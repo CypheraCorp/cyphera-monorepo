@@ -1,7 +1,8 @@
 package handlers
 
 import (
-	"io/ioutil"
+	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -13,9 +14,8 @@ import (
 // @Tags         authentication
 // @Accept       json
 // @Produce      json
-// @Param        address    query     string  true  "Wallet address" example("0x123...")
-// @Success      200  {object}  map[string]string  "Returns nonce"
-// @Failure      400  {object}  ErrorResponse      "Invalid address format"
+// @Success      200  {object}  GetNonceResponse   "Returns nonce"
+// @Failure      401  {object}  ErrorResponse      "Unauthorized"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /nonce [get]
 func GetNonce(c *gin.Context) {
@@ -46,13 +46,17 @@ func GetNonce(c *gin.Context) {
 		return
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"nonce": string(body),
-	})
+	var nonceResp GetNonceResponse
+	if err := json.Unmarshal(body, &nonceResp); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse response"})
+		return
+	}
+
+	c.JSON(http.StatusOK, nonceResp)
 }

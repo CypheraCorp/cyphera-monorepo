@@ -3,7 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -15,9 +15,11 @@ import (
 // @Tags         users
 // @Accept       json
 // @Produce      json
-// @Param        username    query     string  true  "Username to check" example("satoshi")
-// @Success      200  {object}  AvailabilityResponse
-// @Failure      400  {object}  ErrorResponse
+// @Param        address    query     string  true  "Address" example("0x1234567890abcdef")
+// @Success      200  {object}  UserAvailabilityResponse
+// @Failure      400  {object}  ErrorResponse      "Bad request"
+// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /user [get]
 
 func CheckUserAvailability(c *gin.Context) {
@@ -58,7 +60,7 @@ func CheckUserAvailability(c *gin.Context) {
 		return
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
 		return
@@ -70,10 +72,10 @@ func CheckUserAvailability(c *gin.Context) {
 		return
 	}
 
-	// TODO: clean this to include all responses via switch statement
-	exists := getUserResp.Message == "exists"
-	c.JSON(http.StatusOK, gin.H{
-		"exists": exists,
+	message := getUserResp.Message
+	exists := message == UserExists
+	c.JSON(http.StatusOK, UserAvailabilityResponse{
+		Exists: exists,
 	})
 }
 
@@ -83,10 +85,11 @@ func CheckUserAvailability(c *gin.Context) {
 // @Tags         users
 // @Accept       json
 // @Produce      json
-// @Param        request  body      RegisterUserRequest  true  "User registration payload"
-// @Success      201  {object}  RegisterResponse
-// @Failure      400  {object}  ErrorResponse
-// @Failure      409  {object}  ErrorResponse  "Username already taken"
+// @Param        request  body      UserLoginRegisterRequest  true  "User registration payload"
+// @Success      200  {object}  RegisterUserResponse
+// @Failure      400  {object}  ErrorResponse      "Bad request"
+// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /user/register [post]
 
 func RegisterUser(c *gin.Context) {
@@ -125,24 +128,26 @@ func RegisterUser(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
 		return
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		c.JSON(resp.StatusCode, gin.H{"error": string(body)})
+		c.JSON(resp.StatusCode, ErrorResponse{
+			Error: string(body),
+		})
 		return
 	}
 
-	var response map[string]string
-	if err := json.Unmarshal(body, &response); err != nil {
+	var registerUserResponse RegisterUserResponse
+	if err := json.Unmarshal(body, &registerUserResponse); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse response"})
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, registerUserResponse)
 }
 
 // LoginUser godoc
@@ -151,9 +156,11 @@ func RegisterUser(c *gin.Context) {
 // @Tags         users
 // @Accept       json
 // @Produce      json
-// @Param        request  body      LoginRequest  true  "Login credentials"
-// @Success      200  {object}  LoginResponse
-// @Failure      401  {object}  ErrorResponse
+// @Param        request  body      UserLoginRegisterRequest  true  "User login payload"
+// @Success      200  {object}  LoginUserResponse
+// @Failure      400  {object}  ErrorResponse      "Bad request"
+// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /user/login [post]
 
 func LoginUser(c *gin.Context) {
@@ -192,7 +199,7 @@ func LoginUser(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
 		return
@@ -203,11 +210,11 @@ func LoginUser(c *gin.Context) {
 		return
 	}
 
-	var response map[string]string
-	if err := json.Unmarshal(body, &response); err != nil {
+	var loginUserResponse LoginUserResponse
+	if err := json.Unmarshal(body, &loginUserResponse); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse response"})
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, loginUserResponse)
 }

@@ -3,7 +3,8 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -15,8 +16,10 @@ import (
 // @Tags         subscriptions
 // @Accept       json
 // @Produce      json
-// @Success      200  {array}   GetSubscriptionsResponse
-// @Failure      401  {object}  ErrorResponse
+// @Success      200  {object}   GetSubscriptionsResponse
+// @Failure      400  {object}  ErrorResponse      "Bad request"
+// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /subscription [get]
 func GetAllSubscriptions(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")
@@ -41,7 +44,7 @@ func GetAllSubscriptions(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
 		return
@@ -63,8 +66,10 @@ func GetAllSubscriptions(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Param        subscription  body  SubscriptionRequest  true  "Subscription details"
-// @Success      200
-// @Failure      401  {object}  ErrorResponse
+// @Success      200  {object}  CreateSubscriptionResponse
+// @Failure      400  {object}  ErrorResponse      "Bad request"
+// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /subscription [post]
 func CreateSubscription(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")
@@ -102,7 +107,9 @@ func CreateSubscription(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	c.Status(resp.StatusCode)
+	c.JSON(http.StatusOK, CreateSubscriptionResponse{
+		Message: "Subscription(s) created successfully",
+	})
 }
 
 // GetSubscribers godoc
@@ -111,9 +118,11 @@ func CreateSubscription(c *gin.Context) {
 // @Tags         subscribers
 // @Accept       json
 // @Produce      json
-// @Security     Bearer
+// @Param        subscriptionId  query     string  true  "Subscription ID"  example("1234567890")
 // @Success      200  {object}  GetSubscribersResponse
-// @Failure      401  {object}  ErrorResponse
+// @Failure      400  {object}  ErrorResponse      "Bad request"
+// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /subscribers [get]
 func GetSubscribers(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")
@@ -148,7 +157,7 @@ func GetSubscribers(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
 		return
@@ -171,9 +180,10 @@ func GetSubscribers(c *gin.Context) {
 // @Produce      json
 // @Param        subscription  body  DeleteSubscriptionRequest  true  "Subscription details"
 // @Success      200
-// @Failure      401  {object}  ErrorResponse
+// @Failure      400  {object}  ErrorResponse      "Bad request"
+// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /subscription [delete]
-
 func DeleteSubscription(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")
 	if apiKey == "" {
@@ -210,5 +220,7 @@ func DeleteSubscription(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	c.Status(resp.StatusCode)
+	c.JSON(http.StatusOK, DeleteSubscriptionResponse{
+		Message: fmt.Sprintf("Subscription %s deleted successfully", req.SubscriptionId),
+	})
 }

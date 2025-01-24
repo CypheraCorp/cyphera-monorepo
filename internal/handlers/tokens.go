@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -14,8 +14,10 @@ import (
 // @Tags         tokens
 // @Accept       json
 // @Produce      json
-// @Success      200  {array}   Token
-// @Failure      500  {object}  ErrorResponse
+// @Success      200  {object}   GetTokensResponse
+// @Failure      400  {object}  ErrorResponse      "Bad request"
+// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /tokens [get]
 
 func GetTokens(c *gin.Context) {
@@ -41,7 +43,7 @@ func GetTokens(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
 		return
