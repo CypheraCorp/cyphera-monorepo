@@ -9,6 +9,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// CheckUserAvailability godoc
+// @Summary      Check username availability
+// @Description  Verifies if a username is available for registration
+// @Tags         users
+// @Accept       json
+// @Produce      json
+// @Param        username    query     string  true  "Username to check" example("satoshi")
+// @Success      200  {object}  AvailabilityResponse
+// @Failure      400  {object}  ErrorResponse
+// @Router       /user [get]
+
 func CheckUserAvailability(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")
 	if apiKey == "" {
@@ -66,6 +77,18 @@ func CheckUserAvailability(c *gin.Context) {
 	})
 }
 
+// RegisterUser godoc
+// @Summary      Register new user
+// @Description  Creates a new user account with wallet authentication
+// @Tags         users
+// @Accept       json
+// @Produce      json
+// @Param        request  body      RegisterUserRequest  true  "User registration payload"
+// @Success      201  {object}  RegisterResponse
+// @Failure      400  {object}  ErrorResponse
+// @Failure      409  {object}  ErrorResponse  "Username already taken"
+// @Router       /user/register [post]
+
 func RegisterUser(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")
 	if apiKey == "" {
@@ -121,6 +144,17 @@ func RegisterUser(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+// LoginUser godoc
+// @Summary      Authenticate user
+// @Description  Authenticates user using wallet signature and returns JWT token
+// @Tags         users
+// @Accept       json
+// @Produce      json
+// @Param        request  body      LoginRequest  true  "Login credentials"
+// @Success      200  {object}  LoginResponse
+// @Failure      401  {object}  ErrorResponse
+// @Router       /user/login [post]
 
 func LoginUser(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")

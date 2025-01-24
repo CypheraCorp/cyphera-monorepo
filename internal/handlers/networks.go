@@ -8,6 +8,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GetNetworks godoc
+// @Summary      List networks
+// @Description  Retrieves all supported blockchain networks
+// @Tags         networks
+// @Accept       json
+// @Produce      json
+// @Success      200  {array}   Network
+// @Failure      500  {object}  ErrorResponse
+// @Router       /networks [get]
+
 func GetNetworks(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")
 	if apiKey == "" {

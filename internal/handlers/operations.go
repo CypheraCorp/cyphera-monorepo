@@ -82,6 +82,18 @@ func transformOperation(raw RawOperation) (Operation, error) {
 	}, nil
 }
 
+// GetOperations godoc
+// @Summary      List operations
+// @Description  Retrieves all operations for authenticated user
+// @Tags         operations
+// @Accept       json
+// @Produce      json
+// @Security     Bearer
+// @Param        page     query  int     false  "Page number"         default(1)
+// @Param        limit    query  int     false  "Items per page"      default(10)
+// @Success      200  {object}  OperationsResponse
+// @Failure      401  {object}  ErrorResponse
+// @Router       /operations [get]
 func GetOperations(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")
 	if apiKey == "" {
