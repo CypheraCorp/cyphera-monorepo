@@ -10,9 +10,32 @@ import (
 	"syscall"
 	"time"
 
+	_ "cyphera-api/docs" // This will be generated
+
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
+// @title           Cyphera API
+// @version         1.0
+// @description     API Server for Cyphera application
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.url    http://www.swagger.io/support
+// @contact.email  support@swagger.io
+
+// @license.name  Apache 2.0
+// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host      localhost:8000
+// @BasePath  /api/v1
+
+// @securityDefinitions.apikey Bearer
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 func main() {
 	// Initialize router
 	router := gin.Default()
@@ -51,6 +74,9 @@ func main() {
 }
 
 func initializeRoutes(router *gin.Engine) {
+	// Add Swagger endpoint
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
 	// Health check
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{

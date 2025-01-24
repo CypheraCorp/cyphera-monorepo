@@ -1,0 +1,301 @@
+basePath: /api/v1
+definitions:
+  handlers.ErrorResponse:
+    properties:
+      error:
+        example: Invalid request parameters
+        type: string
+    type: object
+  handlers.Operation:
+    properties:
+      entryPoint:
+        type: string
+      executionTime:
+        type: integer
+      paymentType:
+        type: string
+      paymentTypeParams:
+        $ref: '#/definitions/handlers.PaymentTypeParams'
+      status:
+        type: string
+      transactionHash:
+        type: string
+      userOp:
+        $ref: '#/definitions/handlers.UserOperation'
+      userOpHash:
+        type: string
+    type: object
+  handlers.OperationsResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/handlers.Operation'
+        type: array
+    type: object
+  handlers.PaymentLink:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: string
+      subscriptionId:
+        type: string
+      title:
+        type: string
+      validTill:
+        type: string
+    type: object
+  handlers.PaymentTypeParams:
+    properties:
+      paylinkUrl:
+        type: string
+      subscriptionId:
+        type: string
+    type: object
+  handlers.Plan:
+    properties:
+      frequency:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      price:
+        type: number
+      subscriptionId:
+        type: string
+      volume:
+        type: integer
+    type: object
+  handlers.Receiver:
+    properties:
+      address:
+        type: string
+      networkId:
+        type: integer
+      receiverId:
+        type: string
+      subscriptionId:
+        type: string
+    type: object
+  handlers.Subscriber:
+    properties:
+      eoaaddress:
+        type: string
+      plan:
+        $ref: '#/definitions/handlers.Plan'
+      planId:
+        type: string
+      status:
+        type: string
+      subscribedAt:
+        type: string
+      subscriptionId:
+        type: string
+      swaddress:
+        type: string
+    type: object
+  handlers.Subscription:
+    properties:
+      createdAt:
+        type: string
+      id:
+        type: string
+      linktree:
+        type: string
+      paymentlink:
+        $ref: '#/definitions/handlers.PaymentLink'
+      plans:
+        items:
+          $ref: '#/definitions/handlers.Plan'
+        type: array
+      receivers:
+        items:
+          $ref: '#/definitions/handlers.Receiver'
+        type: array
+      status:
+        type: string
+      title:
+        type: string
+      tokens:
+        items:
+          $ref: '#/definitions/handlers.Token'
+        type: array
+      trialDays:
+        type: integer
+      userId:
+        type: string
+    type: object
+  handlers.Token:
+    properties:
+      address:
+        type: string
+      chainId:
+        type: integer
+      coingeckoId:
+        type: string
+      decimals:
+        type: integer
+      id:
+        type: integer
+      logoURI:
+        type: string
+      name:
+        type: string
+      symbol:
+        type: string
+    type: object
+  handlers.UserOperation:
+    properties:
+      callData:
+        type: string
+      callGasLimit:
+        type: string
+      initCode:
+        type: string
+      maxFeePerGas:
+        type: string
+      maxPriorityFeePerGas:
+        type: string
+      nonce:
+        type: string
+      paymasterAndData:
+        type: string
+      preVerificationGas:
+        type: string
+      sender:
+        type: string
+      signature:
+        type: string
+      verificationGasLimit:
+        type: string
+    type: object
+host: localhost:8000
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: API Server for Cyphera application
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Cyphera API
+  version: "1.0"
+paths:
+  /nonce:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a nonce for wallet-based authentication
+      parameters:
+      - description: Wallet address
+        example: '"0x123..."'
+        in: query
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Returns nonce
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid address format
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Get authentication nonce
+      tags:
+      - authentication
+  /operations:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all operations for authenticated user
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.OperationsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: List operations
+      tags:
+      - operations
+  /subscribers:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all subscribers for authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.Subscriber'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: List subscribers
+      tags:
+      - subscribers
+  /subscription:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all available subscription plans
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.Subscription'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: List all subscriptions
+      tags:
+      - subscriptions
+securityDefinitions:
+  Bearer:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

@@ -111,3 +111,8 @@ type Network struct {
 	Currency string `json:"currency"`
 	Type     string `json:"type"`
 }
+
+// ErrorResponse represents an error response
+type ErrorResponse struct {
+	Error string `json:"error" example:"Invalid request parameters"`
+}

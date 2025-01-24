@@ -9,6 +9,63 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GetAllSubscriptions godoc
+// @Summary      List all subscriptions
+// @Description  Retrieves all available subscription plans
+// @Tags         subscriptions
+// @Accept       json
+// @Produce      json
+// @Success      200  {array}   GetSubscriptionsResponse
+// @Failure      401  {object}  ErrorResponse
+// @Router       /subscription [get]
+func GetAllSubscriptions(c *gin.Context) {
+	apiKey := c.GetHeader("x-api-key")
+	if apiKey == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "API key is required"})
+		return
+	}
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", "https://api.billing.acta.link/api/subscription", nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create request"})
+		return
+	}
+
+	req.Header.Set("x-api-key", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch subscriptions"})
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
+		return
+	}
+
+	var subscriptions GetSubscriptionsResponse
+	if err := json.Unmarshal(body, &subscriptions); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse response"})
+		return
+	}
+
+	c.JSON(http.StatusOK, subscriptions)
+}
+
+// CreateSubscription godoc
+// @Summary      Create a new subscription
+// @Description  Creates a new subscription plan
+// @Tags         subscriptions
+// @Accept       json
+// @Produce      json
+// @Param        subscription  body  SubscriptionRequest  true  "Subscription details"
+// @Success      200
+// @Failure      401  {object}  ErrorResponse
+// @Router       /subscription [post]
 func CreateSubscription(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")
 	if apiKey == "" {
@@ -48,44 +105,16 @@ func CreateSubscription(c *gin.Context) {
 	c.Status(resp.StatusCode)
 }
 
-func GetAllSubscriptions(c *gin.Context) {
-	apiKey := c.GetHeader("x-api-key")
-	if apiKey == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "API key is required"})
-		return
-	}
-
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", "https://api.billing.acta.link/api/subscription", nil)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create request"})
-		return
-	}
-
-	req.Header.Set("x-api-key", apiKey)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch subscriptions"})
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
-		return
-	}
-
-	var subscriptions GetSubscriptionsResponse
-	if err := json.Unmarshal(body, &subscriptions); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse response"})
-		return
-	}
-
-	c.JSON(http.StatusOK, subscriptions)
-}
-
+// GetSubscribers godoc
+// @Summary      List subscribers
+// @Description  Retrieves all subscribers for authenticated user
+// @Tags         subscribers
+// @Accept       json
+// @Produce      json
+// @Security     Bearer
+// @Success      200  {object}  GetSubscribersResponse
+// @Failure      401  {object}  ErrorResponse
+// @Router       /subscribers [get]
 func GetSubscribers(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")
 	if apiKey == "" {
@@ -133,6 +162,17 @@ func GetSubscribers(c *gin.Context) {
 
 	c.JSON(http.StatusOK, subscribers)
 }
+
+// DeleteSubscription godoc
+// @Summary      Delete a subscription
+// @Description  Deletes a subscription plan
+// @Tags         subscriptions
+// @Accept       json
+// @Produce      json
+// @Param        subscription  body  DeleteSubscriptionRequest  true  "Subscription details"
+// @Success      200
+// @Failure      401  {object}  ErrorResponse
+// @Router       /subscription [delete]
 
 func DeleteSubscription(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")

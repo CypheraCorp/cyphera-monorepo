@@ -1,0 +1,459 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "API Server for Cyphera application",
+        "title": "Cyphera API",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "url": "http://www.swagger.io/support",
+            "email": "support@swagger.io"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8000",
+    "basePath": "/api/v1",
+    "paths": {
+        "/nonce": {
+            "get": {
+                "description": "Retrieves a nonce for wallet-based authentication",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "authentication"
+                ],
+                "summary": "Get authentication nonce",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"0x123...\"",
+                        "description": "Wallet address",
+                        "name": "address",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Returns nonce",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid address format",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/operations": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Retrieves all operations for authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "operations"
+                ],
+                "summary": "List operations",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.OperationsResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/subscribers": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Retrieves all subscribers for authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subscribers"
+                ],
+                "summary": "List subscribers",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.Subscriber"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/subscription": {
+            "get": {
+                "description": "Retrieves all available subscription plans",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subscriptions"
+                ],
+                "summary": "List all subscriptions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.Subscription"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "handlers.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string",
+                    "example": "Invalid request parameters"
+                }
+            }
+        },
+        "handlers.Operation": {
+            "type": "object",
+            "properties": {
+                "entryPoint": {
+                    "type": "string"
+                },
+                "executionTime": {
+                    "type": "integer"
+                },
+                "paymentType": {
+                    "type": "string"
+                },
+                "paymentTypeParams": {
+                    "$ref": "#/definitions/handlers.PaymentTypeParams"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "transactionHash": {
+                    "type": "string"
+                },
+                "userOp": {
+                    "$ref": "#/definitions/handlers.UserOperation"
+                },
+                "userOpHash": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.OperationsResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.Operation"
+                    }
+                }
+            }
+        },
+        "handlers.PaymentLink": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "subscriptionId": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "validTill": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.PaymentTypeParams": {
+            "type": "object",
+            "properties": {
+                "paylinkUrl": {
+                    "type": "string"
+                },
+                "subscriptionId": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.Plan": {
+            "type": "object",
+            "properties": {
+                "frequency": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price": {
+                    "type": "number"
+                },
+                "subscriptionId": {
+                    "type": "string"
+                },
+                "volume": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.Receiver": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "networkId": {
+                    "type": "integer"
+                },
+                "receiverId": {
+                    "type": "string"
+                },
+                "subscriptionId": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.Subscriber": {
+            "type": "object",
+            "properties": {
+                "eoaaddress": {
+                    "type": "string"
+                },
+                "plan": {
+                    "$ref": "#/definitions/handlers.Plan"
+                },
+                "planId": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "subscribedAt": {
+                    "type": "string"
+                },
+                "subscriptionId": {
+                    "type": "string"
+                },
+                "swaddress": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.Subscription": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "linktree": {
+                    "type": "string"
+                },
+                "paymentlink": {
+                    "$ref": "#/definitions/handlers.PaymentLink"
+                },
+                "plans": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.Plan"
+                    }
+                },
+                "receivers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.Receiver"
+                    }
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.Token"
+                    }
+                },
+                "trialDays": {
+                    "type": "integer"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.Token": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "chainId": {
+                    "type": "integer"
+                },
+                "coingeckoId": {
+                    "type": "string"
+                },
+                "decimals": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "logoURI": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "symbol": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.UserOperation": {
+            "type": "object",
+            "properties": {
+                "callData": {
+                    "type": "string"
+                },
+                "callGasLimit": {
+                    "type": "string"
+                },
+                "initCode": {
+                    "type": "string"
+                },
+                "maxFeePerGas": {
+                    "type": "string"
+                },
+                "maxPriorityFeePerGas": {
+                    "type": "string"
+                },
+                "nonce": {
+                    "type": "string"
+                },
+                "paymasterAndData": {
+                    "type": "string"
+                },
+                "preVerificationGas": {
+                    "type": "string"
+                },
+                "sender": {
+                    "type": "string"
+                },
+                "signature": {
+                    "type": "string"
+                },
+                "verificationGasLimit": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "Bearer": {
+            "description": "Type \"Bearer\" followed by a space and JWT token.",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

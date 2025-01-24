@@ -8,6 +8,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GetTokens godoc
+// @Summary      List tokens
+// @Description  Retrieves all available tokens
+// @Tags         tokens
+// @Accept       json
+// @Produce      json
+// @Success      200  {array}   Token
+// @Failure      500  {object}  ErrorResponse
+// @Router       /tokens [get]
+
 func GetTokens(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")
 	if apiKey == "" {

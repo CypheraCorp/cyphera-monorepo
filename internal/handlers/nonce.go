@@ -7,6 +7,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GetNonce godoc
+// @Summary      Get authentication nonce
+// @Description  Retrieves a nonce for wallet-based authentication
+// @Tags         authentication
+// @Accept       json
+// @Produce      json
+// @Param        address    query     string  true  "Wallet address" example("0x123...")
+// @Success      200  {object}  map[string]string  "Returns nonce"
+// @Failure      400  {object}  ErrorResponse      "Invalid address format"
+// @Failure      500  {object}  ErrorResponse      "Internal server error"
+// @Router       /nonce [get]
 func GetNonce(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")
 	if apiKey == "" {
