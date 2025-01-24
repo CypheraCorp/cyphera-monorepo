@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"cyphera-api/internal/handlers"
 	"log"
 	"net/http"
 	"os"
@@ -21,7 +22,7 @@ func main() {
 
 	// Configure server
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    ":8000",
 		Handler: router,
 	}
 
@@ -60,10 +61,29 @@ func initializeRoutes(router *gin.Engine) {
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 	{
-		v1.GET("/ping", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"message": "pong",
-			})
-		})
+		// Nonce
+		v1.GET("/nonce", handlers.GetNonce)
+
+		// User
+		v1.GET("/user", handlers.CheckUserAvailability)
+		v1.POST("/user/register", handlers.RegisterUser)
+		v1.POST("/user/login", handlers.LoginUser)
+		v1.POST("/user/subscription", handlers.CreateSubscription)
+		v1.DELETE("/user/subscription", handlers.DeleteSubscription)
+
+		// Subscriptions
+		v1.GET("/subscription", handlers.GetAllSubscriptions)
+
+		// Subscribers
+		v1.GET("/subscribers", handlers.GetSubscribers)
+
+		// Operations
+		v1.GET("/operations/", handlers.GetOperations)
+
+		// Tokens
+		v1.GET("/tokens", handlers.GetTokens)
+
+		// Networks
+		v1.GET("/networks", handlers.GetNetworks)
 	}
 }
