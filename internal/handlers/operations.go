@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -85,14 +85,15 @@ func transformOperation(raw RawOperation) (Operation, error) {
 // GetOperations godoc
 // @Summary      List operations
 // @Description  Retrieves all operations for authenticated user
-// @Tags         operations
 // @Accept       json
 // @Produce      json
-// @Security     Bearer
-// @Param        page     query  int     false  "Page number"         default(1)
-// @Param        limit    query  int     false  "Items per page"      default(10)
+// @Param        swaddress  query     string  true  "Smart Wallet Address"  example("0x1234567890abcdef")
+// @Param        subscriptionId  query     string  true  "Subscription ID"  example("1234567890")
+// @Param        status  query     string  true  "Status"
 // @Success      200  {object}  OperationsResponse
-// @Failure      401  {object}  ErrorResponse
+// @Failure      400  {object}  ErrorResponse      "Bad request"
+// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /operations [get]
 func GetOperations(c *gin.Context) {
 	apiKey := c.GetHeader("x-api-key")
@@ -141,7 +142,7 @@ func GetOperations(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
 		return
