@@ -1,6 +1,6 @@
 # cyphera-api
 
-To run, first download the dependencies:
+To run, first download the dependencies (use at least go version go 1.18):
 
 ```
 go mod download
