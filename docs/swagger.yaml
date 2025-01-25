@@ -1,12 +1,17 @@
 basePath: /api/v1
 definitions:
-  handlers.ErrorResponse:
+  actalink.Network:
     properties:
-      error:
-        example: Invalid request parameters
+      chain_id:
+        type: integer
+      currency:
+        type: string
+      name:
+        type: string
+      type:
         type: string
     type: object
-  handlers.Operation:
+  actalink.Operation:
     properties:
       entryPoint:
         type: string
@@ -15,24 +20,17 @@ definitions:
       paymentType:
         type: string
       paymentTypeParams:
-        $ref: '#/definitions/handlers.PaymentTypeParams'
+        $ref: '#/definitions/actalink.PaymentTypeParams'
       status:
         type: string
       transactionHash:
         type: string
       userOp:
-        $ref: '#/definitions/handlers.UserOperation'
+        $ref: '#/definitions/actalink.UserOperation'
       userOpHash:
         type: string
     type: object
-  handlers.OperationsResponse:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/handlers.Operation'
-        type: array
-    type: object
-  handlers.PaymentLink:
+  actalink.PaymentLink:
     properties:
       createdAt:
         type: string
@@ -45,14 +43,14 @@ definitions:
       validTill:
         type: string
     type: object
-  handlers.PaymentTypeParams:
+  actalink.PaymentTypeParams:
     properties:
       paylinkUrl:
         type: string
       subscriptionId:
         type: string
     type: object
-  handlers.Plan:
+  actalink.Plan:
     properties:
       frequency:
         type: string
@@ -67,7 +65,7 @@ definitions:
       volume:
         type: integer
     type: object
-  handlers.Receiver:
+  actalink.Receiver:
     properties:
       address:
         type: string
@@ -78,12 +76,12 @@ definitions:
       subscriptionId:
         type: string
     type: object
-  handlers.Subscriber:
+  actalink.Subscriber:
     properties:
       eoaaddress:
         type: string
       plan:
-        $ref: '#/definitions/handlers.Plan'
+        $ref: '#/definitions/actalink.Plan'
       planId:
         type: string
       status:
@@ -95,7 +93,20 @@ definitions:
       swaddress:
         type: string
     type: object
-  handlers.Subscription:
+  actalink.SubscribersData:
+    properties:
+      subscribers:
+        items:
+          $ref: '#/definitions/actalink.Subscriber'
+        type: array
+      subscriptionId:
+        type: string
+      title:
+        type: string
+      userid:
+        type: string
+    type: object
+  actalink.Subscription:
     properties:
       createdAt:
         type: string
@@ -104,14 +115,14 @@ definitions:
       linktree:
         type: string
       paymentlink:
-        $ref: '#/definitions/handlers.PaymentLink'
+        $ref: '#/definitions/actalink.PaymentLink'
       plans:
         items:
-          $ref: '#/definitions/handlers.Plan'
+          $ref: '#/definitions/actalink.Plan'
         type: array
       receivers:
         items:
-          $ref: '#/definitions/handlers.Receiver'
+          $ref: '#/definitions/actalink.Receiver'
         type: array
       status:
         type: string
@@ -119,14 +130,14 @@ definitions:
         type: string
       tokens:
         items:
-          $ref: '#/definitions/handlers.Token'
+          $ref: '#/definitions/actalink.Token'
         type: array
       trialDays:
         type: integer
       userId:
         type: string
     type: object
-  handlers.Token:
+  actalink.Token:
     properties:
       address:
         type: string
@@ -145,7 +156,7 @@ definitions:
       symbol:
         type: string
     type: object
-  handlers.UserOperation:
+  actalink.UserOperation:
     properties:
       callData:
         type: string
@@ -170,6 +181,113 @@ definitions:
       verificationGasLimit:
         type: string
     type: object
+  handlers.CreateSubscriptionResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  handlers.DeleteSubscriptionRequest:
+    properties:
+      subscriptionId:
+        type: string
+    required:
+    - subscriptionId
+    type: object
+  handlers.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  handlers.GetNetworksResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/actalink.Network'
+        type: array
+    type: object
+  handlers.GetNonceResponse:
+    properties:
+      nonce:
+        type: string
+    type: object
+  handlers.GetSubscribersResponse:
+    properties:
+      data:
+        $ref: '#/definitions/actalink.SubscribersData'
+    type: object
+  handlers.GetSubscriptionsResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/actalink.Subscription'
+        type: array
+    type: object
+  handlers.GetTokensResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/actalink.Token'
+        type: array
+    type: object
+  handlers.HealthResponse:
+    properties:
+      status:
+        type: string
+    type: object
+  handlers.LoginUserResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  handlers.OperationsResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/actalink.Operation'
+        type: array
+    type: object
+  handlers.RegisterUserResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  handlers.SubscriptionRequest:
+    properties:
+      linktree:
+        type: string
+      plans:
+        items:
+          $ref: '#/definitions/actalink.Plan'
+        type: array
+      receivers:
+        items:
+          $ref: '#/definitions/actalink.Receiver'
+        type: array
+      title:
+        type: string
+      tokens:
+        items:
+          type: string
+        type: array
+      trialDays:
+        type: integer
+    type: object
+  handlers.UserAvailabilityResponse:
+    properties:
+      exists:
+        type: boolean
+    type: object
+  handlers.UserLoginRegisterRequest:
+    properties:
+      address:
+        type: string
+      message:
+        type: string
+      nonce:
+        type: string
+      signature:
+        type: string
+    type: object
 host: localhost:8000
 info:
   contact:
@@ -184,29 +302,62 @@ info:
   title: Cyphera API
   version: "1.0"
 paths:
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Checks if the server is running
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Returns health status
+          schema:
+            $ref: '#/definitions/handlers.HealthResponse'
+      summary: Health check
+      tags:
+      - health
+  /networks:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all supported blockchain networks
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.GetNetworksResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: List networks
+      tags:
+      - networks
   /nonce:
     get:
       consumes:
       - application/json
       description: Retrieves a nonce for wallet-based authentication
-      parameters:
-      - description: Wallet address
-        example: '"0x123..."'
-        in: query
-        name: address
-        required: true
-        type: string
       produces:
       - application/json
       responses:
         "200":
           description: Returns nonce
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/handlers.GetNonceResponse'
         "400":
-          description: Invalid address format
+          description: Bad request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
         "500":
@@ -222,16 +373,23 @@ paths:
       - application/json
       description: Retrieves all operations for authenticated user
       parameters:
-      - default: 1
-        description: Page number
+      - description: Smart Wallet Address
+        example: '"0x1234567890abcdef"'
         in: query
-        name: page
-        type: integer
-      - default: 10
-        description: Items per page
+        name: swaddress
+        required: true
+        type: string
+      - description: Subscription ID
+        example: '"1234567890"'
         in: query
-        name: limit
-        type: integer
+        name: subscriptionId
+        required: true
+        type: string
+      - description: Status
+        in: query
+        name: status
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -239,39 +397,85 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/handlers.OperationsResponse'
-        "401":
-          description: Unauthorized
+        "400":
+          description: Bad request
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - Bearer: []
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
       summary: List operations
-      tags:
-      - operations
   /subscribers:
     get:
       consumes:
       - application/json
       description: Retrieves all subscribers for authenticated user
+      parameters:
+      - description: Subscription ID
+        example: '"1234567890"'
+        in: query
+        name: subscriptionId
+        required: true
+        type: string
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/handlers.Subscriber'
-            type: array
-        "401":
-          description: Unauthorized
+            $ref: '#/definitions/handlers.GetSubscribersResponse'
+        "400":
+          description: Bad request
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - Bearer: []
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
       summary: List subscribers
       tags:
       - subscribers
-  /subscription:
+  /subscriptions:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes a subscription plan
+      parameters:
+      - description: Subscription details
+        in: body
+        name: subscription
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.DeleteSubscriptionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Delete a subscription
+      tags:
+      - subscriptions
     get:
       consumes:
       - application/json
@@ -282,16 +486,184 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/handlers.Subscription'
-            type: array
+            $ref: '#/definitions/handlers.GetSubscriptionsResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
         "500":
-          description: Internal Server Error
+          description: Internal server error
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: List all subscriptions
       tags:
       - subscriptions
+    post:
+      consumes:
+      - application/json
+      description: Creates a new subscription plan
+      parameters:
+      - description: Subscription details
+        in: body
+        name: subscription
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SubscriptionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.CreateSubscriptionResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Create a new subscription
+      tags:
+      - subscriptions
+  /tokens:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all available tokens
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.GetTokensResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: List tokens
+      tags:
+      - tokens
+  /user/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates user using wallet signature and returns JWT token
+      parameters:
+      - description: User login payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UserLoginRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.LoginUserResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Authenticate user
+      tags:
+      - users
+  /user/register:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user account with wallet authentication
+      parameters:
+      - description: User registration payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UserLoginRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.RegisterUserResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Register new user
+      tags:
+      - users
+  /users:
+    get:
+      consumes:
+      - application/json
+      description: Verifies if a username is available for registration
+      parameters:
+      - description: Address
+        example: '"0x1234567890abcdef"'
+        in: query
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.UserAvailabilityResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Check username availability
+      tags:
+      - users
 securityDefinitions:
   Bearer:
     description: Type "Bearer" followed by a space and JWT token.

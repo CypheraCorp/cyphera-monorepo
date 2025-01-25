@@ -1,41 +1,15 @@
 package actalink
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-
-	"github.com/pkg/errors"
+	"net/url"
 )
 
 func (c *ActaLinkClient) GetAllSubscriptions() (*GetSubscriptionsResponse, *int, error) {
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", "https://api.billing.acta.link/api/subscription", nil)
+	body, statusCode, err := c.doRequest("GET", "/api/subscription", nil, nil)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	req.Header.Set("x-api-key", c.apiKey)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp ErrorResponse
-		if err := json.Unmarshal(body, &errResp); err != nil {
-			return nil, &resp.StatusCode, errors.New("unknown error occurred")
-		}
-		return nil, &resp.StatusCode, errors.Wrap(errors.New(errResp.Error), "actalink api error")
+		return nil, statusCode, err
 	}
 
 	var subscriptions GetSubscriptionsResponse
@@ -43,7 +17,7 @@ func (c *ActaLinkClient) GetAllSubscriptions() (*GetSubscriptionsResponse, *int,
 		return nil, nil, err
 	}
 
-	return &subscriptions, &resp.StatusCode, nil
+	return &subscriptions, statusCode, nil
 }
 
 func (c *ActaLinkClient) CreateSubscription(req SubscriptionRequest) (*CreateSubscriptionResponse, *int, error) {
@@ -52,37 +26,14 @@ func (c *ActaLinkClient) CreateSubscription(req SubscriptionRequest) (*CreateSub
 		return nil, nil, err
 	}
 
-	client := &http.Client{}
-	request, err := http.NewRequest("POST", "https://api.billing.acta.link/api/newsubscription", bytes.NewBuffer(jsonBody))
+	_, statusCode, err := c.doRequest("POST", "/api/newsubscription", jsonBody, nil)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	request.Header.Set("x-api-key", c.apiKey)
-	request.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(request)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp ErrorResponse
-		if err := json.Unmarshal(body, &errResp); err != nil {
-			return nil, &resp.StatusCode, errors.New("unknown error occurred")
-		}
-		return nil, &resp.StatusCode, errors.Wrap(errors.New(errResp.Error), "actalink api error")
+		return nil, statusCode, err
 	}
 
 	return &CreateSubscriptionResponse{
 		Message: "Subscription(s) created successfully",
-	}, &resp.StatusCode, nil
+	}, statusCode, nil
 }
 
 func (c *ActaLinkClient) DeleteSubscription(req DeleteSubscriptionRequest) (DeleteSubscriptionResponse, *int, error) {
@@ -91,69 +42,23 @@ func (c *ActaLinkClient) DeleteSubscription(req DeleteSubscriptionRequest) (Dele
 		return DeleteSubscriptionResponse{}, nil, err
 	}
 
-	client := &http.Client{}
-	request, err := http.NewRequest("POST", "https://api.billing.acta.link/api/ct/subscription/delete", bytes.NewBuffer(jsonBody))
+	_, statusCode, err := c.doRequest("POST", "/api/ct/subscription/delete", jsonBody, nil)
 	if err != nil {
-		return DeleteSubscriptionResponse{}, nil, err
-	}
-
-	request.Header.Set("x-api-key", c.apiKey)
-	request.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(request)
-	if err != nil {
-		return DeleteSubscriptionResponse{}, nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return DeleteSubscriptionResponse{}, nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp ErrorResponse
-		if err := json.Unmarshal(body, &errResp); err != nil {
-			return DeleteSubscriptionResponse{}, &resp.StatusCode, errors.New("unknown error occurred")
-		}
-		return DeleteSubscriptionResponse{}, &resp.StatusCode, errors.Wrap(errors.New(errResp.Error), "actalink api error")
+		return DeleteSubscriptionResponse{}, statusCode, err
 	}
 
 	return DeleteSubscriptionResponse{
 		Message: fmt.Sprintf("Subscription %s deleted successfully", req.SubscriptionId),
-	}, &resp.StatusCode, nil
+	}, statusCode, nil
 }
 
 func (c *ActaLinkClient) GetSubscribers(subscriptionId string) (*GetSubscribersResponse, *int, error) {
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", "https://api.billing.acta.link/api/ct/subscribers", nil)
+	params := url.Values{}
+	params.Add("subscriptionId", subscriptionId)
+
+	body, statusCode, err := c.doRequest("GET", "/api/ct/subscribers", nil, params)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	q := req.URL.Query()
-	q.Add("subscriptionId", subscriptionId)
-	req.URL.RawQuery = q.Encode()
-
-	req.Header.Set("x-api-key", c.apiKey)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp ErrorResponse
-		if err := json.Unmarshal(body, &errResp); err != nil {
-			return nil, &resp.StatusCode, errors.New("unknown error occurred")
-		}
-		return nil, &resp.StatusCode, errors.Wrap(errors.New(errResp.Error), "actalink api error")
+		return nil, statusCode, err
 	}
 
 	var subscribers GetSubscribersResponse
@@ -161,5 +66,5 @@ func (c *ActaLinkClient) GetSubscribers(subscriptionId string) (*GetSubscribersR
 		return nil, nil, err
 	}
 
-	return &subscribers, &resp.StatusCode, nil
+	return &subscribers, statusCode, nil
 }

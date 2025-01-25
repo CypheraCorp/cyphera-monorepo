@@ -24,6 +24,64 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/health": {
+            "get": {
+                "description": "Checks if the server is running",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Health check",
+                "responses": {
+                    "200": {
+                        "description": "Returns health status",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.HealthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/networks": {
+            "get": {
+                "description": "Retrieves all supported blockchain networks",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "networks"
+                ],
+                "summary": "List networks",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.GetNetworksResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/nonce": {
             "get": {
                 "description": "Retrieves a nonce for wallet-based authentication",
@@ -37,28 +95,21 @@ const docTemplate = `{
                     "authentication"
                 ],
                 "summary": "Get authentication nonce",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"0x123...\"",
-                        "description": "Wallet address",
-                        "name": "address",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "Returns nonce",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/handlers.GetNonceResponse"
                         }
                     },
                     "400": {
-                        "description": "Invalid address format",
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -74,11 +125,6 @@ const docTemplate = `{
         },
         "/operations": {
             "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
                 "description": "Retrieves all operations for authenticated user",
                 "consumes": [
                     "application/json"
@@ -86,24 +132,30 @@ const docTemplate = `{
                 "produces": [
                     "application/json"
                 ],
-                "tags": [
-                    "operations"
-                ],
                 "summary": "List operations",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
+                        "type": "string",
+                        "example": "\"0x1234567890abcdef\"",
+                        "description": "Smart Wallet Address",
+                        "name": "swaddress",
+                        "in": "query",
+                        "required": true
                     },
                     {
-                        "type": "integer",
-                        "default": 10,
-                        "description": "Items per page",
-                        "name": "limit",
-                        "in": "query"
+                        "type": "string",
+                        "example": "\"1234567890\"",
+                        "description": "Subscription ID",
+                        "name": "subscriptionId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Status",
+                        "name": "status",
+                        "in": "query",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -113,8 +165,20 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.OperationsResponse"
                         }
                     },
-                    "401": {
-                        "description": "Unauthorized",
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -124,11 +188,6 @@ const docTemplate = `{
         },
         "/subscribers": {
             "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
                 "description": "Retrieves all subscribers for authenticated user",
                 "consumes": [
                     "application/json"
@@ -140,18 +199,37 @@ const docTemplate = `{
                     "subscribers"
                 ],
                 "summary": "List subscribers",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"1234567890\"",
+                        "description": "Subscription ID",
+                        "name": "subscriptionId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.Subscriber"
-                            }
+                            "$ref": "#/definitions/handlers.GetSubscribersResponse"
                         }
                     },
-                    "401": {
-                        "description": "Unauthorized",
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -159,7 +237,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/subscription": {
+        "/subscriptions": {
             "get": {
                 "description": "Retrieves all available subscription plans",
                 "consumes": [
@@ -176,14 +254,316 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.Subscription"
-                            }
+                            "$ref": "#/definitions/handlers.GetSubscriptionsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Creates a new subscription plan",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subscriptions"
+                ],
+                "summary": "Create a new subscription",
+                "parameters": [
+                    {
+                        "description": "Subscription details",
+                        "name": "subscription",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SubscriptionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateSubscriptionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Deletes a subscription plan",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subscriptions"
+                ],
+                "summary": "Delete a subscription",
+                "parameters": [
+                    {
+                        "description": "Subscription details",
+                        "name": "subscription",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DeleteSubscriptionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tokens": {
+            "get": {
+                "description": "Retrieves all available tokens",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tokens"
+                ],
+                "summary": "List tokens",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.GetTokensResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/user/login": {
+            "post": {
+                "description": "Authenticates user using wallet signature and returns JWT token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Authenticate user",
+                "parameters": [
+                    {
+                        "description": "User login payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UserLoginRegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.LoginUserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/user/register": {
+            "post": {
+                "description": "Creates a new user account with wallet authentication",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Register new user",
+                "parameters": [
+                    {
+                        "description": "User registration payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UserLoginRegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RegisterUserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users": {
+            "get": {
+                "description": "Verifies if a username is available for registration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Check username availability",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"0x1234567890abcdef\"",
+                        "description": "Address",
+                        "name": "address",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UserAvailabilityResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -193,16 +573,24 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "handlers.ErrorResponse": {
+        "actalink.Network": {
             "type": "object",
             "properties": {
-                "error": {
-                    "type": "string",
-                    "example": "Invalid request parameters"
+                "chain_id": {
+                    "type": "integer"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
                 }
             }
         },
-        "handlers.Operation": {
+        "actalink.Operation": {
             "type": "object",
             "properties": {
                 "entryPoint": {
@@ -215,7 +603,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "paymentTypeParams": {
-                    "$ref": "#/definitions/handlers.PaymentTypeParams"
+                    "$ref": "#/definitions/actalink.PaymentTypeParams"
                 },
                 "status": {
                     "type": "string"
@@ -224,25 +612,14 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "userOp": {
-                    "$ref": "#/definitions/handlers.UserOperation"
+                    "$ref": "#/definitions/actalink.UserOperation"
                 },
                 "userOpHash": {
                     "type": "string"
                 }
             }
         },
-        "handlers.OperationsResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/handlers.Operation"
-                    }
-                }
-            }
-        },
-        "handlers.PaymentLink": {
+        "actalink.PaymentLink": {
             "type": "object",
             "properties": {
                 "createdAt": {
@@ -262,7 +639,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.PaymentTypeParams": {
+        "actalink.PaymentTypeParams": {
             "type": "object",
             "properties": {
                 "paylinkUrl": {
@@ -273,7 +650,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.Plan": {
+        "actalink.Plan": {
             "type": "object",
             "properties": {
                 "frequency": {
@@ -296,7 +673,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.Receiver": {
+        "actalink.Receiver": {
             "type": "object",
             "properties": {
                 "address": {
@@ -313,14 +690,14 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.Subscriber": {
+        "actalink.Subscriber": {
             "type": "object",
             "properties": {
                 "eoaaddress": {
                     "type": "string"
                 },
                 "plan": {
-                    "$ref": "#/definitions/handlers.Plan"
+                    "$ref": "#/definitions/actalink.Plan"
                 },
                 "planId": {
                     "type": "string"
@@ -339,7 +716,27 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.Subscription": {
+        "actalink.SubscribersData": {
+            "type": "object",
+            "properties": {
+                "subscribers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/actalink.Subscriber"
+                    }
+                },
+                "subscriptionId": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "userid": {
+                    "type": "string"
+                }
+            }
+        },
+        "actalink.Subscription": {
             "type": "object",
             "properties": {
                 "createdAt": {
@@ -352,18 +749,18 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "paymentlink": {
-                    "$ref": "#/definitions/handlers.PaymentLink"
+                    "$ref": "#/definitions/actalink.PaymentLink"
                 },
                 "plans": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/handlers.Plan"
+                        "$ref": "#/definitions/actalink.Plan"
                     }
                 },
                 "receivers": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/handlers.Receiver"
+                        "$ref": "#/definitions/actalink.Receiver"
                     }
                 },
                 "status": {
@@ -375,7 +772,7 @@ const docTemplate = `{
                 "tokens": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/handlers.Token"
+                        "$ref": "#/definitions/actalink.Token"
                     }
                 },
                 "trialDays": {
@@ -386,7 +783,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.Token": {
+        "actalink.Token": {
             "type": "object",
             "properties": {
                 "address": {
@@ -415,7 +812,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.UserOperation": {
+        "actalink.UserOperation": {
             "type": "object",
             "properties": {
                 "callData": {
@@ -449,6 +846,174 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "verificationGasLimit": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CreateSubscriptionResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.DeleteSubscriptionRequest": {
+            "type": "object",
+            "required": [
+                "subscriptionId"
+            ],
+            "properties": {
+                "subscriptionId": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GetNetworksResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/actalink.Network"
+                    }
+                }
+            }
+        },
+        "handlers.GetNonceResponse": {
+            "type": "object",
+            "properties": {
+                "nonce": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GetSubscribersResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/actalink.SubscribersData"
+                }
+            }
+        },
+        "handlers.GetSubscriptionsResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/actalink.Subscription"
+                    }
+                }
+            }
+        },
+        "handlers.GetTokensResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/actalink.Token"
+                    }
+                }
+            }
+        },
+        "handlers.HealthResponse": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.LoginUserResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.OperationsResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/actalink.Operation"
+                    }
+                }
+            }
+        },
+        "handlers.RegisterUserResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.SubscriptionRequest": {
+            "type": "object",
+            "properties": {
+                "linktree": {
+                    "type": "string"
+                },
+                "plans": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/actalink.Plan"
+                    }
+                },
+                "receivers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/actalink.Receiver"
+                    }
+                },
+                "title": {
+                    "type": "string"
+                },
+                "tokens": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "trialDays": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.UserAvailabilityResponse": {
+            "type": "object",
+            "properties": {
+                "exists": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.UserLoginRegisterRequest": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "nonce": {
+                    "type": "string"
+                },
+                "signature": {
                     "type": "string"
                 }
             }

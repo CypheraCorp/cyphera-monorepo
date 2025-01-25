@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"cyphera-api/internal/handlers"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	_ "cyphera-api/docs" // This will be generated
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -40,6 +42,11 @@ var handlerClient *handlers.HandlerClient
 // @name Authorization
 // @description Type "Bearer" followed by a space and JWT token.
 func main() {
+	// Load environment variables
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: .env file not found: %v\n", err)
+	}
+
 	// Initialize router
 	router := gin.Default()
 
@@ -49,14 +56,21 @@ func main() {
 	// Initialize routes
 	initializeRoutes(router)
 
+	// Get port from environment variable or use default
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8000"
+	}
+
 	// Configure server
 	server := &http.Server{
-		Addr:    ":8000",
+		Addr:    fmt.Sprintf(":%s", port),
 		Handler: router,
 	}
 
 	// Start server in a goroutine
 	go func() {
+		log.Printf("Server starting on port %s\n", port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v\n", err)
 		}
@@ -104,20 +118,20 @@ func initializeRoutes(router *gin.Engine) {
 		v1.GET("/nonce", handlerClient.GetNonce)
 
 		// User
-		v1.GET("/user", handlerClient.CheckUserAvailability)
-		v1.POST("/user/register", handlerClient.RegisterUser)
-		v1.POST("/user/login", handlerClient.LoginUser)
-		v1.POST("/user/subscription", handlerClient.CreateSubscription)
-		v1.DELETE("/user/subscription", handlerClient.DeleteSubscription)
+		v1.GET("/users", handlerClient.CheckUserAvailability)
+		v1.POST("/users/register", handlerClient.RegisterUser)
+		v1.POST("/users/login", handlerClient.LoginUser)
 
-		// Subscriptions
-		v1.GET("/subscription", handlerClient.GetAllSubscriptions)
+		// Subscription
+		v1.POST("/subscriptions", handlerClient.CreateSubscription)
+		v1.DELETE("/subscriptions", handlerClient.DeleteSubscription)
+		v1.GET("/subscriptions", handlerClient.GetAllSubscriptions)
 
 		// Subscribers
 		v1.GET("/subscribers", handlerClient.GetSubscribers)
 
 		// Operations
-		v1.GET("/operations/", handlerClient.GetOperations)
+		v1.GET("/operations", handlerClient.GetOperations)
 
 		// Tokens
 		v1.GET("/tokens", handlerClient.GetTokens)

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -20,18 +21,14 @@ func handleStatusCode(statusCode *int, defaultCode int) int {
 // @Accept       json
 // @Produce      json
 // @Success      200  {object}  GetNonceResponse   "Returns nonce"
-// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      400  {object}  ErrorResponse      "Bad request"
+// @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /nonce [get]
 func (h *HandlerClient) GetNonce(c *gin.Context) {
 	nonceResp, statusCode, err := h.actalink.GetNonce()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch nonce"})
-		return
-	}
-
-	if statusCode == nil || *statusCode != http.StatusOK {
-		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": "Failed to get nonce from upstream"})
+		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to get nonce: %v", err)})
 		return
 	}
 
@@ -47,9 +44,9 @@ func (h *HandlerClient) GetNonce(c *gin.Context) {
 // @Param        address    query     string  true  "Address" example("0x1234567890abcdef")
 // @Success      200  {object}  UserAvailabilityResponse
 // @Failure      400  {object}  ErrorResponse      "Bad request"
-// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
-// @Router       /user [get]
+// @Router       /users [get]
 func (h *HandlerClient) CheckUserAvailability(c *gin.Context) {
 	address := c.Query("address")
 	if address == "" {
@@ -59,12 +56,7 @@ func (h *HandlerClient) CheckUserAvailability(c *gin.Context) {
 
 	availResp, statusCode, err := h.actalink.CheckUserAvailability(address)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check user availability"})
-		return
-	}
-
-	if statusCode == nil || *statusCode != http.StatusOK {
-		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": "Failed to check user availability from upstream"})
+		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to check user availability: %v", err)})
 		return
 	}
 
@@ -83,24 +75,19 @@ func (h *HandlerClient) CheckUserAvailability(c *gin.Context) {
 // @Param        request  body      UserLoginRegisterRequest  true  "User registration payload"
 // @Success      200  {object}  RegisterUserResponse
 // @Failure      400  {object}  ErrorResponse      "Bad request"
-// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /user/register [post]
 func (h *HandlerClient) RegisterUser(c *gin.Context) {
 	var req UserLoginRegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request body: %v", err)})
 		return
 	}
 
 	registerResp, statusCode, err := h.actalink.RegisterUser(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
-		return
-	}
-
-	if statusCode == nil || *statusCode != http.StatusOK {
-		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": "Failed to register user from upstream"})
+		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to register user: %v", err)})
 		return
 	}
 
@@ -116,24 +103,19 @@ func (h *HandlerClient) RegisterUser(c *gin.Context) {
 // @Param        request  body      UserLoginRegisterRequest  true  "User login payload"
 // @Success      200  {object}  LoginUserResponse
 // @Failure      400  {object}  ErrorResponse      "Bad request"
-// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /user/login [post]
 func (h *HandlerClient) LoginUser(c *gin.Context) {
 	var req UserLoginRegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request body: %v", err)})
 		return
 	}
 
 	loginResp, statusCode, err := h.actalink.LoginUser(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to login user"})
-		return
-	}
-
-	if statusCode == nil || *statusCode != http.StatusOK {
-		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": "Failed to login user from upstream"})
+		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to login user: %v", err)})
 		return
 	}
 
@@ -147,18 +129,13 @@ func (h *HandlerClient) LoginUser(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Success      200  {object}  GetNetworksResponse
-// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /networks [get]
 func (h *HandlerClient) GetNetworks(c *gin.Context) {
 	networks, statusCode, err := h.actalink.GetNetworks()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch networks"})
-		return
-	}
-
-	if statusCode == nil || *statusCode != http.StatusOK {
-		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": "Failed to fetch networks from upstream"})
+		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch networks: %v", err)})
 		return
 	}
 
@@ -175,7 +152,7 @@ func (h *HandlerClient) GetNetworks(c *gin.Context) {
 // @Param        status  query     string  true  "Status"
 // @Success      200  {object}  OperationsResponse
 // @Failure      400  {object}  ErrorResponse      "Bad request"
-// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /operations [get]
 func (h *HandlerClient) GetOperations(c *gin.Context) {
@@ -199,12 +176,7 @@ func (h *HandlerClient) GetOperations(c *gin.Context) {
 
 	operations, statusCode, err := h.actalink.GetOperations(swAddress, subId, status)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch operations"})
-		return
-	}
-
-	if statusCode == nil || *statusCode != http.StatusOK {
-		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": "Failed to fetch operations from upstream"})
+		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch operations: %v", err)})
 		return
 	}
 
@@ -217,20 +189,15 @@ func (h *HandlerClient) GetOperations(c *gin.Context) {
 // @Tags         subscriptions
 // @Accept       json
 // @Produce      json
-// @Success      200  {object}   GetSubscriptionsResponse
+// @Success      200  {object}  GetSubscriptionsResponse
 // @Failure      400  {object}  ErrorResponse      "Bad request"
-// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
-// @Router       /subscription [get]
+// @Router       /subscriptions [get]
 func (h *HandlerClient) GetAllSubscriptions(c *gin.Context) {
 	subscriptions, statusCode, err := h.actalink.GetAllSubscriptions()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch subscriptions"})
-		return
-	}
-
-	if statusCode == nil || *statusCode != http.StatusOK {
-		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": "Failed to fetch subscriptions from upstream"})
+		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch subscriptions: %v", err)})
 		return
 	}
 
@@ -246,24 +213,47 @@ func (h *HandlerClient) GetAllSubscriptions(c *gin.Context) {
 // @Param        subscription  body  SubscriptionRequest  true  "Subscription details"
 // @Success      200  {object}  CreateSubscriptionResponse
 // @Failure      400  {object}  ErrorResponse      "Bad request"
-// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
-// @Router       /subscription [post]
+// @Router       /subscriptions [post]
 func (h *HandlerClient) CreateSubscription(c *gin.Context) {
 	var req SubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request body: %v", err)})
 		return
 	}
 
 	resp, statusCode, err := h.actalink.CreateSubscription(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create subscription"})
+		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to create subscription: %v", err)})
 		return
 	}
 
-	if statusCode == nil || *statusCode != http.StatusOK {
-		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": "Failed to create subscription from upstream"})
+	c.JSON(http.StatusOK, resp)
+}
+
+// DeleteSubscription godoc
+// @Summary      Delete a subscription
+// @Description  Deletes a subscription plan
+// @Tags         subscriptions
+// @Accept       json
+// @Produce      json
+// @Param        subscription  body  DeleteSubscriptionRequest  true  "Subscription details"
+// @Success      200
+// @Failure      400  {object}  ErrorResponse      "Bad request"
+// @Failure      403  {object}  ErrorResponse      "Forbidden"
+// @Failure      500  {object}  ErrorResponse      "Internal server error"
+// @Router       /subscriptions [delete]
+func (h *HandlerClient) DeleteSubscription(c *gin.Context) {
+	var req DeleteSubscriptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request body: %v", err)})
+		return
+	}
+
+	resp, statusCode, err := h.actalink.DeleteSubscription(req)
+	if err != nil {
+		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to delete subscription: %v", err)})
 		return
 	}
 
@@ -279,7 +269,7 @@ func (h *HandlerClient) CreateSubscription(c *gin.Context) {
 // @Param        subscriptionId  query     string  true  "Subscription ID"  example("1234567890")
 // @Success      200  {object}  GetSubscribersResponse
 // @Failure      400  {object}  ErrorResponse      "Bad request"
-// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /subscribers [get]
 func (h *HandlerClient) GetSubscribers(c *gin.Context) {
@@ -291,49 +281,11 @@ func (h *HandlerClient) GetSubscribers(c *gin.Context) {
 
 	subscribers, statusCode, err := h.actalink.GetSubscribers(subId)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch subscribers"})
-		return
-	}
-
-	if statusCode == nil || *statusCode != http.StatusOK {
-		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": "Failed to fetch subscribers from upstream"})
+		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch subscribers: %v", err)})
 		return
 	}
 
 	c.JSON(http.StatusOK, subscribers)
-}
-
-// DeleteSubscription godoc
-// @Summary      Delete a subscription
-// @Description  Deletes a subscription plan
-// @Tags         subscriptions
-// @Accept       json
-// @Produce      json
-// @Param        subscription  body  DeleteSubscriptionRequest  true  "Subscription details"
-// @Success      200
-// @Failure      400  {object}  ErrorResponse      "Bad request"
-// @Failure      401  {object}  ErrorResponse      "Unauthorized"
-// @Failure      500  {object}  ErrorResponse      "Internal server error"
-// @Router       /subscription [delete]
-func (h *HandlerClient) DeleteSubscription(c *gin.Context) {
-	var req DeleteSubscriptionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-		return
-	}
-
-	resp, statusCode, err := h.actalink.DeleteSubscription(req)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete subscription"})
-		return
-	}
-
-	if statusCode == nil || *statusCode != http.StatusOK {
-		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": "Failed to delete subscription from upstream"})
-		return
-	}
-
-	c.JSON(http.StatusOK, resp)
 }
 
 // GetTokens godoc
@@ -344,18 +296,13 @@ func (h *HandlerClient) DeleteSubscription(c *gin.Context) {
 // @Produce      json
 // @Success      200  {object}  GetTokensResponse
 // @Failure      400  {object}  ErrorResponse      "Bad request"
-// @Failure      401  {object}  ErrorResponse      "Unauthorized"
+// @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /tokens [get]
 func (h *HandlerClient) GetTokens(c *gin.Context) {
 	tokens, statusCode, err := h.actalink.GetTokens()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tokens"})
-		return
-	}
-
-	if statusCode == nil || *statusCode != http.StatusOK {
-		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": "Failed to fetch tokens from upstream"})
+		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch tokens: %v", err)})
 		return
 	}
 

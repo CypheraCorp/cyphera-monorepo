@@ -2,38 +2,12 @@ package actalink
 
 import (
 	"encoding/json"
-	"io"
-	"net/http"
-
-	"github.com/pkg/errors"
 )
 
 func (c *ActaLinkClient) GetTokens() (*GetTokensResponse, *int, error) {
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", "https://api.billing.acta.link/api/ct/tokens", nil)
+	body, statusCode, err := c.doRequest("GET", "/api/ct/tokens", nil, nil)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	req.Header.Set("x-api-key", c.apiKey)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp ErrorResponse
-		if err := json.Unmarshal(body, &errResp); err != nil {
-			return nil, &resp.StatusCode, errors.New("unknown error occurred")
-		}
-		return nil, &resp.StatusCode, errors.Wrap(errors.New(errResp.Error), "actalink api error")
+		return nil, statusCode, err
 	}
 
 	var tokenResp GetTokensResponse
@@ -41,5 +15,5 @@ func (c *ActaLinkClient) GetTokens() (*GetTokensResponse, *int, error) {
 		return nil, nil, err
 	}
 
-	return &tokenResp, &resp.StatusCode, nil
+	return &tokenResp, statusCode, nil
 }
