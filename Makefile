@@ -26,8 +26,15 @@ run:
 swag:
 	swag init -g cmd/api/main.go
 
+sqlc:
+	sqlc generate
+
+gen: sqlc swag
+
 # Development tasks
-dev: swagger build run
+.PHONY: dev
+dev: swagger build
+	air
 
 # Docker tasks
 docker-build:

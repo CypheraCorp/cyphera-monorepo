@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
 	"fmt"
 	"log"
@@ -14,6 +15,7 @@ import (
 	_ "cyphera-api/docs" // This will be generated
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -57,7 +59,7 @@ func main() {
 	initializeRoutes(router)
 
 	// Get port from environment variable or use default
-	port := os.Getenv("PORT")
+	port := os.Getenv("API_PORT")
 	if port == "" {
 		port = "8000"
 	}
@@ -67,7 +69,6 @@ func main() {
 		Addr:    fmt.Sprintf(":%s", port),
 		Handler: router,
 	}
-
 	// Start server in a goroutine
 	go func() {
 		log.Printf("Server starting on port %s\n", port)
@@ -93,11 +94,27 @@ func main() {
 }
 
 func initializeHandlers() {
+	// Get database connection string from environment
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		log.Fatal("DATABASE_URL environment variable is required")
+	}
+
+	// Connect to the database
+	conn, err := pgx.Connect(context.Background(), dbURL)
+	if err != nil {
+		log.Fatalf("Unable to connect to database: %v\n", err)
+	}
+
+	// Create queries instance
+	dbQueries := db.New(conn)
+
 	apiKey := os.Getenv("ACTALINK_API_KEY")
 	if apiKey == "" {
 		log.Fatal("ACTALINK_API_KEY environment variable is required")
 	}
-	handlerClient = handlers.NewHandlerClient(apiKey)
+
+	handlerClient = handlers.NewHandlerClient(apiKey, dbQueries)
 }
 
 func initializeRoutes(router *gin.Engine) {
@@ -114,29 +131,38 @@ func initializeRoutes(router *gin.Engine) {
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 	{
-		// Nonce
-		v1.GET("/nonce", handlerClient.GetNonce)
 
-		// User
-		v1.GET("/users", handlerClient.CheckUserAvailability)
-		v1.POST("/users/register", handlerClient.RegisterUser)
-		v1.POST("/users/login", handlerClient.LoginUser)
+		//
+		v1.GET("/customers/:id", handlerClient.GetCustomerByID)
+		v1.GET("/api-keys/:id", handlerClient.GetAPIKeyByID)
 
-		// Subscription
-		v1.POST("/subscriptions", handlerClient.CreateSubscription)
-		v1.DELETE("/subscriptions", handlerClient.DeleteSubscription)
-		v1.GET("/subscriptions", handlerClient.GetAllSubscriptions)
+		// actalink group
+		actalink := v1.Group("/actalink")
+		{
+			// Nonce
+			actalink.GET("/nonce", handlerClient.GetNonce)
 
-		// Subscribers
-		v1.GET("/subscribers", handlerClient.GetSubscribers)
+			// User
+			actalink.GET("/users", handlerClient.CheckUserAvailability)
+			actalink.POST("/users/register", handlerClient.RegisterUser)
+			actalink.POST("/users/login", handlerClient.LoginUser)
 
-		// Operations
-		v1.GET("/operations", handlerClient.GetOperations)
+			// Subscription
+			actalink.POST("/subscriptions", handlerClient.CreateSubscription)
+			actalink.DELETE("/subscriptions", handlerClient.DeleteSubscription)
+			actalink.GET("/subscriptions", handlerClient.GetAllSubscriptions)
 
-		// Tokens
-		v1.GET("/tokens", handlerClient.GetTokens)
+			// Subscribers
+			actalink.GET("/subscribers", handlerClient.GetSubscribers)
 
-		// Networks
-		v1.GET("/networks", handlerClient.GetNetworks)
+			// Operations
+			actalink.GET("/operations", handlerClient.GetOperations)
+
+			// Tokens
+			actalink.GET("/tokens", handlerClient.GetTokens)
+
+			// Networks
+			actalink.GET("/networks", handlerClient.GetNetworks)
+		}
 	}
 }

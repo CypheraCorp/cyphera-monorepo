@@ -1,6 +1,6 @@
 package handlers
 
-import "cyphera-api/pkg/actalink"
+import "cyphera-api/internal/pkg/actalink"
 
 // Consts
 const (
