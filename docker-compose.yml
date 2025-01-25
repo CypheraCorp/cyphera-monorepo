@@ -3,6 +3,7 @@ version: '3.8'
 services:
   cyphera-api:
     build: .
+    container_name: cyphera-api
     ports:
       - "8000:8000"
     environment:
@@ -23,6 +24,7 @@ services:
       - cyphera-network
 
   postgres:
+    container_name: cyphera-db
     image: postgres:15-alpine
     ports:
       - "5432:5432"

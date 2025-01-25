@@ -6,7 +6,6 @@ package db
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -56,60 +55,73 @@ func (ns NullApiKeyLevel) Value() (driver.Value, error) {
 	return string(ns.ApiKeyLevel), nil
 }
 
-type SubscriptionStatus string
+type UserRole string
 
 const (
-	SubscriptionStatusActive            SubscriptionStatus = "active"
-	SubscriptionStatusCanceled          SubscriptionStatus = "canceled"
-	SubscriptionStatusPastDue           SubscriptionStatus = "past_due"
-	SubscriptionStatusIncomplete        SubscriptionStatus = "incomplete"
-	SubscriptionStatusIncompleteExpired SubscriptionStatus = "incomplete_expired"
-	SubscriptionStatusTrialing          SubscriptionStatus = "trialing"
-	SubscriptionStatusUnpaid            SubscriptionStatus = "unpaid"
+	UserRoleAdmin   UserRole = "admin"
+	UserRoleAccount UserRole = "account"
 )
 
-func (e *SubscriptionStatus) Scan(src interface{}) error {
+func (e *UserRole) Scan(src interface{}) error {
 	switch s := src.(type) {
 	case []byte:
-		*e = SubscriptionStatus(s)
+		*e = UserRole(s)
 	case string:
-		*e = SubscriptionStatus(s)
+		*e = UserRole(s)
 	default:
-		return fmt.Errorf("unsupported scan type for SubscriptionStatus: %T", src)
+		return fmt.Errorf("unsupported scan type for UserRole: %T", src)
 	}
 	return nil
 }
 
-type NullSubscriptionStatus struct {
-	SubscriptionStatus SubscriptionStatus `json:"subscription_status"`
-	Valid              bool               `json:"valid"` // Valid is true if SubscriptionStatus is not NULL
+type NullUserRole struct {
+	UserRole UserRole `json:"user_role"`
+	Valid    bool     `json:"valid"` // Valid is true if UserRole is not NULL
 }
 
 // Scan implements the Scanner interface.
-func (ns *NullSubscriptionStatus) Scan(value interface{}) error {
+func (ns *NullUserRole) Scan(value interface{}) error {
 	if value == nil {
-		ns.SubscriptionStatus, ns.Valid = "", false
+		ns.UserRole, ns.Valid = "", false
 		return nil
 	}
 	ns.Valid = true
-	return ns.SubscriptionStatus.Scan(value)
+	return ns.UserRole.Scan(value)
 }
 
 // Value implements the driver Valuer interface.
-func (ns NullSubscriptionStatus) Value() (driver.Value, error) {
+func (ns NullUserRole) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
 	}
-	return string(ns.SubscriptionStatus), nil
+	return string(ns.UserRole), nil
+}
+
+type Account struct {
+	ID           uuid.UUID          `json:"id"`
+	UserID       uuid.UUID          `json:"user_id"`
+	Name         string             `json:"name"`
+	Description  pgtype.Text        `json:"description"`
+	BusinessName pgtype.Text        `json:"business_name"`
+	BusinessType pgtype.Text        `json:"business_type"`
+	WebsiteUrl   pgtype.Text        `json:"website_url"`
+	SupportEmail pgtype.Text        `json:"support_email"`
+	SupportPhone pgtype.Text        `json:"support_phone"`
+	Metadata     []byte             `json:"metadata"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+	Livemode     pgtype.Bool        `json:"livemode"`
 }
 
 type ApiKey struct {
 	ID         uuid.UUID          `json:"id"`
-	CustomerID pgtype.UUID        `json:"customer_id"`
+	AccountID  pgtype.UUID        `json:"account_id"`
 	Name       string             `json:"name"`
 	KeyHash    string             `json:"key_hash"`
 	Level      ApiKeyLevel        `json:"level"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	DeletedAt  pgtype.Timestamptz `json:"deleted_at"`
 	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
 	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
 	IsActive   pgtype.Bool        `json:"is_active"`
@@ -119,6 +131,7 @@ type ApiKey struct {
 
 type Customer struct {
 	ID                  uuid.UUID          `json:"id"`
+	AccountID           uuid.UUID          `json:"account_id"`
 	Email               string             `json:"email"`
 	Name                pgtype.Text        `json:"name"`
 	Description         pgtype.Text        `json:"description"`
@@ -136,86 +149,15 @@ type Customer struct {
 	Livemode            pgtype.Bool        `json:"livemode"`
 }
 
-type Invoice struct {
-	ID                 uuid.UUID          `json:"id"`
-	CustomerID         pgtype.UUID        `json:"customer_id"`
-	SubscriptionID     pgtype.UUID        `json:"subscription_id"`
-	Status             string             `json:"status"`
-	Currency           string             `json:"currency"`
-	AmountDue          int32              `json:"amount_due"`
-	AmountPaid         pgtype.Int4        `json:"amount_paid"`
-	AmountRemaining    pgtype.Int4        `json:"amount_remaining"`
-	Paid               pgtype.Bool        `json:"paid"`
-	AttemptCount       pgtype.Int4        `json:"attempt_count"`
-	NextPaymentAttempt pgtype.Timestamptz `json:"next_payment_attempt"`
-	Metadata           []byte             `json:"metadata"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	Livemode           pgtype.Bool        `json:"livemode"`
-}
-
-type PaymentMethod struct {
+type User struct {
 	ID         uuid.UUID          `json:"id"`
-	CustomerID pgtype.UUID        `json:"customer_id"`
-	Type       string             `json:"type"`
-	Details    json.RawMessage    `json:"details"`
-	IsDefault  pgtype.Bool        `json:"is_default"`
+	Auth0ID    string             `json:"auth0_id"`
+	Email      string             `json:"email"`
+	Role       UserRole           `json:"role"`
+	Name       pgtype.Text        `json:"name"`
+	PictureUrl pgtype.Text        `json:"picture_url"`
 	Metadata   []byte             `json:"metadata"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	Livemode   pgtype.Bool        `json:"livemode"`
-}
-
-type Price struct {
-	ID                     uuid.UUID          `json:"id"`
-	ProductID              pgtype.UUID        `json:"product_id"`
-	Currency               string             `json:"currency"`
-	UnitAmount             pgtype.Int4        `json:"unit_amount"`
-	RecurringInterval      pgtype.Text        `json:"recurring_interval"`
-	RecurringIntervalCount pgtype.Int4        `json:"recurring_interval_count"`
-	UsageType              pgtype.Text        `json:"usage_type"`
-	BillingScheme          pgtype.Text        `json:"billing_scheme"`
-	Active                 pgtype.Bool        `json:"active"`
-	Metadata               []byte             `json:"metadata"`
-	CreatedAt              pgtype.Timestamptz `json:"created_at"`
-	Livemode               pgtype.Bool        `json:"livemode"`
-}
-
-type Product struct {
-	ID             uuid.UUID          `json:"id"`
-	Name           string             `json:"name"`
-	Description    pgtype.Text        `json:"description"`
-	Active         pgtype.Bool        `json:"active"`
-	DefaultPriceID pgtype.UUID        `json:"default_price_id"`
-	Metadata       []byte             `json:"metadata"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	Livemode       pgtype.Bool        `json:"livemode"`
-}
-
-type Subscription struct {
-	ID                 uuid.UUID          `json:"id"`
-	CustomerID         pgtype.UUID        `json:"customer_id"`
-	Status             SubscriptionStatus `json:"status"`
-	CurrentPeriodStart pgtype.Timestamptz `json:"current_period_start"`
-	CurrentPeriodEnd   pgtype.Timestamptz `json:"current_period_end"`
-	CancelAt           pgtype.Timestamptz `json:"cancel_at"`
-	CanceledAt         pgtype.Timestamptz `json:"canceled_at"`
-	EndedAt            pgtype.Timestamptz `json:"ended_at"`
-	TrialStart         pgtype.Timestamptz `json:"trial_start"`
-	TrialEnd           pgtype.Timestamptz `json:"trial_end"`
-	Metadata           []byte             `json:"metadata"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	Livemode           pgtype.Bool        `json:"livemode"`
-}
-
-type SubscriptionItem struct {
-	ID             uuid.UUID          `json:"id"`
-	SubscriptionID pgtype.UUID        `json:"subscription_id"`
-	PriceID        pgtype.UUID        `json:"price_id"`
-	Quantity       pgtype.Int4        `json:"quantity"`
-	Metadata       []byte             `json:"metadata"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt  pgtype.Timestamptz `json:"deleted_at"`
 }

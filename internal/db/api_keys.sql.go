@@ -14,7 +14,7 @@ import (
 
 const createAPIKey = `-- name: CreateAPIKey :one
 INSERT INTO api_keys (
-    customer_id,
+    account_id,
     name,
     key_hash,
     level,
@@ -24,22 +24,22 @@ INSERT INTO api_keys (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, customer_id, name, key_hash, level, created_at, expires_at, last_used_at, is_active, metadata, livemode
+RETURNING id, account_id, name, key_hash, level, created_at, deleted_at, expires_at, last_used_at, is_active, metadata, livemode
 `
 
 type CreateAPIKeyParams struct {
-	CustomerID pgtype.UUID        `json:"customer_id"`
-	Name       string             `json:"name"`
-	KeyHash    string             `json:"key_hash"`
-	Level      ApiKeyLevel        `json:"level"`
-	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
-	Metadata   []byte             `json:"metadata"`
-	Livemode   pgtype.Bool        `json:"livemode"`
+	AccountID pgtype.UUID        `json:"account_id"`
+	Name      string             `json:"name"`
+	KeyHash   string             `json:"key_hash"`
+	Level     ApiKeyLevel        `json:"level"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	Metadata  []byte             `json:"metadata"`
+	Livemode  pgtype.Bool        `json:"livemode"`
 }
 
 func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error) {
 	row := q.db.QueryRow(ctx, createAPIKey,
-		arg.CustomerID,
+		arg.AccountID,
 		arg.Name,
 		arg.KeyHash,
 		arg.Level,
@@ -50,11 +50,12 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 	var i ApiKey
 	err := row.Scan(
 		&i.ID,
-		&i.CustomerID,
+		&i.AccountID,
 		&i.Name,
 		&i.KeyHash,
 		&i.Level,
 		&i.CreatedAt,
+		&i.DeletedAt,
 		&i.ExpiresAt,
 		&i.LastUsedAt,
 		&i.IsActive,
@@ -64,20 +65,22 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 	return i, err
 }
 
-const deactivateAPIKey = `-- name: DeactivateAPIKey :exec
+const deleteAPIKey = `-- name: DeleteAPIKey :exec
 UPDATE api_keys
-SET is_active = false
-WHERE id = $1
+SET 
+    deleted_at = CURRENT_TIMESTAMP,
+    is_active = false
+WHERE id = $1 AND deleted_at IS NULL
 `
 
-func (q *Queries) DeactivateAPIKey(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deactivateAPIKey, id)
+func (q *Queries) DeleteAPIKey(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAPIKey, id)
 	return err
 }
 
 const getAPIKey = `-- name: GetAPIKey :one
-SELECT id, customer_id, name, key_hash, level, created_at, expires_at, last_used_at, is_active, metadata, livemode FROM api_keys
-WHERE id = $1 AND is_active = true LIMIT 1
+SELECT id, account_id, name, key_hash, level, created_at, deleted_at, expires_at, last_used_at, is_active, metadata, livemode FROM api_keys
+WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
 func (q *Queries) GetAPIKey(ctx context.Context, id uuid.UUID) (ApiKey, error) {
@@ -85,11 +88,12 @@ func (q *Queries) GetAPIKey(ctx context.Context, id uuid.UUID) (ApiKey, error) {
 	var i ApiKey
 	err := row.Scan(
 		&i.ID,
-		&i.CustomerID,
+		&i.AccountID,
 		&i.Name,
 		&i.KeyHash,
 		&i.Level,
 		&i.CreatedAt,
+		&i.DeletedAt,
 		&i.ExpiresAt,
 		&i.LastUsedAt,
 		&i.IsActive,
@@ -100,8 +104,8 @@ func (q *Queries) GetAPIKey(ctx context.Context, id uuid.UUID) (ApiKey, error) {
 }
 
 const getAPIKeyByHash = `-- name: GetAPIKeyByHash :one
-SELECT id, customer_id, name, key_hash, level, created_at, expires_at, last_used_at, is_active, metadata, livemode FROM api_keys
-WHERE key_hash = $1 AND is_active = true LIMIT 1
+SELECT id, account_id, name, key_hash, level, created_at, deleted_at, expires_at, last_used_at, is_active, metadata, livemode FROM api_keys
+WHERE key_hash = $1 AND deleted_at IS NULL AND is_active = true LIMIT 1
 `
 
 func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error) {
@@ -109,11 +113,12 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, 
 	var i ApiKey
 	err := row.Scan(
 		&i.ID,
-		&i.CustomerID,
+		&i.AccountID,
 		&i.Name,
 		&i.KeyHash,
 		&i.Level,
 		&i.CreatedAt,
+		&i.DeletedAt,
 		&i.ExpiresAt,
 		&i.LastUsedAt,
 		&i.IsActive,
@@ -123,14 +128,29 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, 
 	return i, err
 }
 
-const listAPIKeys = `-- name: ListAPIKeys :many
-SELECT id, customer_id, name, key_hash, level, created_at, expires_at, last_used_at, is_active, metadata, livemode FROM api_keys
-WHERE customer_id = $1 AND is_active = true
+const getActiveAPIKeysCount = `-- name: GetActiveAPIKeysCount :one
+SELECT COUNT(*) 
+FROM api_keys
+WHERE account_id = $1 
+AND deleted_at IS NULL 
+AND is_active = true
+AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+`
+
+func (q *Queries) GetActiveAPIKeysCount(ctx context.Context, accountID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getActiveAPIKeysCount, accountID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getAllAPIKeys = `-- name: GetAllAPIKeys :many
+SELECT id, account_id, name, key_hash, level, created_at, deleted_at, expires_at, last_used_at, is_active, metadata, livemode FROM api_keys
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListAPIKeys(ctx context.Context, customerID pgtype.UUID) ([]ApiKey, error) {
-	rows, err := q.db.Query(ctx, listAPIKeys, customerID)
+func (q *Queries) GetAllAPIKeys(ctx context.Context) ([]ApiKey, error) {
+	rows, err := q.db.Query(ctx, getAllAPIKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -140,11 +160,12 @@ func (q *Queries) ListAPIKeys(ctx context.Context, customerID pgtype.UUID) ([]Ap
 		var i ApiKey
 		if err := rows.Scan(
 			&i.ID,
-			&i.CustomerID,
+			&i.AccountID,
 			&i.Name,
 			&i.KeyHash,
 			&i.Level,
 			&i.CreatedAt,
+			&i.DeletedAt,
 			&i.ExpiresAt,
 			&i.LastUsedAt,
 			&i.IsActive,
@@ -159,6 +180,195 @@ func (q *Queries) ListAPIKeys(ctx context.Context, customerID pgtype.UUID) ([]Ap
 		return nil, err
 	}
 	return items, nil
+}
+
+const getExpiredAPIKeys = `-- name: GetExpiredAPIKeys :many
+SELECT id, account_id, name, key_hash, level, created_at, deleted_at, expires_at, last_used_at, is_active, metadata, livemode FROM api_keys
+WHERE deleted_at IS NULL 
+AND is_active = true
+AND expires_at IS NOT NULL 
+AND expires_at <= CURRENT_TIMESTAMP
+ORDER BY expires_at ASC
+`
+
+func (q *Queries) GetExpiredAPIKeys(ctx context.Context) ([]ApiKey, error) {
+	rows, err := q.db.Query(ctx, getExpiredAPIKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ApiKey{}
+	for rows.Next() {
+		var i ApiKey
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.Name,
+			&i.KeyHash,
+			&i.Level,
+			&i.CreatedAt,
+			&i.DeletedAt,
+			&i.ExpiresAt,
+			&i.LastUsedAt,
+			&i.IsActive,
+			&i.Metadata,
+			&i.Livemode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const hardDeleteAPIKey = `-- name: HardDeleteAPIKey :exec
+DELETE FROM api_keys
+WHERE id = $1
+`
+
+func (q *Queries) HardDeleteAPIKey(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, hardDeleteAPIKey, id)
+	return err
+}
+
+const listAPIKeys = `-- name: ListAPIKeys :many
+SELECT id, account_id, name, key_hash, level, created_at, deleted_at, expires_at, last_used_at, is_active, metadata, livemode FROM api_keys
+WHERE account_id = $1 AND deleted_at IS NULL
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListAPIKeys(ctx context.Context, accountID pgtype.UUID) ([]ApiKey, error) {
+	rows, err := q.db.Query(ctx, listAPIKeys, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ApiKey{}
+	for rows.Next() {
+		var i ApiKey
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.Name,
+			&i.KeyHash,
+			&i.Level,
+			&i.CreatedAt,
+			&i.DeletedAt,
+			&i.ExpiresAt,
+			&i.LastUsedAt,
+			&i.IsActive,
+			&i.Metadata,
+			&i.Livemode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateAPIKey = `-- name: UpdateAPIKey :one
+UPDATE api_keys
+SET
+    name = COALESCE($2, name),
+    level = COALESCE($3, level),
+    expires_at = COALESCE($4, expires_at),
+    is_active = COALESCE($5, is_active),
+    metadata = COALESCE($6, metadata),
+    last_used_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, account_id, name, key_hash, level, created_at, deleted_at, expires_at, last_used_at, is_active, metadata, livemode
+`
+
+type UpdateAPIKeyParams struct {
+	ID        uuid.UUID          `json:"id"`
+	Name      string             `json:"name"`
+	Level     ApiKeyLevel        `json:"level"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	IsActive  pgtype.Bool        `json:"is_active"`
+	Metadata  []byte             `json:"metadata"`
+}
+
+func (q *Queries) UpdateAPIKey(ctx context.Context, arg UpdateAPIKeyParams) (ApiKey, error) {
+	row := q.db.QueryRow(ctx, updateAPIKey,
+		arg.ID,
+		arg.Name,
+		arg.Level,
+		arg.ExpiresAt,
+		arg.IsActive,
+		arg.Metadata,
+	)
+	var i ApiKey
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Name,
+		&i.KeyHash,
+		&i.Level,
+		&i.CreatedAt,
+		&i.DeletedAt,
+		&i.ExpiresAt,
+		&i.LastUsedAt,
+		&i.IsActive,
+		&i.Metadata,
+		&i.Livemode,
+	)
+	return i, err
+}
+
+const updateAPIKeyFull = `-- name: UpdateAPIKeyFull :one
+UPDATE api_keys
+SET
+    name = $2,
+    level = $3,
+    expires_at = $4,
+    is_active = $5,
+    metadata = $6,
+    last_used_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, account_id, name, key_hash, level, created_at, deleted_at, expires_at, last_used_at, is_active, metadata, livemode
+`
+
+type UpdateAPIKeyFullParams struct {
+	ID        uuid.UUID          `json:"id"`
+	Name      string             `json:"name"`
+	Level     ApiKeyLevel        `json:"level"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	IsActive  pgtype.Bool        `json:"is_active"`
+	Metadata  []byte             `json:"metadata"`
+}
+
+func (q *Queries) UpdateAPIKeyFull(ctx context.Context, arg UpdateAPIKeyFullParams) (ApiKey, error) {
+	row := q.db.QueryRow(ctx, updateAPIKeyFull,
+		arg.ID,
+		arg.Name,
+		arg.Level,
+		arg.ExpiresAt,
+		arg.IsActive,
+		arg.Metadata,
+	)
+	var i ApiKey
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Name,
+		&i.KeyHash,
+		&i.Level,
+		&i.CreatedAt,
+		&i.DeletedAt,
+		&i.ExpiresAt,
+		&i.LastUsedAt,
+		&i.IsActive,
+		&i.Metadata,
+		&i.Livemode,
+	)
+	return i, err
 }
 
 const updateAPIKeyLastUsed = `-- name: UpdateAPIKeyLastUsed :exec

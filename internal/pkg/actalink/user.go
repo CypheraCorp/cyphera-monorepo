@@ -2,6 +2,7 @@ package actalink
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 )
 
@@ -19,40 +20,21 @@ func (c *ActaLinkClient) CheckUserAvailability(address string) (*UserAvailabilit
 	}, statusCode, nil
 }
 
-func (c *ActaLinkClient) RegisterUser(request UserLoginRegisterRequest) (*RegisterUserResponse, *int, error) {
+func (c *ActaLinkClient) RegisterOrLoginUser(request UserLoginRegisterRequest, suffix string) (*RegisterOrLoginUserResponse, *int, error) {
 	jsonBody, err := json.Marshal(request)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	body, statusCode, err := c.doRequest("POST", "/api/ct/register", jsonBody, nil)
+	body, statusCode, err := c.doRequest("POST", fmt.Sprintf("/api/ct/%s", suffix), jsonBody, nil)
 	if err != nil {
 		return nil, statusCode, err
 	}
 
-	var registerResp RegisterUserResponse
-	if err := json.Unmarshal(body, &registerResp); err != nil {
+	var resp RegisterOrLoginUserResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, nil, err
 	}
 
-	return &registerResp, statusCode, nil
-}
-
-func (c *ActaLinkClient) LoginUser(request UserLoginRegisterRequest) (*LoginUserResponse, *int, error) {
-	jsonBody, err := json.Marshal(request)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	body, statusCode, err := c.doRequest("POST", "/api/ct/login", jsonBody, nil)
-	if err != nil {
-		return nil, statusCode, err
-	}
-
-	var loginResp LoginUserResponse
-	if err := json.Unmarshal(body, &loginResp); err != nil {
-		return nil, nil, err
-	}
-
-	return &loginResp, statusCode, nil
+	return &resp, statusCode, nil
 }

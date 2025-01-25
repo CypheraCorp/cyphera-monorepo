@@ -13,16 +13,48 @@ import (
 
 type Querier interface {
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
+	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
-	DeactivateAPIKey(ctx context.Context, id uuid.UUID) error
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteAPIKey(ctx context.Context, id uuid.UUID) error
+	DeleteAccount(ctx context.Context, id uuid.UUID) error
 	DeleteCustomer(ctx context.Context, id uuid.UUID) error
+	DeleteUser(ctx context.Context, id uuid.UUID) error
 	GetAPIKey(ctx context.Context, id uuid.UUID) (ApiKey, error)
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
+	GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
+	GetAccountByUserID(ctx context.Context, userID uuid.UUID) (Account, error)
+	GetActiveAPIKeysCount(ctx context.Context, accountID pgtype.UUID) (int64, error)
+	GetAllAPIKeys(ctx context.Context) ([]ApiKey, error)
+	GetAllAccounts(ctx context.Context) ([]Account, error)
+	GetAllUsers(ctx context.Context) ([]User, error)
 	GetCustomer(ctx context.Context, id uuid.UUID) (Customer, error)
-	ListAPIKeys(ctx context.Context, customerID pgtype.UUID) ([]ApiKey, error)
-	ListCustomers(ctx context.Context) ([]Customer, error)
+	GetCustomerByEmail(ctx context.Context, arg GetCustomerByEmailParams) (Customer, error)
+	GetCustomersByAccountID(ctx context.Context) ([]GetCustomersByAccountIDRow, error)
+	GetCustomersByBalance(ctx context.Context, arg GetCustomersByBalanceParams) ([]Customer, error)
+	GetCustomersByScope(ctx context.Context, arg GetCustomersByScopeParams) ([]GetCustomersByScopeRow, error)
+	GetExpiredAPIKeys(ctx context.Context) ([]ApiKey, error)
+	GetUser(ctx context.Context, id uuid.UUID) (User, error)
+	GetUserByAuth0ID(ctx context.Context, auth0ID string) (User, error)
+	GetUserByEmail(ctx context.Context, email string) (User, error)
+	HardDeleteAPIKey(ctx context.Context, id uuid.UUID) error
+	HardDeleteAccount(ctx context.Context, id uuid.UUID) error
+	HardDeleteCustomer(ctx context.Context, id uuid.UUID) error
+	HardDeleteUser(ctx context.Context, id uuid.UUID) error
+	ListAPIKeys(ctx context.Context, accountID pgtype.UUID) ([]ApiKey, error)
+	ListAccountCustomers(ctx context.Context, id uuid.UUID) ([]Customer, error)
+	ListAccounts(ctx context.Context) ([]Account, error)
+	ListUsers(ctx context.Context) ([]User, error)
+	UpdateAPIKey(ctx context.Context, arg UpdateAPIKeyParams) (ApiKey, error)
+	UpdateAPIKeyFull(ctx context.Context, arg UpdateAPIKeyFullParams) (ApiKey, error)
 	UpdateAPIKeyLastUsed(ctx context.Context, id uuid.UUID) error
+	UpdateAccount(ctx context.Context, arg UpdateAccountParams) (Account, error)
+	UpdateAccountFull(ctx context.Context, arg UpdateAccountFullParams) (Account, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
+	UpdateCustomerBalance(ctx context.Context, arg UpdateCustomerBalanceParams) (Customer, error)
+	UpdateCustomerFull(ctx context.Context, arg UpdateCustomerFullParams) (Customer, error)
+	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
+	UpdateUserFull(ctx context.Context, arg UpdateUserFullParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

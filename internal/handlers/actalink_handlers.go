@@ -1,11 +1,38 @@
 package handlers
 
 import (
+	"cyphera-api/internal/pkg/actalink"
 	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
+
+// Consts
+const (
+	UserExists = "exists"
+)
+
+// Request Types
+type UserLoginRegisterRequest = actalink.UserLoginRegisterRequest
+type SubscriptionRequest = actalink.SubscriptionRequest
+type DeleteSubscriptionRequest = actalink.DeleteSubscriptionRequest
+
+// Response Types
+type GetUserResponse = actalink.UserAvailabilityResponse
+type GetNonceResponse = actalink.GetNonceResponse
+type RegisterOrLoginUserResponse = actalink.RegisterOrLoginUserResponse
+type GetSubscriptionsResponse = actalink.GetSubscriptionsResponse
+type CreateSubscriptionResponse = actalink.CreateSubscriptionResponse
+type DeleteSubscriptionResponse = actalink.DeleteSubscriptionResponse
+type GetSubscribersResponse = actalink.GetSubscribersResponse
+type GetTokensResponse = actalink.GetTokensResponse
+type GetNetworksResponse = actalink.GetNetworksResponse
+type OperationsResponse = actalink.OperationsResponse
+
+type UserAvailabilityResponse struct {
+	Exists bool `json:"exists"`
+}
 
 func handleStatusCode(statusCode *int, defaultCode int) int {
 	if statusCode == nil {
@@ -46,7 +73,7 @@ func (h *HandlerClient) GetNonce(c *gin.Context) {
 // @Failure      400  {object}  ErrorResponse      "Bad request"
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
-// @Router       /users [get]
+// @Router       /isuseravailable [get]
 func (h *HandlerClient) CheckUserAvailability(c *gin.Context) {
 	address := c.Query("address")
 	if address == "" {
@@ -73,7 +100,7 @@ func (h *HandlerClient) CheckUserAvailability(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Param        request  body      UserLoginRegisterRequest  true  "User registration payload"
-// @Success      200  {object}  RegisterUserResponse
+// @Success      200  {object}  RegisterOrLoginUserResponse
 // @Failure      400  {object}  ErrorResponse      "Bad request"
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
@@ -85,7 +112,7 @@ func (h *HandlerClient) RegisterUser(c *gin.Context) {
 		return
 	}
 
-	registerResp, statusCode, err := h.actalink.RegisterUser(req)
+	registerResp, statusCode, err := h.actalink.RegisterOrLoginUser(req, "register")
 	if err != nil {
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to register user: %v", err)})
 		return
@@ -101,7 +128,7 @@ func (h *HandlerClient) RegisterUser(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Param        request  body      UserLoginRegisterRequest  true  "User login payload"
-// @Success      200  {object}  LoginUserResponse
+// @Success      200  {object}  RegisterOrLoginUserResponse
 // @Failure      400  {object}  ErrorResponse      "Bad request"
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
@@ -113,7 +140,7 @@ func (h *HandlerClient) LoginUser(c *gin.Context) {
 		return
 	}
 
-	loginResp, statusCode, err := h.actalink.LoginUser(req)
+	loginResp, statusCode, err := h.actalink.RegisterOrLoginUser(req, "login")
 	if err != nil {
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to login user: %v", err)})
 		return

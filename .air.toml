@@ -2,7 +2,7 @@ root = "."
 tmp_dir = "bin"
 
 [build]
-  cmd = "go build -o ./cmd/api/main.go ."
+  cmd = "go build -o bin/cyphera-api ./cmd/api/main.go"
   bin = "./bin/cyphera-api"
   delay = 500 # in milliseconds
   exclude_dir = ["assets", "tmp", "bin", "vendor"]
