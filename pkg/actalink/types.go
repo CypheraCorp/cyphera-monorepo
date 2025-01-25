@@ -1,18 +1,6 @@
-package handlers
-
-// Consts
-const (
-	UserExists = "exists"
-)
+package actalink
 
 // Request Types
-type UserLoginRegisterRequest struct {
-	Address   string `json:"address"`
-	Message   string `json:"message"`
-	Signature string `json:"signature"`
-	Nonce     string `json:"nonce"`
-}
-
 type SubscriptionRequest struct {
 	Title     string     `json:"title"`
 	Tokens    []string   `json:"tokens"`
@@ -26,16 +14,14 @@ type DeleteSubscriptionRequest struct {
 	SubscriptionId string `json:"subscriptionId" binding:"required"`
 }
 
+type UserLoginRegisterRequest struct {
+	Address   string `json:"address"`
+	Message   string `json:"message"`
+	Signature string `json:"signature"`
+	Nonce     string `json:"nonce"`
+}
+
 // Response Types
-
-type GetUserResponse struct {
-	Message string `json:"message"`
-}
-
-type GetNonceResponse struct {
-	Nonce string `json:"nonce"`
-}
-
 type GetSubscriptionsResponse struct {
 	Data []Subscription `json:"data"`
 }
@@ -44,11 +30,27 @@ type CreateSubscriptionResponse struct {
 	Message string `json:"message"`
 }
 
-type UserAvailabilityResponse struct {
-	Exists bool `json:"exists"`
+type DeleteSubscriptionResponse struct {
+	Message string `json:"message"`
 }
 
-type DeleteSubscriptionResponse struct {
+type GetSubscribersResponse struct {
+	Data SubscribersData `json:"data"`
+}
+
+type OperationsResponse struct {
+	Data []Operation `json:"data"`
+}
+
+type GetTokensResponse struct {
+	Data []Token `json:"data"`
+}
+
+type GetNetworksResponse struct {
+	Data []Network `json:"data"`
+}
+
+type UserAvailabilityResponse struct {
 	Message string `json:"message"`
 }
 
@@ -60,21 +62,9 @@ type LoginUserResponse struct {
 	Message string `json:"message"`
 }
 
-type GetSubscribersResponse struct {
-	Data SubscribersData `json:"data"`
-}
-
-type GetTokensResponse struct {
-	Data []Token `json:"data"`
-}
-
-type GetNetworksResponse struct {
-	Data []Network `json:"data"`
-}
-
-// ErrorResponse represents an error response
+// ErrorResponse represents the error response from the API
 type ErrorResponse struct {
-	Error string `json:"error" example:"Invalid request parameters"`
+	Error string `json:"error"`
 }
 
 // Model Types
@@ -142,6 +132,47 @@ type Token struct {
 	ChainId     int    `json:"chainId"`
 	LogoURI     string `json:"logoURI"`
 	CoingeckoId string `json:"coingeckoId"`
+}
+
+type UserOperation struct {
+	Sender               string `json:"sender"`
+	Nonce                string `json:"nonce"`
+	InitCode             string `json:"initCode"`
+	CallData             string `json:"callData"`
+	CallGasLimit         string `json:"callGasLimit"`
+	VerificationGasLimit string `json:"verificationGasLimit"`
+	PreVerificationGas   string `json:"preVerificationGas"`
+	MaxFeePerGas         string `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas string `json:"maxPriorityFeePerGas"`
+	PaymasterAndData     string `json:"paymasterAndData"`
+	Signature            string `json:"signature"`
+}
+
+type PaymentTypeParams struct {
+	SubscriptionId string `json:"subscriptionId"`
+	PaylinkUrl     string `json:"paylinkUrl"`
+}
+
+type RawOperation struct {
+	UserOpHash        string `json:"userOpHash"`
+	UserOp            string `json:"userOp"`
+	EntryPoint        string `json:"entryPoint"`
+	ExecutionTime     int64  `json:"executionTime"`
+	PaymentType       string `json:"paymentType"`
+	PaymentTypeParams string `json:"paymentTypeParams"`
+	Status            string `json:"status"`
+	TransactionHash   string `json:"transactionHash"`
+}
+
+type Operation struct {
+	UserOpHash        string            `json:"userOpHash"`
+	UserOp            UserOperation     `json:"userOp"`
+	EntryPoint        string            `json:"entryPoint"`
+	ExecutionTime     int64             `json:"executionTime"`
+	PaymentType       string            `json:"paymentType"`
+	PaymentTypeParams PaymentTypeParams `json:"paymentTypeParams"`
+	Status            string            `json:"status"`
+	TransactionHash   string            `json:"transactionHash"`
 }
 
 type Network struct {

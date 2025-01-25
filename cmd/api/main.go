@@ -17,6 +17,9 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
+// Handler Definitions
+var handlerClient *handlers.HandlerClient
+
 // @title           Cyphera API
 // @version         1.0
 // @description     API Server for Cyphera application
@@ -40,6 +43,9 @@ func main() {
 	// Initialize router
 	router := gin.Default()
 
+	// Initialize Handlers
+	initializeHandlers()
+
 	// Initialize routes
 	initializeRoutes(router)
 
@@ -49,28 +55,35 @@ func main() {
 		Handler: router,
 	}
 
-	// Graceful shutdown
+	// Start server in a goroutine
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v\n", err)
 		}
 	}()
 
-	// Wait for interrupt signal
+	// Wait for interrupt signal to gracefully shutdown the server
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-
 	log.Println("Shutting down server...")
 
+	// Give outstanding requests a deadline for completion
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
 	if err := server.Shutdown(ctx); err != nil {
 		log.Fatal("Server forced to shutdown:", err)
 	}
 
-	log.Println("Server exited")
+	log.Println("Server exiting")
+}
+
+func initializeHandlers() {
+	apiKey := os.Getenv("ACTALINK_API_KEY")
+	if apiKey == "" {
+		log.Fatal("ACTALINK_API_KEY environment variable is required")
+	}
+	handlerClient = handlers.NewHandlerClient(apiKey)
 }
 
 func initializeRoutes(router *gin.Engine) {
@@ -88,28 +101,28 @@ func initializeRoutes(router *gin.Engine) {
 	v1 := router.Group("/api/v1")
 	{
 		// Nonce
-		v1.GET("/nonce", handlers.GetNonce)
+		v1.GET("/nonce", handlerClient.GetNonce)
 
 		// User
-		v1.GET("/user", handlers.CheckUserAvailability)
-		v1.POST("/user/register", handlers.RegisterUser)
-		v1.POST("/user/login", handlers.LoginUser)
-		v1.POST("/user/subscription", handlers.CreateSubscription)
-		v1.DELETE("/user/subscription", handlers.DeleteSubscription)
+		v1.GET("/user", handlerClient.CheckUserAvailability)
+		v1.POST("/user/register", handlerClient.RegisterUser)
+		v1.POST("/user/login", handlerClient.LoginUser)
+		v1.POST("/user/subscription", handlerClient.CreateSubscription)
+		v1.DELETE("/user/subscription", handlerClient.DeleteSubscription)
 
 		// Subscriptions
-		v1.GET("/subscription", handlers.GetAllSubscriptions)
+		v1.GET("/subscription", handlerClient.GetAllSubscriptions)
 
 		// Subscribers
-		v1.GET("/subscribers", handlers.GetSubscribers)
+		v1.GET("/subscribers", handlerClient.GetSubscribers)
 
 		// Operations
-		v1.GET("/operations/", handlers.GetOperations)
+		v1.GET("/operations/", handlerClient.GetOperations)
 
 		// Tokens
-		v1.GET("/tokens", handlers.GetTokens)
+		v1.GET("/tokens", handlerClient.GetTokens)
 
 		// Networks
-		v1.GET("/networks", handlers.GetNetworks)
+		v1.GET("/networks", handlerClient.GetNetworks)
 	}
 }
