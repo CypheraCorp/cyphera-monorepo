@@ -1,9 +1,5 @@
 package actalink
 
-import (
-	"encoding/json"
-)
-
 type GetNonceResponse struct {
 	Nonce string `json:"nonce"`
 }
@@ -15,9 +11,8 @@ func (c *ActaLinkClient) GetNonce() (*GetNonceResponse, *int, error) {
 		return nil, statusCode, err
 	}
 
-	var nonceResp GetNonceResponse
-	if err := json.Unmarshal(body, &nonceResp); err != nil {
-		return nil, nil, err
+	nonceResp := GetNonceResponse{
+		Nonce: string(body),
 	}
 
 	return &nonceResp, statusCode, nil

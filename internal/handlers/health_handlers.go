@@ -12,6 +12,10 @@ func NewHealthHandler() *HealthHandler {
 	return &HealthHandler{}
 }
 
+type HealthResponse struct {
+	Status string `json:"status"`
+}
+
 // Health godoc
 // @Summary      Health check
 // @Description  Checks if the server is running

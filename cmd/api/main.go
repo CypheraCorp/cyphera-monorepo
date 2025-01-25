@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"cyphera-api/internal/auth"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
 	"fmt"
@@ -22,7 +23,10 @@ import (
 )
 
 // Handler Definitions
-var handlerClient *handlers.HandlerClient
+var (
+	handlerClient *handlers.HandlerClient
+	dbQueries     *db.Queries
+)
 
 // @title           Cyphera API
 // @version         1.0
@@ -47,6 +51,14 @@ func main() {
 	// Load environment variables
 	if err := godotenv.Load(); err != nil {
 		log.Printf("Warning: .env file not found: %v\n", err)
+	}
+
+	// Check required Auth0 environment variables
+	requiredEnvVars := []string{"AUTH0_DOMAIN", "AUTH0_AUDIENCE"}
+	for _, envVar := range requiredEnvVars {
+		if os.Getenv(envVar) == "" {
+			log.Fatalf("%s environment variable is required", envVar)
+		}
 	}
 
 	// Initialize router
@@ -107,7 +119,7 @@ func initializeHandlers() {
 	}
 
 	// Create queries instance
-	dbQueries := db.New(conn)
+	dbQueries = db.New(conn)
 
 	apiKey := os.Getenv("ACTALINK_API_KEY")
 	if apiKey == "" {
@@ -132,37 +144,93 @@ func initializeRoutes(router *gin.Engine) {
 	v1 := router.Group("/api/v1")
 	{
 
-		//
-		v1.GET("/customers/:id", handlerClient.GetCustomerByID)
-		v1.GET("/api-keys/:id", handlerClient.GetAPIKeyByID)
+		// No Public routes for now
 
-		// actalink group
-		actalink := v1.Group("/actalink")
+		// Protected routes (authentication required)
+		protected := v1.Group("/")
+		protected.Use(auth.EnsureValidAPIKeyOrToken(dbQueries))
 		{
-			// Nonce
-			actalink.GET("/nonce", handlerClient.GetNonce)
 
-			// User
-			actalink.GET("/users", handlerClient.CheckUserAvailability)
-			actalink.POST("/users/register", handlerClient.RegisterUser)
-			actalink.POST("/users/login", handlerClient.LoginUser)
+			// Admin-only routes
+			admin := protected.Group("/admin")
+			admin.Use(auth.RequireRoles("admin"))
+			{
+				// User management
+				admin.GET("/users", handlerClient.ListUsers)
+				admin.POST("/users", handlerClient.CreateUser)
+				admin.GET("/users/:id", handlerClient.GetUser)
+				admin.PUT("/users/:id", handlerClient.UpdateUser)
+				admin.DELETE("/users/:id", handlerClient.DeleteUser)
 
-			// Subscription
-			actalink.POST("/subscriptions", handlerClient.CreateSubscription)
-			actalink.DELETE("/subscriptions", handlerClient.DeleteSubscription)
-			actalink.GET("/subscriptions", handlerClient.GetAllSubscriptions)
+				// Account management
+				admin.GET("/accounts", handlerClient.ListAccounts)
+				admin.POST("/accounts", handlerClient.CreateAccount)
+				admin.GET("/accounts/all", handlerClient.GetAllAccounts)
+				admin.GET("/accounts/:id", handlerClient.GetAccount)
+				admin.PUT("/accounts/:id", handlerClient.UpdateAccount)
+				admin.DELETE("/accounts/:id", handlerClient.DeleteAccount)
+				admin.DELETE("/accounts/:id/hard", handlerClient.HardDeleteAccount)
+				admin.GET("/accounts/:id/customers", handlerClient.ListAccountCustomers)
 
-			// Subscribers
-			actalink.GET("/subscribers", handlerClient.GetSubscribers)
+				// API Key management
+				admin.GET("/api-keys", handlerClient.GetAllAPIKeys)
+				admin.GET("/api-keys/expired", handlerClient.GetExpiredAPIKeys)
+			}
 
-			// Operations
-			actalink.GET("/operations", handlerClient.GetOperations)
+			// Current User routes
+			users := protected.Group("/users")
+			{
+				users.GET("/me", handlerClient.GetCurrentUser)
+				users.PUT("/me", handlerClient.UpdateUser)
+			}
 
-			// Tokens
-			actalink.GET("/tokens", handlerClient.GetTokens)
+			// Customers
+			protected.GET("/customers", handlerClient.ListCustomers)
+			protected.POST("/customers", handlerClient.CreateCustomer)
+			protected.GET("/customers/:id", handlerClient.GetCustomer)
+			protected.PUT("/customers/:id", handlerClient.UpdateCustomer)
+			protected.DELETE("/customers/:id", handlerClient.DeleteCustomer)
 
-			// Networks
-			actalink.GET("/networks", handlerClient.GetNetworks)
+			// API Keys
+			apiKeys := protected.Group("/api-keys")
+			{
+				// Regular user routes (scoped to their account)
+				apiKeys.GET("", handlerClient.ListAPIKeys)
+				apiKeys.POST("", handlerClient.CreateAPIKey)
+				apiKeys.GET("/count", handlerClient.GetActiveAPIKeysCount)
+				apiKeys.GET("/:id", handlerClient.GetAPIKeyByID)
+				apiKeys.PUT("/:id", handlerClient.UpdateAPIKey)
+				apiKeys.DELETE("/:id", handlerClient.DeleteAPIKey)
+			}
+
+			// ActaLink routes
+			actalink := protected.Group("/actalink")
+			{
+				// Nonce
+				actalink.GET("/nonce", handlerClient.GetNonce)
+
+				// User
+				actalink.GET("/isuseravailable", handlerClient.CheckUserAvailability)
+				actalink.POST("/users/register", handlerClient.RegisterUser)
+				actalink.POST("/users/login", handlerClient.LoginUser)
+
+				// Subscription
+				actalink.POST("/subscriptions", handlerClient.CreateSubscription)
+				actalink.DELETE("/subscriptions", handlerClient.DeleteSubscription)
+				actalink.GET("/subscriptions", handlerClient.GetAllSubscriptions)
+
+				// Subscribers
+				actalink.GET("/subscribers", handlerClient.GetSubscribers)
+
+				// Operations
+				actalink.GET("/operations", handlerClient.GetOperations)
+
+				// Tokens
+				actalink.GET("/tokens", handlerClient.GetTokens)
+
+				// Networks
+				actalink.GET("/networks", handlerClient.GetNetworks)
+			}
 		}
 	}
 }

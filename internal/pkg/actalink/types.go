@@ -54,11 +54,7 @@ type UserAvailabilityResponse struct {
 	Message string `json:"message"`
 }
 
-type RegisterUserResponse struct {
-	Message string `json:"message"`
-}
-
-type LoginUserResponse struct {
+type RegisterOrLoginUserResponse struct {
 	Message string `json:"message"`
 }
 
