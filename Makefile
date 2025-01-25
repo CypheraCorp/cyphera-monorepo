@@ -23,7 +23,7 @@ lint:
 run:
 	$(GO) run $(MAIN_PACKAGE)
 
-swagger:
+swag:
 	swag init -g cmd/api/main.go
 
 # Development tasks

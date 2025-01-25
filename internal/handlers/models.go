@@ -25,6 +25,14 @@ type GetTokensResponse = actalink.GetTokensResponse
 type GetNetworksResponse = actalink.GetNetworksResponse
 type OperationsResponse = actalink.OperationsResponse
 
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
 type UserAvailabilityResponse struct {
 	Exists bool `json:"exists"`
+}
+
+type HealthResponse struct {
+	Status string `json:"status"`
 }

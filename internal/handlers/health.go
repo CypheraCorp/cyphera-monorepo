@@ -21,7 +21,7 @@ func NewHealthHandler() *HealthHandler {
 // @Success      200  {object}  HealthResponse   "Returns health status"
 // @Router       /health [get]
 func (h *HealthHandler) Health(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status": "ok",
+	c.JSON(http.StatusOK, HealthResponse{
+		Status: "ok",
 	})
 }
