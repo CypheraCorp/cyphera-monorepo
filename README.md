@@ -11,20 +11,15 @@ This project uses environment variables for configuration. To set up:
 
 2. Edit `.env` and update the values:
    - `ACTALINK_API_KEY`: Your API key for Actalink (required)
-   - `PORT`: Server port (default: 8000)
 
 ## Running the Project
 
-To run, first download the dependencies (use at least go version go 1.23):
+To run install docker first: https://docs.docker.com/get-started/get-docker/
+
+Then, run the following command to start the server and postgres database:
 
 ```bash
-go mod download
-```
-
-Then run the server:
-
-```bash
-go run cmd/api/main.go
+docker compose up
 ```
 
 Then, make a request to the API. Message admin for access to the API key:
@@ -39,7 +34,7 @@ The API documentation is available through Swagger UI at `http://localhost:8000/
 To update the swagger documentation, run the following command:
 
 ```bash
-swag init -g cmd/api/main.go
+make gen
 ```
 
 Then run the server again.
