@@ -5,10 +5,9 @@ set -e  # Exit on error
 rm -f bootstrap function.zip
 
 # Build the binary
-echo "Building Go binary for AWS Lambda (ARM64)..."
+echo "Building Go binary for AWS Lambda (x86_64)..."
 GOOS=linux \
-GOARCH=arm64 \
-GOARM=7 \
+GOARCH=amd64 \
 CGO_ENABLED=0 \
 go build \
   -tags lambda.norpc \
@@ -16,15 +15,15 @@ go build \
   -o bootstrap \
   cmd/api/main/main.go
 
-# Print binary information before compression
-echo "Binary details before compression:"
+# Print binary information
+echo "Binary details:"
 file bootstrap
 ls -lh bootstrap
 
 # Verify the binary architecture
 echo "Verifying binary architecture..."
-if ! file bootstrap | grep -q "aarch64"; then
-    echo "Error: Binary is not compiled for ARM64"
+if ! file bootstrap | grep -q "x86-64"; then
+    echo "Error: Binary is not compiled for x86_64"
     echo "Binary details:"
     file bootstrap
     exit 1
