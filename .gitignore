@@ -35,6 +35,7 @@ terraform/.terraform/
 .vscode/
 *.swp
 *.swo
+tmp/
 
 # Serverless
 .serverless/

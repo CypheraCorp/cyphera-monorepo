@@ -181,6 +181,32 @@ definitions:
       verificationGasLimit:
         type: string
     type: object
+  handlers.APIKeyResponse:
+    properties:
+      account_id:
+        type: string
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      last_used_at:
+        type: string
+      level:
+        type: string
+      livemode:
+        type: boolean
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+    type: object
   handlers.CreateCustomerRequest:
     properties:
       currency:
@@ -319,6 +345,15 @@ definitions:
       status:
         type: string
     type: object
+  handlers.ListAPIKeyResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/handlers.APIKeyResponse'
+        type: array
+      object:
+        type: string
+    type: object
   handlers.OperationsResponse:
     properties:
       data:
@@ -442,6 +477,255 @@ info:
   title: Cyphera API
   version: "1.0"
 paths:
+  /api_keys:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of API keys for the authenticated user or account
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ListAPIKeyResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List API keys
+      tags:
+      - api_keys
+    post:
+      consumes:
+      - application/json
+      description: Creates a new API key for the authenticated account
+      parameters:
+      - description: API Key creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Returns API key object and the actual key
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Failed to create API key
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create new API key
+      tags:
+      - api_keys
+  /api_keys/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft deletes an API key
+      parameters:
+      - description: API Key ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: API key does not belong to your account
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: API key not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Failed to delete API key
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete API key
+      tags:
+      - api_keys
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a specific API key by its unique identifier
+      parameters:
+      - description: API Key ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.APIKeyResponse'
+        "400":
+          description: Invalid UUID format or account ID
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: API key does not belong to your account
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: API key not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get API key by ID
+      tags:
+      - api_keys
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing API key's properties
+      parameters:
+      - description: API Key ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: API Key update request
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.APIKeyResponse'
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: API key does not belong to your account
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: API key not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Failed to update API key
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update API key
+      tags:
+      - api_keys
+  /api_keys/all:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all API keys (admin only)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ListAPIKeyResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Failed to retrieve API keys
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get all API keys
+      tags:
+      - api_keys
+  /api_keys/count:
+    get:
+      consumes:
+      - application/json
+      description: Gets the count of active API keys for an account
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Returns count of active API keys
+          schema:
+            additionalProperties:
+              type: integer
+            type: object
+        "400":
+          description: Invalid account ID
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Failed to get API key count
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get active API keys count
+      tags:
+      - api_keys
+  /api_keys/expired:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all expired API keys (admin only)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ListAPIKeyResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Failed to retrieve expired API keys
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get expired API keys
+      tags:
+      - api_keys
   /customers:
     get:
       consumes:
@@ -641,7 +925,7 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: Check username availability
       tags:
-      - users
+      - Actalink
   /networks:
     get:
       consumes:
@@ -664,7 +948,7 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: List networks
       tags:
-      - networks
+      - Actalink
   /nonce:
     get:
       consumes:
@@ -691,7 +975,7 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: Get authentication nonce
       tags:
-      - authentication
+      - Actalink
   /operations:
     get:
       consumes:
@@ -735,6 +1019,8 @@ paths:
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: List operations
+      tags:
+      - Actalink
   /subscribers:
     get:
       consumes:
@@ -768,7 +1054,7 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: List subscribers
       tags:
-      - subscribers
+      - Actalink
   /subscriptions:
     delete:
       consumes:
@@ -800,7 +1086,7 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: Delete a subscription
       tags:
-      - subscriptions
+      - Actalink
     get:
       consumes:
       - application/json
@@ -826,7 +1112,7 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: List all subscriptions
       tags:
-      - subscriptions
+      - Actalink
     post:
       consumes:
       - application/json
@@ -859,7 +1145,7 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: Create a new subscription
       tags:
-      - subscriptions
+      - Actalink
   /tokens:
     get:
       consumes:
@@ -886,7 +1172,7 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: List tokens
       tags:
-      - tokens
+      - Actalink
   /user/login:
     post:
       consumes:
@@ -920,7 +1206,7 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: Authenticate user
       tags:
-      - users
+      - Actalink
   /user/register:
     post:
       consumes:
@@ -954,12 +1240,12 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: Register new user
       tags:
-      - users
+      - Actalink
   /users:
     get:
       consumes:
       - application/json
-      description: Returns a list of users. Only accessible by admins.
+      description: Returns a list of all users (admin only)
       produces:
       - application/json
       responses:
@@ -971,10 +1257,6 @@ paths:
             type: array
         "401":
           description: Unauthorized
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
