@@ -6,7 +6,11 @@ rm -f bootstrap function.zip
 
 # Build the binary
 echo "Building Go binary..."
-GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -o bootstrap cmd/api/main/main.go
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
+  -tags lambda.norpc \
+  -ldflags="-s -w" \
+  -o bootstrap \
+  cmd/api/main/main.go
 
 # Create deployment package (optional, for local testing)
 if [ "${CREATE_ZIP:-false}" = "true" ]; then
@@ -25,6 +29,9 @@ fi
 # Verify the bootstrap file exists
 if [ -f bootstrap ]; then
     echo "Successfully created bootstrap binary"
+    # Print binary information
+    echo "Binary details:"
+    file bootstrap
 else
     echo "Failed to create bootstrap binary"
     exit 1
