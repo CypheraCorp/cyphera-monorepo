@@ -8,9 +8,9 @@ provider:
   region: us-east-1
   environment:
     DATABASE_URL: ${env:DATABASE_URL}
+    ACTALINK_API_KEY: ${env:ACTALINK_API_KEY}
     AUTH0_DOMAIN: ${env:AUTH0_DOMAIN}
     AUTH0_AUDIENCE: ${env:AUTH0_AUDIENCE}
-    ACTALINK_API_KEY: ${env:ACTALINK_API_KEY}
   vpc:
     securityGroupIds:
       - ${self:custom.vpc.${opt:stage, 'local'}.securityGroupIds}

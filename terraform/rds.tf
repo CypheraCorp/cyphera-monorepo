@@ -1,9 +1,9 @@
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.app_name}-db-subnet"
-  subnet_ids = module.vpc.private_subnets
+  name       = "${var.app_name}-db-subnet-public"
+  subnet_ids = module.vpc.public_subnets
 
   tags = {
-    Name = "${var.app_name}-db-subnet"
+    Name = "${var.app_name}-db-subnet-public"
   }
 }
 
@@ -17,6 +17,15 @@ resource "aws_security_group" "rds" {
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.lambda.id]
+  }
+
+  # Allow access from development machine
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [var.nate_machine_ip]
+    description = "PostgreSQL access from development machine"
   }
 
   egress {
@@ -38,36 +47,32 @@ resource "aws_db_instance" "main" {
   engine           = "postgres"
   engine_version   = "15.10"
   instance_class   = "db.t4g.micro"
-  allocated_storage = 20  # Minimum storage for gp3
-  storage_type      = "gp3"  # More cost-effective than gp2
-  max_allocated_storage = 20  # Disable storage autoscaling to control costs
+  allocated_storage = 20
+  storage_type      = "gp3"
+  max_allocated_storage = 20
 
   db_name  = "cyphera"
   username = var.db_username
   password = var.db_password
 
+  # Using the new public subnet group
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
   # Cost optimization settings
-  backup_retention_period = 0  # No automated backups for dev/test
+  backup_retention_period = 0
   skip_final_snapshot    = true
   multi_az              = false
-  publicly_accessible    = false
-  storage_encrypted     = true  # Important for security, minimal cost impact
+  publicly_accessible    = true
+  storage_encrypted     = true
 
-  # Performance Insights is free for 7 days retention
+  # Performance Insights settings
   performance_insights_enabled = true
   performance_insights_retention_period = 7
 
-  # Auto minor version upgrades for security
   auto_minor_version_upgrade = true
-
-  # Maintenance window during off-hours
   maintenance_window = "Sun:03:00-Sun:04:00"
-
-  # Cost optimization: Stop database during non-business hours
-  deletion_protection = false  # Allow stopping/starting for cost savings
+  deletion_protection = false
 
   tags = {
     Environment = var.environment
