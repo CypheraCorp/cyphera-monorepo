@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"cyphera-api/internal/auth"
+	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -118,19 +120,18 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 
 // ListUsers godoc
 // @Summary List all users
-// @Description Returns a list of users. Only accessible by admins.
+// @Description Returns a list of all users (admin only)
 // @Tags users
 // @Accept json
 // @Produce json
 // @Success 200 {array} UserResponse
 // @Failure 401 {object} ErrorResponse
-// @Failure 403 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users [get]
 func (h *UserHandler) ListUsers(c *gin.Context) {
-	// Only admins can list all users
-	if c.GetString("userRole") != "admin" {
-		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Only admins can list all users"})
+	// Only admin users can list all users
+	if c.GetString("userRole") != constants.RoleAdmin {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Only admin users can list all users"})
 		return
 	}
 
@@ -166,7 +167,7 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 // @Router /users [post]
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	// Only admins can create users
-	if c.GetString("userRole") != "admin" {
+	if c.GetString("userRole") != constants.RoleAdmin {
 		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Only admins can create users"})
 		return
 	}
@@ -215,7 +216,6 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /users/{id} [put]
 func (h *UserHandler) UpdateUser(c *gin.Context) {
-	// Only admins can update other users
 	currentRole := c.GetString("userRole")
 	currentAuth0ID := c.GetString("auth0ID")
 
@@ -226,7 +226,6 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	// Get the user being updated
 	targetUser, err := h.common.db.GetUser(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "User not found"})
@@ -234,7 +233,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	}
 
 	// Check permissions
-	if currentRole != "admin" && currentAuth0ID != targetUser.Auth0ID {
+	if currentRole != constants.RoleAdmin && currentAuth0ID != targetUser.Auth0ID {
 		c.JSON(http.StatusForbidden, ErrorResponse{Error: "You can only update your own user data"})
 		return
 	}
@@ -245,20 +244,19 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	metadata, err := json.Marshal(req.Metadata)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
-		return
-	}
-
-	// Only admins can update roles
 	role := targetUser.Role
 	if req.Role != "" {
-		if currentRole != "admin" {
+		if currentRole != constants.RoleAdmin {
 			c.JSON(http.StatusForbidden, ErrorResponse{Error: "Only admins can update user roles"})
 			return
 		}
 		role = db.UserRole(req.Role)
+	}
+
+	metadata, err := json.Marshal(req.Metadata)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
+		return
 	}
 
 	user, err := h.common.db.UpdateUser(c.Request.Context(), db.UpdateUserParams{
@@ -293,7 +291,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 // @Router /users/{id} [delete]
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	// Only admins can delete users
-	if c.GetString("userRole") != "admin" {
+	if c.GetString("userRole") != constants.RoleAdmin {
 		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Only admins can delete users"})
 		return
 	}
@@ -355,7 +353,10 @@ func (h *UserHandler) RegisterUser(c *gin.Context) {
 // Helper function to convert database model to API response
 func toUserResponse(u db.User) UserResponse {
 	var metadata map[string]interface{}
-	json.Unmarshal(u.Metadata, &metadata)
+	if err := json.Unmarshal(u.Metadata, &metadata); err != nil {
+		log.Printf("Error unmarshaling user metadata: %v", err)
+		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
+	}
 
 	return UserResponse{
 		ID:         u.ID.String(),

@@ -46,8 +46,9 @@ func main() {
 
 	// Configure server
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%s", port),
-		Handler: router,
+		Addr:              fmt.Sprintf(":%s", port),
+		Handler:           router,
+		ReadHeaderTimeout: 20 * time.Second, // Prevent Slowloris attacks
 	}
 	// Start server in a goroutine
 	go func() {

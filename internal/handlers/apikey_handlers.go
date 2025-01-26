@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
 	"encoding/json"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// APIKeyHandler handles API key related operations
 type APIKeyHandler struct {
 	common *CommonServices
 }
@@ -44,7 +46,7 @@ func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
 	}
 
 	// Check if the API key belongs to the account (unless admin)
-	if c.GetString("userRole") != "admin" {
+	if c.GetString("userRole") != constants.RoleAdmin {
 		accountUUID, err := uuid.Parse(accountID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid account ID format"})
@@ -66,8 +68,23 @@ func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
 	c.JSON(http.StatusOK, apiKey)
 }
 
-// ListAPIKeys retrieves all API keys for the current account
+// ListAPIKeys godoc
+// @Summary List API keys
+// @Description Returns a list of API keys for the authenticated user or account
+// @Tags api_keys
+// @Accept json
+// @Produce json
+// @Success 200 {array} APIKeyResponse
+// @Failure 401 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /api_keys [get]
 func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
+	// Only admin users can list API keys
+	if c.GetString("userRole") != constants.RoleAdmin {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Only admin users can list API keys"})
+		return
+	}
+
 	accountID := c.GetString("accountID")
 	if accountID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Account ID not found in context"})
@@ -200,7 +217,7 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 	}
 
 	// Check ownership unless admin
-	if c.GetString("userRole") != "admin" {
+	if c.GetString("userRole") != constants.RoleAdmin {
 		accountID := c.GetString("accountID")
 		if accountID == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Account ID not found in context"})
@@ -275,7 +292,7 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 	}
 
 	// Check ownership unless admin
-	if c.GetString("userRole") != "admin" {
+	if c.GetString("userRole") != constants.RoleAdmin {
 		accountID := c.GetString("accountID")
 		if accountID == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Account ID not found in context"})

@@ -3,6 +3,7 @@ package handlers
 import (
 	"cyphera-api/internal/db"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -269,10 +270,16 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 // Helper functions to convert database models to API responses
 func toCustomerResponse(c db.Customer) CustomerResponse {
 	var metadata map[string]interface{}
-	json.Unmarshal(c.Metadata, &metadata)
+	if err := json.Unmarshal(c.Metadata, &metadata); err != nil {
+		log.Printf("Error unmarshaling customer metadata: %v", err)
+		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
+	}
 
 	var taxIDs map[string]interface{}
-	json.Unmarshal(c.TaxIds, &taxIDs)
+	if err := json.Unmarshal(c.TaxIds, &taxIDs); err != nil {
+		log.Printf("Error unmarshaling customer tax IDs: %v", err)
+		taxIDs = make(map[string]interface{}) // Use empty map if unmarshal fails
+	}
 
 	defaultSourceID := ""
 	if c.DefaultSourceID.Valid {
@@ -300,10 +307,16 @@ func toCustomerResponse(c db.Customer) CustomerResponse {
 
 func toCustomerScopeResponse(c db.GetCustomersByScopeRow) CustomerResponse {
 	var metadata map[string]interface{}
-	json.Unmarshal(c.Metadata, &metadata)
+	if err := json.Unmarshal(c.Metadata, &metadata); err != nil {
+		log.Printf("Error unmarshaling customer metadata: %v", err)
+		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
+	}
 
 	var taxIDs map[string]interface{}
-	json.Unmarshal(c.TaxIds, &taxIDs)
+	if err := json.Unmarshal(c.TaxIds, &taxIDs); err != nil {
+		log.Printf("Error unmarshaling customer tax IDs: %v", err)
+		taxIDs = make(map[string]interface{}) // Use empty map if unmarshal fails
+	}
 
 	defaultSourceID := ""
 	if c.DefaultSourceID.Valid {

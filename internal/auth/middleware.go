@@ -78,7 +78,9 @@ func errorHandler(w http.ResponseWriter, r *http.Request, err error) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
-	w.Write([]byte(`{"message":"Invalid token"}`))
+	if _, err := w.Write([]byte(`{"message":"Invalid token"}`)); err != nil {
+		log.Printf("Error writing response: %v", err)
+	}
 }
 
 // GetUserIDFromToken extracts the Auth0 user ID from the token
@@ -153,15 +155,19 @@ func RequireRoles(roles ...string) gin.HandlerFunc {
 				return
 			}
 
-			// Remove 'Bearer ' prefix if it exists
+			// Remove 'Bearer ' prefix if it exists and validate
 			token = strings.TrimPrefix(token, "Bearer ")
+			if token == "" {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token format"})
+				c.Abort()
+				return
+			}
 
 			// Here you would validate the token and extract roles
 			// For now, we'll implement a simple check
 			// In production, you should verify this against your users table
 
 			// TODO: Implement role checking against database
-			// For now, we'll just continue
 			c.Next()
 		default:
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authentication type"})
