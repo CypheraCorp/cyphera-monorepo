@@ -10,7 +10,7 @@ variable "environment" {
 
 variable "app_name" {
   description = "Application name"
-  default     = "cyphera-api"
+  default     = "cyphera"
 }
 
 variable "db_username" {
@@ -20,5 +20,11 @@ variable "db_username" {
 
 variable "db_password" {
   description = "Database password"
+  default     = "apipassword"
   sensitive   = true
+}
+
+variable "nate_machine_ip" {
+  description = "Development machine IP address for RDS access"
+  default     = "151.204.139.74/32"  # Your current IP
 } 
