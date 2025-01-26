@@ -13,9 +13,10 @@ provider:
     AUTH0_AUDIENCE: ${env:AUTH0_AUDIENCE}
   vpc:
     securityGroupIds:
-      - ${self:custom.vpc.${opt:stage, 'local'}.securityGroupIds}
+      - ${ssm:/cyphera/lambda-security-group-id}
     subnetIds:
-      - ${self:custom.vpc.${opt:stage, 'local'}.subnetIds}
+      - ${ssm:/cyphera/private-subnet-1}
+      - ${ssm:/cyphera/private-subnet-2}
 
 custom:
   vpc:
