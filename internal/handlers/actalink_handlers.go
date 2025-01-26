@@ -52,7 +52,7 @@ func handleStatusCode(statusCode *int, defaultCode int) int {
 // GetNonce godoc
 // @Summary      Get authentication nonce
 // @Description  Retrieves a nonce for wallet-based authentication
-// @Tags         authentication
+// @Tags         Actalink
 // @Accept       json
 // @Produce      json
 // @Success      200  {object}  GetNonceResponse   "Returns nonce"
@@ -73,7 +73,7 @@ func (h *ActalinkHandler) GetNonce(c *gin.Context) {
 // CheckUserAvailability godoc
 // @Summary      Check username availability
 // @Description  Verifies if a username is available for registration
-// @Tags         users
+// @Tags         Actalink
 // @Accept       json
 // @Produce      json
 // @Param        address    query     string  true  "Address" example("0x1234567890abcdef")
@@ -104,7 +104,7 @@ func (h *ActalinkHandler) CheckUserAvailability(c *gin.Context) {
 // RegisterUser godoc
 // @Summary      Register new user
 // @Description  Creates a new user account with wallet authentication
-// @Tags         users
+// @Tags         Actalink
 // @Accept       json
 // @Produce      json
 // @Param        request  body      UserLoginRegisterRequest  true  "User registration payload"
@@ -132,7 +132,7 @@ func (h *ActalinkHandler) RegisterActalinkUser(c *gin.Context) {
 // LoginUser godoc
 // @Summary      Authenticate user
 // @Description  Authenticates user using wallet signature and returns JWT token
-// @Tags         users
+// @Tags         Actalink
 // @Accept       json
 // @Produce      json
 // @Param        request  body      UserLoginRegisterRequest  true  "User login payload"
@@ -160,7 +160,7 @@ func (h *ActalinkHandler) LoginActalinkUser(c *gin.Context) {
 // GetNetworks godoc
 // @Summary      List networks
 // @Description  Retrieves all supported blockchain networks
-// @Tags         networks
+// @Tags         Actalink
 // @Accept       json
 // @Produce      json
 // @Success      200  {object}  GetNetworksResponse
@@ -180,6 +180,7 @@ func (h *ActalinkHandler) GetNetworks(c *gin.Context) {
 // GetOperations godoc
 // @Summary      List operations
 // @Description  Retrieves all operations for authenticated user
+// @Tags         Actalink
 // @Accept       json
 // @Produce      json
 // @Param        swaddress  query     string  true  "Smart Wallet Address"  example("0x1234567890abcdef")
@@ -221,7 +222,7 @@ func (h *ActalinkHandler) GetOperations(c *gin.Context) {
 // GetAllSubscriptions godoc
 // @Summary      List all subscriptions
 // @Description  Retrieves all available subscription plans
-// @Tags         subscriptions
+// @Tags         Actalink
 // @Accept       json
 // @Produce      json
 // @Success      200  {object}  GetSubscriptionsResponse
@@ -242,7 +243,7 @@ func (h *ActalinkHandler) GetAllSubscriptions(c *gin.Context) {
 // CreateSubscription godoc
 // @Summary      Create a new subscription
 // @Description  Creates a new subscription plan
-// @Tags         subscriptions
+// @Tags         Actalink
 // @Accept       json
 // @Produce      json
 // @Param        subscription  body  SubscriptionRequest  true  "Subscription details"
@@ -270,7 +271,7 @@ func (h *ActalinkHandler) CreateSubscription(c *gin.Context) {
 // DeleteSubscription godoc
 // @Summary      Delete a subscription
 // @Description  Deletes a subscription plan
-// @Tags         subscriptions
+// @Tags         Actalink
 // @Accept       json
 // @Produce      json
 // @Param        subscription  body  DeleteSubscriptionRequest  true  "Subscription details"
@@ -298,7 +299,7 @@ func (h *ActalinkHandler) DeleteSubscription(c *gin.Context) {
 // GetSubscribers godoc
 // @Summary      List subscribers
 // @Description  Retrieves all subscribers for authenticated user
-// @Tags         subscribers
+// @Tags         Actalink
 // @Accept       json
 // @Produce      json
 // @Param        subscriptionId  query     string  true  "Subscription ID"  example("1234567890")
@@ -326,7 +327,7 @@ func (h *ActalinkHandler) GetSubscribers(c *gin.Context) {
 // GetTokens godoc
 // @Summary      List tokens
 // @Description  Retrieves all available tokens
-// @Tags         tokens
+// @Tags         Actalink
 // @Accept       json
 // @Produce      json
 // @Success      200  {object}  GetTokensResponse
