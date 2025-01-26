@@ -5,12 +5,23 @@ set -e  # Exit on error
 rm -f bootstrap function.zip
 
 # Build the binary
-echo "Building Go binary..."
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
+echo "Building Go binary for AWS Lambda (ARM64)..."
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build \
   -tags lambda.norpc \
   -ldflags="-s -w" \
   -o bootstrap \
   cmd/api/main/main.go
+
+# Verify the binary
+echo "Verifying binary architecture..."
+if ! file bootstrap | grep -q "ARM aarch64"; then
+    echo "Error: Binary is not compiled for ARM64"
+    file bootstrap
+    exit 1
+fi
+
+# Make the binary executable
+chmod +x bootstrap
 
 # Create deployment package (optional, for local testing)
 if [ "${CREATE_ZIP:-false}" = "true" ]; then
@@ -26,12 +37,12 @@ if [ "${CREATE_ZIP:-false}" = "true" ]; then
     fi
 fi
 
-# Verify the bootstrap file exists
+# Final verification
 if [ -f bootstrap ]; then
     echo "Successfully created bootstrap binary"
-    # Print binary information
     echo "Binary details:"
     file bootstrap
+    ls -l bootstrap
 else
     echo "Failed to create bootstrap binary"
     exit 1
