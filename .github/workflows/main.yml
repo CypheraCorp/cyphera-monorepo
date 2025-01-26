@@ -128,7 +128,10 @@ jobs:
         node-version: '18'
 
     - name: Install Serverless Framework
-      run: npm install -g serverless@3
+      run: |
+        npm uninstall -g serverless
+        npm cache clean --force
+        npm install -g serverless@3.33.0
 
     - name: Deploy with Serverless
       env:
@@ -141,6 +144,12 @@ jobs:
         serverless deploy --stage prod --verbose
 
     - name: Log deployment info
+      env:
+        STAGE: prod
+        AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
+        AUTH0_AUDIENCE: ${{ secrets.AUTH0_AUDIENCE }}
+        ACTALINK_API_KEY: ${{ secrets.ACTALINK_API_KEY }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
       run: |
         echo "Deployed to AWS Lambda"
-        serverless info --stage prod
+        serverless info --stage prod 
