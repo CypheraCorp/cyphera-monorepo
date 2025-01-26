@@ -10,8 +10,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AccountHandler struct {
+	common *CommonServices
+}
+
+func NewAccountHandler(common *CommonServices) *AccountHandler {
+	return &AccountHandler{common: common}
+}
+
 // GetAccount retrieves a specific account by its ID
-func (h *HandlerClient) GetAccount(c *gin.Context) {
+func (h *AccountHandler) GetAccount(c *gin.Context) {
 	id := c.Param("id")
 
 	// Validate UUID format
@@ -21,7 +29,7 @@ func (h *HandlerClient) GetAccount(c *gin.Context) {
 		return
 	}
 
-	account, err := h.db.GetAccount(c.Request.Context(), parsedUUID)
+	account, err := h.common.db.GetAccount(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Account not found"})
 		return
@@ -31,8 +39,8 @@ func (h *HandlerClient) GetAccount(c *gin.Context) {
 }
 
 // ListAccounts retrieves all non-deleted accounts
-func (h *HandlerClient) ListAccounts(c *gin.Context) {
-	accounts, err := h.db.ListAccounts(c.Request.Context())
+func (h *AccountHandler) ListAccounts(c *gin.Context) {
+	accounts, err := h.common.db.ListAccounts(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve accounts"})
 		return
@@ -45,8 +53,8 @@ func (h *HandlerClient) ListAccounts(c *gin.Context) {
 }
 
 // GetAllAccounts retrieves all accounts including deleted ones
-func (h *HandlerClient) GetAllAccounts(c *gin.Context) {
-	accounts, err := h.db.GetAllAccounts(c.Request.Context())
+func (h *AccountHandler) GetAllAccounts(c *gin.Context) {
+	accounts, err := h.common.db.GetAllAccounts(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve accounts"})
 		return
@@ -59,7 +67,7 @@ func (h *HandlerClient) GetAllAccounts(c *gin.Context) {
 }
 
 // CreateAccount creates a new account
-func (h *HandlerClient) CreateAccount(c *gin.Context) {
+func (h *AccountHandler) CreateAccount(c *gin.Context) {
 	var req struct {
 		UserID       string                 `json:"user_id" binding:"required"`
 		Name         string                 `json:"name" binding:"required"`
@@ -96,7 +104,7 @@ func (h *HandlerClient) CreateAccount(c *gin.Context) {
 		livemode.Valid = true
 	}
 
-	account, err := h.db.CreateAccount(c.Request.Context(), db.CreateAccountParams{
+	account, err := h.common.db.CreateAccount(c.Request.Context(), db.CreateAccountParams{
 		UserID:       userUUID,
 		Name:         req.Name,
 		Description:  pgtype.Text{String: req.Description, Valid: req.Description != ""},
@@ -117,7 +125,7 @@ func (h *HandlerClient) CreateAccount(c *gin.Context) {
 }
 
 // UpdateAccount updates an existing account
-func (h *HandlerClient) UpdateAccount(c *gin.Context) {
+func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
@@ -147,7 +155,7 @@ func (h *HandlerClient) UpdateAccount(c *gin.Context) {
 		return
 	}
 
-	account, err := h.db.UpdateAccount(c.Request.Context(), db.UpdateAccountParams{
+	account, err := h.common.db.UpdateAccount(c.Request.Context(), db.UpdateAccountParams{
 		ID:           parsedUUID,
 		Name:         req.Name,
 		Description:  pgtype.Text{String: req.Description, Valid: req.Description != ""},
@@ -167,7 +175,7 @@ func (h *HandlerClient) UpdateAccount(c *gin.Context) {
 }
 
 // DeleteAccount soft deletes an account
-func (h *HandlerClient) DeleteAccount(c *gin.Context) {
+func (h *AccountHandler) DeleteAccount(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
@@ -175,7 +183,7 @@ func (h *HandlerClient) DeleteAccount(c *gin.Context) {
 		return
 	}
 
-	err = h.db.DeleteAccount(c.Request.Context(), parsedUUID)
+	err = h.common.db.DeleteAccount(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account"})
 		return
@@ -185,7 +193,7 @@ func (h *HandlerClient) DeleteAccount(c *gin.Context) {
 }
 
 // HardDeleteAccount permanently deletes an account
-func (h *HandlerClient) HardDeleteAccount(c *gin.Context) {
+func (h *AccountHandler) HardDeleteAccount(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
@@ -193,7 +201,7 @@ func (h *HandlerClient) HardDeleteAccount(c *gin.Context) {
 		return
 	}
 
-	err = h.db.HardDeleteAccount(c.Request.Context(), parsedUUID)
+	err = h.common.db.HardDeleteAccount(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to permanently delete account"})
 		return
@@ -203,7 +211,7 @@ func (h *HandlerClient) HardDeleteAccount(c *gin.Context) {
 }
 
 // ListAccountCustomers retrieves all customers for a specific account
-func (h *HandlerClient) ListAccountCustomers(c *gin.Context) {
+func (h *AccountHandler) ListAccountCustomers(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
@@ -211,7 +219,7 @@ func (h *HandlerClient) ListAccountCustomers(c *gin.Context) {
 		return
 	}
 
-	customers, err := h.db.ListAccountCustomers(c.Request.Context(), parsedUUID)
+	customers, err := h.common.db.ListAccountCustomers(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve account customers"})
 		return

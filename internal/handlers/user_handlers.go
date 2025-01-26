@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"cyphera-api/internal/auth"
 	"cyphera-api/internal/db"
 	"encoding/json"
 	"net/http"
@@ -9,6 +10,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+// Domain-specific handlers
+type UserHandler struct {
+	common *CommonServices
+}
+
+func NewUserHandler(common *CommonServices) *UserHandler {
+	return &UserHandler{common: common}
+}
 
 // UserResponse represents the standardized API response for user operations
 type UserResponse struct {
@@ -43,6 +53,14 @@ type UpdateUserRequest struct {
 	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
+// in internal/handlers/user_handlers.go
+type RegisterUserRequest struct {
+	Email      string          `json:"email"`
+	Name       string          `json:"name"`
+	PictureURL string          `json:"picture_url,omitempty"`
+	Metadata   json.RawMessage `json:"metadata,omitempty"`
+}
+
 // GetUser godoc
 // @Summary Get a user
 // @Description Retrieves the details of an existing user
@@ -55,7 +73,7 @@ type UpdateUserRequest struct {
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users/{id} [get]
-func (h *HandlerClient) GetUser(c *gin.Context) {
+func (h *UserHandler) GetUser(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
@@ -63,7 +81,7 @@ func (h *HandlerClient) GetUser(c *gin.Context) {
 		return
 	}
 
-	user, err := h.db.GetUser(c.Request.Context(), parsedUUID)
+	user, err := h.common.db.GetUser(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "User not found"})
 		return
@@ -82,14 +100,14 @@ func (h *HandlerClient) GetUser(c *gin.Context) {
 // @Failure 401 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users/me [get]
-func (h *HandlerClient) GetCurrentUser(c *gin.Context) {
+func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 	auth0ID := c.GetString("auth0ID")
 	if auth0ID == "" {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "Not authenticated"})
 		return
 	}
 
-	user, err := h.db.GetUserByAuth0ID(c.Request.Context(), auth0ID)
+	user, err := h.common.db.GetUserByAuth0ID(c.Request.Context(), auth0ID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "User not found"})
 		return
@@ -109,14 +127,14 @@ func (h *HandlerClient) GetCurrentUser(c *gin.Context) {
 // @Failure 403 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users [get]
-func (h *HandlerClient) ListUsers(c *gin.Context) {
+func (h *UserHandler) ListUsers(c *gin.Context) {
 	// Only admins can list all users
 	if c.GetString("userRole") != "admin" {
 		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Only admins can list all users"})
 		return
 	}
 
-	users, err := h.db.ListUsers(c.Request.Context())
+	users, err := h.common.db.ListUsers(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve users"})
 		return
@@ -146,7 +164,7 @@ func (h *HandlerClient) ListUsers(c *gin.Context) {
 // @Failure 403 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users [post]
-func (h *HandlerClient) CreateUser(c *gin.Context) {
+func (h *UserHandler) CreateUser(c *gin.Context) {
 	// Only admins can create users
 	if c.GetString("userRole") != "admin" {
 		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Only admins can create users"})
@@ -165,7 +183,7 @@ func (h *HandlerClient) CreateUser(c *gin.Context) {
 		return
 	}
 
-	user, err := h.db.CreateUser(c.Request.Context(), db.CreateUserParams{
+	user, err := h.common.db.CreateUser(c.Request.Context(), db.CreateUserParams{
 		Auth0ID:    req.Auth0ID,
 		Email:      req.Email,
 		Role:       db.UserRole(req.Role),
@@ -196,7 +214,7 @@ func (h *HandlerClient) CreateUser(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users/{id} [put]
-func (h *HandlerClient) UpdateUser(c *gin.Context) {
+func (h *UserHandler) UpdateUser(c *gin.Context) {
 	// Only admins can update other users
 	currentRole := c.GetString("userRole")
 	currentAuth0ID := c.GetString("auth0ID")
@@ -209,7 +227,7 @@ func (h *HandlerClient) UpdateUser(c *gin.Context) {
 	}
 
 	// Get the user being updated
-	targetUser, err := h.db.GetUser(c.Request.Context(), parsedUUID)
+	targetUser, err := h.common.db.GetUser(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "User not found"})
 		return
@@ -243,7 +261,7 @@ func (h *HandlerClient) UpdateUser(c *gin.Context) {
 		role = db.UserRole(req.Role)
 	}
 
-	user, err := h.db.UpdateUser(c.Request.Context(), db.UpdateUserParams{
+	user, err := h.common.db.UpdateUser(c.Request.Context(), db.UpdateUserParams{
 		ID:         parsedUUID,
 		Email:      req.Email,
 		Role:       role,
@@ -273,7 +291,7 @@ func (h *HandlerClient) UpdateUser(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users/{id} [delete]
-func (h *HandlerClient) DeleteUser(c *gin.Context) {
+func (h *UserHandler) DeleteUser(c *gin.Context) {
 	// Only admins can delete users
 	if c.GetString("userRole") != "admin" {
 		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Only admins can delete users"})
@@ -287,13 +305,51 @@ func (h *HandlerClient) DeleteUser(c *gin.Context) {
 		return
 	}
 
-	err = h.db.DeleteUser(c.Request.Context(), parsedUUID)
+	err = h.common.db.DeleteUser(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "User not found"})
 		return
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+func (h *UserHandler) RegisterUser(c *gin.Context) {
+	var req RegisterUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get Auth0 ID from the JWT token
+	auth0ID, err := auth.GetUserIDFromToken(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	// Check if user already exists
+	_, err = h.common.db.GetUserByAuth0ID(c, auth0ID)
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "User already exists"})
+		return
+	}
+
+	// Create user
+	user, err := h.common.db.CreateUser(c, db.CreateUserParams{
+		Auth0ID:    auth0ID,
+		Email:      req.Email,
+		Role:       "user", // default role
+		Name:       pgtype.Text{String: req.Name, Valid: req.Name != ""},
+		PictureUrl: pgtype.Text{String: req.PictureURL, Valid: req.PictureURL != ""},
+		Metadata:   req.Metadata,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, user)
 }
 
 // Helper function to convert database model to API response

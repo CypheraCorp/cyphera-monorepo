@@ -11,8 +11,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type APIKeyHandler struct {
+	common *CommonServices
+}
+
+func NewAPIKeyHandler(common *CommonServices) *APIKeyHandler {
+	return &APIKeyHandler{common: common}
+}
+
 // GetAPIKeyByID retrieves a specific API key by its ID
-func (h *HandlerClient) GetAPIKeyByID(c *gin.Context) {
+func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
 	id := c.Param("id")
 
 	// Validate UUID format
@@ -29,7 +37,7 @@ func (h *HandlerClient) GetAPIKeyByID(c *gin.Context) {
 		return
 	}
 
-	apiKey, err := h.db.GetAPIKey(c.Request.Context(), parsedUUID)
+	apiKey, err := h.common.db.GetAPIKey(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
 		return
@@ -59,7 +67,7 @@ func (h *HandlerClient) GetAPIKeyByID(c *gin.Context) {
 }
 
 // ListAPIKeys retrieves all API keys for the current account
-func (h *HandlerClient) ListAPIKeys(c *gin.Context) {
+func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 	accountID := c.GetString("accountID")
 	if accountID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Account ID not found in context"})
@@ -76,7 +84,7 @@ func (h *HandlerClient) ListAPIKeys(c *gin.Context) {
 	pgUUID.Bytes = parsedUUID
 	pgUUID.Valid = true
 
-	apiKeys, err := h.db.ListAPIKeys(c.Request.Context(), pgUUID)
+	apiKeys, err := h.common.db.ListAPIKeys(c.Request.Context(), pgUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve API keys"})
 		return
@@ -89,9 +97,9 @@ func (h *HandlerClient) ListAPIKeys(c *gin.Context) {
 }
 
 // GetAllAPIKeys retrieves all API keys (admin only)
-func (h *HandlerClient) GetAllAPIKeys(c *gin.Context) {
+func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
 	// This endpoint should only be accessible by admins (handled by middleware)
-	apiKeys, err := h.db.GetAllAPIKeys(c.Request.Context())
+	apiKeys, err := h.common.db.GetAllAPIKeys(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve API keys"})
 		return
@@ -104,7 +112,7 @@ func (h *HandlerClient) GetAllAPIKeys(c *gin.Context) {
 }
 
 // CreateAPIKey creates a new API key
-func (h *HandlerClient) CreateAPIKey(c *gin.Context) {
+func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	var req struct {
 		Name      string                 `json:"name" binding:"required"`
 		Level     string                 `json:"level" binding:"required,oneof=read write admin"`
@@ -148,7 +156,7 @@ func (h *HandlerClient) CreateAPIKey(c *gin.Context) {
 		expiresAt.Valid = true
 	}
 
-	apiKey, err := h.db.CreateAPIKey(c.Request.Context(), db.CreateAPIKeyParams{
+	apiKey, err := h.common.db.CreateAPIKey(c.Request.Context(), db.CreateAPIKeyParams{
 		AccountID: pgUUID,
 		Name:      req.Name,
 		KeyHash:   keyHash,
@@ -170,7 +178,7 @@ func (h *HandlerClient) CreateAPIKey(c *gin.Context) {
 }
 
 // UpdateAPIKey updates an existing API key
-func (h *HandlerClient) UpdateAPIKey(c *gin.Context) {
+func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
@@ -199,7 +207,7 @@ func (h *HandlerClient) UpdateAPIKey(c *gin.Context) {
 			return
 		}
 
-		apiKey, err := h.db.GetAPIKey(c.Request.Context(), parsedUUID)
+		apiKey, err := h.common.db.GetAPIKey(c.Request.Context(), parsedUUID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
 			return
@@ -241,7 +249,7 @@ func (h *HandlerClient) UpdateAPIKey(c *gin.Context) {
 		isActive.Valid = true
 	}
 
-	apiKey, err := h.db.UpdateAPIKey(c.Request.Context(), db.UpdateAPIKeyParams{
+	apiKey, err := h.common.db.UpdateAPIKey(c.Request.Context(), db.UpdateAPIKeyParams{
 		ID:        parsedUUID,
 		Name:      req.Name,
 		Level:     db.ApiKeyLevel(req.Level),
@@ -258,7 +266,7 @@ func (h *HandlerClient) UpdateAPIKey(c *gin.Context) {
 }
 
 // DeleteAPIKey soft deletes an API key
-func (h *HandlerClient) DeleteAPIKey(c *gin.Context) {
+func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
@@ -274,7 +282,7 @@ func (h *HandlerClient) DeleteAPIKey(c *gin.Context) {
 			return
 		}
 
-		apiKey, err := h.db.GetAPIKey(c.Request.Context(), parsedUUID)
+		apiKey, err := h.common.db.GetAPIKey(c.Request.Context(), parsedUUID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
 			return
@@ -298,7 +306,7 @@ func (h *HandlerClient) DeleteAPIKey(c *gin.Context) {
 		}
 	}
 
-	err = h.db.DeleteAPIKey(c.Request.Context(), parsedUUID)
+	err = h.common.db.DeleteAPIKey(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete API key"})
 		return
@@ -308,9 +316,9 @@ func (h *HandlerClient) DeleteAPIKey(c *gin.Context) {
 }
 
 // GetExpiredAPIKeys retrieves all expired API keys (admin only)
-func (h *HandlerClient) GetExpiredAPIKeys(c *gin.Context) {
+func (h *APIKeyHandler) GetExpiredAPIKeys(c *gin.Context) {
 	// This endpoint should only be accessible by admins (handled by middleware)
-	apiKeys, err := h.db.GetExpiredAPIKeys(c.Request.Context())
+	apiKeys, err := h.common.db.GetExpiredAPIKeys(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve expired API keys"})
 		return
@@ -323,7 +331,7 @@ func (h *HandlerClient) GetExpiredAPIKeys(c *gin.Context) {
 }
 
 // GetActiveAPIKeysCount gets the count of active API keys for an account
-func (h *HandlerClient) GetActiveAPIKeysCount(c *gin.Context) {
+func (h *APIKeyHandler) GetActiveAPIKeysCount(c *gin.Context) {
 	accountID := c.GetString("accountID")
 	if accountID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Account ID not found in context"})
@@ -340,7 +348,7 @@ func (h *HandlerClient) GetActiveAPIKeysCount(c *gin.Context) {
 	pgUUID.Bytes = parsedUUID
 	pgUUID.Valid = true
 
-	count, err := h.db.GetActiveAPIKeysCount(c.Request.Context(), pgUUID)
+	count, err := h.common.db.GetActiveAPIKeysCount(c.Request.Context(), pgUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get API key count"})
 		return
