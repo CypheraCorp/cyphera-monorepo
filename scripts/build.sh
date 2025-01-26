@@ -6,7 +6,7 @@ rm -f bootstrap function.zip
 
 # Build the binary
 echo "Building Go binary..."
-GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -o bootstrap cmd/api/main.go
+GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -o bootstrap cmd/api/main/main.go
 
 # Create deployment package
 echo "Creating deployment package..."
