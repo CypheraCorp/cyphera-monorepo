@@ -43,6 +43,11 @@ jobs:
         go-version: ${{ env.GO_VERSION }}
         cache: true
     
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
+
     - name: Install dependencies
       run: go mod download
 
@@ -86,13 +91,23 @@ jobs:
         go-version: ${{ env.GO_VERSION }}
         cache: true
 
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
+
+    - name: Install UPX
+      run: sudo apt-get update && sudo apt-get install -y upx-ucl
+
     - name: Build Lambda package
       run: |
         chmod +x scripts/build.sh
         ./scripts/build.sh
 
     - name: List files
-      run: ls -la    
+      run: |
+        ls -lh
+        file bootstrap
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
@@ -129,8 +144,6 @@ jobs:
 
     - name: Install Serverless Framework
       run: |
-        npm uninstall -g serverless
-        npm cache clean --force
         npm install -g serverless@3.33.0
 
     - name: Deploy with Serverless
