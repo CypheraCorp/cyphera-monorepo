@@ -13,6 +13,14 @@ const (
 	UserExists = "exists"
 )
 
+type ActalinkHandler struct {
+	common *CommonServices
+}
+
+func NewActalinkHandler(common *CommonServices) *ActalinkHandler {
+	return &ActalinkHandler{common: common}
+}
+
 // Request Types
 type UserLoginRegisterRequest = actalink.UserLoginRegisterRequest
 type SubscriptionRequest = actalink.SubscriptionRequest
@@ -52,8 +60,8 @@ func handleStatusCode(statusCode *int, defaultCode int) int {
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /nonce [get]
-func (h *HandlerClient) GetNonce(c *gin.Context) {
-	nonceResp, statusCode, err := h.actalink.GetNonce()
+func (h *ActalinkHandler) GetNonce(c *gin.Context) {
+	nonceResp, statusCode, err := h.common.actalink.GetNonce()
 	if err != nil {
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to get nonce: %v", err)})
 		return
@@ -74,14 +82,14 @@ func (h *HandlerClient) GetNonce(c *gin.Context) {
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /isuseravailable [get]
-func (h *HandlerClient) CheckUserAvailability(c *gin.Context) {
+func (h *ActalinkHandler) CheckUserAvailability(c *gin.Context) {
 	address := c.Query("address")
 	if address == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Address parameter is required"})
 		return
 	}
 
-	availResp, statusCode, err := h.actalink.CheckUserAvailability(address)
+	availResp, statusCode, err := h.common.actalink.CheckUserAvailability(address)
 	if err != nil {
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to check user availability: %v", err)})
 		return
@@ -105,14 +113,14 @@ func (h *HandlerClient) CheckUserAvailability(c *gin.Context) {
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /user/register [post]
-func (h *HandlerClient) RegisterUser(c *gin.Context) {
+func (h *ActalinkHandler) RegisterActalinkUser(c *gin.Context) {
 	var req UserLoginRegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request body: %v", err)})
 		return
 	}
 
-	registerResp, statusCode, err := h.actalink.RegisterOrLoginUser(req, "register")
+	registerResp, statusCode, err := h.common.actalink.RegisterOrLoginUser(req, "register")
 	if err != nil {
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to register user: %v", err)})
 		return
@@ -133,14 +141,14 @@ func (h *HandlerClient) RegisterUser(c *gin.Context) {
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /user/login [post]
-func (h *HandlerClient) LoginUser(c *gin.Context) {
+func (h *ActalinkHandler) LoginActalinkUser(c *gin.Context) {
 	var req UserLoginRegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request body: %v", err)})
 		return
 	}
 
-	loginResp, statusCode, err := h.actalink.RegisterOrLoginUser(req, "login")
+	loginResp, statusCode, err := h.common.actalink.RegisterOrLoginUser(req, "login")
 	if err != nil {
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to login user: %v", err)})
 		return
@@ -159,8 +167,8 @@ func (h *HandlerClient) LoginUser(c *gin.Context) {
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /networks [get]
-func (h *HandlerClient) GetNetworks(c *gin.Context) {
-	networks, statusCode, err := h.actalink.GetNetworks()
+func (h *ActalinkHandler) GetNetworks(c *gin.Context) {
+	networks, statusCode, err := h.common.actalink.GetNetworks()
 	if err != nil {
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch networks: %v", err)})
 		return
@@ -182,7 +190,7 @@ func (h *HandlerClient) GetNetworks(c *gin.Context) {
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /operations [get]
-func (h *HandlerClient) GetOperations(c *gin.Context) {
+func (h *ActalinkHandler) GetOperations(c *gin.Context) {
 	swAddress := c.Query("swaddress")
 	if swAddress == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Smart Wallet Address is required"})
@@ -201,7 +209,7 @@ func (h *HandlerClient) GetOperations(c *gin.Context) {
 		return
 	}
 
-	operations, statusCode, err := h.actalink.GetOperations(swAddress, subId, status)
+	operations, statusCode, err := h.common.actalink.GetOperations(swAddress, subId, status)
 	if err != nil {
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch operations: %v", err)})
 		return
@@ -221,8 +229,8 @@ func (h *HandlerClient) GetOperations(c *gin.Context) {
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /subscriptions [get]
-func (h *HandlerClient) GetAllSubscriptions(c *gin.Context) {
-	subscriptions, statusCode, err := h.actalink.GetAllSubscriptions()
+func (h *ActalinkHandler) GetAllSubscriptions(c *gin.Context) {
+	subscriptions, statusCode, err := h.common.actalink.GetAllSubscriptions()
 	if err != nil {
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch subscriptions: %v", err)})
 		return
@@ -243,14 +251,14 @@ func (h *HandlerClient) GetAllSubscriptions(c *gin.Context) {
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /subscriptions [post]
-func (h *HandlerClient) CreateSubscription(c *gin.Context) {
+func (h *ActalinkHandler) CreateSubscription(c *gin.Context) {
 	var req SubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request body: %v", err)})
 		return
 	}
 
-	resp, statusCode, err := h.actalink.CreateSubscription(req)
+	resp, statusCode, err := h.common.actalink.CreateSubscription(req)
 	if err != nil {
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to create subscription: %v", err)})
 		return
@@ -271,14 +279,14 @@ func (h *HandlerClient) CreateSubscription(c *gin.Context) {
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /subscriptions [delete]
-func (h *HandlerClient) DeleteSubscription(c *gin.Context) {
+func (h *ActalinkHandler) DeleteSubscription(c *gin.Context) {
 	var req DeleteSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request body: %v", err)})
 		return
 	}
 
-	resp, statusCode, err := h.actalink.DeleteSubscription(req)
+	resp, statusCode, err := h.common.actalink.DeleteSubscription(req)
 	if err != nil {
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to delete subscription: %v", err)})
 		return
@@ -299,14 +307,14 @@ func (h *HandlerClient) DeleteSubscription(c *gin.Context) {
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /subscribers [get]
-func (h *HandlerClient) GetSubscribers(c *gin.Context) {
+func (h *ActalinkHandler) GetSubscribers(c *gin.Context) {
 	subId := c.Query("subscriptionId")
 	if subId == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Subscription ID is required"})
 		return
 	}
 
-	subscribers, statusCode, err := h.actalink.GetSubscribers(subId)
+	subscribers, statusCode, err := h.common.actalink.GetSubscribers(subId)
 	if err != nil {
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch subscribers: %v", err)})
 		return
@@ -326,8 +334,8 @@ func (h *HandlerClient) GetSubscribers(c *gin.Context) {
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /tokens [get]
-func (h *HandlerClient) GetTokens(c *gin.Context) {
-	tokens, statusCode, err := h.actalink.GetTokens()
+func (h *ActalinkHandler) GetTokens(c *gin.Context) {
+	tokens, statusCode, err := h.common.actalink.GetTokens()
 	if err != nil {
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch tokens: %v", err)})
 		return

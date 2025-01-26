@@ -1,4 +1,4 @@
-.PHONY: all build test clean lint run swagger
+.PHONY: all build test clean lint run swagger deploy
 
 # Go parameters
 BINARY_NAME=cyphera-api
@@ -8,7 +8,7 @@ GO=go
 all: lint test build
 
 build:
-	$(GO) build -o bin/$(BINARY_NAME) $(MAIN_PACKAGE)
+	$(GO) build -o bin/$(BINARY_NAME) $(MAIN_PACKAGE)/main
 
 test:
 	$(GO) test -v ./...
@@ -20,11 +20,11 @@ clean:
 lint:
 	golangci-lint run
 
-run:
-	$(GO) run $(MAIN_PACKAGE)
+run-local:
+	./scripts/local.sh
 
 swag:
-	swag init -g cmd/api/main.go
+	swag init -g cmd/api/main/main.go
 
 sqlc:
 	sqlc generate
@@ -33,8 +33,21 @@ gen: sqlc swag
 
 # Development tasks
 .PHONY: dev
-dev: swagger build
+
+air:
 	air
+
+env:
+	@if [ -f .env.local ]; then \
+		export $$(cat .env.local | grep -v '^#' | xargs); \
+	else \
+		export $$(cat .env | grep -v '^#' | xargs); \
+	fi
+
+dev: swagger air
+
+local:
+	./scripts/local.sh
 
 # Docker tasks
 docker-build:
@@ -54,4 +67,13 @@ help:
 	@echo "  make swagger      - Generate swagger documentation"
 	@echo "  make dev          - Run development mode"
 	@echo "  make docker-build - Build docker image"
-	@echo "  make docker-run   - Run docker container" 
+	@echo "  make docker-run   - Run docker container"
+	@echo "  make deploy       - Deploy the application"
+
+deploy:
+	serverless deploy
+
+clean:
+	$(GO) clean
+	rm -f bin/$(BINARY_NAME)
+	rm -f bootstrap function.zip 

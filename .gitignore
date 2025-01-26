@@ -27,8 +27,14 @@ bin/
 # env file
 .env
 
+# Terraform
+terraform/.terraform/
+
 # IDE specific files
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# Serverless
+.serverless/

@@ -10,6 +10,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type CustomerHandler struct {
+	common *CommonServices
+}
+
+func NewCustomerHandler(common *CommonServices) *CustomerHandler {
+	return &CustomerHandler{common: common}
+}
+
 // CustomerResponse represents the standardized API response for customer operations
 type CustomerResponse struct {
 	ID                string                 `json:"id"`
@@ -66,7 +74,7 @@ type UpdateCustomerRequest struct {
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /customers/{id} [get]
-func (h *HandlerClient) GetCustomer(c *gin.Context) {
+func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
@@ -74,7 +82,7 @@ func (h *HandlerClient) GetCustomer(c *gin.Context) {
 		return
 	}
 
-	customer, err := h.db.GetCustomer(c.Request.Context(), parsedUUID)
+	customer, err := h.common.db.GetCustomer(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Customer not found"})
 		return
@@ -93,14 +101,14 @@ func (h *HandlerClient) GetCustomer(c *gin.Context) {
 // @Failure 401 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /customers [get]
-func (h *HandlerClient) ListCustomers(c *gin.Context) {
+func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	// Get user role and account ID from context (set by auth middleware)
 	role := c.GetString("userRole")
 	accountID := c.GetString("accountID")
 
 	parsedAccountID, _ := uuid.Parse(accountID)
 
-	customers, err := h.db.GetCustomersByScope(c.Request.Context(), db.GetCustomersByScopeParams{
+	customers, err := h.common.db.GetCustomersByScope(c.Request.Context(), db.GetCustomersByScopeParams{
 		Column1:   role,
 		AccountID: parsedAccountID,
 	})
@@ -132,7 +140,7 @@ func (h *HandlerClient) ListCustomers(c *gin.Context) {
 // @Failure 401 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /customers [post]
-func (h *HandlerClient) CreateCustomer(c *gin.Context) {
+func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	var req CreateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
@@ -154,7 +162,7 @@ func (h *HandlerClient) CreateCustomer(c *gin.Context) {
 		return
 	}
 
-	customer, err := h.db.CreateCustomer(c.Request.Context(), db.CreateCustomerParams{
+	customer, err := h.common.db.CreateCustomer(c.Request.Context(), db.CreateCustomerParams{
 		AccountID:   parsedAccountID,
 		Email:       req.Email,
 		Name:        pgtype.Text{String: req.Name, Valid: req.Name != ""},
@@ -185,7 +193,7 @@ func (h *HandlerClient) CreateCustomer(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /customers/{id} [put]
-func (h *HandlerClient) UpdateCustomer(c *gin.Context) {
+func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
@@ -211,7 +219,7 @@ func (h *HandlerClient) UpdateCustomer(c *gin.Context) {
 		return
 	}
 
-	customer, err := h.db.UpdateCustomer(c.Request.Context(), db.UpdateCustomerParams{
+	customer, err := h.common.db.UpdateCustomer(c.Request.Context(), db.UpdateCustomerParams{
 		ID:          parsedUUID,
 		Email:       req.Email,
 		Name:        pgtype.Text{String: req.Name, Valid: req.Name != ""},
@@ -241,7 +249,7 @@ func (h *HandlerClient) UpdateCustomer(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /customers/{id} [delete]
-func (h *HandlerClient) DeleteCustomer(c *gin.Context) {
+func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
@@ -249,7 +257,7 @@ func (h *HandlerClient) DeleteCustomer(c *gin.Context) {
 		return
 	}
 
-	err = h.db.DeleteCustomer(c.Request.Context(), parsedUUID)
+	err = h.common.db.DeleteCustomer(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Customer not found"})
 		return
