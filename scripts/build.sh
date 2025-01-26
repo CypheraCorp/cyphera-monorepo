@@ -6,30 +6,22 @@ rm -f bootstrap function.zip
 
 # Build the binary
 echo "Building Go binary for AWS Lambda (ARM64)..."
-GOARCH=arm64 \
 GOOS=linux \
-CGO_ENABLED=0 \
+GOARCH=arm64 \
 GOARM=7 \
+CGO_ENABLED=0 \
 go build \
   -tags lambda.norpc \
-  -ldflags="-s -w -X main.Version=1.0.0" \
-  -trimpath \
+  -ldflags="-s -w" \
   -o bootstrap \
   cmd/api/main/main.go
 
-# Strip binary (additional size reduction)
-echo "Stripping binary..."
-strip bootstrap 2>/dev/null || true
+# Print binary information before compression
+echo "Binary details before compression:"
+file bootstrap
+ls -lh bootstrap
 
-# Compress the binary
-echo "Compressing binary with UPX..."
-if command -v upx >/dev/null 2>&1; then
-    upx -9 bootstrap
-else
-    echo "UPX not installed, skipping compression"
-fi
-
-# Verify the binary
+# Verify the binary architecture
 echo "Verifying binary architecture..."
 if ! file bootstrap | grep -q "aarch64"; then
     echo "Error: Binary is not compiled for ARM64"
@@ -41,10 +33,10 @@ fi
 # Make the binary executable
 chmod +x bootstrap
 
-# Print binary information
-echo "Binary details:"
+# Print final binary information
+echo "Final binary details:"
 file bootstrap
-ls -lh bootstrap  # Using -h for human-readable sizes
+ls -lh bootstrap
 
 # Create deployment package (optional, for local testing)
 if [ "${CREATE_ZIP:-false}" = "true" ]; then
