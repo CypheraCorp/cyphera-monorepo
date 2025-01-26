@@ -96,18 +96,21 @@ jobs:
       with:
         platforms: arm64
 
-    - name: Install UPX
-      run: sudo apt-get update && sudo apt-get install -y upx-ucl
-
     - name: Build Lambda package
       run: |
         chmod +x scripts/build.sh
         ./scripts/build.sh
 
-    - name: List files
+    - name: Verify binary
       run: |
-        ls -lh
+        echo "Binary details:"
         file bootstrap
+        ls -lh bootstrap
+        echo "Checking binary architecture..."
+        if ! file bootstrap | grep -q "aarch64"; then
+          echo "Error: Binary is not compiled for ARM64"
+          exit 1
+        fi
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
