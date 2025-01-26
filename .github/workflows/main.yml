@@ -91,6 +91,9 @@ jobs:
         chmod +x scripts/build.sh
         ./scripts/build.sh
 
+    - name: List files
+      run: ls -la    
+
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
