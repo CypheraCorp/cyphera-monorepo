@@ -31,7 +31,7 @@ custom:
         - ${ssm:/cyphera/private-subnet-2, ''}
 
 functions:
-  api:
+  main:
     handler: bootstrap
     events:
       - httpApi:
