@@ -9,14 +9,6 @@ provider:
   httpApi:
     payload: '1.0'
     cors: true
-    domain:
-      name: api.cypherapay.com
-      basePath: dev
-      stage: ${opt:stage, 'dev'}
-      securityPolicy: tls_1_2
-      endpointType: regional
-      certificateArn: arn:aws:acm:us-east-1:699475955358:certificate/2aab5f4d-bc62-42de-83b2-74d61ef8d0c2
-      createRoute53Record: true
   environment:
     DATABASE_URL: ${env:DATABASE_URL}
     ACTALINK_API_KEY: ${env:ACTALINK_API_KEY}
@@ -48,6 +40,7 @@ functions:
       - httpApi:
           path: /health
           method: GET
+          cors: true
       - httpApi:
           path: /{proxy+}
           method: ANY
@@ -56,3 +49,21 @@ functions:
     memorySize: 256
     environment:
       GIN_MODE: release
+
+resources:
+  Resources:
+    ApiGatewayDomainName:
+      Type: AWS::ApiGatewayV2::DomainName
+      Properties:
+        DomainName: api.cypherapay.com
+        DomainNameConfigurations:
+          - CertificateArn: arn:aws:acm:us-east-1:699475955358:certificate/2aab5f4d-bc62-42de-83b2-74d61ef8d0c2
+            EndpointType: REGIONAL
+            SecurityPolicy: TLS_1_2
+    ApiGatewayMapping:
+      Type: AWS::ApiGatewayV2::ApiMapping
+      Properties:
+        DomainName: api.cypherapay.com
+        ApiId: !Ref HttpApi
+        Stage: $default
+        ApiMappingKey: dev
