@@ -3,8 +3,12 @@ package handlers
 import (
 	"cyphera-api/internal/db"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
+
+	"encoding/base64"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -54,7 +58,18 @@ type UpdateAPIKeyRequest struct {
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// GetAPIKeyByID retrieves a specific API key by its ID
+// GetAPIKeyByID godoc
+// @Summary Get an API key
+// @Description Retrieves a specific API key by its ID
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Param id path string true "API Key ID"
+// @Success 200 {object} APIKeyResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /api-keys/{id} [get]
 func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
@@ -72,7 +87,17 @@ func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
 	c.JSON(http.StatusOK, toAPIKeyResponse(apiKey))
 }
 
-// ListAPIKeys retrieves all API keys for the current workspace
+// ListAPIKeys godoc
+// @Summary List API keys
+// @Description Retrieves all API keys for the current workspace
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Success 200 {array} APIKeyResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /api-keys [get]
 func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 	workspaceID := c.GetString("workspaceID")
 	parsedUUID, err := uuid.Parse(workspaceID)
@@ -98,7 +123,16 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 	})
 }
 
-// GetAllAPIKeys retrieves all API keys (admin only)
+// GetAllAPIKeys godoc
+// @Summary Get all API keys
+// @Description Retrieves all API keys across all workspaces (admin only)
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Success 200 {array} APIKeyResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /admin/api-keys [get]
 func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
 	apiKeys, err := h.common.db.GetAllAPIKeys(c.Request.Context())
 	if err != nil {
@@ -117,7 +151,18 @@ func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
 	})
 }
 
-// CreateAPIKey creates a new API key
+// CreateAPIKey godoc
+// @Summary Create API key
+// @Description Creates a new API key for the current workspace
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Param key body CreateAPIKeyRequest true "API key creation data"
+// @Success 201 {object} APIKeyResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /api-keys [post]
 func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	var req CreateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -160,7 +205,19 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	c.JSON(http.StatusCreated, toAPIKeyResponse(apiKey))
 }
 
-// UpdateAPIKey updates an existing API key
+// UpdateAPIKey godoc
+// @Summary Update API key
+// @Description Updates an existing API key
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Param id path string true "API Key ID"
+// @Param key body UpdateAPIKeyRequest true "API key update data"
+// @Success 200 {object} APIKeyResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /api-keys/{id} [put]
 func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
@@ -202,7 +259,18 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 	c.JSON(http.StatusOK, toAPIKeyResponse(apiKey))
 }
 
-// DeleteAPIKey soft deletes an API key
+// DeleteAPIKey godoc
+// @Summary Delete API key
+// @Description Soft deletes an API key
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Param id path string true "API Key ID"
+// @Success 204 "No Content"
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /api-keys/{id} [delete]
 func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
@@ -220,7 +288,16 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// GetExpiredAPIKeys retrieves all expired API keys
+// GetExpiredAPIKeys godoc
+// @Summary Get expired API keys
+// @Description Retrieves all expired API keys
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Success 200 {array} APIKeyResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /admin/api-keys/expired [get]
 func (h *APIKeyHandler) GetExpiredAPIKeys(c *gin.Context) {
 	apiKeys, err := h.common.db.GetExpiredAPIKeys(c.Request.Context())
 	if err != nil {
@@ -239,7 +316,17 @@ func (h *APIKeyHandler) GetExpiredAPIKeys(c *gin.Context) {
 	})
 }
 
-// GetActiveAPIKeysCount gets the count of active API keys for a workspace
+// GetActiveAPIKeysCount godoc
+// @Summary Get active API key count
+// @Description Gets the count of active API keys for a workspace
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]int32
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /api-keys/count [get]
 func (h *APIKeyHandler) GetActiveAPIKeysCount(c *gin.Context) {
 	workspaceID := c.GetString("workspaceID")
 	parsedUUID, err := uuid.Parse(workspaceID)
@@ -292,7 +379,21 @@ func toAPIKeyResponse(k db.ApiKey) APIKeyResponse {
 }
 
 // Helper function to generate a secure API key hash
+// generateAPIKeyHash creates a secure, unique API key using UUID v4 and base64 encoding
+// The format is: prefix_base64(uuid)_timestamp
+// Example: cyk_dj8kDjf9sKq0pLm3nO7_1234567890
 func generateAPIKeyHash() string {
-	// TODO: Implement secure API key generation
-	return "test_key_hash"
+	// Generate a UUID v4
+	keyUUID := uuid.New()
+
+	// Get current timestamp
+	timestamp := time.Now().Unix()
+
+	// Create the key components
+	prefix := "cyk" // Cyphera Key prefix
+	uuidStr := base64.RawURLEncoding.EncodeToString(keyUUID[:])
+	timestampStr := strconv.FormatInt(timestamp, 10)
+
+	// Combine components with underscores
+	return fmt.Sprintf("%s_%s_%s", prefix, uuidStr, timestampStr)
 }

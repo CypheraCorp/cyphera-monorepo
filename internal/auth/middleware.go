@@ -21,19 +21,22 @@ import (
 )
 
 var (
+	// ErrInvalidToken is returned when the provided token is invalid
 	ErrInvalidToken = errors.New("invalid token")
 )
 
+// CustomClaims contains custom data we want from the token
 type CustomClaims struct {
 	Scope string `json:"scope"`
 }
 
-// Validate does nothing for now but we can use it to check scopes
+// Validate implements the validator.CustomClaims interface
 func (c CustomClaims) Validate(ctx context.Context) error {
 	return nil
 }
 
-// EnsureValidToken is a middleware that will check the validity of our JWT
+// EnsureValidToken is a middleware that validates JWT tokens from Auth0
+// It checks the token's signature, expiration, issuer, and audience
 func EnsureValidToken() gin.HandlerFunc {
 	issuerURL, err := url.Parse("https://" + os.Getenv("AUTH0_DOMAIN") + "/")
 	if err != nil {
@@ -80,6 +83,7 @@ func EnsureValidToken() gin.HandlerFunc {
 	}
 }
 
+// errorHandler handles errors that occur during JWT validation
 func errorHandler(w http.ResponseWriter, r *http.Request, err error) {
 	log.Printf("Encountered error while validating JWT: %v", err)
 
@@ -90,7 +94,8 @@ func errorHandler(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
-// GetUserIDFromToken extracts the Auth0 user ID from the token
+// GetUserIDFromToken extracts the Auth0 user ID from the JWT token
+// Returns the user ID string or an error if the token is invalid
 func GetUserIDFromToken(c *gin.Context) (string, error) {
 	claims, ok := c.Request.Context().Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims)
 	if !ok {
@@ -103,6 +108,7 @@ func GetUserIDFromToken(c *gin.Context) (string, error) {
 }
 
 // validateAPIKey validates the API key and returns workspace and account information
+// It checks if the key exists, is not expired, and retrieves associated workspace and account
 func validateAPIKey(c *gin.Context, queries *db.Queries, apiKey string) (db.Workspace, db.Account, db.ApiKey, error) {
 	// Validate API key
 	key, err := queries.GetAPIKeyByKey(c.Request.Context(), apiKey)
@@ -131,6 +137,7 @@ func validateAPIKey(c *gin.Context, queries *db.Queries, apiKey string) (db.Work
 }
 
 // validateJWTToken validates the JWT token and returns user and account information
+// It checks the token format, validates it, and retrieves associated user and accounts
 func validateJWTToken(c *gin.Context, queries *db.Queries, authHeader string) (db.User, []db.ListAccountsByUserRow, error) {
 	// Extract token from Authorization header
 	parts := strings.Split(authHeader, " ")
@@ -160,7 +167,9 @@ func validateJWTToken(c *gin.Context, queries *db.Queries, authHeader string) (d
 	return user, accounts, nil
 }
 
-// EnsureValidAPIKeyOrToken middleware checks for either a valid API key or JWT token
+// EnsureValidAPIKeyOrToken is a middleware that checks for either a valid API key or JWT token
+// It first checks for an API key in the X-API-Key header, then falls back to JWT token validation
+// Sets various context values based on the authentication method used
 func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// First check for API key in header
@@ -242,7 +251,8 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 	}
 }
 
-// GetAccountIDFromToken extracts the Auth0 account ID from the token
+// GetAccountIDFromToken extracts the Auth0 account ID from the JWT token
+// Returns the account ID string or an error if the token is invalid
 func GetAccountIDFromToken(c *gin.Context) (string, error) {
 	claims, ok := c.Request.Context().Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims)
 	if !ok {
@@ -254,7 +264,9 @@ func GetAccountIDFromToken(c *gin.Context) (string, error) {
 	return sub, nil
 }
 
-// RequireRoles middleware checks if the user has the required roles
+// RequireRoles is a middleware that checks if the user has the required roles
+// For API key auth, it checks the access level
+// For JWT auth, it checks the account type for admin operations
 func RequireRoles(roles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		accountType := c.GetString("accountType")
