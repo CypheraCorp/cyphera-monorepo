@@ -138,7 +138,6 @@ jobs:
     - name: Install Serverless Framework
       run: |
         npm install -g serverless@3.33.0
-        npm install -g serverless-domain-manager
 
     - name: Deploy with Serverless
       env:
