@@ -6,6 +6,8 @@ provider:
   name: aws
   runtime: provided.al2
   region: us-east-1
+  httpApi:
+    payload: '1.0'
   environment:
     ACTALINK_API_KEY : cxiaitiqbnpvbrgaamevrghjojaagxuu
     DATABASE_URL: postgresql://apiuser:apipassword@cyphera-db.cjwqc0yo6vzw.us-east-1.rds.amazonaws.com:5432/cyphera
