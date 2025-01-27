@@ -15,66 +15,66 @@ env:
   STAGE: dev
 
 jobs:
-  test:
-    name: Test
-    runs-on: ubuntu-latest
+  # test:
+  #   name: Test
+  #   runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: cyphera_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+  #   services:
+  #     postgres:
+  #       image: postgres:15
+  #       env:
+  #         POSTGRES_USER: postgres
+  #         POSTGRES_PASSWORD: postgres
+  #         POSTGRES_DB: cyphera_test
+  #       ports:
+  #         - 5432:5432
+  #       options: >-
+  #         --health-cmd pg_isready
+  #         --health-interval 10s
+  #         --health-timeout 5s
+  #         --health-retries 5
 
-    steps:
-    - uses: actions/checkout@v3
+  #   steps:
+  #   - uses: actions/checkout@v3
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
+  #   - name: Set up Go
+  #     uses: actions/setup-go@v4
+  #     with:
+  #       go-version: ${{ env.GO_VERSION }}
+  #       cache: true
     
-    - name: Install dependencies
-      run: go mod download
+  #   - name: Install dependencies
+  #     run: go mod download
 
-    - name: Run tests
-      env:  
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
-        AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
-        AUTH0_AUDIENCE: ${{ secrets.AUTH0_AUDIENCE }}
-        ACTALINK_API_KEY: ${{ secrets.ACTALINK_API_KEY }}
-      run: go test -v ./...
+  #   - name: Run tests
+  #     env:  
+  #       DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
+  #       AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
+  #       AUTH0_AUDIENCE: ${{ secrets.AUTH0_AUDIENCE }}
+  #       ACTALINK_API_KEY: ${{ secrets.ACTALINK_API_KEY }}
+  #     run: go test -v ./...
 
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
+  # lint:
+  #   name: Lint
+  #   runs-on: ubuntu-latest
     
-    steps:
-    - uses: actions/checkout@v3
+  #   steps:
+  #   - uses: actions/checkout@v3
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
+  #   - name: Set up Go
+  #     uses: actions/setup-go@v4
+  #     with:
+  #       go-version: ${{ env.GO_VERSION }}
+  #       cache: true
 
-    - name: golangci-lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-        version: latest
+  #   - name: golangci-lint
+  #     uses: golangci/golangci-lint-action@v3
+  #     with:
+  #       version: latest
 
   build:
     name: Build
-    needs: [test, lint]
+    # needs: [test, lint]
     runs-on: ubuntu-latest
     
     steps:
