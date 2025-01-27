@@ -2,6 +2,9 @@ service: cyphera-api
 
 frameworkVersion: '3'
 
+plugins:
+  - serverless-domain-manager
+
 provider:
   name: aws
   runtime: provided.al2
@@ -10,13 +13,6 @@ provider:
     payload: '1.0'
     cors: true
     metrics: true
-    domainName:
-      name: api.cypherapay.com
-      certificateArn: arn:aws:acm:us-east-1:699475955358:certificate/2aab5f4d-bc62-42de-83b2-74d61ef8d0c2
-      securityPolicy: TLS_1_2
-      endpointType: regional
-      createRoute53Record: true
-      stage: dev
   environment:
     DATABASE_URL: ${env:DATABASE_URL}
     ACTALINK_API_KEY: ${env:ACTALINK_API_KEY}
@@ -30,6 +26,15 @@ provider:
       - ${ssm:/cyphera/private-subnet-2}
 
 custom:
+  customDomain:
+    domainName: api.cypherapay.com
+    certificateArn: arn:aws:acm:us-east-1:699475955358:certificate/2aab5f4d-bc62-42de-83b2-74d61ef8d0c2
+    basePath: dev
+    stage: ${opt:stage, 'dev'}
+    createRoute53Record: true
+    endpointType: regional
+    securityPolicy: TLS_1_2
+    apiType: http
   vpc:
     local:
       securityGroupIds: []
