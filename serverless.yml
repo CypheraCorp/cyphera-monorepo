@@ -31,10 +31,11 @@ custom:
     certificateArn: arn:aws:acm:us-east-1:699475955358:certificate/2aab5f4d-bc62-42de-83b2-74d61ef8d0c2
     basePath: dev
     stage: ${opt:stage, 'dev'}
-    createRoute53Record: true
+    createRoute53Record: false
     endpointType: regional
     securityPolicy: TLS_1_2
     apiType: http
+    autoDomain: true
   vpc:
     local:
       securityGroupIds: []
