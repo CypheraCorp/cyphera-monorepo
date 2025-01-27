@@ -10,6 +10,13 @@ provider:
     payload: '1.0'
     cors: true
     metrics: true
+    domain:
+      name: api.cypherapay.com
+      certificateArn: arn:aws:acm:us-east-1:699475955358:certificate/2aab5f4d-bc62-42de-83b2-74d61ef8d0c2
+      securityPolicy: TLS_1_2
+      endpointType: regional
+      createRoute53Record: true
+      stage: dev
   environment:
     DATABASE_URL: ${env:DATABASE_URL}
     ACTALINK_API_KEY: ${env:ACTALINK_API_KEY}
@@ -48,22 +55,3 @@ functions:
     memorySize: 256
     environment:
       GIN_MODE: release
-
-resources:
-  Resources:
-    ApiGatewayDomainName:
-      Type: AWS::ApiGatewayV2::DomainName
-      Properties:
-        DomainName: api.cypherapay.com
-        DomainNameConfigurations:
-          - CertificateArn: arn:aws:acm:us-east-1:699475955358:certificate/2aab5f4d-bc62-42de-83b2-74d61ef8d0c2
-            EndpointType: REGIONAL
-            SecurityPolicy: TLS_1_2
-    ApiGatewayMapping:
-      Type: AWS::ApiGatewayV2::ApiMapping
-      DependsOn: ApiGatewayDomainName
-      Properties:
-        DomainName: api.cypherapay.com
-        ApiId: ${aws:httpApi}
-        Stage: $default
-        ApiMappingKey: dev
