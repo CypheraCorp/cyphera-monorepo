@@ -7,10 +7,10 @@ provider:
   runtime: provided.al2
   region: us-east-1
   environment:
-    DATABASE_URL: ${env:DATABASE_URL}
-    ACTALINK_API_KEY: ${env:ACTALINK_API_KEY}
-    AUTH0_DOMAIN: ${env:AUTH0_DOMAIN}
-    AUTH0_AUDIENCE: ${env:AUTH0_AUDIENCE}
+    ACTALINK_API_KEY : cxiaitiqbnpvbrgaamevrghjojaagxuu
+    DATABASE_URL: postgresql://apiuser:apipassword@cyphera-db.cjwqc0yo6vzw.us-east-1.rds.amazonaws.com:5432/cyphera
+    AUTH0_DOMAIN: your-tenant.auth0.com
+    AUTH0_AUDIENCE: https://api.cyphera.com
   vpc:
     securityGroupIds:
       - ${ssm:/cyphera/lambda-security-group-id}
@@ -34,6 +34,9 @@ functions:
   main:
     handler: bootstrap
     events:
+      - httpApi:
+          path: /health
+          method: GET
       - httpApi:
           path: /{proxy+}
           method: ANY
