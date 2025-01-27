@@ -103,7 +103,7 @@ func (h *ActalinkHandler) CheckUserAvailability(c *gin.Context) {
 
 // RegisterUser godoc
 // @Summary      Register new user
-// @Description  Creates a new user account with wallet authentication
+// @Description  Creates a new user workspace with wallet authentication
 // @Tags         Actalink
 // @Accept       json
 // @Produce      json

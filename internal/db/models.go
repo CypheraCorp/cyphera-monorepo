@@ -12,6 +12,48 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AccountType string
+
+const (
+	AccountTypeAdmin    AccountType = "admin"
+	AccountTypeMerchant AccountType = "merchant"
+)
+
+func (e *AccountType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AccountType(s)
+	case string:
+		*e = AccountType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AccountType: %T", src)
+	}
+	return nil
+}
+
+type NullAccountType struct {
+	AccountType AccountType `json:"account_type"`
+	Valid       bool        `json:"valid"` // Valid is true if AccountType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAccountType) Scan(value interface{}) error {
+	if value == nil {
+		ns.AccountType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AccountType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAccountType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AccountType), nil
+}
+
 type ApiKeyLevel string
 
 const (
@@ -58,8 +100,10 @@ func (ns NullApiKeyLevel) Value() (driver.Value, error) {
 type UserRole string
 
 const (
-	UserRoleAdmin   UserRole = "admin"
-	UserRoleAccount UserRole = "account"
+	UserRoleOwner     UserRole = "owner"
+	UserRoleAdmin     UserRole = "admin"
+	UserRoleSupport   UserRole = "support"
+	UserRoleDeveloper UserRole = "developer"
 )
 
 func (e *UserRole) Scan(src interface{}) error {
@@ -99,9 +143,8 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 
 type Account struct {
 	ID           uuid.UUID          `json:"id"`
-	UserID       uuid.UUID          `json:"user_id"`
 	Name         string             `json:"name"`
-	Description  pgtype.Text        `json:"description"`
+	AccountType  AccountType        `json:"account_type"`
 	BusinessName pgtype.Text        `json:"business_name"`
 	BusinessType pgtype.Text        `json:"business_type"`
 	WebsiteUrl   pgtype.Text        `json:"website_url"`
@@ -111,53 +154,89 @@ type Account struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
-	Livemode     pgtype.Bool        `json:"livemode"`
 }
 
 type ApiKey struct {
-	ID         uuid.UUID          `json:"id"`
-	AccountID  pgtype.UUID        `json:"account_id"`
-	Name       string             `json:"name"`
-	KeyHash    string             `json:"key_hash"`
-	Level      ApiKeyLevel        `json:"level"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	DeletedAt  pgtype.Timestamptz `json:"deleted_at"`
-	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
-	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
-	IsActive   pgtype.Bool        `json:"is_active"`
-	Metadata   []byte             `json:"metadata"`
-	Livemode   pgtype.Bool        `json:"livemode"`
+	ID          uuid.UUID          `json:"id"`
+	WorkspaceID uuid.UUID          `json:"workspace_id"`
+	Name        string             `json:"name"`
+	KeyHash     string             `json:"key_hash"`
+	AccessLevel ApiKeyLevel        `json:"access_level"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	LastUsedAt  pgtype.Timestamptz `json:"last_used_at"`
+	Metadata    []byte             `json:"metadata"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type Customer struct {
 	ID                  uuid.UUID          `json:"id"`
-	AccountID           uuid.UUID          `json:"account_id"`
-	Email               string             `json:"email"`
+	WorkspaceID         uuid.UUID          `json:"workspace_id"`
+	ExternalID          pgtype.Text        `json:"external_id"`
+	Email               pgtype.Text        `json:"email"`
 	Name                pgtype.Text        `json:"name"`
+	Phone               pgtype.Text        `json:"phone"`
 	Description         pgtype.Text        `json:"description"`
-	Metadata            []byte             `json:"metadata"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 	Balance             pgtype.Int4        `json:"balance"`
 	Currency            pgtype.Text        `json:"currency"`
 	DefaultSourceID     pgtype.UUID        `json:"default_source_id"`
 	InvoicePrefix       pgtype.Text        `json:"invoice_prefix"`
 	NextInvoiceSequence pgtype.Int4        `json:"next_invoice_sequence"`
-	TaxExempt           pgtype.Text        `json:"tax_exempt"`
+	TaxExempt           pgtype.Bool        `json:"tax_exempt"`
 	TaxIds              []byte             `json:"tax_ids"`
+	Metadata            []byte             `json:"metadata"`
 	Livemode            pgtype.Bool        `json:"livemode"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type User struct {
-	ID         uuid.UUID          `json:"id"`
-	Auth0ID    string             `json:"auth0_id"`
-	Email      string             `json:"email"`
-	Role       UserRole           `json:"role"`
-	Name       pgtype.Text        `json:"name"`
-	PictureUrl pgtype.Text        `json:"picture_url"`
-	Metadata   []byte             `json:"metadata"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt  pgtype.Timestamptz `json:"deleted_at"`
+	ID               uuid.UUID          `json:"id"`
+	Auth0ID          string             `json:"auth0_id"`
+	Email            string             `json:"email"`
+	FirstName        pgtype.Text        `json:"first_name"`
+	LastName         pgtype.Text        `json:"last_name"`
+	DisplayName      pgtype.Text        `json:"display_name"`
+	PictureUrl       pgtype.Text        `json:"picture_url"`
+	Phone            pgtype.Text        `json:"phone"`
+	Timezone         pgtype.Text        `json:"timezone"`
+	Locale           pgtype.Text        `json:"locale"`
+	LastLoginAt      pgtype.Timestamptz `json:"last_login_at"`
+	EmailVerified    pgtype.Bool        `json:"email_verified"`
+	TwoFactorEnabled pgtype.Bool        `json:"two_factor_enabled"`
+	Status           pgtype.Text        `json:"status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type UserAccount struct {
+	ID        uuid.UUID          `json:"id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	AccountID uuid.UUID          `json:"account_id"`
+	Role      UserRole           `json:"role"`
+	IsOwner   pgtype.Bool        `json:"is_owner"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type Workspace struct {
+	ID           uuid.UUID          `json:"id"`
+	AccountID    uuid.UUID          `json:"account_id"`
+	Name         string             `json:"name"`
+	Description  pgtype.Text        `json:"description"`
+	BusinessName pgtype.Text        `json:"business_name"`
+	BusinessType pgtype.Text        `json:"business_type"`
+	WebsiteUrl   pgtype.Text        `json:"website_url"`
+	SupportEmail pgtype.Text        `json:"support_email"`
+	SupportPhone pgtype.Text        `json:"support_phone"`
+	Metadata     []byte             `json:"metadata"`
+	Livemode     pgtype.Bool        `json:"livemode"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
 }

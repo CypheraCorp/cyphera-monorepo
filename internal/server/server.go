@@ -19,10 +19,11 @@ import (
 
 // Handler Definitions
 var (
-	userHandler     *handlers.UserHandler
-	accountHandler  *handlers.AccountHandler
-	customerHandler *handlers.CustomerHandler
-	apiKeyHandler   *handlers.APIKeyHandler
+	accountHandler   *handlers.AccountHandler
+	workspaceHandler *handlers.WorkspaceHandler
+	customerHandler  *handlers.CustomerHandler
+	apiKeyHandler    *handlers.APIKeyHandler
+	userHandler      *handlers.UserHandler
 
 	// Actalink
 	actalinkHandler *handlers.ActalinkHandler
@@ -60,10 +61,11 @@ func InitializeHandlers() {
 	)
 
 	// API Handler initialization
-	userHandler = handlers.NewUserHandler(commonServices)
 	accountHandler = handlers.NewAccountHandler(commonServices)
+	workspaceHandler = handlers.NewWorkspaceHandler(commonServices)
 	customerHandler = handlers.NewCustomerHandler(commonServices)
 	apiKeyHandler = handlers.NewAPIKeyHandler(commonServices)
+	userHandler = handlers.NewUserHandler(commonServices)
 	// Actalink Handler initialization
 	actalinkHandler = handlers.NewActalinkHandler(commonServices)
 }
@@ -82,39 +84,53 @@ func InitializeRoutes(router *gin.Engine) {
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 	{
-
 		// No Public routes for now
 
 		// Protected routes (authentication required)
 		protected := v1.Group("/")
 		protected.Use(auth.EnsureValidAPIKeyOrToken(dbQueries))
 		{
-
 			// Admin-only routes
 			admin := protected.Group("/admin")
 			admin.Use(auth.RequireRoles("admin"))
 			{
+				// Account management
+				admin.GET("/accounts", accountHandler.ListAccounts)
+				admin.POST("/accounts", accountHandler.CreateAccount) // Create account entity in database
+				admin.GET("/accounts/:id", accountHandler.GetAccount)
+				admin.PUT("/accounts/:id", accountHandler.UpdateAccount)
+				admin.DELETE("/accounts/:id", accountHandler.DeleteAccount)
+
 				// User management
-				admin.GET("/users", userHandler.ListUsers)
-				admin.POST("/users", userHandler.CreateUser)            // Create user entity in database
-				admin.POST("/users/register", userHandler.RegisterUser) // Register user on platform
+				admin.POST("/users", userHandler.CreateUser)
 				admin.GET("/users/:id", userHandler.GetUser)
 				admin.PUT("/users/:id", userHandler.UpdateUser)
 				admin.DELETE("/users/:id", userHandler.DeleteUser)
 
-				// Account management
-				admin.GET("/accounts", accountHandler.ListAccounts)
-				admin.POST("/accounts", accountHandler.CreateAccount)
-				admin.GET("/accounts/all", accountHandler.GetAllAccounts)
-				admin.GET("/accounts/:id", accountHandler.GetAccount)
-				admin.PUT("/accounts/:id", accountHandler.UpdateAccount)
-				admin.DELETE("/accounts/:id", accountHandler.DeleteAccount)
-				admin.DELETE("/accounts/:id/hard", accountHandler.HardDeleteAccount)
-				admin.GET("/accounts/:id/customers", accountHandler.ListAccountCustomers)
+				// Workspace management
+				admin.GET("/workspaces", workspaceHandler.ListWorkspaces)
+				admin.POST("/workspaces", workspaceHandler.CreateWorkspace)
+				admin.GET("/workspaces/all", workspaceHandler.GetAllWorkspaces)
+				admin.GET("/workspaces/:id", workspaceHandler.GetWorkspace)
+				admin.PUT("/workspaces/:id", workspaceHandler.UpdateWorkspace)
+				admin.DELETE("/workspaces/:id", workspaceHandler.DeleteWorkspace)
+				admin.DELETE("/workspaces/:id/hard", workspaceHandler.HardDeleteWorkspace)
+				admin.GET("/workspaces/:id/customers", workspaceHandler.ListWorkspaceCustomers)
 
 				// API Key management
 				admin.GET("/api-keys", apiKeyHandler.GetAllAPIKeys)
 				admin.GET("/api-keys/expired", apiKeyHandler.GetExpiredAPIKeys)
+			}
+
+			// Current Account routes
+			accounts := protected.Group("/accounts")
+			{
+				accounts.GET("/me", accountHandler.GetCurrentAccount)
+				accounts.PUT("/me", accountHandler.UpdateAccount)
+
+				// User-Account relationship routes
+				accounts.POST("/:id/users", userHandler.AddUserToAccount)
+				accounts.DELETE("/:id/users/:userId", userHandler.RemoveUserFromAccount)
 			}
 
 			// Current User routes
@@ -122,6 +138,7 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				users.GET("/me", userHandler.GetCurrentUser)
 				users.PUT("/me", userHandler.UpdateUser)
+				users.GET("/:id/accounts", userHandler.ListUserAccounts)
 			}
 
 			// Customers
@@ -134,7 +151,7 @@ func InitializeRoutes(router *gin.Engine) {
 			// API Keys
 			apiKeys := protected.Group("/api-keys")
 			{
-				// Regular user routes (scoped to their account)
+				// Regular account routes (scoped to their workspace)
 				apiKeys.GET("", apiKeyHandler.ListAPIKeys)
 				apiKeys.POST("", apiKeyHandler.CreateAPIKey)
 				apiKeys.GET("/count", apiKeyHandler.GetActiveAPIKeysCount)
@@ -149,10 +166,10 @@ func InitializeRoutes(router *gin.Engine) {
 				// Nonce
 				actalink.GET("/nonce", actalinkHandler.GetNonce)
 
-				// User
+				// Account
 				actalink.GET("/isuseravailable", actalinkHandler.CheckUserAvailability)
-				actalink.POST("/users/register", actalinkHandler.RegisterActalinkUser)
-				actalink.POST("/users/login", actalinkHandler.LoginActalinkUser)
+				actalink.POST("/accounts/register", actalinkHandler.RegisterActalinkUser)
+				actalink.POST("/accounts/login", actalinkHandler.LoginActalinkUser)
 
 				// Subscription
 				actalink.POST("/subscriptions", actalinkHandler.CreateSubscription)

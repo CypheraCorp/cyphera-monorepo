@@ -1,7 +1,14 @@
 package constants
 
-// User roles
+// Role constants
 const (
-	RoleAdmin = "admin"
-	RoleUser  = "user"
+	RoleAdmin    = "admin"
+	RoleMerchant = "merchant"
+)
+
+// Access level constants
+const (
+	AccessLevelRead  = "read"
+	AccessLevelWrite = "write"
+	AccessLevelAdmin = "admin"
 )

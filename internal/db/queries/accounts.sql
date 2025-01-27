@@ -2,10 +2,6 @@
 SELECT * FROM accounts
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1;
 
--- name: GetAccountByUserID :one
-SELECT * FROM accounts
-WHERE user_id = $1 AND deleted_at IS NULL LIMIT 1;
-
 -- name: ListAccounts :many
 SELECT * FROM accounts
 WHERE deleted_at IS NULL
@@ -17,26 +13,27 @@ ORDER BY created_at DESC;
 
 -- name: CreateAccount :one
 INSERT INTO accounts (
-    user_id,
     name,
-    description,
+    account_type,
     business_name,
     business_type,
     website_url,
     support_email,
     support_phone,
-    metadata,
-    livemode
+    metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
-)
-RETURNING *;
+    $1, $2, $3, $4, $5, $6, $7, $8
+) RETURNING *;
+
+-- name: GetAccountByID :one
+SELECT * FROM accounts
+WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: UpdateAccount :one
 UPDATE accounts
 SET
     name = COALESCE($2, name),
-    description = COALESCE($3, description),
+    account_type = COALESCE($3, account_type),
     business_name = COALESCE($4, business_name),
     business_type = COALESCE($5, business_type),
     website_url = COALESCE($6, website_url),
@@ -47,33 +44,58 @@ SET
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
 
--- name: UpdateAccountFull :one
-UPDATE accounts
-SET
-    name = $2,
-    description = $3,
-    business_name = $4,
-    business_type = $5,
-    website_url = $6,
-    support_email = $7,
-    support_phone = $8,
-    metadata = $9,
-    livemode = $10,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING *;
-
 -- name: DeleteAccount :exec
 UPDATE accounts
 SET deleted_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL;
+WHERE id = $1;
 
 -- name: HardDeleteAccount :exec
 DELETE FROM accounts
 WHERE id = $1;
 
--- name: ListAccountCustomers :many
-SELECT c.* FROM customers c
-INNER JOIN accounts a ON c.account_id = a.id
-WHERE a.id = $1 AND c.deleted_at IS NULL
-ORDER BY c.created_at DESC;
+-- name: ListAccountsByUser :many
+SELECT 
+    a.*,
+    ua.role as user_role,
+    ua.is_owner
+FROM accounts a
+JOIN user_accounts ua ON a.id = ua.account_id
+WHERE ua.user_id = $1 
+AND a.deleted_at IS NULL 
+AND ua.deleted_at IS NULL
+ORDER BY a.created_at DESC;
+
+-- name: GetAccountUsers :many
+SELECT 
+    u.*,
+    ua.role,
+    ua.is_owner,
+    ua.created_at as joined_at
+FROM users u
+JOIN user_accounts ua ON u.id = ua.user_id
+WHERE ua.account_id = $1 
+AND u.deleted_at IS NULL 
+AND ua.deleted_at IS NULL
+ORDER BY ua.is_owner DESC, ua.created_at DESC;
+
+-- name: SearchAccounts :many
+SELECT DISTINCT a.* 
+FROM accounts a
+LEFT JOIN user_accounts ua ON a.id = ua.account_id
+LEFT JOIN users u ON ua.user_id = u.id
+WHERE 
+    (
+        a.name ILIKE $1 OR
+        a.business_name ILIKE $1 OR
+        u.email ILIKE $1 OR
+        u.display_name ILIKE $1
+    )
+    AND a.deleted_at IS NULL
+ORDER BY a.created_at DESC
+LIMIT $2
+OFFSET $3;
+
+-- name: ListAccountsByType :many
+SELECT * FROM accounts
+WHERE account_type = $1 AND deleted_at IS NULL
+ORDER BY created_at DESC; 
