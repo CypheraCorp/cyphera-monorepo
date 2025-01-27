@@ -181,6 +181,28 @@ definitions:
       verificationGasLimit:
         type: string
     type: object
+  handlers.APIKeyResponse:
+    properties:
+      access_level:
+        type: string
+      created:
+        type: integer
+      expires_at:
+        type: integer
+      id:
+        type: string
+      last_used_at:
+        type: integer
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      object:
+        type: string
+      updated:
+        type: integer
+    type: object
   handlers.AccountResponse:
     properties:
       account_type:
@@ -211,19 +233,39 @@ definitions:
     type: object
   handlers.AddUserToAccountRequest:
     properties:
-      is_owner:
-        type: boolean
+      email:
+        type: string
       role:
         enum:
         - admin
         - support
         - developer
         type: string
-      user_id:
+    required:
+    - email
+    - role
+    type: object
+  handlers.CreateAPIKeyRequest:
+    properties:
+      access_level:
+        enum:
+        - read
+        - write
+        - admin
+        type: string
+      description:
+        type: string
+      expires_at:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
         type: string
     required:
-    - role
-    - user_id
+    - access_level
+    - description
+    - name
     type: object
   handlers.CreateAccountRequest:
     properties:
@@ -235,6 +277,8 @@ definitions:
       business_name:
         type: string
       business_type:
+        type: string
+      description:
         type: string
       metadata:
         additionalProperties: true
@@ -249,7 +293,38 @@ definitions:
         type: string
     required:
     - account_type
+    - business_name
+    - business_type
+    - description
     - name
+    - support_email
+    - support_phone
+    - website_url
+    type: object
+  handlers.CreateCustomerRequest:
+    properties:
+      currency:
+        type: string
+      description:
+        type: string
+      email:
+        type: string
+      external_id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      phone:
+        type: string
+      tax_exempt:
+        type: boolean
+      tax_ids:
+        additionalProperties: true
+        type: object
+    required:
+    - email
     type: object
   handlers.CreateSubscriptionResponse:
     properties:
@@ -284,6 +359,79 @@ definitions:
     required:
     - auth0_id
     - email
+    type: object
+  handlers.CreateWorkspaceRequest:
+    description: Creates a new workspace
+    properties:
+      account_id:
+        type: string
+      business_name:
+        type: string
+      business_type:
+        type: string
+      description:
+        type: string
+      livemode:
+        type: boolean
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      support_email:
+        type: string
+      support_phone:
+        type: string
+      website_url:
+        type: string
+    required:
+    - business_name
+    - name
+    type: object
+  handlers.CustomerResponse:
+    properties:
+      balance:
+        type: integer
+      business_name:
+        type: string
+      created:
+        type: integer
+      currency:
+        type: string
+      default_source:
+        type: string
+      description:
+        type: string
+      email:
+        type: string
+      external_id:
+        type: string
+      id:
+        type: string
+      invoice_prefix:
+        type: string
+      livemode:
+        type: boolean
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      next_invoice_number:
+        type: integer
+      object:
+        type: string
+      phone:
+        type: string
+      tax_exempt:
+        type: boolean
+      tax_ids:
+        additionalProperties: true
+        type: object
+      workspace_id:
+        type: string
+      workspace_name:
+        type: string
     type: object
   handlers.DeleteSubscriptionRequest:
     properties:
@@ -366,6 +514,24 @@ definitions:
       trialDays:
         type: integer
     type: object
+  handlers.UpdateAPIKeyRequest:
+    properties:
+      access_level:
+        enum:
+        - read
+        - write
+        - admin
+        type: string
+      description:
+        type: string
+      expires_at:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+    type: object
   handlers.UpdateAccountRequest:
     properties:
       account_type:
@@ -376,6 +542,8 @@ definitions:
       business_name:
         type: string
       business_type:
+        type: string
+      description:
         type: string
       metadata:
         additionalProperties: true
@@ -388,6 +556,29 @@ definitions:
         type: string
       website_url:
         type: string
+    type: object
+  handlers.UpdateCustomerRequest:
+    properties:
+      currency:
+        type: string
+      description:
+        type: string
+      email:
+        type: string
+      external_id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      phone:
+        type: string
+      tax_exempt:
+        type: boolean
+      tax_ids:
+        additionalProperties: true
+        type: object
     type: object
   handlers.UpdateUserRequest:
     properties:
@@ -416,6 +607,31 @@ definitions:
         type: string
       two_factor_enabled:
         type: boolean
+    type: object
+  handlers.UpdateWorkspaceRequest:
+    description: Updates an existing workspace
+    properties:
+      account_id:
+        type: string
+      business_name:
+        type: string
+      business_type:
+        type: string
+      description:
+        type: string
+      livemode:
+        type: boolean
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      support_email:
+        type: string
+      support_phone:
+        type: string
+      website_url:
+        type: string
     type: object
   handlers.UserAccountResponse:
     properties:
@@ -514,6 +730,39 @@ definitions:
         type: boolean
       updated:
         type: integer
+    type: object
+  handlers.WorkspaceResponse:
+    description: Workspace response
+    properties:
+      account_id:
+        type: string
+      business_name:
+        type: string
+      business_type:
+        type: string
+      created:
+        type: integer
+      description:
+        type: string
+      id:
+        type: string
+      livemode:
+        type: boolean
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      object:
+        type: string
+      support_email:
+        type: string
+      support_phone:
+        type: string
+      updated:
+        type: integer
+      website_url:
+        type: string
     type: object
 host: localhost:8000
 info:
@@ -620,42 +869,6 @@ paths:
       tags:
       - users
   /accounts/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: Deletes an account. Only accessible by admins.
-      parameters:
-      - description: Account ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Delete an account
-      tags:
-      - accounts
     get:
       consumes:
       - application/json
@@ -789,6 +1002,474 @@ paths:
       summary: Get current account
       tags:
       - accounts
+  /admin/accounts/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes an account. Only accessible by admins.
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete an account
+      tags:
+      - accounts
+  /admin/api-keys:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all API keys across all workspaces (admin only)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.APIKeyResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get all API keys
+      tags:
+      - api-keys
+  /admin/api-keys/expired:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all expired API keys
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.APIKeyResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get expired API keys
+      tags:
+      - api-keys
+  /admin/workspaces/{id}/hard:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently deletes a workspace (admin only)
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Hard delete workspace
+      tags:
+      - workspaces
+  /admin/workspaces/all:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all workspaces including deleted ones (admin only)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.WorkspaceResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get all workspaces
+      tags:
+      - workspaces
+  /api-keys:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all API keys for the current workspace
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.APIKeyResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List API keys
+      tags:
+      - api-keys
+    post:
+      consumes:
+      - application/json
+      description: Creates a new API key for the current workspace
+      parameters:
+      - description: API key creation data
+        in: body
+        name: key
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateAPIKeyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.APIKeyResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create API key
+      tags:
+      - api-keys
+  /api-keys/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft deletes an API key
+      parameters:
+      - description: API Key ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete API key
+      tags:
+      - api-keys
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a specific API key by its ID
+      parameters:
+      - description: API Key ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.APIKeyResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get an API key
+      tags:
+      - api-keys
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing API key
+      parameters:
+      - description: API Key ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: API key update data
+        in: body
+        name: key
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateAPIKeyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.APIKeyResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update API key
+      tags:
+      - api-keys
+  /api-keys/count:
+    get:
+      consumes:
+      - application/json
+      description: Gets the count of active API keys for a workspace
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: integer
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get active API key count
+      tags:
+      - api-keys
+  /customers:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all customers for the current workspace
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.CustomerResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List customers
+      tags:
+      - customers
+    post:
+      consumes:
+      - application/json
+      description: Creates a new customer in the current workspace
+      parameters:
+      - description: Customer creation data
+        in: body
+        name: customer
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateCustomerRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.CustomerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create customer
+      tags:
+      - customers
+  /customers/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft deletes a customer
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete customer
+      tags:
+      - customers
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a specific customer by its ID
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.CustomerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a customer
+      tags:
+      - customers
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing customer
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Customer update data
+        in: body
+        name: customer
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateCustomerRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.CustomerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update customer
+      tags:
+      - customers
   /health:
     get:
       consumes:
@@ -1330,6 +2011,188 @@ paths:
       summary: Get current user
       tags:
       - users
+  /workspaces:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all non-deleted workspaces
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.WorkspaceResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List workspaces
+      tags:
+      - workspaces
+    post:
+      consumes:
+      - application/json
+      description: Creates a new workspace
+      parameters:
+      - description: Workspace creation data
+        in: body
+        name: workspace
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateWorkspaceRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.WorkspaceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create workspace
+      tags:
+      - workspaces
+  /workspaces/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft deletes a workspace
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete workspace
+      tags:
+      - workspaces
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a specific workspace by its ID
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.WorkspaceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a workspace
+      tags:
+      - workspaces
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing workspace
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Workspace update data
+        in: body
+        name: workspace
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateWorkspaceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.WorkspaceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update workspace
+      tags:
+      - workspaces
+  /workspaces/{id}/customers:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all customers for a workspace
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.CustomerResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List workspace customers
+      tags:
+      - workspaces
 securityDefinitions:
   Bearer:
     description: Type "Bearer" followed by a space and JWT token.
