@@ -9,6 +9,7 @@ provider:
   httpApi:
     payload: '1.0'
     cors: true
+    metrics: true
   environment:
     DATABASE_URL: ${env:DATABASE_URL}
     ACTALINK_API_KEY: ${env:ACTALINK_API_KEY}
@@ -40,11 +41,9 @@ functions:
       - httpApi:
           path: /health
           method: GET
-          cors: true
       - httpApi:
           path: /{proxy+}
           method: ANY
-          cors: true
     timeout: 29
     memorySize: 256
     environment:
@@ -64,6 +63,6 @@ resources:
       Type: AWS::ApiGatewayV2::ApiMapping
       Properties:
         DomainName: api.cypherapay.com
-        ApiId: !Ref HttpApi
+        ApiId: ${aws:ApiGatewayRestApi}
         Stage: $default
         ApiMappingKey: dev
