@@ -20,7 +20,6 @@ variable "db_username" {
 
 variable "db_password" {
   description = "Database password"
-  default     = "apipassword"
   sensitive   = true
 }
 
