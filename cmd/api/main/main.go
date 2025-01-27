@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"log"
 
 	_ "cyphera-api/docs" // This will be generated
 	"cyphera-api/internal/server"
@@ -51,6 +52,8 @@ func init() {
 }
 
 func Handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	// Add debug logging
+	log.Printf("Received request with path: %s", req.Path)
 	return ginLambda.ProxyWithContext(ctx, req)
 }
 
