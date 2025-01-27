@@ -82,9 +82,8 @@ type UpdateUserRequest struct {
 
 // AddUserToAccountRequest represents the request to add a user to an account
 type AddUserToAccountRequest struct {
-	UserID  string `json:"user_id" binding:"required"`
-	Role    string `json:"role" binding:"required,oneof=admin support developer"`
-	IsOwner bool   `json:"is_owner"`
+	Email string `json:"email" binding:"required,email"`
+	Role  string `json:"role" binding:"required,oneof=admin support developer"`
 }
 
 // GetCurrentUser godoc
@@ -336,14 +335,7 @@ func (h *UserHandler) AddUserToAccount(c *gin.Context) {
 		return
 	}
 
-	parsedUserID, err := uuid.Parse(req.UserID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid user ID format"})
-		return
-	}
-
-	// Check if user exists
-	user, err := h.common.db.GetUserByID(c.Request.Context(), parsedUserID)
+	user, err := h.common.db.GetUserByEmail(c.Request.Context(), req.Email)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "User not found"})
 		return
@@ -351,10 +343,9 @@ func (h *UserHandler) AddUserToAccount(c *gin.Context) {
 
 	// Add user to account
 	_, err = h.common.db.AddUserToAccount(c.Request.Context(), db.AddUserToAccountParams{
-		UserID:    parsedUserID,
+		UserID:    user.ID,
 		AccountID: parsedAccountID,
 		Role:      db.UserRole(req.Role),
-		IsOwner:   pgtype.Bool{Bool: req.IsOwner, Valid: true},
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to add user to account"})

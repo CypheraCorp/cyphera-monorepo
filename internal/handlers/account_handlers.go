@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
 	"encoding/json"
 	"log"
@@ -39,24 +40,26 @@ type AccountResponse struct {
 // CreateAccountRequest represents the request body for creating an account
 type CreateAccountRequest struct {
 	Name         string                 `json:"name" binding:"required"`
+	Description  string                 `json:"description" binding:"required"`
+	BusinessName string                 `json:"business_name" binding:"required"`
+	BusinessType string                 `json:"business_type" binding:"required"`
+	WebsiteURL   string                 `json:"website_url" binding:"required"`
+	SupportEmail string                 `json:"support_email" binding:"required"`
+	SupportPhone string                 `json:"support_phone" binding:"required"`
 	AccountType  string                 `json:"account_type" binding:"required,oneof=admin merchant"`
-	BusinessName string                 `json:"business_name,omitempty"`
-	BusinessType string                 `json:"business_type,omitempty"`
-	WebsiteURL   string                 `json:"website_url,omitempty"`
-	SupportEmail string                 `json:"support_email,omitempty"`
-	SupportPhone string                 `json:"support_phone,omitempty"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // UpdateAccountRequest represents the request body for updating an account
 type UpdateAccountRequest struct {
 	Name         string                 `json:"name,omitempty"`
-	AccountType  string                 `json:"account_type,omitempty" binding:"omitempty,oneof=admin merchant"`
+	Description  string                 `json:"description,omitempty"`
 	BusinessName string                 `json:"business_name,omitempty"`
 	BusinessType string                 `json:"business_type,omitempty"`
 	WebsiteURL   string                 `json:"website_url,omitempty"`
 	SupportEmail string                 `json:"support_email,omitempty"`
 	SupportPhone string                 `json:"support_phone,omitempty"`
+	AccountType  string                 `json:"account_type,omitempty" binding:"omitempty,oneof=admin merchant"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 }
 
@@ -291,16 +294,16 @@ func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path string true "Account ID"
-// @Success 204 "No Content"
+// @Success 200 {object} SuccessResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /accounts/{id} [delete]
+// @Failure 500 {object} ErrorResponse
+// @Router /admin/accounts/{id} [delete]
 func (h *AccountHandler) DeleteAccount(c *gin.Context) {
 	// Only admins can delete accounts
-	if c.GetString("accountType") != "admin" {
+	if c.GetString("accountType") != constants.AccountTypeAdmin {
 		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Only admin accounts can delete accounts"})
 		return
 	}

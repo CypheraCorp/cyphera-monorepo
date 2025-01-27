@@ -2,8 +2,10 @@ package auth
 
 import (
 	"context"
+	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -100,39 +102,73 @@ func GetUserIDFromToken(c *gin.Context) (string, error) {
 	return sub, nil
 }
 
+// validateAPIKey validates the API key and returns workspace and account information
+func validateAPIKey(c *gin.Context, queries *db.Queries, apiKey string) (db.Workspace, db.Account, db.ApiKey, error) {
+	// Validate API key
+	key, err := queries.GetAPIKeyByKey(c.Request.Context(), apiKey)
+	if err != nil {
+		return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid API key")
+	}
+
+	// Check if API key is expired
+	if key.ExpiresAt.Valid && key.ExpiresAt.Time.Before(time.Now()) {
+		return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("API key has expired")
+	}
+
+	// Get workspace associated with API key
+	workspace, err := queries.GetWorkspace(c.Request.Context(), key.WorkspaceID)
+	if err != nil {
+		return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid workspace")
+	}
+
+	// Get account associated with workspace
+	account, err := queries.GetAccount(c.Request.Context(), workspace.AccountID)
+	if err != nil {
+		return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid account")
+	}
+
+	return workspace, account, key, nil
+}
+
+// validateJWTToken validates the JWT token and returns user and account information
+func validateJWTToken(c *gin.Context, queries *db.Queries, authHeader string) (db.User, []db.ListAccountsByUserRow, error) {
+	// Extract token from Authorization header
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		return db.User{}, nil, fmt.Errorf("invalid authorization header format")
+	}
+
+	// Validate JWT token
+	claims, ok := c.Request.Context().Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims)
+	if !ok {
+		return db.User{}, nil, fmt.Errorf("invalid token")
+	}
+
+	// Get user from database using Auth0 ID
+	auth0ID := claims.RegisteredClaims.Subject
+	user, err := queries.GetUserByAuth0ID(c.Request.Context(), auth0ID)
+	if err != nil {
+		return db.User{}, nil, fmt.Errorf("invalid user")
+	}
+
+	// Get user's accounts
+	accounts, err := queries.ListAccountsByUser(c.Request.Context(), user.ID)
+	if err != nil || len(accounts) == 0 {
+		return db.User{}, nil, fmt.Errorf("no associated accounts")
+	}
+
+	return user, accounts, nil
+}
+
 // EnsureValidAPIKeyOrToken middleware checks for either a valid API key or JWT token
 func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// First check for API key in header
 		apiKey := c.GetHeader("X-API-Key")
 		if apiKey != "" {
-			// Validate API key
-			key, err := queries.GetAPIKeyByKey(c.Request.Context(), apiKey)
+			workspace, account, key, err := validateAPIKey(c, queries, apiKey)
 			if err != nil {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
-				c.Abort()
-				return
-			}
-
-			// Check if API key is expired
-			if key.ExpiresAt.Valid && key.ExpiresAt.Time.Before(time.Now()) {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "API key has expired"})
-				c.Abort()
-				return
-			}
-
-			// Get workspace associated with API key
-			workspace, err := queries.GetWorkspace(c.Request.Context(), key.WorkspaceID)
-			if err != nil {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid workspace"})
-				c.Abort()
-				return
-			}
-
-			// Get account associated with workspace
-			account, err := queries.GetAccount(c.Request.Context(), workspace.AccountID)
-			if err != nil {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid account"})
+				c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 				c.Abort()
 				return
 			}
@@ -155,35 +191,9 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 			return
 		}
 
-		// Extract token from Authorization header
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
-			c.Abort()
-			return
-		}
-
-		// Validate JWT token
-		claims, ok := c.Request.Context().Value(jwtmiddleware.ContextKey{}).(*validator.ValidatedClaims)
-		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-			c.Abort()
-			return
-		}
-
-		// Get user from database using Auth0 ID
-		auth0ID := claims.RegisteredClaims.Subject
-		user, err := queries.GetUserByAuth0ID(c.Request.Context(), auth0ID)
+		user, accounts, err := validateJWTToken(c, queries, authHeader)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user"})
-			c.Abort()
-			return
-		}
-
-		// Get user's accounts
-		accounts, err := queries.ListAccountsByUser(c.Request.Context(), user.ID)
-		if err != nil || len(accounts) == 0 {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "No associated accounts"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			c.Abort()
 			return
 		}
@@ -201,7 +211,7 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 			}
 		}
 
-		// Parse and validate account ID
+		// Find the specified account in user's accounts
 		accountID, err := uuid.Parse(accountIDStr)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid account ID format"})
@@ -209,31 +219,25 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 			return
 		}
 
-		// Find the specified account in user's accounts
-		var userAccount db.ListAccountsByUserRow
-		found := false
+		var userAccount *db.ListAccountsByUserRow
 		for _, acc := range accounts {
 			if acc.ID == accountID {
-				userAccount = acc
-				found = true
+				userAccount = &acc
 				break
 			}
 		}
 
-		if !found {
-			c.JSON(http.StatusForbidden, gin.H{"error": "User does not have access to this account"})
+		if userAccount == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Account not associated with user"})
 			c.Abort()
 			return
 		}
 
-		// Set user and account information in context
+		// Set context with user and account information
 		c.Set("userID", user.ID.String())
-		c.Set("auth0ID", auth0ID)
-		c.Set("authType", "jwt")
-		c.Set("accountID", accountID.String())
-		c.Set("userRole", string(userAccount.UserRole))
+		c.Set("accountID", accountIDStr)
 		c.Set("accountType", string(userAccount.AccountType))
-
+		c.Set("authType", "jwt")
 		c.Next()
 	}
 }
@@ -250,58 +254,27 @@ func GetAccountIDFromToken(c *gin.Context) (string, error) {
 	return sub, nil
 }
 
-// RequireRoles middleware checks if the user has any of the required roles
+// RequireRoles middleware checks if the user has the required roles
 func RequireRoles(roles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		accountType := c.GetString("accountType")
+		apiKeyLevel := c.GetString("apiKeyLevel")
 		authType := c.GetString("authType")
 
-		switch authType {
-		case "api_key":
-			accountType := c.GetString("accountType")
-			apiKeyLevel := c.GetString("apiKeyLevel")
-
-			// First check account type
-			if accountType != "admin" {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient account type permissions"})
+		// For API key auth, check access level
+		if authType == "api_key" {
+			if apiKeyLevel != constants.AccessLevelAdmin {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient API key access level"})
 				c.Abort()
 				return
 			}
+			c.Next()
+			return
+		}
 
-			// Then check API key level
-			if apiKeyLevel != "admin" {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient API key permissions"})
-				c.Abort()
-				return
-			}
-
-		case "jwt":
-			userRole := c.GetString("userRole")
-			accountType := c.GetString("accountType")
-
-			// Check if user has required role
-			hasRequiredRole := false
-			for _, role := range roles {
-				if role == userRole {
-					hasRequiredRole = true
-					break
-				}
-			}
-
-			if !hasRequiredRole {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient user role permissions"})
-				c.Abort()
-				return
-			}
-
-			// For admin-only operations, check account type
-			if roles[0] == "admin" && accountType != "admin" {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient account type permissions"})
-				c.Abort()
-				return
-			}
-
-		default:
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authentication type"})
+		// For admin-only operations, check account type
+		if roles[0] == constants.RoleAdmin && accountType != constants.AccountTypeAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
 			c.Abort()
 			return
 		}
