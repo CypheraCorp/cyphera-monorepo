@@ -11,10 +11,12 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// CustomerHandler handles customer related operations
 type CustomerHandler struct {
 	common *CommonServices
 }
 
+// NewCustomerHandler creates a new instance of CustomerHandler
 func NewCustomerHandler(common *CommonServices) *CustomerHandler {
 	return &CustomerHandler{common: common}
 }
@@ -69,7 +71,18 @@ type UpdateCustomerRequest struct {
 	TaxIDs      map[string]interface{} `json:"tax_ids,omitempty"`
 }
 
-// GetCustomer retrieves a specific customer by its ID
+// GetCustomer godoc
+// @Summary Get a customer
+// @Description Retrieves a specific customer by its ID
+// @Tags customers
+// @Accept json
+// @Produce json
+// @Param id path string true "Customer ID"
+// @Success 200 {object} CustomerResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /customers/{id} [get]
 func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
@@ -87,7 +100,17 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 	c.JSON(http.StatusOK, toCustomerResponse(customer))
 }
 
-// ListCustomers retrieves all customers for the current workspace
+// ListCustomers godoc
+// @Summary List customers
+// @Description Retrieves all customers for the current workspace
+// @Tags customers
+// @Accept json
+// @Produce json
+// @Success 200 {array} CustomerResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /customers [get]
 func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	workspaceID := c.GetString("workspaceID")
 	parsedUUID, err := uuid.Parse(workspaceID)
@@ -113,7 +136,18 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	})
 }
 
-// CreateCustomer creates a new customer
+// CreateCustomer godoc
+// @Summary Create customer
+// @Description Creates a new customer in the current workspace
+// @Tags customers
+// @Accept json
+// @Produce json
+// @Param customer body CreateCustomerRequest true "Customer creation data"
+// @Success 200 {object} CustomerResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /customers [post]
 func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	var req CreateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -159,7 +193,19 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	c.JSON(http.StatusOK, toCustomerResponse(customer))
 }
 
-// UpdateCustomer updates an existing customer
+// UpdateCustomer godoc
+// @Summary Update customer
+// @Description Updates an existing customer
+// @Tags customers
+// @Accept json
+// @Produce json
+// @Param id path string true "Customer ID"
+// @Param customer body UpdateCustomerRequest true "Customer update data"
+// @Success 200 {object} CustomerResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /customers/{id} [put]
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
@@ -205,7 +251,18 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	c.JSON(http.StatusOK, toCustomerResponse(customer))
 }
 
-// DeleteCustomer deletes a customer
+// DeleteCustomer godoc
+// @Summary Delete customer
+// @Description Soft deletes a customer
+// @Tags customers
+// @Accept json
+// @Produce json
+// @Param id path string true "Customer ID"
+// @Success 204 "No Content"
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /customers/{id} [delete]
 func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
