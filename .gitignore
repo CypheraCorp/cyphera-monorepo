@@ -26,6 +26,7 @@ bin/
 
 # env file
 .env
+.env.prod
 
 # Terraform
 terraform/.terraform/
