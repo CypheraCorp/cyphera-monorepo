@@ -39,3 +39,5 @@ functions:
           method: ANY
     timeout: 29
     memorySize: 256
+    environment:
+      GIN_MODE: release
