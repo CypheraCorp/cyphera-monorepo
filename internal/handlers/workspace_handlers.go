@@ -282,7 +282,7 @@ func (h *WorkspaceHandler) UpdateWorkspace(c *gin.Context) {
 	c.JSON(http.StatusOK, toWorkspaceResponse(workspace))
 }
 
-// DeleteWorkspace soft deletes a workspace
+// DeleteWorkspace godoc
 // @Summary Delete workspace
 // @Description Soft deletes a workspace
 // @Tags workspaces
@@ -311,7 +311,7 @@ func (h *WorkspaceHandler) DeleteWorkspace(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// HardDeleteWorkspace permanently deletes a workspace
+// HardDeleteWorkspace godoc
 // @Summary Hard delete workspace
 // @Description Permanently deletes a workspace (admin only)
 // @Tags workspaces

@@ -294,12 +294,12 @@ func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path string true "Account ID"
-// @Success 200 {object} SuccessResponse
+// @Success 204 "No Content"
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
 // @Router /admin/accounts/{id} [delete]
 func (h *AccountHandler) DeleteAccount(c *gin.Context) {
 	// Only admins can delete accounts
