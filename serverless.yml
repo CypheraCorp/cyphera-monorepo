@@ -61,8 +61,9 @@ resources:
             SecurityPolicy: TLS_1_2
     ApiGatewayMapping:
       Type: AWS::ApiGatewayV2::ApiMapping
+      DependsOn: ApiGatewayDomainName
       Properties:
         DomainName: api.cypherapay.com
-        ApiId: ${aws:ApiGatewayRestApi}
+        ApiId: !Ref HttpApi
         Stage: $default
         ApiMappingKey: dev
