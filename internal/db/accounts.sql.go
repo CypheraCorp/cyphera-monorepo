@@ -14,54 +14,46 @@ import (
 
 const createAccount = `-- name: CreateAccount :one
 INSERT INTO accounts (
-    user_id,
     name,
-    description,
+    account_type,
     business_name,
     business_type,
     website_url,
     support_email,
     support_phone,
-    metadata,
-    livemode
+    metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
-)
-RETURNING id, user_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at, livemode
+    $1, $2, $3, $4, $5, $6, $7, $8
+) RETURNING id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at
 `
 
 type CreateAccountParams struct {
-	UserID       uuid.UUID   `json:"user_id"`
 	Name         string      `json:"name"`
-	Description  pgtype.Text `json:"description"`
+	AccountType  AccountType `json:"account_type"`
 	BusinessName pgtype.Text `json:"business_name"`
 	BusinessType pgtype.Text `json:"business_type"`
 	WebsiteUrl   pgtype.Text `json:"website_url"`
 	SupportEmail pgtype.Text `json:"support_email"`
 	SupportPhone pgtype.Text `json:"support_phone"`
 	Metadata     []byte      `json:"metadata"`
-	Livemode     pgtype.Bool `json:"livemode"`
 }
 
 func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error) {
 	row := q.db.QueryRow(ctx, createAccount,
-		arg.UserID,
 		arg.Name,
-		arg.Description,
+		arg.AccountType,
 		arg.BusinessName,
 		arg.BusinessType,
 		arg.WebsiteUrl,
 		arg.SupportEmail,
 		arg.SupportPhone,
 		arg.Metadata,
-		arg.Livemode,
 	)
 	var i Account
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
 		&i.Name,
-		&i.Description,
+		&i.AccountType,
 		&i.BusinessName,
 		&i.BusinessType,
 		&i.WebsiteUrl,
@@ -71,7 +63,6 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.Livemode,
 	)
 	return i, err
 }
@@ -79,7 +70,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 const deleteAccount = `-- name: DeleteAccount :exec
 UPDATE accounts
 SET deleted_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1
 `
 
 func (q *Queries) DeleteAccount(ctx context.Context, id uuid.UUID) error {
@@ -88,7 +79,7 @@ func (q *Queries) DeleteAccount(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, user_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at, livemode FROM accounts
+SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at FROM accounts
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -97,9 +88,8 @@ func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
 	var i Account
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
 		&i.Name,
-		&i.Description,
+		&i.AccountType,
 		&i.BusinessName,
 		&i.BusinessType,
 		&i.WebsiteUrl,
@@ -109,24 +99,22 @@ func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.Livemode,
 	)
 	return i, err
 }
 
-const getAccountByUserID = `-- name: GetAccountByUserID :one
-SELECT id, user_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at, livemode FROM accounts
-WHERE user_id = $1 AND deleted_at IS NULL LIMIT 1
+const getAccountByID = `-- name: GetAccountByID :one
+SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at FROM accounts
+WHERE id = $1 AND deleted_at IS NULL
 `
 
-func (q *Queries) GetAccountByUserID(ctx context.Context, userID uuid.UUID) (Account, error) {
-	row := q.db.QueryRow(ctx, getAccountByUserID, userID)
+func (q *Queries) GetAccountByID(ctx context.Context, id uuid.UUID) (Account, error) {
+	row := q.db.QueryRow(ctx, getAccountByID, id)
 	var i Account
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
 		&i.Name,
-		&i.Description,
+		&i.AccountType,
 		&i.BusinessName,
 		&i.BusinessType,
 		&i.WebsiteUrl,
@@ -136,13 +124,92 @@ func (q *Queries) GetAccountByUserID(ctx context.Context, userID uuid.UUID) (Acc
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.Livemode,
 	)
 	return i, err
 }
 
+const getAccountUsers = `-- name: GetAccountUsers :many
+SELECT 
+    u.id, u.auth0_id, u.email, u.first_name, u.last_name, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
+    ua.role,
+    ua.is_owner,
+    ua.created_at as joined_at
+FROM users u
+JOIN user_accounts ua ON u.id = ua.user_id
+WHERE ua.account_id = $1 
+AND u.deleted_at IS NULL 
+AND ua.deleted_at IS NULL
+ORDER BY ua.is_owner DESC, ua.created_at DESC
+`
+
+type GetAccountUsersRow struct {
+	ID               uuid.UUID          `json:"id"`
+	Auth0ID          string             `json:"auth0_id"`
+	Email            string             `json:"email"`
+	FirstName        pgtype.Text        `json:"first_name"`
+	LastName         pgtype.Text        `json:"last_name"`
+	DisplayName      pgtype.Text        `json:"display_name"`
+	PictureUrl       pgtype.Text        `json:"picture_url"`
+	Phone            pgtype.Text        `json:"phone"`
+	Timezone         pgtype.Text        `json:"timezone"`
+	Locale           pgtype.Text        `json:"locale"`
+	LastLoginAt      pgtype.Timestamptz `json:"last_login_at"`
+	EmailVerified    pgtype.Bool        `json:"email_verified"`
+	TwoFactorEnabled pgtype.Bool        `json:"two_factor_enabled"`
+	Status           pgtype.Text        `json:"status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	Role             UserRole           `json:"role"`
+	IsOwner          pgtype.Bool        `json:"is_owner"`
+	JoinedAt         pgtype.Timestamptz `json:"joined_at"`
+}
+
+func (q *Queries) GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]GetAccountUsersRow, error) {
+	rows, err := q.db.Query(ctx, getAccountUsers, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAccountUsersRow{}
+	for rows.Next() {
+		var i GetAccountUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Auth0ID,
+			&i.Email,
+			&i.FirstName,
+			&i.LastName,
+			&i.DisplayName,
+			&i.PictureUrl,
+			&i.Phone,
+			&i.Timezone,
+			&i.Locale,
+			&i.LastLoginAt,
+			&i.EmailVerified,
+			&i.TwoFactorEnabled,
+			&i.Status,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.Role,
+			&i.IsOwner,
+			&i.JoinedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAllAccounts = `-- name: GetAllAccounts :many
-SELECT id, user_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at, livemode FROM accounts
+SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at FROM accounts
 ORDER BY created_at DESC
 `
 
@@ -157,9 +224,8 @@ func (q *Queries) GetAllAccounts(ctx context.Context) ([]Account, error) {
 		var i Account
 		if err := rows.Scan(
 			&i.ID,
-			&i.UserID,
 			&i.Name,
-			&i.Description,
+			&i.AccountType,
 			&i.BusinessName,
 			&i.BusinessType,
 			&i.WebsiteUrl,
@@ -169,7 +235,6 @@ func (q *Queries) GetAllAccounts(ctx context.Context) ([]Account, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
-			&i.Livemode,
 		); err != nil {
 			return nil, err
 		}
@@ -191,53 +256,8 @@ func (q *Queries) HardDeleteAccount(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const listAccountCustomers = `-- name: ListAccountCustomers :many
-SELECT c.id, c.account_id, c.email, c.name, c.description, c.metadata, c.created_at, c.updated_at, c.deleted_at, c.balance, c.currency, c.default_source_id, c.invoice_prefix, c.next_invoice_sequence, c.tax_exempt, c.tax_ids, c.livemode FROM customers c
-INNER JOIN accounts a ON c.account_id = a.id
-WHERE a.id = $1 AND c.deleted_at IS NULL
-ORDER BY c.created_at DESC
-`
-
-func (q *Queries) ListAccountCustomers(ctx context.Context, id uuid.UUID) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, listAccountCustomers, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Customer{}
-	for rows.Next() {
-		var i Customer
-		if err := rows.Scan(
-			&i.ID,
-			&i.AccountID,
-			&i.Email,
-			&i.Name,
-			&i.Description,
-			&i.Metadata,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-			&i.Balance,
-			&i.Currency,
-			&i.DefaultSourceID,
-			&i.InvoicePrefix,
-			&i.NextInvoiceSequence,
-			&i.TaxExempt,
-			&i.TaxIds,
-			&i.Livemode,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, user_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at, livemode FROM accounts
+SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at FROM accounts
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -253,9 +273,8 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 		var i Account
 		if err := rows.Scan(
 			&i.ID,
-			&i.UserID,
 			&i.Name,
-			&i.Description,
+			&i.AccountType,
 			&i.BusinessName,
 			&i.BusinessType,
 			&i.WebsiteUrl,
@@ -265,7 +284,167 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
-			&i.Livemode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAccountsByType = `-- name: ListAccountsByType :many
+SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at FROM accounts
+WHERE account_type = $1 AND deleted_at IS NULL
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListAccountsByType(ctx context.Context, accountType AccountType) ([]Account, error) {
+	rows, err := q.db.Query(ctx, listAccountsByType, accountType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Account{}
+	for rows.Next() {
+		var i Account
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.AccountType,
+			&i.BusinessName,
+			&i.BusinessType,
+			&i.WebsiteUrl,
+			&i.SupportEmail,
+			&i.SupportPhone,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAccountsByUser = `-- name: ListAccountsByUser :many
+SELECT 
+    a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.created_at, a.updated_at, a.deleted_at,
+    ua.role as user_role,
+    ua.is_owner
+FROM accounts a
+JOIN user_accounts ua ON a.id = ua.account_id
+WHERE ua.user_id = $1 
+AND a.deleted_at IS NULL 
+AND ua.deleted_at IS NULL
+ORDER BY a.created_at DESC
+`
+
+type ListAccountsByUserRow struct {
+	ID           uuid.UUID          `json:"id"`
+	Name         string             `json:"name"`
+	AccountType  AccountType        `json:"account_type"`
+	BusinessName pgtype.Text        `json:"business_name"`
+	BusinessType pgtype.Text        `json:"business_type"`
+	WebsiteUrl   pgtype.Text        `json:"website_url"`
+	SupportEmail pgtype.Text        `json:"support_email"`
+	SupportPhone pgtype.Text        `json:"support_phone"`
+	Metadata     []byte             `json:"metadata"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+	UserRole     UserRole           `json:"user_role"`
+	IsOwner      pgtype.Bool        `json:"is_owner"`
+}
+
+func (q *Queries) ListAccountsByUser(ctx context.Context, userID uuid.UUID) ([]ListAccountsByUserRow, error) {
+	rows, err := q.db.Query(ctx, listAccountsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAccountsByUserRow{}
+	for rows.Next() {
+		var i ListAccountsByUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.AccountType,
+			&i.BusinessName,
+			&i.BusinessType,
+			&i.WebsiteUrl,
+			&i.SupportEmail,
+			&i.SupportPhone,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.UserRole,
+			&i.IsOwner,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchAccounts = `-- name: SearchAccounts :many
+SELECT DISTINCT a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.created_at, a.updated_at, a.deleted_at 
+FROM accounts a
+LEFT JOIN user_accounts ua ON a.id = ua.account_id
+LEFT JOIN users u ON ua.user_id = u.id
+WHERE 
+    (
+        a.name ILIKE $1 OR
+        a.business_name ILIKE $1 OR
+        u.email ILIKE $1 OR
+        u.display_name ILIKE $1
+    )
+    AND a.deleted_at IS NULL
+ORDER BY a.created_at DESC
+LIMIT $2
+OFFSET $3
+`
+
+type SearchAccountsParams struct {
+	Name   string `json:"name"`
+	Limit  int32  `json:"limit"`
+	Offset int32  `json:"offset"`
+}
+
+func (q *Queries) SearchAccounts(ctx context.Context, arg SearchAccountsParams) ([]Account, error) {
+	rows, err := q.db.Query(ctx, searchAccounts, arg.Name, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Account{}
+	for rows.Next() {
+		var i Account
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.AccountType,
+			&i.BusinessName,
+			&i.BusinessType,
+			&i.WebsiteUrl,
+			&i.SupportEmail,
+			&i.SupportPhone,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -281,7 +460,7 @@ const updateAccount = `-- name: UpdateAccount :one
 UPDATE accounts
 SET
     name = COALESCE($2, name),
-    description = COALESCE($3, description),
+    account_type = COALESCE($3, account_type),
     business_name = COALESCE($4, business_name),
     business_type = COALESCE($5, business_type),
     website_url = COALESCE($6, website_url),
@@ -290,13 +469,13 @@ SET
     metadata = COALESCE($9, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, user_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at, livemode
+RETURNING id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateAccountParams struct {
 	ID           uuid.UUID   `json:"id"`
 	Name         string      `json:"name"`
-	Description  pgtype.Text `json:"description"`
+	AccountType  AccountType `json:"account_type"`
 	BusinessName pgtype.Text `json:"business_name"`
 	BusinessType pgtype.Text `json:"business_type"`
 	WebsiteUrl   pgtype.Text `json:"website_url"`
@@ -309,7 +488,7 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (A
 	row := q.db.QueryRow(ctx, updateAccount,
 		arg.ID,
 		arg.Name,
-		arg.Description,
+		arg.AccountType,
 		arg.BusinessName,
 		arg.BusinessType,
 		arg.WebsiteUrl,
@@ -320,9 +499,8 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (A
 	var i Account
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
 		&i.Name,
-		&i.Description,
+		&i.AccountType,
 		&i.BusinessName,
 		&i.BusinessType,
 		&i.WebsiteUrl,
@@ -332,70 +510,6 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (A
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.Livemode,
-	)
-	return i, err
-}
-
-const updateAccountFull = `-- name: UpdateAccountFull :one
-UPDATE accounts
-SET
-    name = $2,
-    description = $3,
-    business_name = $4,
-    business_type = $5,
-    website_url = $6,
-    support_email = $7,
-    support_phone = $8,
-    metadata = $9,
-    livemode = $10,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING id, user_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at, livemode
-`
-
-type UpdateAccountFullParams struct {
-	ID           uuid.UUID   `json:"id"`
-	Name         string      `json:"name"`
-	Description  pgtype.Text `json:"description"`
-	BusinessName pgtype.Text `json:"business_name"`
-	BusinessType pgtype.Text `json:"business_type"`
-	WebsiteUrl   pgtype.Text `json:"website_url"`
-	SupportEmail pgtype.Text `json:"support_email"`
-	SupportPhone pgtype.Text `json:"support_phone"`
-	Metadata     []byte      `json:"metadata"`
-	Livemode     pgtype.Bool `json:"livemode"`
-}
-
-func (q *Queries) UpdateAccountFull(ctx context.Context, arg UpdateAccountFullParams) (Account, error) {
-	row := q.db.QueryRow(ctx, updateAccountFull,
-		arg.ID,
-		arg.Name,
-		arg.Description,
-		arg.BusinessName,
-		arg.BusinessType,
-		arg.WebsiteUrl,
-		arg.SupportEmail,
-		arg.SupportPhone,
-		arg.Metadata,
-		arg.Livemode,
-	)
-	var i Account
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Name,
-		&i.Description,
-		&i.BusinessName,
-		&i.BusinessType,
-		&i.WebsiteUrl,
-		&i.SupportEmail,
-		&i.SupportPhone,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-		&i.Livemode,
 	)
 	return i, err
 }

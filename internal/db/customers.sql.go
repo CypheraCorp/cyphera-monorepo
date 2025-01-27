@@ -14,11 +14,12 @@ import (
 
 const createCustomer = `-- name: CreateCustomer :one
 INSERT INTO customers (
-    account_id,
+    workspace_id,
+    external_id,
     email,
     name,
+    phone,
     description,
-    metadata,
     balance,
     currency,
     default_source_id,
@@ -26,36 +27,40 @@ INSERT INTO customers (
     next_invoice_sequence,
     tax_exempt,
     tax_ids,
+    metadata,
     livemode
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
 )
-RETURNING id, account_id, email, name, description, metadata, created_at, updated_at, deleted_at, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, livemode
+RETURNING id, workspace_id, external_id, email, name, phone, description, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at
 `
 
 type CreateCustomerParams struct {
-	AccountID           uuid.UUID   `json:"account_id"`
-	Email               string      `json:"email"`
+	WorkspaceID         uuid.UUID   `json:"workspace_id"`
+	ExternalID          pgtype.Text `json:"external_id"`
+	Email               pgtype.Text `json:"email"`
 	Name                pgtype.Text `json:"name"`
+	Phone               pgtype.Text `json:"phone"`
 	Description         pgtype.Text `json:"description"`
-	Metadata            []byte      `json:"metadata"`
 	Balance             pgtype.Int4 `json:"balance"`
 	Currency            pgtype.Text `json:"currency"`
 	DefaultSourceID     pgtype.UUID `json:"default_source_id"`
 	InvoicePrefix       pgtype.Text `json:"invoice_prefix"`
 	NextInvoiceSequence pgtype.Int4 `json:"next_invoice_sequence"`
-	TaxExempt           pgtype.Text `json:"tax_exempt"`
+	TaxExempt           pgtype.Bool `json:"tax_exempt"`
 	TaxIds              []byte      `json:"tax_ids"`
+	Metadata            []byte      `json:"metadata"`
 	Livemode            pgtype.Bool `json:"livemode"`
 }
 
 func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, createCustomer,
-		arg.AccountID,
+		arg.WorkspaceID,
+		arg.ExternalID,
 		arg.Email,
 		arg.Name,
+		arg.Phone,
 		arg.Description,
-		arg.Metadata,
 		arg.Balance,
 		arg.Currency,
 		arg.DefaultSourceID,
@@ -63,19 +68,18 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		arg.NextInvoiceSequence,
 		arg.TaxExempt,
 		arg.TaxIds,
+		arg.Metadata,
 		arg.Livemode,
 	)
 	var i Customer
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
+		&i.ExternalID,
 		&i.Email,
 		&i.Name,
+		&i.Phone,
 		&i.Description,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
 		&i.Balance,
 		&i.Currency,
 		&i.DefaultSourceID,
@@ -83,7 +87,11 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		&i.NextInvoiceSequence,
 		&i.TaxExempt,
 		&i.TaxIds,
+		&i.Metadata,
 		&i.Livemode,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -99,162 +107,13 @@ func (q *Queries) DeleteCustomer(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const getCustomer = `-- name: GetCustomer :one
-SELECT id, account_id, email, name, description, metadata, created_at, updated_at, deleted_at, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, livemode FROM customers
-WHERE id = $1 AND deleted_at IS NULL LIMIT 1
+const getAllCustomers = `-- name: GetAllCustomers :many
+SELECT id, workspace_id, external_id, email, name, phone, description, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
+ORDER BY created_at DESC
 `
 
-func (q *Queries) GetCustomer(ctx context.Context, id uuid.UUID) (Customer, error) {
-	row := q.db.QueryRow(ctx, getCustomer, id)
-	var i Customer
-	err := row.Scan(
-		&i.ID,
-		&i.AccountID,
-		&i.Email,
-		&i.Name,
-		&i.Description,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-		&i.Balance,
-		&i.Currency,
-		&i.DefaultSourceID,
-		&i.InvoicePrefix,
-		&i.NextInvoiceSequence,
-		&i.TaxExempt,
-		&i.TaxIds,
-		&i.Livemode,
-	)
-	return i, err
-}
-
-const getCustomerByEmail = `-- name: GetCustomerByEmail :one
-SELECT id, account_id, email, name, description, metadata, created_at, updated_at, deleted_at, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, livemode FROM customers
-WHERE account_id = $1 AND email = $2 AND deleted_at IS NULL LIMIT 1
-`
-
-type GetCustomerByEmailParams struct {
-	AccountID uuid.UUID `json:"account_id"`
-	Email     string    `json:"email"`
-}
-
-func (q *Queries) GetCustomerByEmail(ctx context.Context, arg GetCustomerByEmailParams) (Customer, error) {
-	row := q.db.QueryRow(ctx, getCustomerByEmail, arg.AccountID, arg.Email)
-	var i Customer
-	err := row.Scan(
-		&i.ID,
-		&i.AccountID,
-		&i.Email,
-		&i.Name,
-		&i.Description,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-		&i.Balance,
-		&i.Currency,
-		&i.DefaultSourceID,
-		&i.InvoicePrefix,
-		&i.NextInvoiceSequence,
-		&i.TaxExempt,
-		&i.TaxIds,
-		&i.Livemode,
-	)
-	return i, err
-}
-
-const getCustomersByAccountID = `-- name: GetCustomersByAccountID :many
-SELECT 
-    c.id, c.account_id, c.email, c.name, c.description, c.metadata, c.created_at, c.updated_at, c.deleted_at, c.balance, c.currency, c.default_source_id, c.invoice_prefix, c.next_invoice_sequence, c.tax_exempt, c.tax_ids, c.livemode,
-    a.name as account_name,
-    a.business_name as account_business_name,
-    a.support_email as account_support_email
-FROM customers c
-INNER JOIN accounts a ON c.account_id = a.id
-WHERE c.deleted_at IS NULL
-ORDER BY c.created_at DESC
-`
-
-type GetCustomersByAccountIDRow struct {
-	ID                  uuid.UUID          `json:"id"`
-	AccountID           uuid.UUID          `json:"account_id"`
-	Email               string             `json:"email"`
-	Name                pgtype.Text        `json:"name"`
-	Description         pgtype.Text        `json:"description"`
-	Metadata            []byte             `json:"metadata"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
-	Balance             pgtype.Int4        `json:"balance"`
-	Currency            pgtype.Text        `json:"currency"`
-	DefaultSourceID     pgtype.UUID        `json:"default_source_id"`
-	InvoicePrefix       pgtype.Text        `json:"invoice_prefix"`
-	NextInvoiceSequence pgtype.Int4        `json:"next_invoice_sequence"`
-	TaxExempt           pgtype.Text        `json:"tax_exempt"`
-	TaxIds              []byte             `json:"tax_ids"`
-	Livemode            pgtype.Bool        `json:"livemode"`
-	AccountName         string             `json:"account_name"`
-	AccountBusinessName pgtype.Text        `json:"account_business_name"`
-	AccountSupportEmail pgtype.Text        `json:"account_support_email"`
-}
-
-func (q *Queries) GetCustomersByAccountID(ctx context.Context) ([]GetCustomersByAccountIDRow, error) {
-	rows, err := q.db.Query(ctx, getCustomersByAccountID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetCustomersByAccountIDRow{}
-	for rows.Next() {
-		var i GetCustomersByAccountIDRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.AccountID,
-			&i.Email,
-			&i.Name,
-			&i.Description,
-			&i.Metadata,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-			&i.Balance,
-			&i.Currency,
-			&i.DefaultSourceID,
-			&i.InvoicePrefix,
-			&i.NextInvoiceSequence,
-			&i.TaxExempt,
-			&i.TaxIds,
-			&i.Livemode,
-			&i.AccountName,
-			&i.AccountBusinessName,
-			&i.AccountSupportEmail,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getCustomersByBalance = `-- name: GetCustomersByBalance :many
-SELECT id, account_id, email, name, description, metadata, created_at, updated_at, deleted_at, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, livemode FROM customers
-WHERE account_id = $1 
-AND deleted_at IS NULL 
-AND balance > $2
-ORDER BY balance DESC
-`
-
-type GetCustomersByBalanceParams struct {
-	AccountID uuid.UUID   `json:"account_id"`
-	Balance   pgtype.Int4 `json:"balance"`
-}
-
-func (q *Queries) GetCustomersByBalance(ctx context.Context, arg GetCustomersByBalanceParams) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, getCustomersByBalance, arg.AccountID, arg.Balance)
+func (q *Queries) GetAllCustomers(ctx context.Context) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, getAllCustomers)
 	if err != nil {
 		return nil, err
 	}
@@ -264,14 +123,12 @@ func (q *Queries) GetCustomersByBalance(ctx context.Context, arg GetCustomersByB
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
+			&i.ExternalID,
 			&i.Email,
 			&i.Name,
+			&i.Phone,
 			&i.Description,
-			&i.Metadata,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
 			&i.Balance,
 			&i.Currency,
 			&i.DefaultSourceID,
@@ -279,7 +136,11 @@ func (q *Queries) GetCustomersByBalance(ctx context.Context, arg GetCustomersByB
 			&i.NextInvoiceSequence,
 			&i.TaxExempt,
 			&i.TaxIds,
+			&i.Metadata,
 			&i.Livemode,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -291,154 +152,22 @@ func (q *Queries) GetCustomersByBalance(ctx context.Context, arg GetCustomersByB
 	return items, nil
 }
 
-const getCustomersByScope = `-- name: GetCustomersByScope :many
-SELECT 
-    c.id, c.account_id, c.email, c.name, c.description, c.metadata, c.created_at, c.updated_at, c.deleted_at, c.balance, c.currency, c.default_source_id, c.invoice_prefix, c.next_invoice_sequence, c.tax_exempt, c.tax_ids, c.livemode,
-    a.name as account_name,
-    a.business_name as account_business_name
-FROM customers c
-LEFT JOIN accounts a ON c.account_id = a.id
-WHERE 
-    CASE 
-        WHEN $1 = 'admin'::user_role THEN true  -- Admins can see all customers
-        WHEN $1 = 'account'::user_role THEN c.account_id = $2  -- Accounts can only see their customers
-        ELSE false
-    END
-    AND c.deleted_at IS NULL
-ORDER BY c.created_at DESC
+const getCustomer = `-- name: GetCustomer :one
+SELECT id, workspace_id, external_id, email, name, phone, description, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
+WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
-type GetCustomersByScopeParams struct {
-	Column1   interface{} `json:"column_1"`
-	AccountID uuid.UUID   `json:"account_id"`
-}
-
-type GetCustomersByScopeRow struct {
-	ID                  uuid.UUID          `json:"id"`
-	AccountID           uuid.UUID          `json:"account_id"`
-	Email               string             `json:"email"`
-	Name                pgtype.Text        `json:"name"`
-	Description         pgtype.Text        `json:"description"`
-	Metadata            []byte             `json:"metadata"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
-	Balance             pgtype.Int4        `json:"balance"`
-	Currency            pgtype.Text        `json:"currency"`
-	DefaultSourceID     pgtype.UUID        `json:"default_source_id"`
-	InvoicePrefix       pgtype.Text        `json:"invoice_prefix"`
-	NextInvoiceSequence pgtype.Int4        `json:"next_invoice_sequence"`
-	TaxExempt           pgtype.Text        `json:"tax_exempt"`
-	TaxIds              []byte             `json:"tax_ids"`
-	Livemode            pgtype.Bool        `json:"livemode"`
-	AccountName         pgtype.Text        `json:"account_name"`
-	AccountBusinessName pgtype.Text        `json:"account_business_name"`
-}
-
-func (q *Queries) GetCustomersByScope(ctx context.Context, arg GetCustomersByScopeParams) ([]GetCustomersByScopeRow, error) {
-	rows, err := q.db.Query(ctx, getCustomersByScope, arg.Column1, arg.AccountID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetCustomersByScopeRow{}
-	for rows.Next() {
-		var i GetCustomersByScopeRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.AccountID,
-			&i.Email,
-			&i.Name,
-			&i.Description,
-			&i.Metadata,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-			&i.Balance,
-			&i.Currency,
-			&i.DefaultSourceID,
-			&i.InvoicePrefix,
-			&i.NextInvoiceSequence,
-			&i.TaxExempt,
-			&i.TaxIds,
-			&i.Livemode,
-			&i.AccountName,
-			&i.AccountBusinessName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const hardDeleteCustomer = `-- name: HardDeleteCustomer :exec
-DELETE FROM customers
-WHERE id = $1
-`
-
-func (q *Queries) HardDeleteCustomer(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, hardDeleteCustomer, id)
-	return err
-}
-
-const updateCustomer = `-- name: UpdateCustomer :one
-UPDATE customers
-SET
-    email = COALESCE($2, email),
-    name = COALESCE($3, name),
-    description = COALESCE($4, description),
-    metadata = COALESCE($5, metadata),
-    balance = COALESCE($6, balance),
-    currency = COALESCE($7, currency),
-    default_source_id = COALESCE($8, default_source_id),
-    tax_exempt = COALESCE($9, tax_exempt),
-    tax_ids = COALESCE($10, tax_ids),
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, account_id, email, name, description, metadata, created_at, updated_at, deleted_at, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, livemode
-`
-
-type UpdateCustomerParams struct {
-	ID              uuid.UUID   `json:"id"`
-	Email           string      `json:"email"`
-	Name            pgtype.Text `json:"name"`
-	Description     pgtype.Text `json:"description"`
-	Metadata        []byte      `json:"metadata"`
-	Balance         pgtype.Int4 `json:"balance"`
-	Currency        pgtype.Text `json:"currency"`
-	DefaultSourceID pgtype.UUID `json:"default_source_id"`
-	TaxExempt       pgtype.Text `json:"tax_exempt"`
-	TaxIds          []byte      `json:"tax_ids"`
-}
-
-func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error) {
-	row := q.db.QueryRow(ctx, updateCustomer,
-		arg.ID,
-		arg.Email,
-		arg.Name,
-		arg.Description,
-		arg.Metadata,
-		arg.Balance,
-		arg.Currency,
-		arg.DefaultSourceID,
-		arg.TaxExempt,
-		arg.TaxIds,
-	)
+func (q *Queries) GetCustomer(ctx context.Context, id uuid.UUID) (Customer, error) {
+	row := q.db.QueryRow(ctx, getCustomer, id)
 	var i Customer
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
+		&i.ExternalID,
 		&i.Email,
 		&i.Name,
+		&i.Phone,
 		&i.Description,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
 		&i.Balance,
 		&i.Currency,
 		&i.DefaultSourceID,
@@ -446,7 +175,344 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		&i.NextInvoiceSequence,
 		&i.TaxExempt,
 		&i.TaxIds,
+		&i.Metadata,
 		&i.Livemode,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getCustomerByEmail = `-- name: GetCustomerByEmail :one
+SELECT id, workspace_id, external_id, email, name, phone, description, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
+WHERE workspace_id = $1 AND email = $2 AND deleted_at IS NULL LIMIT 1
+`
+
+type GetCustomerByEmailParams struct {
+	WorkspaceID uuid.UUID   `json:"workspace_id"`
+	Email       pgtype.Text `json:"email"`
+}
+
+func (q *Queries) GetCustomerByEmail(ctx context.Context, arg GetCustomerByEmailParams) (Customer, error) {
+	row := q.db.QueryRow(ctx, getCustomerByEmail, arg.WorkspaceID, arg.Email)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ExternalID,
+		&i.Email,
+		&i.Name,
+		&i.Phone,
+		&i.Description,
+		&i.Balance,
+		&i.Currency,
+		&i.DefaultSourceID,
+		&i.InvoicePrefix,
+		&i.NextInvoiceSequence,
+		&i.TaxExempt,
+		&i.TaxIds,
+		&i.Metadata,
+		&i.Livemode,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getCustomerByExternalID = `-- name: GetCustomerByExternalID :one
+SELECT id, workspace_id, external_id, email, name, phone, description, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
+WHERE workspace_id = $1 AND external_id = $2 AND deleted_at IS NULL LIMIT 1
+`
+
+type GetCustomerByExternalIDParams struct {
+	WorkspaceID uuid.UUID   `json:"workspace_id"`
+	ExternalID  pgtype.Text `json:"external_id"`
+}
+
+func (q *Queries) GetCustomerByExternalID(ctx context.Context, arg GetCustomerByExternalIDParams) (Customer, error) {
+	row := q.db.QueryRow(ctx, getCustomerByExternalID, arg.WorkspaceID, arg.ExternalID)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ExternalID,
+		&i.Email,
+		&i.Name,
+		&i.Phone,
+		&i.Description,
+		&i.Balance,
+		&i.Currency,
+		&i.DefaultSourceID,
+		&i.InvoicePrefix,
+		&i.NextInvoiceSequence,
+		&i.TaxExempt,
+		&i.TaxIds,
+		&i.Metadata,
+		&i.Livemode,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getCustomersByBalance = `-- name: GetCustomersByBalance :many
+SELECT id, workspace_id, external_id, email, name, phone, description, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
+WHERE workspace_id = $1 
+AND deleted_at IS NULL 
+AND balance > $2
+ORDER BY balance DESC
+`
+
+type GetCustomersByBalanceParams struct {
+	WorkspaceID uuid.UUID   `json:"workspace_id"`
+	Balance     pgtype.Int4 `json:"balance"`
+}
+
+func (q *Queries) GetCustomersByBalance(ctx context.Context, arg GetCustomersByBalanceParams) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, getCustomersByBalance, arg.WorkspaceID, arg.Balance)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Customer{}
+	for rows.Next() {
+		var i Customer
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ExternalID,
+			&i.Email,
+			&i.Name,
+			&i.Phone,
+			&i.Description,
+			&i.Balance,
+			&i.Currency,
+			&i.DefaultSourceID,
+			&i.InvoicePrefix,
+			&i.NextInvoiceSequence,
+			&i.TaxExempt,
+			&i.TaxIds,
+			&i.Metadata,
+			&i.Livemode,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCustomersWithWorkspaceInfo = `-- name: GetCustomersWithWorkspaceInfo :many
+SELECT 
+    c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.balance, c.currency, c.default_source_id, c.invoice_prefix, c.next_invoice_sequence, c.tax_exempt, c.tax_ids, c.metadata, c.livemode, c.created_at, c.updated_at, c.deleted_at,
+    w.name as workspace_name,
+    w.business_name as workspace_business_name,
+    w.support_email as workspace_support_email
+FROM customers c
+INNER JOIN workspaces w ON c.workspace_id = w.id
+WHERE c.workspace_id = $1 AND c.deleted_at IS NULL
+ORDER BY c.created_at DESC
+`
+
+type GetCustomersWithWorkspaceInfoRow struct {
+	ID                    uuid.UUID          `json:"id"`
+	WorkspaceID           uuid.UUID          `json:"workspace_id"`
+	ExternalID            pgtype.Text        `json:"external_id"`
+	Email                 pgtype.Text        `json:"email"`
+	Name                  pgtype.Text        `json:"name"`
+	Phone                 pgtype.Text        `json:"phone"`
+	Description           pgtype.Text        `json:"description"`
+	Balance               pgtype.Int4        `json:"balance"`
+	Currency              pgtype.Text        `json:"currency"`
+	DefaultSourceID       pgtype.UUID        `json:"default_source_id"`
+	InvoicePrefix         pgtype.Text        `json:"invoice_prefix"`
+	NextInvoiceSequence   pgtype.Int4        `json:"next_invoice_sequence"`
+	TaxExempt             pgtype.Bool        `json:"tax_exempt"`
+	TaxIds                []byte             `json:"tax_ids"`
+	Metadata              []byte             `json:"metadata"`
+	Livemode              pgtype.Bool        `json:"livemode"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt             pgtype.Timestamptz `json:"deleted_at"`
+	WorkspaceName         string             `json:"workspace_name"`
+	WorkspaceBusinessName pgtype.Text        `json:"workspace_business_name"`
+	WorkspaceSupportEmail pgtype.Text        `json:"workspace_support_email"`
+}
+
+func (q *Queries) GetCustomersWithWorkspaceInfo(ctx context.Context, workspaceID uuid.UUID) ([]GetCustomersWithWorkspaceInfoRow, error) {
+	rows, err := q.db.Query(ctx, getCustomersWithWorkspaceInfo, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCustomersWithWorkspaceInfoRow{}
+	for rows.Next() {
+		var i GetCustomersWithWorkspaceInfoRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ExternalID,
+			&i.Email,
+			&i.Name,
+			&i.Phone,
+			&i.Description,
+			&i.Balance,
+			&i.Currency,
+			&i.DefaultSourceID,
+			&i.InvoicePrefix,
+			&i.NextInvoiceSequence,
+			&i.TaxExempt,
+			&i.TaxIds,
+			&i.Metadata,
+			&i.Livemode,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.WorkspaceName,
+			&i.WorkspaceBusinessName,
+			&i.WorkspaceSupportEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCustomers = `-- name: ListCustomers :many
+SELECT id, workspace_id, external_id, email, name, phone, description, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
+WHERE workspace_id = $1 AND deleted_at IS NULL
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListCustomers(ctx context.Context, workspaceID uuid.UUID) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, listCustomers, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Customer{}
+	for rows.Next() {
+		var i Customer
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ExternalID,
+			&i.Email,
+			&i.Name,
+			&i.Phone,
+			&i.Description,
+			&i.Balance,
+			&i.Currency,
+			&i.DefaultSourceID,
+			&i.InvoicePrefix,
+			&i.NextInvoiceSequence,
+			&i.TaxExempt,
+			&i.TaxIds,
+			&i.Metadata,
+			&i.Livemode,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateCustomer = `-- name: UpdateCustomer :one
+UPDATE customers
+SET
+    email = COALESCE($2, email),
+    name = COALESCE($3, name),
+    phone = COALESCE($4, phone),
+    description = COALESCE($5, description),
+    balance = COALESCE($6, balance),
+    currency = COALESCE($7, currency),
+    default_source_id = COALESCE($8, default_source_id),
+    invoice_prefix = COALESCE($9, invoice_prefix),
+    next_invoice_sequence = COALESCE($10, next_invoice_sequence),
+    tax_exempt = COALESCE($11, tax_exempt),
+    tax_ids = COALESCE($12, tax_ids),
+    metadata = COALESCE($13, metadata),
+    livemode = COALESCE($14, livemode),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, workspace_id, external_id, email, name, phone, description, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at
+`
+
+type UpdateCustomerParams struct {
+	ID                  uuid.UUID   `json:"id"`
+	Email               pgtype.Text `json:"email"`
+	Name                pgtype.Text `json:"name"`
+	Phone               pgtype.Text `json:"phone"`
+	Description         pgtype.Text `json:"description"`
+	Balance             pgtype.Int4 `json:"balance"`
+	Currency            pgtype.Text `json:"currency"`
+	DefaultSourceID     pgtype.UUID `json:"default_source_id"`
+	InvoicePrefix       pgtype.Text `json:"invoice_prefix"`
+	NextInvoiceSequence pgtype.Int4 `json:"next_invoice_sequence"`
+	TaxExempt           pgtype.Bool `json:"tax_exempt"`
+	TaxIds              []byte      `json:"tax_ids"`
+	Metadata            []byte      `json:"metadata"`
+	Livemode            pgtype.Bool `json:"livemode"`
+}
+
+func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error) {
+	row := q.db.QueryRow(ctx, updateCustomer,
+		arg.ID,
+		arg.Email,
+		arg.Name,
+		arg.Phone,
+		arg.Description,
+		arg.Balance,
+		arg.Currency,
+		arg.DefaultSourceID,
+		arg.InvoicePrefix,
+		arg.NextInvoiceSequence,
+		arg.TaxExempt,
+		arg.TaxIds,
+		arg.Metadata,
+		arg.Livemode,
+	)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ExternalID,
+		&i.Email,
+		&i.Name,
+		&i.Phone,
+		&i.Description,
+		&i.Balance,
+		&i.Currency,
+		&i.DefaultSourceID,
+		&i.InvoicePrefix,
+		&i.NextInvoiceSequence,
+		&i.TaxExempt,
+		&i.TaxIds,
+		&i.Metadata,
+		&i.Livemode,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -457,7 +523,7 @@ SET
     balance = balance + $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, account_id, email, name, description, metadata, created_at, updated_at, deleted_at, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, livemode
+RETURNING id, workspace_id, external_id, email, name, phone, description, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at
 `
 
 type UpdateCustomerBalanceParams struct {
@@ -470,14 +536,12 @@ func (q *Queries) UpdateCustomerBalance(ctx context.Context, arg UpdateCustomerB
 	var i Customer
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
+		&i.ExternalID,
 		&i.Email,
 		&i.Name,
+		&i.Phone,
 		&i.Description,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
 		&i.Balance,
 		&i.Currency,
 		&i.DefaultSourceID,
@@ -485,82 +549,11 @@ func (q *Queries) UpdateCustomerBalance(ctx context.Context, arg UpdateCustomerB
 		&i.NextInvoiceSequence,
 		&i.TaxExempt,
 		&i.TaxIds,
-		&i.Livemode,
-	)
-	return i, err
-}
-
-const updateCustomerFull = `-- name: UpdateCustomerFull :one
-UPDATE customers
-SET
-    email = $2,
-    name = $3,
-    description = $4,
-    metadata = $5,
-    balance = $6,
-    currency = $7,
-    default_source_id = $8,
-    invoice_prefix = $9,
-    next_invoice_sequence = $10,
-    tax_exempt = $11,
-    tax_ids = $12,
-    livemode = $13,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING id, account_id, email, name, description, metadata, created_at, updated_at, deleted_at, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, livemode
-`
-
-type UpdateCustomerFullParams struct {
-	ID                  uuid.UUID   `json:"id"`
-	Email               string      `json:"email"`
-	Name                pgtype.Text `json:"name"`
-	Description         pgtype.Text `json:"description"`
-	Metadata            []byte      `json:"metadata"`
-	Balance             pgtype.Int4 `json:"balance"`
-	Currency            pgtype.Text `json:"currency"`
-	DefaultSourceID     pgtype.UUID `json:"default_source_id"`
-	InvoicePrefix       pgtype.Text `json:"invoice_prefix"`
-	NextInvoiceSequence pgtype.Int4 `json:"next_invoice_sequence"`
-	TaxExempt           pgtype.Text `json:"tax_exempt"`
-	TaxIds              []byte      `json:"tax_ids"`
-	Livemode            pgtype.Bool `json:"livemode"`
-}
-
-func (q *Queries) UpdateCustomerFull(ctx context.Context, arg UpdateCustomerFullParams) (Customer, error) {
-	row := q.db.QueryRow(ctx, updateCustomerFull,
-		arg.ID,
-		arg.Email,
-		arg.Name,
-		arg.Description,
-		arg.Metadata,
-		arg.Balance,
-		arg.Currency,
-		arg.DefaultSourceID,
-		arg.InvoicePrefix,
-		arg.NextInvoiceSequence,
-		arg.TaxExempt,
-		arg.TaxIds,
-		arg.Livemode,
-	)
-	var i Customer
-	err := row.Scan(
-		&i.ID,
-		&i.AccountID,
-		&i.Email,
-		&i.Name,
-		&i.Description,
 		&i.Metadata,
+		&i.Livemode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
-		&i.Balance,
-		&i.Currency,
-		&i.DefaultSourceID,
-		&i.InvoicePrefix,
-		&i.NextInvoiceSequence,
-		&i.TaxExempt,
-		&i.TaxIds,
-		&i.Livemode,
 	)
 	return i, err
 }

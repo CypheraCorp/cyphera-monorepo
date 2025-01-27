@@ -23,9 +23,11 @@ func NewCustomerHandler(common *CommonServices) *CustomerHandler {
 type CustomerResponse struct {
 	ID                string                 `json:"id"`
 	Object            string                 `json:"object"`
-	AccountID         string                 `json:"account_id"`
+	WorkspaceID       string                 `json:"workspace_id"`
+	ExternalID        string                 `json:"external_id,omitempty"`
 	Email             string                 `json:"email"`
 	Name              string                 `json:"name,omitempty"`
+	Phone             string                 `json:"phone,omitempty"`
 	Description       string                 `json:"description,omitempty"`
 	Metadata          map[string]interface{} `json:"metadata,omitempty"`
 	Balance           int32                  `json:"balance"`
@@ -33,48 +35,41 @@ type CustomerResponse struct {
 	DefaultSourceID   string                 `json:"default_source,omitempty"`
 	InvoicePrefix     string                 `json:"invoice_prefix,omitempty"`
 	NextInvoiceNumber int32                  `json:"next_invoice_number"`
-	TaxExempt         string                 `json:"tax_exempt"`
+	TaxExempt         bool                   `json:"tax_exempt"`
 	TaxIDs            map[string]interface{} `json:"tax_ids,omitempty"`
 	Livemode          bool                   `json:"livemode"`
 	Created           int64                  `json:"created"`
-	AccountName       string                 `json:"account_name,omitempty"`
+	WorkspaceName     string                 `json:"workspace_name,omitempty"`
 	BusinessName      string                 `json:"business_name,omitempty"`
 }
 
 // CreateCustomerRequest represents the request body for creating a customer
 type CreateCustomerRequest struct {
+	ExternalID  string                 `json:"external_id,omitempty"`
 	Email       string                 `json:"email" binding:"required,email"`
 	Name        string                 `json:"name,omitempty"`
+	Phone       string                 `json:"phone,omitempty"`
 	Description string                 `json:"description,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 	Currency    string                 `json:"currency,omitempty"`
-	TaxExempt   string                 `json:"tax_exempt,omitempty"`
+	TaxExempt   bool                   `json:"tax_exempt,omitempty"`
 	TaxIDs      map[string]interface{} `json:"tax_ids,omitempty"`
 }
 
 // UpdateCustomerRequest represents the request body for updating a customer
 type UpdateCustomerRequest struct {
+	ExternalID  string                 `json:"external_id,omitempty"`
 	Email       string                 `json:"email,omitempty"`
 	Name        string                 `json:"name,omitempty"`
+	Phone       string                 `json:"phone,omitempty"`
 	Description string                 `json:"description,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 	Currency    string                 `json:"currency,omitempty"`
-	TaxExempt   string                 `json:"tax_exempt,omitempty"`
+	TaxExempt   bool                   `json:"tax_exempt,omitempty"`
 	TaxIDs      map[string]interface{} `json:"tax_ids,omitempty"`
 }
 
-// GetCustomer godoc
-// @Summary Get a customer
-// @Description Retrieves the details of an existing customer
-// @Tags customers
-// @Accept json
-// @Produce json
-// @Param id path string true "Customer ID"
-// @Success 200 {object} CustomerResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /customers/{id} [get]
+// GetCustomer retrieves a specific customer by its ID
 func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
@@ -92,27 +87,16 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 	c.JSON(http.StatusOK, toCustomerResponse(customer))
 }
 
-// ListCustomers godoc
-// @Summary List all customers
-// @Description Returns a list of your customers. The customers are returned sorted by creation date, with the most recent customers appearing first.
-// @Tags customers
-// @Accept json
-// @Produce json
-// @Success 200 {array} CustomerResponse
-// @Failure 401 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /customers [get]
+// ListCustomers retrieves all customers for the current workspace
 func (h *CustomerHandler) ListCustomers(c *gin.Context) {
-	// Get user role and account ID from context (set by auth middleware)
-	role := c.GetString("userRole")
-	accountID := c.GetString("accountID")
+	workspaceID := c.GetString("workspaceID")
+	parsedUUID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID format"})
+		return
+	}
 
-	parsedAccountID, _ := uuid.Parse(accountID)
-
-	customers, err := h.common.db.GetCustomersByScope(c.Request.Context(), db.GetCustomersByScopeParams{
-		Column1:   role,
-		AccountID: parsedAccountID,
-	})
+	customers, err := h.common.db.ListCustomers(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve customers"})
 		return
@@ -120,7 +104,7 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 
 	response := make([]CustomerResponse, len(customers))
 	for i, customer := range customers {
-		response[i] = toCustomerScopeResponse(customer)
+		response[i] = toCustomerResponse(customer)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -129,18 +113,7 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	})
 }
 
-// CreateCustomer godoc
-// @Summary Create a customer
-// @Description Creates a new customer object
-// @Tags customers
-// @Accept json
-// @Produce json
-// @Param customer body CreateCustomerRequest true "Customer creation data"
-// @Success 200 {object} CustomerResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 401 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /customers [post]
+// CreateCustomer creates a new customer
 func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	var req CreateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -148,8 +121,12 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 		return
 	}
 
-	accountID := c.GetString("accountID")
-	parsedAccountID, _ := uuid.Parse(accountID)
+	workspaceID := c.GetString("workspaceID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID format"})
+		return
+	}
 
 	metadata, err := json.Marshal(req.Metadata)
 	if err != nil {
@@ -164,14 +141,15 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	}
 
 	customer, err := h.common.db.CreateCustomer(c.Request.Context(), db.CreateCustomerParams{
-		AccountID:   parsedAccountID,
-		Email:       req.Email,
+		WorkspaceID: parsedWorkspaceID,
+		Email:       pgtype.Text{String: req.Email, Valid: req.Email != ""},
 		Name:        pgtype.Text{String: req.Name, Valid: req.Name != ""},
+		Phone:       pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
 		Description: pgtype.Text{String: req.Description, Valid: req.Description != ""},
-		Metadata:    metadata,
 		Currency:    pgtype.Text{String: req.Currency, Valid: req.Currency != ""},
-		TaxExempt:   pgtype.Text{String: req.TaxExempt, Valid: req.TaxExempt != ""},
+		TaxExempt:   pgtype.Bool{Bool: req.TaxExempt, Valid: true},
 		TaxIds:      taxIDs,
+		Metadata:    metadata,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create customer"})
@@ -181,19 +159,7 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	c.JSON(http.StatusOK, toCustomerResponse(customer))
 }
 
-// UpdateCustomer godoc
-// @Summary Update a customer
-// @Description Updates the specified customer by setting the values of the parameters passed
-// @Tags customers
-// @Accept json
-// @Produce json
-// @Param id path string true "Customer ID"
-// @Param customer body UpdateCustomerRequest true "Customer update data"
-// @Success 200 {object} CustomerResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /customers/{id} [put]
+// UpdateCustomer updates an existing customer
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
@@ -222,13 +188,14 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 
 	customer, err := h.common.db.UpdateCustomer(c.Request.Context(), db.UpdateCustomerParams{
 		ID:          parsedUUID,
-		Email:       req.Email,
+		Email:       pgtype.Text{String: req.Email, Valid: req.Email != ""},
 		Name:        pgtype.Text{String: req.Name, Valid: req.Name != ""},
+		Phone:       pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
 		Description: pgtype.Text{String: req.Description, Valid: req.Description != ""},
-		Metadata:    metadata,
 		Currency:    pgtype.Text{String: req.Currency, Valid: req.Currency != ""},
-		TaxExempt:   pgtype.Text{String: req.TaxExempt, Valid: req.TaxExempt != ""},
+		TaxExempt:   pgtype.Bool{Bool: req.TaxExempt, Valid: true},
 		TaxIds:      taxIDs,
+		Metadata:    metadata,
 	})
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Customer not found"})
@@ -238,18 +205,7 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	c.JSON(http.StatusOK, toCustomerResponse(customer))
 }
 
-// DeleteCustomer godoc
-// @Summary Delete a customer
-// @Description Deletes a customer
-// @Tags customers
-// @Accept json
-// @Produce json
-// @Param id path string true "Customer ID"
-// @Success 204 "No Content"
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /customers/{id} [delete]
+// DeleteCustomer deletes a customer
 func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
@@ -267,7 +223,7 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// Helper functions to convert database models to API responses
+// Helper function to convert database model to API response
 func toCustomerResponse(c db.Customer) CustomerResponse {
 	var metadata map[string]interface{}
 	if err := json.Unmarshal(c.Metadata, &metadata); err != nil {
@@ -287,59 +243,23 @@ func toCustomerResponse(c db.Customer) CustomerResponse {
 	}
 
 	return CustomerResponse{
-		ID:              c.ID.String(),
-		Object:          "customer",
-		AccountID:       c.AccountID.String(),
-		Email:           c.Email,
-		Name:            c.Name.String,
-		Description:     c.Description.String,
-		Metadata:        metadata,
-		Balance:         c.Balance.Int32,
-		Currency:        c.Currency.String,
-		DefaultSourceID: defaultSourceID,
-		InvoicePrefix:   c.InvoicePrefix.String,
-		TaxExempt:       c.TaxExempt.String,
-		TaxIDs:          taxIDs,
-		Livemode:        c.Livemode.Bool,
-		Created:         c.CreatedAt.Time.Unix(),
-	}
-}
-
-func toCustomerScopeResponse(c db.GetCustomersByScopeRow) CustomerResponse {
-	var metadata map[string]interface{}
-	if err := json.Unmarshal(c.Metadata, &metadata); err != nil {
-		log.Printf("Error unmarshaling customer metadata: %v", err)
-		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
-	}
-
-	var taxIDs map[string]interface{}
-	if err := json.Unmarshal(c.TaxIds, &taxIDs); err != nil {
-		log.Printf("Error unmarshaling customer tax IDs: %v", err)
-		taxIDs = make(map[string]interface{}) // Use empty map if unmarshal fails
-	}
-
-	defaultSourceID := ""
-	if c.DefaultSourceID.Valid {
-		defaultSourceID = uuid.UUID(c.DefaultSourceID.Bytes).String()
-	}
-
-	return CustomerResponse{
-		ID:              c.ID.String(),
-		Object:          "customer",
-		AccountID:       c.AccountID.String(),
-		Email:           c.Email,
-		Name:            c.Name.String,
-		Description:     c.Description.String,
-		Metadata:        metadata,
-		Balance:         c.Balance.Int32,
-		Currency:        c.Currency.String,
-		DefaultSourceID: defaultSourceID,
-		InvoicePrefix:   c.InvoicePrefix.String,
-		TaxExempt:       c.TaxExempt.String,
-		TaxIDs:          taxIDs,
-		Livemode:        c.Livemode.Bool,
-		Created:         c.CreatedAt.Time.Unix(),
-		AccountName:     c.AccountName.String,
-		BusinessName:    c.AccountBusinessName.String,
+		ID:                c.ID.String(),
+		Object:            "customer",
+		WorkspaceID:       c.WorkspaceID.String(),
+		ExternalID:        c.ExternalID.String,
+		Email:             c.Email.String,
+		Name:              c.Name.String,
+		Phone:             c.Phone.String,
+		Description:       c.Description.String,
+		Metadata:          metadata,
+		Balance:           c.Balance.Int32,
+		Currency:          c.Currency.String,
+		DefaultSourceID:   defaultSourceID,
+		InvoicePrefix:     c.InvoicePrefix.String,
+		NextInvoiceNumber: c.NextInvoiceSequence.Int32,
+		TaxExempt:         c.TaxExempt.Bool,
+		TaxIDs:            taxIDs,
+		Livemode:          c.Livemode.Bool,
+		Created:           c.CreatedAt.Time.Unix(),
 	}
 }

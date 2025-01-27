@@ -3,6 +3,7 @@ package handlers
 import (
 	"cyphera-api/internal/db"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// Domain-specific handlers
 type AccountHandler struct {
 	common *CommonServices
 }
@@ -18,147 +20,255 @@ func NewAccountHandler(common *CommonServices) *AccountHandler {
 	return &AccountHandler{common: common}
 }
 
-// GetAccount retrieves a specific account by its ID
+// AccountResponse represents the standardized API response for account operations
+type AccountResponse struct {
+	ID           string                 `json:"id"`
+	Object       string                 `json:"object"`
+	Name         string                 `json:"name"`
+	AccountType  string                 `json:"account_type"`
+	BusinessName string                 `json:"business_name,omitempty"`
+	BusinessType string                 `json:"business_type,omitempty"`
+	WebsiteURL   string                 `json:"website_url,omitempty"`
+	SupportEmail string                 `json:"support_email,omitempty"`
+	SupportPhone string                 `json:"support_phone,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	Created      int64                  `json:"created"`
+	Updated      int64                  `json:"updated"`
+}
+
+// CreateAccountRequest represents the request body for creating an account
+type CreateAccountRequest struct {
+	Name         string                 `json:"name" binding:"required"`
+	AccountType  string                 `json:"account_type" binding:"required,oneof=admin merchant"`
+	BusinessName string                 `json:"business_name,omitempty"`
+	BusinessType string                 `json:"business_type,omitempty"`
+	WebsiteURL   string                 `json:"website_url,omitempty"`
+	SupportEmail string                 `json:"support_email,omitempty"`
+	SupportPhone string                 `json:"support_phone,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// UpdateAccountRequest represents the request body for updating an account
+type UpdateAccountRequest struct {
+	Name         string                 `json:"name,omitempty"`
+	AccountType  string                 `json:"account_type,omitempty" binding:"omitempty,oneof=admin merchant"`
+	BusinessName string                 `json:"business_name,omitempty"`
+	BusinessType string                 `json:"business_type,omitempty"`
+	WebsiteURL   string                 `json:"website_url,omitempty"`
+	SupportEmail string                 `json:"support_email,omitempty"`
+	SupportPhone string                 `json:"support_phone,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// ListAccounts godoc
+// @Summary List accounts
+// @Description Returns a list of accounts. Only accessible by admins.
+// @Tags accounts
+// @Accept json
+// @Produce json
+// @Success 200 {object} AccountResponse
+// @Failure 401 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /accounts [get]
+func (h *AccountHandler) ListAccounts(c *gin.Context) {
+	accounts, err := h.common.db.ListAccounts(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve accounts"})
+		return
+	}
+
+	response := make([]AccountResponse, len(accounts))
+	for i, account := range accounts {
+		response[i] = toAccountResponse(account)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"object": "list",
+		"data":   response,
+	})
+}
+
+// GetAccount godoc
+// @Summary Get an account
+// @Description Retrieves the details of an existing account
+// @Tags accounts
+// @Accept json
+// @Produce json
+// @Param id path string true "Account ID"
+// @Success 200 {object} AccountResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /accounts/{id} [get]
 func (h *AccountHandler) GetAccount(c *gin.Context) {
 	id := c.Param("id")
-
-	// Validate UUID format
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid account ID format"})
 		return
 	}
 
 	account, err := h.common.db.GetAccount(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Account not found"})
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Account not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, account)
+	c.JSON(http.StatusOK, toAccountResponse(account))
 }
 
-// ListAccounts retrieves all non-deleted accounts
-func (h *AccountHandler) ListAccounts(c *gin.Context) {
-	accounts, err := h.common.db.ListAccounts(c.Request.Context())
+// GetCurrentAccount godoc
+// @Summary Get current account
+// @Description Retrieves the details of the currently authenticated user's account
+// @Tags accounts
+// @Accept json
+// @Produce json
+// @Success 200 {object} AccountResponse
+// @Failure 401 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /accounts/me [get]
+func (h *AccountHandler) GetCurrentAccount(c *gin.Context) {
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "Not authenticated"})
+		return
+	}
+
+	parsedUserID, err := uuid.Parse(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve accounts"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid user ID format"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"object": "list",
-		"data":   accounts,
-	})
-}
-
-// GetAllAccounts retrieves all accounts including deleted ones
-func (h *AccountHandler) GetAllAccounts(c *gin.Context) {
-	accounts, err := h.common.db.GetAllAccounts(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve accounts"})
+	// Get user's accounts
+	accounts, err := h.common.db.ListAccountsByUser(c.Request.Context(), parsedUserID)
+	if err != nil || len(accounts) == 0 {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "No account found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"object": "list",
-		"data":   accounts,
-	})
+	// Find the account where the user is the owner
+	for _, acc := range accounts {
+		if acc.IsOwner.Bool {
+			c.JSON(http.StatusOK, toAccountResponseFromUserAccount(acc))
+			return
+		}
+	}
+
+	// If no owned account found, return the first associated account
+	c.JSON(http.StatusOK, toAccountResponseFromUserAccount(accounts[0]))
 }
 
-// CreateAccount creates a new account
+// CreateAccount godoc
+// @Summary Create an account
+// @Description Creates a new account object. Only accessible by admins.
+// @Tags accounts
+// @Accept json
+// @Produce json
+// @Param account body CreateAccountRequest true "Account creation data"
+// @Success 200 {object} AccountResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /accounts [post]
 func (h *AccountHandler) CreateAccount(c *gin.Context) {
-	var req struct {
-		UserID       string                 `json:"user_id" binding:"required"`
-		Name         string                 `json:"name" binding:"required"`
-		Description  string                 `json:"description,omitempty"`
-		BusinessName string                 `json:"business_name,omitempty"`
-		BusinessType string                 `json:"business_type,omitempty"`
-		WebsiteURL   string                 `json:"website_url,omitempty"`
-		SupportEmail string                 `json:"support_email,omitempty"`
-		SupportPhone string                 `json:"support_phone,omitempty"`
-		Metadata     map[string]interface{} `json:"metadata,omitempty"`
-		Livemode     *bool                  `json:"livemode,omitempty"`
-	}
-
+	var req CreateAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	userUUID, err := uuid.Parse(req.UserID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID format"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
 		return
 	}
 
 	metadata, err := json.Marshal(req.Metadata)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid metadata format"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
 		return
 	}
 
-	var livemode pgtype.Bool
-	if req.Livemode != nil {
-		livemode.Bool = *req.Livemode
-		livemode.Valid = true
-	}
-
 	account, err := h.common.db.CreateAccount(c.Request.Context(), db.CreateAccountParams{
-		UserID:       userUUID,
 		Name:         req.Name,
-		Description:  pgtype.Text{String: req.Description, Valid: req.Description != ""},
+		AccountType:  db.AccountType(req.AccountType),
 		BusinessName: pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
 		BusinessType: pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
 		WebsiteUrl:   pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
 		SupportEmail: pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
 		SupportPhone: pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
 		Metadata:     metadata,
-		Livemode:     livemode,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create account"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create account"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, account)
+	c.JSON(http.StatusOK, toAccountResponse(account))
 }
 
-// UpdateAccount updates an existing account
+// UpdateAccount godoc
+// @Summary Update an account
+// @Description Updates the specified account by setting the values of the parameters passed
+// @Tags accounts
+// @Accept json
+// @Produce json
+// @Param id path string true "Account ID"
+// @Param account body UpdateAccountRequest true "Account update data"
+// @Success 200 {object} AccountResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /accounts/{id} [put]
 func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid account ID format"})
 		return
 	}
 
-	var req struct {
-		Name         string                 `json:"name,omitempty"`
-		Description  string                 `json:"description,omitempty"`
-		BusinessName string                 `json:"business_name,omitempty"`
-		BusinessType string                 `json:"business_type,omitempty"`
-		WebsiteURL   string                 `json:"website_url,omitempty"`
-		SupportEmail string                 `json:"support_email,omitempty"`
-		SupportPhone string                 `json:"support_phone,omitempty"`
-		Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	// Check if user has access to this account
+	userID := c.GetString("userID")
+	parsedUserID, err := uuid.Parse(userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid user ID format"})
+		return
 	}
 
+	accounts, err := h.common.db.ListAccountsByUser(c.Request.Context(), parsedUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to verify account access"})
+		return
+	}
+
+	var hasAccess bool
+	for _, acc := range accounts {
+		if acc.ID == parsedUUID {
+			hasAccess = true
+			break
+		}
+	}
+
+	if !hasAccess {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "You don't have access to this account"})
+		return
+	}
+
+	var req UpdateAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
 		return
 	}
 
 	metadata, err := json.Marshal(req.Metadata)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid metadata format"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
 		return
 	}
 
 	account, err := h.common.db.UpdateAccount(c.Request.Context(), db.UpdateAccountParams{
 		ID:           parsedUUID,
 		Name:         req.Name,
-		Description:  pgtype.Text{String: req.Description, Valid: req.Description != ""},
+		AccountType:  db.AccountType(req.AccountType),
 		BusinessName: pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
 		BusinessType: pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
 		WebsiteUrl:   pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
@@ -167,66 +277,94 @@ func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 		Metadata:     metadata,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update account"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update account"})
 		return
 	}
 
-	c.JSON(http.StatusOK, account)
+	c.JSON(http.StatusOK, toAccountResponse(account))
 }
 
-// DeleteAccount soft deletes an account
+// DeleteAccount godoc
+// @Summary Delete an account
+// @Description Deletes an account. Only accessible by admins.
+// @Tags accounts
+// @Accept json
+// @Produce json
+// @Param id path string true "Account ID"
+// @Success 204 "No Content"
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /accounts/{id} [delete]
 func (h *AccountHandler) DeleteAccount(c *gin.Context) {
+	// Only admins can delete accounts
+	if c.GetString("accountType") != "admin" {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Only admin accounts can delete accounts"})
+		return
+	}
+
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid account ID format"})
 		return
 	}
 
 	err = h.common.db.DeleteAccount(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete account"})
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Account not found"})
 		return
 	}
 
 	c.Status(http.StatusNoContent)
 }
 
-// HardDeleteAccount permanently deletes an account
-func (h *AccountHandler) HardDeleteAccount(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
-		return
+// Helper function to convert database model to API response
+func toAccountResponse(a db.Account) AccountResponse {
+	var metadata map[string]interface{}
+	if err := json.Unmarshal(a.Metadata, &metadata); err != nil {
+		log.Printf("Error unmarshaling account metadata: %v", err)
+		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
 	}
 
-	err = h.common.db.HardDeleteAccount(c.Request.Context(), parsedUUID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to permanently delete account"})
-		return
+	return AccountResponse{
+		ID:           a.ID.String(),
+		Object:       "account",
+		Name:         a.Name,
+		AccountType:  string(a.AccountType),
+		BusinessName: a.BusinessName.String,
+		BusinessType: a.BusinessType.String,
+		WebsiteURL:   a.WebsiteUrl.String,
+		SupportEmail: a.SupportEmail.String,
+		SupportPhone: a.SupportPhone.String,
+		Metadata:     metadata,
+		Created:      a.CreatedAt.Time.Unix(),
+		Updated:      a.UpdatedAt.Time.Unix(),
 	}
-
-	c.Status(http.StatusNoContent)
 }
 
-// ListAccountCustomers retrieves all customers for a specific account
-func (h *AccountHandler) ListAccountCustomers(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
-		return
+// Helper function to convert ListAccountsByUserRow to API response
+func toAccountResponseFromUserAccount(a db.ListAccountsByUserRow) AccountResponse {
+	var metadata map[string]interface{}
+	if err := json.Unmarshal(a.Metadata, &metadata); err != nil {
+		log.Printf("Error unmarshaling account metadata: %v", err)
+		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
 	}
 
-	customers, err := h.common.db.ListAccountCustomers(c.Request.Context(), parsedUUID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve account customers"})
-		return
+	return AccountResponse{
+		ID:           a.ID.String(),
+		Object:       "account",
+		Name:         a.Name,
+		AccountType:  string(a.AccountType),
+		BusinessName: a.BusinessName.String,
+		BusinessType: a.BusinessType.String,
+		WebsiteURL:   a.WebsiteUrl.String,
+		SupportEmail: a.SupportEmail.String,
+		SupportPhone: a.SupportPhone.String,
+		Metadata:     metadata,
+		Created:      a.CreatedAt.Time.Unix(),
+		Updated:      a.UpdatedAt.Time.Unix(),
 	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"object": "list",
-		"data":   customers,
-	})
 }

@@ -24,14 +24,14 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api_keys": {
+        "/accounts": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns a list of API keys for the authenticated user or account",
+                "description": "Returns a list of accounts. Only accessible by admins.",
                 "consumes": [
                     "application/json"
                 ],
@@ -39,14 +39,14 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "api_keys"
+                    "accounts"
                 ],
-                "summary": "List API keys",
+                "summary": "List accounts",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ListAPIKeyResponse"
+                            "$ref": "#/definitions/handlers.AccountResponse"
                         }
                     },
                     "401": {
@@ -63,7 +63,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Creates a new API key for the authenticated account",
+                "description": "Creates a new account object. Only accessible by admins.",
                 "consumes": [
                     "application/json"
                 ],
@@ -71,258 +71,17 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "api_keys"
+                    "accounts"
                 ],
-                "summary": "Create new API key",
+                "summary": "Create an account",
                 "parameters": [
                     {
-                        "description": "API Key creation request",
-                        "name": "request",
+                        "description": "Account creation data",
+                        "name": "account",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Returns API key object and the actual key",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request parameters",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Failed to create API key",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api_keys/all": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves all API keys (admin only)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api_keys"
-                ],
-                "summary": "Get all API keys",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ListAPIKeyResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Failed to retrieve API keys",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api_keys/count": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Gets the count of active API keys for an account",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api_keys"
-                ],
-                "summary": "Get active API keys count",
-                "responses": {
-                    "200": {
-                        "description": "Returns count of active API keys",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "integer"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid account ID",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Failed to get API key count",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api_keys/expired": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves all expired API keys (admin only)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api_keys"
-                ],
-                "summary": "Get expired API keys",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ListAPIKeyResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Failed to retrieve expired API keys",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api_keys/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves a specific API key by its unique identifier",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api_keys"
-                ],
-                "summary": "Get API key by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "API Key ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.APIKeyResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid UUID format or account ID",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "API key does not belong to your account",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "API key not found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Updates an existing API key's properties",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api_keys"
-                ],
-                "summary": "Update API key",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "API Key ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "API Key update request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/handlers.CreateAccountRequest"
                         }
                     }
                 ],
@@ -330,161 +89,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.APIKeyResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request parameters",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "API key does not belong to your account",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "API key not found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Failed to update API key",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Soft deletes an API key",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api_keys"
-                ],
-                "summary": "Delete API key",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "API Key ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Invalid UUID format",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "API key does not belong to your account",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "API key not found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Failed to delete API key",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/customers": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Returns a list of your customers. The customers are returned sorted by creation date, with the most recent customers appearing first.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "customers"
-                ],
-                "summary": "List all customers",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.CustomerResponse"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Creates a new customer object",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "customers"
-                ],
-                "summary": "Create a customer",
-                "parameters": [
-                    {
-                        "description": "Customer creation data",
-                        "name": "customer",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CreateCustomerRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CustomerResponse"
+                            "$ref": "#/definitions/handlers.AccountResponse"
                         }
                     },
                     "400": {
@@ -498,18 +103,24 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
             }
         },
-        "/customers/{id}": {
+        "/accounts/me": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves the details of an existing customer",
+                "description": "Retrieves the details of the currently authenticated user's account",
                 "consumes": [
                     "application/json"
                 ],
@@ -517,13 +128,100 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "customers"
+                    "accounts"
                 ],
-                "summary": "Get a customer",
+                "summary": "Get current account",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AccountResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/{accountId}/users/{userId}": {
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Removes a user from an account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Remove user from account",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Customer ID",
+                        "description": "Account ID",
+                        "name": "accountId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "userId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieves the details of an existing account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Get an account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -533,7 +231,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.CustomerResponse"
+                            "$ref": "#/definitions/handlers.AccountResponse"
                         }
                     },
                     "400": {
@@ -556,7 +254,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Updates the specified customer by setting the values of the parameters passed",
+                "description": "Updates the specified account by setting the values of the parameters passed",
                 "consumes": [
                     "application/json"
                 ],
@@ -564,24 +262,24 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "customers"
+                    "accounts"
                 ],
-                "summary": "Update a customer",
+                "summary": "Update an account",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Customer ID",
+                        "description": "Account ID",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Customer update data",
-                        "name": "customer",
+                        "description": "Account update data",
+                        "name": "account",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.UpdateCustomerRequest"
+                            "$ref": "#/definitions/handlers.UpdateAccountRequest"
                         }
                     }
                 ],
@@ -589,11 +287,23 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.CustomerResponse"
+                            "$ref": "#/definitions/handlers.AccountResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -612,7 +322,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Deletes a customer",
+                "description": "Deletes an account. Only accessible by admins.",
                 "consumes": [
                     "application/json"
                 ],
@@ -620,13 +330,13 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "customers"
+                    "accounts"
                 ],
-                "summary": "Delete a customer",
+                "summary": "Delete an account",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Customer ID",
+                        "description": "Account ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -635,6 +345,76 @@ const docTemplate = `{
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/{id}/users": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Adds a user to an account with specified role",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Add user to account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "User account data",
+                        "name": "user",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AddUserToAccountRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UserAccountResponse"
+                        }
                     },
                     "400": {
                         "description": "Bad Request",
@@ -1151,7 +931,7 @@ const docTemplate = `{
         },
         "/user/register": {
             "post": {
-                "description": "Creates a new user account with wallet authentication",
+                "description": "Creates a new user workspace with wallet authentication",
                 "consumes": [
                     "application/json"
                 ],
@@ -1202,48 +982,13 @@ const docTemplate = `{
             }
         },
         "/users": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Returns a list of all users (admin only)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "List all users",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.UserResponse"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Creates a new user object. Only accessible by admins.",
+                "description": "Creates a new user",
                 "consumes": [
                     "application/json"
                 ],
@@ -1266,26 +1011,14 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "201": {
+                        "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/handlers.UserResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -1381,7 +1114,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Updates the specified user by setting the values of the parameters passed",
+                "description": "Updates the specified user",
                 "consumes": [
                     "application/json"
                 ],
@@ -1423,18 +1156,6 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -1449,7 +1170,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Deletes a user. Only accessible by admins.",
+                "description": "Soft deletes a user",
                 "consumes": [
                     "application/json"
                 ],
@@ -1479,14 +1200,54 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
-                    "401": {
-                        "description": "Unauthorized",
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    }
+                }
+            }
+        },
+        "/users/{id}/accounts": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Lists all accounts associated with a user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "List user's accounts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.UserAccountResponse"
+                            }
+                        }
                     },
-                    "403": {
-                        "description": "Forbidden",
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -1779,58 +1540,89 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.APIKeyResponse": {
+        "handlers.AccountResponse": {
             "type": "object",
             "properties": {
-                "account_id": {
+                "account_type": {
                     "type": "string"
                 },
-                "created_at": {
+                "business_name": {
                     "type": "string"
                 },
-                "deleted_at": {
+                "business_type": {
                     "type": "string"
                 },
-                "expires_at": {
-                    "type": "string"
+                "created": {
+                    "type": "integer"
                 },
                 "id": {
                     "type": "string"
                 },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "last_used_at": {
-                    "type": "string"
-                },
-                "level": {
-                    "type": "string"
-                },
-                "livemode": {
-                    "type": "boolean"
-                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": true
                 },
                 "name": {
+                    "type": "string"
+                },
+                "object": {
+                    "type": "string"
+                },
+                "support_email": {
+                    "type": "string"
+                },
+                "support_phone": {
+                    "type": "string"
+                },
+                "updated": {
+                    "type": "integer"
+                },
+                "website_url": {
                     "type": "string"
                 }
             }
         },
-        "handlers.CreateCustomerRequest": {
+        "handlers.AddUserToAccountRequest": {
             "type": "object",
             "required": [
-                "email"
+                "role",
+                "user_id"
             ],
             "properties": {
-                "currency": {
+                "is_owner": {
+                    "type": "boolean"
+                },
+                "role": {
+                    "type": "string",
+                    "enum": [
+                        "admin",
+                        "support",
+                        "developer"
+                    ]
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CreateAccountRequest": {
+            "type": "object",
+            "required": [
+                "account_type",
+                "name"
+            ],
+            "properties": {
+                "account_type": {
+                    "type": "string",
+                    "enum": [
+                        "admin",
+                        "merchant"
+                    ]
+                },
+                "business_name": {
                     "type": "string"
                 },
-                "description": {
-                    "type": "string"
-                },
-                "email": {
+                "business_type": {
                     "type": "string"
                 },
                 "metadata": {
@@ -1840,12 +1632,14 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "tax_exempt": {
+                "support_email": {
                     "type": "string"
                 },
-                "tax_ids": {
-                    "type": "object",
-                    "additionalProperties": true
+                "support_phone": {
+                    "type": "string"
+                },
+                "website_url": {
+                    "type": "string"
                 }
             }
         },
@@ -1861,93 +1655,42 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "auth0_id",
-                "email",
-                "role"
+                "email"
             ],
             "properties": {
                 "auth0_id": {
                     "type": "string"
                 },
+                "display_name": {
+                    "type": "string"
+                },
                 "email": {
+                    "type": "string"
+                },
+                "email_verified": {
+                    "type": "boolean"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "locale": {
                     "type": "string"
                 },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": true
                 },
-                "name": {
+                "phone": {
                     "type": "string"
                 },
                 "picture_url": {
                     "type": "string"
                 },
-                "role": {
-                    "type": "string",
-                    "enum": [
-                        "admin",
-                        "account"
-                    ]
-                }
-            }
-        },
-        "handlers.CustomerResponse": {
-            "type": "object",
-            "properties": {
-                "account_id": {
+                "timezone": {
                     "type": "string"
-                },
-                "account_name": {
-                    "type": "string"
-                },
-                "balance": {
-                    "type": "integer"
-                },
-                "business_name": {
-                    "type": "string"
-                },
-                "created": {
-                    "type": "integer"
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "default_source": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "invoice_prefix": {
-                    "type": "string"
-                },
-                "livemode": {
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "next_invoice_number": {
-                    "type": "integer"
-                },
-                "object": {
-                    "type": "string"
-                },
-                "tax_exempt": {
-                    "type": "string"
-                },
-                "tax_ids": {
-                    "type": "object",
-                    "additionalProperties": true
                 }
             }
         },
@@ -2027,20 +1770,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.ListAPIKeyResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/handlers.APIKeyResponse"
-                    }
-                },
-                "object": {
-                    "type": "string"
-                }
-            }
-        },
         "handlers.OperationsResponse": {
             "type": "object",
             "properties": {
@@ -2092,16 +1821,20 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.UpdateCustomerRequest": {
+        "handlers.UpdateAccountRequest": {
             "type": "object",
             "properties": {
-                "currency": {
+                "account_type": {
+                    "type": "string",
+                    "enum": [
+                        "admin",
+                        "merchant"
+                    ]
+                },
+                "business_name": {
                     "type": "string"
                 },
-                "description": {
-                    "type": "string"
-                },
-                "email": {
+                "business_type": {
                     "type": "string"
                 },
                 "metadata": {
@@ -2111,37 +1844,122 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "tax_exempt": {
+                "support_email": {
                     "type": "string"
                 },
-                "tax_ids": {
-                    "type": "object",
-                    "additionalProperties": true
+                "support_phone": {
+                    "type": "string"
+                },
+                "website_url": {
+                    "type": "string"
                 }
             }
         },
         "handlers.UpdateUserRequest": {
             "type": "object",
             "properties": {
+                "display_name": {
+                    "type": "string"
+                },
                 "email": {
+                    "type": "string"
+                },
+                "email_verified": {
+                    "type": "boolean"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "locale": {
                     "type": "string"
                 },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": true
                 },
-                "name": {
+                "phone": {
+                    "type": "string"
+                },
+                "picture_url": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "two_factor_enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.UserAccountResponse": {
+            "type": "object",
+            "properties": {
+                "account_name": {
+                    "type": "string"
+                },
+                "auth0_id": {
+                    "type": "string"
+                },
+                "created": {
+                    "type": "integer"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "email_verified": {
+                    "type": "boolean"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_owner": {
+                    "type": "boolean"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "locale": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "object": {
+                    "type": "string"
+                },
+                "phone": {
                     "type": "string"
                 },
                 "picture_url": {
                     "type": "string"
                 },
                 "role": {
-                    "type": "string",
-                    "enum": [
-                        "admin",
-                        "account"
-                    ]
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "two_factor_enabled": {
+                    "type": "boolean"
+                },
+                "updated": {
+                    "type": "integer"
                 }
             }
         },
@@ -2179,27 +1997,48 @@ const docTemplate = `{
                 "created": {
                     "type": "integer"
                 },
+                "display_name": {
+                    "type": "string"
+                },
                 "email": {
                     "type": "string"
                 },
+                "email_verified": {
+                    "type": "boolean"
+                },
+                "first_name": {
+                    "type": "string"
+                },
                 "id": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "locale": {
                     "type": "string"
                 },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": true
                 },
-                "name": {
+                "object": {
                     "type": "string"
                 },
-                "object": {
+                "phone": {
                     "type": "string"
                 },
                 "picture_url": {
                     "type": "string"
                 },
-                "role": {
+                "status": {
                     "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "two_factor_enabled": {
+                    "type": "boolean"
                 },
                 "updated": {
                     "type": "integer"
