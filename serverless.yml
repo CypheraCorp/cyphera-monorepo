@@ -9,10 +9,12 @@ provider:
   name: aws
   runtime: provided.al2
   region: us-east-1
+  stage: $default
   httpApi:
     payload: '1.0'
     cors: true
     metrics: true
+    stage: $default
   environment:
     DATABASE_URL: ${env:DATABASE_URL}
     ACTALINK_API_KEY: ${env:ACTALINK_API_KEY}
@@ -29,8 +31,8 @@ custom:
   customDomain:
     domainName: api.cypherapay.com
     certificateArn: arn:aws:acm:us-east-1:699475955358:certificate/2aab5f4d-bc62-42de-83b2-74d61ef8d0c2
-    basePath: dev
-    stage: ${opt:stage, 'dev'}
+    basePath: ''
+    stage: $default
     createRoute53Record: false
     endpointType: regional
     securityPolicy: TLS_1_2
