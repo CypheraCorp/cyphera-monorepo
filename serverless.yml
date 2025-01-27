@@ -2,17 +2,21 @@ service: cyphera-api
 
 frameworkVersion: '3'
 
+plugins:
+  - serverless-domain-manager
+
 provider:
   name: aws
   runtime: provided.al2
   region: us-east-1
   httpApi:
     payload: '1.0'
+    cors: true
   environment:
-    ACTALINK_API_KEY : cxiaitiqbnpvbrgaamevrghjojaagxuu
-    DATABASE_URL: postgresql://apiuser:apipassword@cyphera-db.cjwqc0yo6vzw.us-east-1.rds.amazonaws.com:5432/cyphera
-    AUTH0_DOMAIN: your-tenant.auth0.com
-    AUTH0_AUDIENCE: https://api.cyphera.com
+    DATABASE_URL: ${env:DATABASE_URL}
+    ACTALINK_API_KEY: ${env:ACTALINK_API_KEY}
+    AUTH0_DOMAIN: ${env:AUTH0_DOMAIN}
+    AUTH0_AUDIENCE: ${env:AUTH0_AUDIENCE}
   vpc:
     securityGroupIds:
       - ${ssm:/cyphera/lambda-security-group-id}
@@ -21,6 +25,15 @@ provider:
       - ${ssm:/cyphera/private-subnet-2}
 
 custom:
+  customDomain:
+    domainName: api.cypherapay.com
+    basePath: dev
+    stage: ${opt:stage, 'dev'}
+    createRoute53Record: true
+    endpointType: 'regional'
+    securityPolicy: tls_1_2
+    apiType: http
+    certificateArn: arn:aws:acm:us-east-1:699475955358:certificate/2aab5f4d-bc62-42de-83b2-74d61ef8d0c2
   vpc:
     local:
       securityGroupIds: []
@@ -42,6 +55,7 @@ functions:
       - httpApi:
           path: /{proxy+}
           method: ANY
+          cors: true
     timeout: 29
     memorySize: 256
     environment:
