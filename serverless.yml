@@ -64,6 +64,6 @@ resources:
       DependsOn: ApiGatewayDomainName
       Properties:
         DomainName: api.cypherapay.com
-        ApiId: !Ref HttpApi
+        ApiId: ${construct:apiId}
         Stage: $default
         ApiMappingKey: dev
