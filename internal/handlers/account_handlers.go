@@ -40,13 +40,13 @@ type AccountResponse struct {
 // CreateAccountRequest represents the request body for creating an account
 type CreateAccountRequest struct {
 	Name         string                 `json:"name" binding:"required"`
-	Description  string                 `json:"description" binding:"required"`
-	BusinessName string                 `json:"business_name" binding:"required"`
-	BusinessType string                 `json:"business_type" binding:"required"`
-	WebsiteURL   string                 `json:"website_url" binding:"required"`
-	SupportEmail string                 `json:"support_email" binding:"required"`
-	SupportPhone string                 `json:"support_phone" binding:"required"`
 	AccountType  string                 `json:"account_type" binding:"required,oneof=admin merchant"`
+	Description  string                 `json:"description,omitempty"`
+	BusinessName string                 `json:"business_name,omitempty"`
+	BusinessType string                 `json:"business_type,omitempty"`
+	WebsiteURL   string                 `json:"website_url,omitempty"`
+	SupportEmail string                 `json:"support_email,omitempty"`
+	SupportPhone string                 `json:"support_phone,omitempty"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 }
 

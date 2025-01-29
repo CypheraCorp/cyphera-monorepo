@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "ethers": "^6.13.5",
+    "siwe": "^3.0.0"
+  }
+}
