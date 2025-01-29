@@ -40,3 +40,8 @@ tmp/
 
 # Serverless
 .serverless/
+node_modules/
+.env.local
+package-lock.json
+.yarnrc
+cookies.txt
