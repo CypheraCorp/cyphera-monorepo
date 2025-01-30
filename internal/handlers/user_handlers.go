@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -179,7 +180,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		Metadata:      metadata,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create user"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create user in db"})
 		return
 	}
 
@@ -474,4 +475,36 @@ func toUserAccountResponse(u db.ListUserAccountsRow) UserAccountResponse {
 		Role:         string(u.Role),
 		IsOwner:      u.IsOwner.Bool,
 	}
+}
+
+// GetUserByAuth0IDHandler retrieves a user by their Auth0 ID.
+// @Summary Get user by Auth0 ID
+// @Description Retrieves a user's details using their Auth0 ID
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param auth0_id path string true "Auth0 ID"
+// @Success 200 {object} User
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /users/auth0/{auth0_id} [get]
+func (h *UserHandler) GetUserByAuth0IDHandler(c *gin.Context) {
+	auth0ID := c.Param("auth0_id")
+	if auth0ID == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "auth0_id is required"})
+		return
+	}
+
+	user, err := h.common.db.GetUserByAuth0ID(c.Request.Context(), auth0ID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			c.JSON(http.StatusNotFound, ErrorResponse{Error: "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "failed to get user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, toUserResponse(user))
 }

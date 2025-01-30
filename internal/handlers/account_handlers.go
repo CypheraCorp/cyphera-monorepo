@@ -4,8 +4,10 @@ import (
 	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -23,44 +25,54 @@ func NewAccountHandler(common *CommonServices) *AccountHandler {
 
 // AccountResponse represents the standardized API response for account operations
 type AccountResponse struct {
-	ID           string                 `json:"id"`
-	Object       string                 `json:"object"`
-	Name         string                 `json:"name"`
-	AccountType  string                 `json:"account_type"`
-	BusinessName string                 `json:"business_name,omitempty"`
-	BusinessType string                 `json:"business_type,omitempty"`
-	WebsiteURL   string                 `json:"website_url,omitempty"`
-	SupportEmail string                 `json:"support_email,omitempty"`
-	SupportPhone string                 `json:"support_phone,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	Created      int64                  `json:"created"`
-	Updated      int64                  `json:"updated"`
+	ID                 string                 `json:"id"`
+	Object             string                 `json:"object"`
+	Name               string                 `json:"name"`
+	AccountType        string                 `json:"account_type"`
+	BusinessName       string                 `json:"business_name,omitempty"`
+	BusinessType       string                 `json:"business_type,omitempty"`
+	WebsiteURL         string                 `json:"website_url,omitempty"`
+	SupportEmail       string                 `json:"support_email,omitempty"`
+	SupportPhone       string                 `json:"support_phone,omitempty"`
+	Metadata           map[string]interface{} `json:"metadata,omitempty"`
+	FinishedOnboarding bool                   `json:"finished_onboarding"`
+	Created            int64                  `json:"created"`
+	Updated            int64                  `json:"updated"`
 }
 
 // CreateAccountRequest represents the request body for creating an account
 type CreateAccountRequest struct {
-	Name         string                 `json:"name" binding:"required"`
-	AccountType  string                 `json:"account_type" binding:"required,oneof=admin merchant"`
-	Description  string                 `json:"description,omitempty"`
-	BusinessName string                 `json:"business_name,omitempty"`
-	BusinessType string                 `json:"business_type,omitempty"`
-	WebsiteURL   string                 `json:"website_url,omitempty"`
-	SupportEmail string                 `json:"support_email,omitempty"`
-	SupportPhone string                 `json:"support_phone,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	Name               string                 `json:"name" binding:"required"`
+	AccountType        string                 `json:"account_type" binding:"required,oneof=admin merchant"`
+	Description        string                 `json:"description,omitempty"`
+	BusinessName       string                 `json:"business_name,omitempty"`
+	BusinessType       string                 `json:"business_type,omitempty"`
+	WebsiteURL         string                 `json:"website_url,omitempty"`
+	SupportEmail       string                 `json:"support_email,omitempty"`
+	SupportPhone       string                 `json:"support_phone,omitempty"`
+	FinishedOnboarding bool                   `json:"finished_onboarding,omitempty"`
+	Metadata           map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // UpdateAccountRequest represents the request body for updating an account
 type UpdateAccountRequest struct {
-	Name         string                 `json:"name,omitempty"`
-	Description  string                 `json:"description,omitempty"`
-	BusinessName string                 `json:"business_name,omitempty"`
-	BusinessType string                 `json:"business_type,omitempty"`
-	WebsiteURL   string                 `json:"website_url,omitempty"`
-	SupportEmail string                 `json:"support_email,omitempty"`
-	SupportPhone string                 `json:"support_phone,omitempty"`
-	AccountType  string                 `json:"account_type,omitempty" binding:"omitempty,oneof=admin merchant"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	Name               string                 `json:"name,omitempty"`
+	Description        string                 `json:"description,omitempty"`
+	BusinessName       string                 `json:"business_name,omitempty"`
+	BusinessType       string                 `json:"business_type,omitempty"`
+	WebsiteURL         string                 `json:"website_url,omitempty"`
+	SupportEmail       string                 `json:"support_email,omitempty"`
+	SupportPhone       string                 `json:"support_phone,omitempty"`
+	AccountType        string                 `json:"account_type,omitempty" binding:"omitempty,oneof=admin merchant"`
+	FinishedOnboarding bool                   `json:"finished_onboarding,omitempty"`
+	Metadata           map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// InitializeAccountResponse represents the response body for initializing an account
+type InitializeAccountResponse struct {
+	AccountResponse AccountResponse   `json:"account"`
+	User            UserResponse      `json:"user"`
+	Workspace       WorkspaceResponse `json:"workspace"`
 }
 
 // ListAccounts godoc
@@ -169,7 +181,7 @@ func (h *AccountHandler) GetCurrentAccount(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param account body CreateAccountRequest true "Account creation data"
-// @Success 200 {object} AccountResponse
+// @Success 200 {object} CreateAccountRequest
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
@@ -189,21 +201,129 @@ func (h *AccountHandler) CreateAccount(c *gin.Context) {
 	}
 
 	account, err := h.common.db.CreateAccount(c.Request.Context(), db.CreateAccountParams{
-		Name:         req.Name,
-		AccountType:  db.AccountType(req.AccountType),
-		BusinessName: pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
-		BusinessType: pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
-		WebsiteUrl:   pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
-		SupportEmail: pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
-		SupportPhone: pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
-		Metadata:     metadata,
+		Name:               req.Name,
+		AccountType:        db.AccountType(req.AccountType),
+		BusinessName:       pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
+		BusinessType:       pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
+		WebsiteUrl:         pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
+		SupportEmail:       pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
+		SupportPhone:       pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
+		FinishedOnboarding: pgtype.Bool{Bool: req.FinishedOnboarding, Valid: true},
+		Metadata:           metadata,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create account"})
 		return
 	}
 
-	c.JSON(http.StatusOK, toAccountResponse(account))
+	accountResponse := toAccountResponse(account)
+
+	c.JSON(http.StatusOK, accountResponse)
+}
+
+// CreateAccount godoc
+// @Summary Create an account
+// @Description Creates a new account object. Only accessible by admins.
+// @Tags accounts
+// @Accept json
+// @Produce json
+// @Param account body CreateAccountRequest true "Account creation data"
+// @Success 200 {object} InitializeAccountResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /accounts/initialize [post]
+func (h *AccountHandler) InitializeAccount(c *gin.Context) {
+	var req CreateAccountRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	metadata, err := json.Marshal(req.Metadata)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
+		return
+	}
+
+	metaDataMap := make(map[string]interface{})
+	err = json.Unmarshal(metadata, &metaDataMap)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to unmarshal metadata"})
+		return
+	}
+
+	ownerAuth0Id := metaDataMap["ownerAuth0Id"].(string)
+	if ownerAuth0Id == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Owner Auth0 ID is required"})
+		return
+	}
+
+	email := metaDataMap["email"].(string)
+	if email == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Email is required"})
+		return
+	}
+
+	account, err := h.common.db.CreateAccount(c.Request.Context(), db.CreateAccountParams{
+		Name:               req.Name,
+		AccountType:        db.AccountType(req.AccountType),
+		BusinessName:       pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
+		BusinessType:       pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
+		WebsiteUrl:         pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
+		SupportEmail:       pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
+		SupportPhone:       pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
+		FinishedOnboarding: pgtype.Bool{Bool: req.FinishedOnboarding, Valid: true},
+		Metadata:           metadata,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create account"})
+		return
+	}
+
+	// Create user account
+	user, err := h.common.db.CreateUser(c.Request.Context(), db.CreateUserParams{
+		Auth0ID: ownerAuth0Id,
+		Email:   email,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create user"})
+		return
+	}
+
+	workspace, err := h.common.db.CreateWorkspace(c.Request.Context(), db.CreateWorkspaceParams{
+		Name:      strings.ToLower(fmt.Sprintf("%s's Workspace", strings.ReplaceAll(account.Name, " ", "_"))),
+		AccountID: account.ID,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create workspace"})
+		return
+	}
+
+	// add user to account
+	_, err = h.common.db.AddUserToAccount(c.Request.Context(), db.AddUserToAccountParams{
+		UserID:    user.ID,
+		AccountID: account.ID,
+		Role:      db.UserRoleAdmin,
+		IsOwner:   pgtype.Bool{Bool: true, Valid: true},
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to add user to account"})
+		return
+	}
+
+	accountResponse := toAccountResponse(account)
+	userResponse := toUserResponse(user)
+	workspaceResponse := toWorkspaceResponse(workspace)
+
+	accountResponseWithUser := InitializeAccountResponse{
+		AccountResponse: accountResponse,
+		User:            userResponse,
+		Workspace:       workspaceResponse,
+	}
+
+	c.JSON(http.StatusOK, accountResponseWithUser)
 }
 
 // UpdateAccount godoc
@@ -269,15 +389,16 @@ func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 	}
 
 	account, err := h.common.db.UpdateAccount(c.Request.Context(), db.UpdateAccountParams{
-		ID:           parsedUUID,
-		Name:         req.Name,
-		AccountType:  db.AccountType(req.AccountType),
-		BusinessName: pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
-		BusinessType: pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
-		WebsiteUrl:   pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
-		SupportEmail: pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
-		SupportPhone: pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
-		Metadata:     metadata,
+		ID:                 parsedUUID,
+		Name:               req.Name,
+		AccountType:        db.AccountType(req.AccountType),
+		BusinessName:       pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
+		BusinessType:       pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
+		WebsiteUrl:         pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
+		SupportEmail:       pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
+		SupportPhone:       pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
+		FinishedOnboarding: pgtype.Bool{Bool: req.FinishedOnboarding, Valid: true},
+		Metadata:           metadata,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update account"})
@@ -333,18 +454,19 @@ func toAccountResponse(a db.Account) AccountResponse {
 	}
 
 	return AccountResponse{
-		ID:           a.ID.String(),
-		Object:       "account",
-		Name:         a.Name,
-		AccountType:  string(a.AccountType),
-		BusinessName: a.BusinessName.String,
-		BusinessType: a.BusinessType.String,
-		WebsiteURL:   a.WebsiteUrl.String,
-		SupportEmail: a.SupportEmail.String,
-		SupportPhone: a.SupportPhone.String,
-		Metadata:     metadata,
-		Created:      a.CreatedAt.Time.Unix(),
-		Updated:      a.UpdatedAt.Time.Unix(),
+		ID:                 a.ID.String(),
+		Object:             "account",
+		Name:               a.Name,
+		AccountType:        string(a.AccountType),
+		BusinessName:       a.BusinessName.String,
+		BusinessType:       a.BusinessType.String,
+		WebsiteURL:         a.WebsiteUrl.String,
+		SupportEmail:       a.SupportEmail.String,
+		SupportPhone:       a.SupportPhone.String,
+		Metadata:           metadata,
+		FinishedOnboarding: a.FinishedOnboarding.Bool,
+		Created:            a.CreatedAt.Time.Unix(),
+		Updated:            a.UpdatedAt.Time.Unix(),
 	}
 }
 
@@ -357,17 +479,18 @@ func toAccountResponseFromUserAccount(a db.ListAccountsByUserRow) AccountRespons
 	}
 
 	return AccountResponse{
-		ID:           a.ID.String(),
-		Object:       "account",
-		Name:         a.Name,
-		AccountType:  string(a.AccountType),
-		BusinessName: a.BusinessName.String,
-		BusinessType: a.BusinessType.String,
-		WebsiteURL:   a.WebsiteUrl.String,
-		SupportEmail: a.SupportEmail.String,
-		SupportPhone: a.SupportPhone.String,
-		Metadata:     metadata,
-		Created:      a.CreatedAt.Time.Unix(),
-		Updated:      a.UpdatedAt.Time.Unix(),
+		ID:                 a.ID.String(),
+		Object:             "account",
+		Name:               a.Name,
+		AccountType:        string(a.AccountType),
+		BusinessName:       a.BusinessName.String,
+		BusinessType:       a.BusinessType.String,
+		WebsiteURL:         a.WebsiteUrl.String,
+		SupportEmail:       a.SupportEmail.String,
+		SupportPhone:       a.SupportPhone.String,
+		Metadata:           metadata,
+		FinishedOnboarding: a.FinishedOnboarding.Bool,
+		Created:            a.CreatedAt.Time.Unix(),
+		Updated:            a.UpdatedAt.Time.Unix(),
 	}
 }

@@ -100,7 +100,6 @@ func (ns NullApiKeyLevel) Value() (driver.Value, error) {
 type UserRole string
 
 const (
-	UserRoleOwner     UserRole = "owner"
 	UserRoleAdmin     UserRole = "admin"
 	UserRoleSupport   UserRole = "support"
 	UserRoleDeveloper UserRole = "developer"
@@ -142,18 +141,19 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 }
 
 type Account struct {
-	ID           uuid.UUID          `json:"id"`
-	Name         string             `json:"name"`
-	AccountType  AccountType        `json:"account_type"`
-	BusinessName pgtype.Text        `json:"business_name"`
-	BusinessType pgtype.Text        `json:"business_type"`
-	WebsiteUrl   pgtype.Text        `json:"website_url"`
-	SupportEmail pgtype.Text        `json:"support_email"`
-	SupportPhone pgtype.Text        `json:"support_phone"`
-	Metadata     []byte             `json:"metadata"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+	ID                 uuid.UUID          `json:"id"`
+	Name               string             `json:"name"`
+	AccountType        AccountType        `json:"account_type"`
+	BusinessName       pgtype.Text        `json:"business_name"`
+	BusinessType       pgtype.Text        `json:"business_type"`
+	WebsiteUrl         pgtype.Text        `json:"website_url"`
+	SupportEmail       pgtype.Text        `json:"support_email"`
+	SupportPhone       pgtype.Text        `json:"support_phone"`
+	Metadata           []byte             `json:"metadata"`
+	FinishedOnboarding pgtype.Bool        `json:"finished_onboarding"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type ApiKey struct {

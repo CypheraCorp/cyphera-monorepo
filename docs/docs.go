@@ -89,7 +89,64 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.AccountResponse"
+                            "$ref": "#/definitions/handlers.CreateAccountRequest"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/initialize": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates a new account object. Only accessible by admins.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Create an account",
+                "parameters": [
+                    {
+                        "description": "Account creation data",
+                        "name": "account",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateAccountRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.InitializeAccountResponse"
                         }
                     },
                     "400": {
@@ -2559,6 +2616,9 @@ const docTemplate = `{
                 "created": {
                     "type": "integer"
                 },
+                "finished_onboarding": {
+                    "type": "boolean"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -2641,13 +2701,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "account_type",
-                "business_name",
-                "business_type",
-                "description",
-                "name",
-                "support_email",
-                "support_phone",
-                "website_url"
+                "name"
             ],
             "properties": {
                 "account_type": {
@@ -2665,6 +2719,9 @@ const docTemplate = `{
                 },
                 "description": {
                     "type": "string"
+                },
+                "finished_onboarding": {
+                    "type": "boolean"
                 },
                 "metadata": {
                     "type": "object",
@@ -2956,6 +3013,20 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.InitializeAccountResponse": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "$ref": "#/definitions/handlers.AccountResponse"
+                },
+                "user": {
+                    "$ref": "#/definitions/handlers.UserResponse"
+                },
+                "workspace": {
+                    "$ref": "#/definitions/handlers.WorkspaceResponse"
+                }
+            }
+        },
         "handlers.OperationsResponse": {
             "type": "object",
             "properties": {
@@ -3051,6 +3122,9 @@ const docTemplate = `{
                 },
                 "description": {
                     "type": "string"
+                },
+                "finished_onboarding": {
+                    "type": "boolean"
                 },
                 "metadata": {
                     "type": "object",
