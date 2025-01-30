@@ -8,7 +8,7 @@ CREATE TYPE api_key_level AS ENUM ('read', 'write', 'admin');
 CREATE TYPE account_type AS ENUM ('admin', 'merchant');
 
 -- Enum for user roles within an account
-CREATE TYPE user_role AS ENUM ('owner', 'admin', 'support', 'developer');
+CREATE TYPE user_role AS ENUM ('admin', 'support', 'developer');
 
 -- Accounts table (top level organization)
 CREATE TABLE IF NOT EXISTS accounts (
@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     support_email VARCHAR(255),
     support_phone VARCHAR(255),
     metadata JSONB,
+    finished_onboarding BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE
@@ -157,13 +158,13 @@ VALUES
     (
         (SELECT id FROM users WHERE email = 'merchant@example.com'),
         (SELECT id FROM accounts WHERE name = 'Test Account'),
-        'owner',
+        'admin',
         true
     ),
     (
         (SELECT id FROM users WHERE email = 'admin@cyphera.com'),
         (SELECT id FROM accounts WHERE name = 'Admin Account'),
-        'owner',
+        'admin',
         true
     )
 ON CONFLICT DO NOTHING;

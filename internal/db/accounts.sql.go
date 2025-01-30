@@ -21,21 +21,23 @@ INSERT INTO accounts (
     website_url,
     support_email,
     support_phone,
+    finished_onboarding,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
-) RETURNING id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
+) RETURNING id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at
 `
 
 type CreateAccountParams struct {
-	Name         string      `json:"name"`
-	AccountType  AccountType `json:"account_type"`
-	BusinessName pgtype.Text `json:"business_name"`
-	BusinessType pgtype.Text `json:"business_type"`
-	WebsiteUrl   pgtype.Text `json:"website_url"`
-	SupportEmail pgtype.Text `json:"support_email"`
-	SupportPhone pgtype.Text `json:"support_phone"`
-	Metadata     []byte      `json:"metadata"`
+	Name               string      `json:"name"`
+	AccountType        AccountType `json:"account_type"`
+	BusinessName       pgtype.Text `json:"business_name"`
+	BusinessType       pgtype.Text `json:"business_type"`
+	WebsiteUrl         pgtype.Text `json:"website_url"`
+	SupportEmail       pgtype.Text `json:"support_email"`
+	SupportPhone       pgtype.Text `json:"support_phone"`
+	FinishedOnboarding pgtype.Bool `json:"finished_onboarding"`
+	Metadata           []byte      `json:"metadata"`
 }
 
 func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error) {
@@ -47,6 +49,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		arg.WebsiteUrl,
 		arg.SupportEmail,
 		arg.SupportPhone,
+		arg.FinishedOnboarding,
 		arg.Metadata,
 	)
 	var i Account
@@ -60,6 +63,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.SupportEmail,
 		&i.SupportPhone,
 		&i.Metadata,
+		&i.FinishedOnboarding,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -79,7 +83,7 @@ func (q *Queries) DeleteAccount(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at FROM accounts
+SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -96,6 +100,7 @@ func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
 		&i.SupportEmail,
 		&i.SupportPhone,
 		&i.Metadata,
+		&i.FinishedOnboarding,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -104,7 +109,7 @@ func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
 }
 
 const getAccountByID = `-- name: GetAccountByID :one
-SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at FROM accounts
+SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -121,6 +126,7 @@ func (q *Queries) GetAccountByID(ctx context.Context, id uuid.UUID) (Account, er
 		&i.SupportEmail,
 		&i.SupportPhone,
 		&i.Metadata,
+		&i.FinishedOnboarding,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -209,7 +215,7 @@ func (q *Queries) GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]G
 }
 
 const getAllAccounts = `-- name: GetAllAccounts :many
-SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at FROM accounts
+SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
 ORDER BY created_at DESC
 `
 
@@ -232,6 +238,7 @@ func (q *Queries) GetAllAccounts(ctx context.Context) ([]Account, error) {
 			&i.SupportEmail,
 			&i.SupportPhone,
 			&i.Metadata,
+			&i.FinishedOnboarding,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -257,7 +264,7 @@ func (q *Queries) HardDeleteAccount(ctx context.Context, id uuid.UUID) error {
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at FROM accounts
+SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -281,6 +288,7 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 			&i.SupportEmail,
 			&i.SupportPhone,
 			&i.Metadata,
+			&i.FinishedOnboarding,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -296,7 +304,7 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 }
 
 const listAccountsByType = `-- name: ListAccountsByType :many
-SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at FROM accounts
+SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
 WHERE account_type = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -320,6 +328,7 @@ func (q *Queries) ListAccountsByType(ctx context.Context, accountType AccountTyp
 			&i.SupportEmail,
 			&i.SupportPhone,
 			&i.Metadata,
+			&i.FinishedOnboarding,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -336,7 +345,7 @@ func (q *Queries) ListAccountsByType(ctx context.Context, accountType AccountTyp
 
 const listAccountsByUser = `-- name: ListAccountsByUser :many
 SELECT 
-    a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.created_at, a.updated_at, a.deleted_at,
+    a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at,
     ua.role as user_role,
     ua.is_owner
 FROM accounts a
@@ -348,20 +357,21 @@ ORDER BY a.created_at DESC
 `
 
 type ListAccountsByUserRow struct {
-	ID           uuid.UUID          `json:"id"`
-	Name         string             `json:"name"`
-	AccountType  AccountType        `json:"account_type"`
-	BusinessName pgtype.Text        `json:"business_name"`
-	BusinessType pgtype.Text        `json:"business_type"`
-	WebsiteUrl   pgtype.Text        `json:"website_url"`
-	SupportEmail pgtype.Text        `json:"support_email"`
-	SupportPhone pgtype.Text        `json:"support_phone"`
-	Metadata     []byte             `json:"metadata"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
-	UserRole     UserRole           `json:"user_role"`
-	IsOwner      pgtype.Bool        `json:"is_owner"`
+	ID                 uuid.UUID          `json:"id"`
+	Name               string             `json:"name"`
+	AccountType        AccountType        `json:"account_type"`
+	BusinessName       pgtype.Text        `json:"business_name"`
+	BusinessType       pgtype.Text        `json:"business_type"`
+	WebsiteUrl         pgtype.Text        `json:"website_url"`
+	SupportEmail       pgtype.Text        `json:"support_email"`
+	SupportPhone       pgtype.Text        `json:"support_phone"`
+	Metadata           []byte             `json:"metadata"`
+	FinishedOnboarding pgtype.Bool        `json:"finished_onboarding"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	UserRole           UserRole           `json:"user_role"`
+	IsOwner            pgtype.Bool        `json:"is_owner"`
 }
 
 func (q *Queries) ListAccountsByUser(ctx context.Context, userID uuid.UUID) ([]ListAccountsByUserRow, error) {
@@ -383,6 +393,7 @@ func (q *Queries) ListAccountsByUser(ctx context.Context, userID uuid.UUID) ([]L
 			&i.SupportEmail,
 			&i.SupportPhone,
 			&i.Metadata,
+			&i.FinishedOnboarding,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -400,7 +411,7 @@ func (q *Queries) ListAccountsByUser(ctx context.Context, userID uuid.UUID) ([]L
 }
 
 const searchAccounts = `-- name: SearchAccounts :many
-SELECT DISTINCT a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.created_at, a.updated_at, a.deleted_at 
+SELECT DISTINCT a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at 
 FROM accounts a
 LEFT JOIN user_accounts ua ON a.id = ua.account_id
 LEFT JOIN users u ON ua.user_id = u.id
@@ -442,6 +453,7 @@ func (q *Queries) SearchAccounts(ctx context.Context, arg SearchAccountsParams) 
 			&i.SupportEmail,
 			&i.SupportPhone,
 			&i.Metadata,
+			&i.FinishedOnboarding,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -466,22 +478,24 @@ SET
     website_url = COALESCE($6, website_url),
     support_email = COALESCE($7, support_email),
     support_phone = COALESCE($8, support_phone),
-    metadata = COALESCE($9, metadata),
+    finished_onboarding = COALESCE($9, finished_onboarding),
+    metadata = COALESCE($10, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, created_at, updated_at, deleted_at
+RETURNING id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at
 `
 
 type UpdateAccountParams struct {
-	ID           uuid.UUID   `json:"id"`
-	Name         string      `json:"name"`
-	AccountType  AccountType `json:"account_type"`
-	BusinessName pgtype.Text `json:"business_name"`
-	BusinessType pgtype.Text `json:"business_type"`
-	WebsiteUrl   pgtype.Text `json:"website_url"`
-	SupportEmail pgtype.Text `json:"support_email"`
-	SupportPhone pgtype.Text `json:"support_phone"`
-	Metadata     []byte      `json:"metadata"`
+	ID                 uuid.UUID   `json:"id"`
+	Name               string      `json:"name"`
+	AccountType        AccountType `json:"account_type"`
+	BusinessName       pgtype.Text `json:"business_name"`
+	BusinessType       pgtype.Text `json:"business_type"`
+	WebsiteUrl         pgtype.Text `json:"website_url"`
+	SupportEmail       pgtype.Text `json:"support_email"`
+	SupportPhone       pgtype.Text `json:"support_phone"`
+	FinishedOnboarding pgtype.Bool `json:"finished_onboarding"`
+	Metadata           []byte      `json:"metadata"`
 }
 
 func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (Account, error) {
@@ -494,6 +508,7 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (A
 		arg.WebsiteUrl,
 		arg.SupportEmail,
 		arg.SupportPhone,
+		arg.FinishedOnboarding,
 		arg.Metadata,
 	)
 	var i Account
@@ -507,6 +522,7 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (A
 		&i.SupportEmail,
 		&i.SupportPhone,
 		&i.Metadata,
+		&i.FinishedOnboarding,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,

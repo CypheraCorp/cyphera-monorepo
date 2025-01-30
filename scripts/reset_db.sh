@@ -1,10 +1,12 @@
 #!/bin/bash
 
 # Database connection parameters
-DB_HOST="cyphera-db.cjwqc0yo6vzw.us-east-1.rds.amazonaws.com"
+DB_HOST="localhost"
 DB_PORT="5432"
-DB_USER="apiuser"
+DB_USER="postgres"
 DB_NAME="cyphera"
+DB_USER="apiuser"
+
 
 # Path to init SQL script
 INIT_SCRIPT="internal/db/init-scripts/01-init.sql"

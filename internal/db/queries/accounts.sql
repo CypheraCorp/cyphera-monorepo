@@ -20,9 +20,10 @@ INSERT INTO accounts (
     website_url,
     support_email,
     support_phone,
+    finished_onboarding,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
 ) RETURNING *;
 
 -- name: GetAccountByID :one
@@ -39,7 +40,8 @@ SET
     website_url = COALESCE($6, website_url),
     support_email = COALESCE($7, support_email),
     support_phone = COALESCE($8, support_phone),
-    metadata = COALESCE($9, metadata),
+    finished_onboarding = COALESCE($9, finished_onboarding),
+    metadata = COALESCE($10, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
