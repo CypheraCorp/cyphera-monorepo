@@ -2,9 +2,11 @@
 SELECT * FROM workspaces
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1;
 
--- name: GetWorkspaceByAccountID :one
+-- name: ListWorkspacesByAccountID :many
 SELECT * FROM workspaces
-WHERE account_id = $1 AND deleted_at IS NULL LIMIT 1;
+WHERE account_id = $1 
+AND deleted_at IS NULL
+ORDER BY created_at DESC;
 
 -- name: ListWorkspaces :many
 SELECT * FROM workspaces
@@ -62,3 +64,11 @@ SELECT c.* FROM customers c
 INNER JOIN workspaces w ON c.workspace_id = w.id
 WHERE w.id = $1 AND c.deleted_at IS NULL
 ORDER BY c.created_at DESC;
+
+-- name: GetAccountByWorkspaceID :one
+SELECT a.* FROM accounts a
+JOIN workspaces w ON w.account_id = a.id
+WHERE w.id = $1 
+AND w.deleted_at IS NULL 
+AND a.deleted_at IS NULL
+LIMIT 1;

@@ -87,6 +87,36 @@ func (q *Queries) DeleteWorkspace(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const getAccountByWorkspaceID = `-- name: GetAccountByWorkspaceID :one
+SELECT a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at FROM accounts a
+JOIN workspaces w ON w.account_id = a.id
+WHERE w.id = $1 
+AND w.deleted_at IS NULL 
+AND a.deleted_at IS NULL
+LIMIT 1
+`
+
+func (q *Queries) GetAccountByWorkspaceID(ctx context.Context, id uuid.UUID) (Account, error) {
+	row := q.db.QueryRow(ctx, getAccountByWorkspaceID, id)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.AccountType,
+		&i.BusinessName,
+		&i.BusinessType,
+		&i.WebsiteUrl,
+		&i.SupportEmail,
+		&i.SupportPhone,
+		&i.Metadata,
+		&i.FinishedOnboarding,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const getAllWorkspaces = `-- name: GetAllWorkspaces :many
 SELECT id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, created_at, updated_at, deleted_at FROM workspaces
 ORDER BY created_at DESC
@@ -134,33 +164,6 @@ WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 
 func (q *Queries) GetWorkspace(ctx context.Context, id uuid.UUID) (Workspace, error) {
 	row := q.db.QueryRow(ctx, getWorkspace, id)
-	var i Workspace
-	err := row.Scan(
-		&i.ID,
-		&i.AccountID,
-		&i.Name,
-		&i.Description,
-		&i.BusinessName,
-		&i.BusinessType,
-		&i.WebsiteUrl,
-		&i.SupportEmail,
-		&i.SupportPhone,
-		&i.Metadata,
-		&i.Livemode,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
-const getWorkspaceByAccountID = `-- name: GetWorkspaceByAccountID :one
-SELECT id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, created_at, updated_at, deleted_at FROM workspaces
-WHERE account_id = $1 AND deleted_at IS NULL LIMIT 1
-`
-
-func (q *Queries) GetWorkspaceByAccountID(ctx context.Context, accountID uuid.UUID) (Workspace, error) {
-	row := q.db.QueryRow(ctx, getWorkspaceByAccountID, accountID)
 	var i Workspace
 	err := row.Scan(
 		&i.ID,
@@ -246,6 +249,48 @@ ORDER BY created_at DESC
 
 func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
 	rows, err := q.db.Query(ctx, listWorkspaces)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Workspace{}
+	for rows.Next() {
+		var i Workspace
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.Name,
+			&i.Description,
+			&i.BusinessName,
+			&i.BusinessType,
+			&i.WebsiteUrl,
+			&i.SupportEmail,
+			&i.SupportPhone,
+			&i.Metadata,
+			&i.Livemode,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspacesByAccountID = `-- name: ListWorkspacesByAccountID :many
+SELECT id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, created_at, updated_at, deleted_at FROM workspaces
+WHERE account_id = $1 
+AND deleted_at IS NULL
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListWorkspacesByAccountID(ctx context.Context, accountID uuid.UUID) ([]Workspace, error) {
+	rows, err := q.db.Query(ctx, listWorkspacesByAccountID, accountID)
 	if err != nil {
 		return nil, err
 	}

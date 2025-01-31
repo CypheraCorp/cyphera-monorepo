@@ -199,6 +199,76 @@ func (q *Queries) GetUserAccountRole(ctx context.Context, arg GetUserAccountRole
 	return i, err
 }
 
+const getUserAssociatedAccounts = `-- name: GetUserAssociatedAccounts :many
+SELECT 
+    a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at,
+    ua.role as user_role,
+    ua.is_owner,
+    ua.created_at as joined_at
+FROM accounts a
+JOIN user_accounts ua ON a.id = ua.account_id
+WHERE ua.user_id = $1 
+AND a.deleted_at IS NULL 
+AND ua.deleted_at IS NULL
+ORDER BY ua.created_at DESC
+`
+
+type GetUserAssociatedAccountsRow struct {
+	ID                 uuid.UUID          `json:"id"`
+	Name               string             `json:"name"`
+	AccountType        AccountType        `json:"account_type"`
+	BusinessName       pgtype.Text        `json:"business_name"`
+	BusinessType       pgtype.Text        `json:"business_type"`
+	WebsiteUrl         pgtype.Text        `json:"website_url"`
+	SupportEmail       pgtype.Text        `json:"support_email"`
+	SupportPhone       pgtype.Text        `json:"support_phone"`
+	Metadata           []byte             `json:"metadata"`
+	FinishedOnboarding pgtype.Bool        `json:"finished_onboarding"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	UserRole           UserRole           `json:"user_role"`
+	IsOwner            pgtype.Bool        `json:"is_owner"`
+	JoinedAt           pgtype.Timestamptz `json:"joined_at"`
+}
+
+func (q *Queries) GetUserAssociatedAccounts(ctx context.Context, userID uuid.UUID) ([]GetUserAssociatedAccountsRow, error) {
+	rows, err := q.db.Query(ctx, getUserAssociatedAccounts, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUserAssociatedAccountsRow{}
+	for rows.Next() {
+		var i GetUserAssociatedAccountsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.AccountType,
+			&i.BusinessName,
+			&i.BusinessType,
+			&i.WebsiteUrl,
+			&i.SupportEmail,
+			&i.SupportPhone,
+			&i.Metadata,
+			&i.FinishedOnboarding,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.UserRole,
+			&i.IsOwner,
+			&i.JoinedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserByAuth0ID = `-- name: GetUserByAuth0ID :one
 SELECT id, auth0_id, email, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
 WHERE auth0_id = $1 AND deleted_at IS NULL

@@ -484,7 +484,7 @@ func toUserAccountResponse(u db.ListUserAccountsRow) UserAccountResponse {
 // @Accept json
 // @Produce json
 // @Param auth0_id path string true "Auth0 ID"
-// @Success 200 {object} User
+// @Success 200 {object} UserResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
