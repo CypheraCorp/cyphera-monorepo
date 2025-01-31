@@ -266,52 +266,90 @@ func (h *AccountHandler) InitializeAccount(c *gin.Context) {
 		return
 	}
 
-	account, err := h.common.db.CreateAccount(c.Request.Context(), db.CreateAccountParams{
-		Name:               req.Name,
-		AccountType:        db.AccountType(req.AccountType),
-		BusinessName:       pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
-		BusinessType:       pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
-		WebsiteUrl:         pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
-		SupportEmail:       pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
-		SupportPhone:       pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
-		FinishedOnboarding: pgtype.Bool{Bool: req.FinishedOnboarding, Valid: true},
-		Metadata:           metadata,
-	})
+	// Check if user already exists
+	user, err := h.common.db.GetUserByAuth0ID(c.Request.Context(), ownerAuth0Id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create account"})
+		account, err := h.common.db.CreateAccount(c.Request.Context(), db.CreateAccountParams{
+			Name:               req.Name,
+			AccountType:        db.AccountType(req.AccountType),
+			BusinessName:       pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
+			BusinessType:       pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
+			WebsiteUrl:         pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
+			SupportEmail:       pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
+			SupportPhone:       pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
+			FinishedOnboarding: pgtype.Bool{Bool: req.FinishedOnboarding, Valid: true},
+			Metadata:           metadata,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create account"})
+			return
+		}
+
+		// Create user account
+		user, err = h.common.db.CreateUser(c.Request.Context(), db.CreateUserParams{
+			Auth0ID: ownerAuth0Id,
+			Email:   email,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create user"})
+			return
+		}
+
+		workspace, err := h.common.db.CreateWorkspace(c.Request.Context(), db.CreateWorkspaceParams{
+			Name:      strings.ToLower(fmt.Sprintf("%s's Workspace", strings.ReplaceAll(account.Name, " ", "_"))),
+			AccountID: account.ID,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create workspace"})
+			return
+		}
+
+		// add user to account
+		_, err = h.common.db.AddUserToAccount(c.Request.Context(), db.AddUserToAccountParams{
+			UserID:    user.ID,
+			AccountID: account.ID,
+			Role:      db.UserRoleAdmin,
+			IsOwner:   pgtype.Bool{Bool: true, Valid: true},
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to add user to account"})
+			return
+		}
+
+		accountResponse := toAccountResponse(account)
+		userResponse := toUserResponse(user)
+		workspaceResponse := toWorkspaceResponse(workspace)
+
+		accountResponseWithUser := InitializeAccountResponse{
+			AccountResponse: accountResponse,
+			User:            userResponse,
+			Workspace:       workspaceResponse,
+		}
+
+		c.JSON(http.StatusOK, accountResponseWithUser)
+	}
+
+	// user and account is already created so we can return the data that is there.
+	accounts, err := h.common.db.GetUserAssociatedAccounts(c.Request.Context(), user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve account"})
 		return
 	}
 
-	// Create user account
-	user, err := h.common.db.CreateUser(c.Request.Context(), db.CreateUserParams{
-		Auth0ID: ownerAuth0Id,
-		Email:   email,
-	})
+	account, err := h.common.db.GetAccountByID(c.Request.Context(), accounts[0].ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create user"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve account"})
 		return
 	}
 
-	workspace, err := h.common.db.CreateWorkspace(c.Request.Context(), db.CreateWorkspaceParams{
-		Name:      strings.ToLower(fmt.Sprintf("%s's Workspace", strings.ReplaceAll(account.Name, " ", "_"))),
-		AccountID: account.ID,
-	})
+	// get workspace by account id
+	workspaces, err := h.common.db.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create workspace"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve workspace"})
 		return
 	}
 
-	// add user to account
-	_, err = h.common.db.AddUserToAccount(c.Request.Context(), db.AddUserToAccountParams{
-		UserID:    user.ID,
-		AccountID: account.ID,
-		Role:      db.UserRoleAdmin,
-		IsOwner:   pgtype.Bool{Bool: true, Valid: true},
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to add user to account"})
-		return
-	}
+	workspace := workspaces[0]
 
 	accountResponse := toAccountResponse(account)
 	userResponse := toUserResponse(user)
@@ -324,6 +362,7 @@ func (h *AccountHandler) InitializeAccount(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, accountResponseWithUser)
+	return
 }
 
 // UpdateAccount godoc

@@ -2035,6 +2035,39 @@ paths:
       summary: List user's accounts
       tags:
       - users
+  /users/auth0/{auth0_id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a user's details using their Auth0 ID
+      parameters:
+      - description: Auth0 ID
+        in: path
+        name: auth0_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Get user by Auth0 ID
+      tags:
+      - users
   /users/me:
     get:
       consumes:

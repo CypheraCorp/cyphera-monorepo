@@ -27,6 +27,7 @@ type Querier interface {
 	GetAPIKeyByKey(ctx context.Context, keyHash string) (ApiKey, error)
 	GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
 	GetAccountByID(ctx context.Context, id uuid.UUID) (Account, error)
+	GetAccountByWorkspaceID(ctx context.Context, id uuid.UUID) (Account, error)
 	// Prevent removal of account owners
 	GetAccountOwner(ctx context.Context, accountID uuid.UUID) (User, error)
 	GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]GetAccountUsersRow, error)
@@ -42,11 +43,11 @@ type Querier interface {
 	GetCustomersWithWorkspaceInfo(ctx context.Context, workspaceID uuid.UUID) ([]GetCustomersWithWorkspaceInfoRow, error)
 	GetExpiredAPIKeys(ctx context.Context) ([]ApiKey, error)
 	GetUserAccountRole(ctx context.Context, arg GetUserAccountRoleParams) (UserAccount, error)
+	GetUserAssociatedAccounts(ctx context.Context, userID uuid.UUID) ([]GetUserAssociatedAccountsRow, error)
 	GetUserByAuth0ID(ctx context.Context, auth0ID string) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetWorkspace(ctx context.Context, id uuid.UUID) (Workspace, error)
-	GetWorkspaceByAccountID(ctx context.Context, accountID uuid.UUID) (Workspace, error)
 	HardDeleteAccount(ctx context.Context, id uuid.UUID) error
 	HardDeleteWorkspace(ctx context.Context, id uuid.UUID) error
 	ListAPIKeys(ctx context.Context, workspaceID uuid.UUID) ([]ApiKey, error)
@@ -58,6 +59,7 @@ type Querier interface {
 	ListUsersByAccount(ctx context.Context, accountID uuid.UUID) ([]User, error)
 	ListWorkspaceCustomers(ctx context.Context, id uuid.UUID) ([]Customer, error)
 	ListWorkspaces(ctx context.Context) ([]Workspace, error)
+	ListWorkspacesByAccountID(ctx context.Context, accountID uuid.UUID) ([]Workspace, error)
 	RemoveUserFromAccount(ctx context.Context, arg RemoveUserFromAccountParams) error
 	SearchAccounts(ctx context.Context, arg SearchAccountsParams) ([]Account, error)
 	UpdateAPIKey(ctx context.Context, arg UpdateAPIKeyParams) (ApiKey, error)

@@ -116,4 +116,17 @@ WHERE u.id = $1
 AND u.deleted_at IS NULL 
 AND ua.deleted_at IS NULL
 AND a.deleted_at IS NULL
+ORDER BY ua.created_at DESC;
+
+-- name: GetUserAssociatedAccounts :many
+SELECT 
+    a.*,
+    ua.role as user_role,
+    ua.is_owner,
+    ua.created_at as joined_at
+FROM accounts a
+JOIN user_accounts ua ON a.id = ua.account_id
+WHERE ua.user_id = $1 
+AND a.deleted_at IS NULL 
+AND ua.deleted_at IS NULL
 ORDER BY ua.created_at DESC; 
