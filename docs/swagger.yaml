@@ -443,6 +443,17 @@ definitions:
       error:
         type: string
     type: object
+  handlers.FullAccountResponse:
+    properties:
+      account:
+        $ref: '#/definitions/handlers.AccountResponse'
+      user:
+        $ref: '#/definitions/handlers.UserResponse'
+      workspaces:
+        items:
+          $ref: '#/definitions/handlers.WorkspaceResponse'
+        type: array
+    type: object
   handlers.GetNetworksResponse:
     properties:
       data:
@@ -478,15 +489,6 @@ definitions:
     properties:
       status:
         type: string
-    type: object
-  handlers.InitializeAccountResponse:
-    properties:
-      account:
-        $ref: '#/definitions/handlers.AccountResponse'
-      user:
-        $ref: '#/definitions/handlers.UserResponse'
-      workspace:
-        $ref: '#/definitions/handlers.WorkspaceResponse'
     type: object
   handlers.OperationsResponse:
     properties:
@@ -843,6 +845,47 @@ paths:
       summary: Create an account
       tags:
       - accounts
+  /accounts/:id:
+    put:
+      consumes:
+      - application/json
+      description: Updates the specified account by setting the values of the parameters
+        passed
+      parameters:
+      - description: Account update data
+        in: body
+        name: account
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AccountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update an account
+      tags:
+      - accounts
   /accounts/{accountId}/users/{userId}:
     delete:
       consumes:
@@ -908,51 +951,6 @@ paths:
       summary: Get an account
       tags:
       - accounts
-    put:
-      consumes:
-      - application/json
-      description: Updates the specified account by setting the values of the parameters
-        passed
-      parameters:
-      - description: Account ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Account update data
-        in: body
-        name: account
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UpdateAccountRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.AccountResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update an account
-      tags:
-      - accounts
   /accounts/{id}/users:
     post:
       consumes:
@@ -990,25 +988,45 @@ paths:
       summary: Add user to account
       tags:
       - users
-  /accounts/initialize:
-    post:
+  /accounts/me:
+    get:
       consumes:
       - application/json
-      description: Creates a new account object. Only accessible by admins.
-      parameters:
-      - description: Account creation data
-        in: body
-        name: account
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.CreateAccountRequest'
+      description: Retrieves the details of the currently authenticated user's account
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.InitializeAccountResponse'
+            $ref: '#/definitions/handlers.FullAccountResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get current account
+      tags:
+      - accounts
+    put:
+      consumes:
+      - application/json
+      description: Updates the currently authenticated user's account details
+      parameters:
+      - description: Account update data
+        in: body
+        name: account
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.FullAccountResponse'
         "400":
           description: Bad Request
           schema:
@@ -1023,28 +1041,44 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Create an account
+      summary: Update current account
       tags:
       - accounts
-  /accounts/me:
-    get:
+  /accounts/signin:
+    post:
       consumes:
       - application/json
-      description: Retrieves the details of the currently authenticated user's account
+      description: Creates a new account or returns back existing account. Only accessible
+        by admins.
+      parameters:
+      - description: Account creation data
+        in: body
+        name: account
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateAccountRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.AccountResponse'
+            $ref: '#/definitions/handlers.FullAccountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Get current account
+      summary: Register or sign in to an account
       tags:
       - accounts
   /admin/accounts/{id}:

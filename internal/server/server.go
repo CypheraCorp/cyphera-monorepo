@@ -102,7 +102,7 @@ func InitializeRoutes(router *gin.Engine) {
 				// Account management
 				admin.GET("/accounts", accountHandler.ListAccounts)
 				admin.POST("/accounts", accountHandler.CreateAccount)
-				admin.POST("/accounts/initialize", accountHandler.InitializeAccount) // Create account entity in database
+				admin.POST("/accounts/signin", accountHandler.SignInAccount)
 				admin.DELETE("/accounts/:id", accountHandler.DeleteAccount)
 
 				// User management
@@ -130,7 +130,7 @@ func InitializeRoutes(router *gin.Engine) {
 			accounts := protected.Group("/accounts")
 			{
 				accounts.GET("/me", accountHandler.GetCurrentAccount)
-				accounts.PUT("/me", accountHandler.UpdateAccount)
+				accounts.PUT("/me", accountHandler.UpdateCurrentAccount)
 
 				accounts.GET("/:id", accountHandler.GetAccount)
 				accounts.PUT("/:id", accountHandler.UpdateAccount)

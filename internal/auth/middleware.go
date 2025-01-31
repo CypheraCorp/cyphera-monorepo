@@ -170,14 +170,14 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 		}
 
 		// If no API key, check for JWT token
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
+		jwtToken := c.GetHeader("Authorization")
+		if jwtToken == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "No authentication provided"})
 			c.Abort()
 			return
 		}
 
-		user, accounts, err := validateJWTToken(c, queries, authHeader)
+		user, accounts, err := validateJWTToken(c, queries, jwtToken)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			c.Abort()
@@ -187,34 +187,42 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 		// Get account ID from header
 		accountIDStr := c.GetHeader("X-Account-ID")
 		if accountIDStr == "" {
-			// If no account specified and user has only one account, use that
-			if len(accounts) == 1 {
-				accountIDStr = accounts[0].ID.String()
-			} else {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Account ID not specified"})
-				c.Abort()
-				return
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Account ID not specified"})
+			c.Abort()
+			return
+		}
+
+		// get current user's account
+		var account *db.ListAccountsByUserRow
+		for _, acc := range accounts {
+			if acc.ID.String() == accountIDStr {
+				account = &acc
+				break
 			}
 		}
 
-		// Find the specified account in user's accounts
-		accountID, err := uuid.Parse(accountIDStr)
+		if account == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Account not associated with user"})
+			c.Abort()
+			return
+		}
+
+		_, err = uuid.Parse(accountIDStr)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid account ID format"})
 			c.Abort()
 			return
 		}
 
-		var userAccount *db.ListAccountsByUserRow
-		for _, acc := range accounts {
-			if acc.ID == accountID {
-				userAccount = &acc
-				break
-			}
+		workspaceIdStr := c.GetHeader("X-Workspace-ID")
+		if workspaceIdStr == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Workspace ID not specified"})
+			c.Abort()
+			return
 		}
-
-		if userAccount == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Account not associated with user"})
+		_, err = uuid.Parse(workspaceIdStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID format"})
 			c.Abort()
 			return
 		}
@@ -222,7 +230,9 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 		// Set context with user and account information
 		c.Set("userID", user.ID.String())
 		c.Set("accountID", accountIDStr)
-		c.Set("accountType", string(userAccount.AccountType))
+		c.Set("workspaceID", workspaceIdStr)
+		c.Set("accountType", string(account.AccountType))
+		c.Set("userRole", string(account.UserRole))
 		c.Set("authType", "jwt")
 		c.Next()
 	}

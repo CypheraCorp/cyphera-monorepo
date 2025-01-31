@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log"
 
@@ -22,6 +23,20 @@ func LogRequestBody() gin.HandlerFunc {
 
 		// Log the body
 		log.Printf("Request Body: %s", string(bodyBytes))
+
+		accountIDStr := c.GetHeader("X-Account-ID")
+		workspaceIDStr := c.GetHeader("X-Workspace-ID")
+		userIDStr := c.GetHeader("X-User-ID")
+		apiKey := c.GetHeader("X-API-Key")
+		jwtToken := c.GetHeader("Authorization")
+		fmt.Println("accountIDStr", accountIDStr)
+		fmt.Println("workspaceIDStr", workspaceIDStr)
+		fmt.Println("userIDStr", userIDStr)
+		if apiKey != "" {
+			fmt.Println("apiKey", apiKey)
+		} else if jwtToken != "" {
+			fmt.Println("jwtToken", jwtToken)
+		}
 
 		// Continue
 		c.Next()
