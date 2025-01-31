@@ -23,6 +23,12 @@ func NewAccountHandler(common *CommonServices) *AccountHandler {
 	return &AccountHandler{common: common}
 }
 
+type FullAccountResponse struct {
+	AccountResponse AccountResponse     `json:"account"`
+	User            UserResponse        `json:"user"`
+	Workspaces      []WorkspaceResponse `json:"workspaces"`
+}
+
 // AccountResponse represents the standardized API response for account operations
 type AccountResponse struct {
 	ID                 string                 `json:"id"`
@@ -68,11 +74,11 @@ type UpdateAccountRequest struct {
 	Metadata           map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// InitializeAccountResponse represents the response body for initializing an account
-type InitializeAccountResponse struct {
-	AccountResponse AccountResponse   `json:"account"`
-	User            UserResponse      `json:"user"`
-	Workspace       WorkspaceResponse `json:"workspace"`
+// AccountAccessResponse represents the response from checking account access
+type AccountAccessResponse struct {
+	User      db.User
+	Account   db.Account
+	Workspace []db.Workspace
 }
 
 // ListAccounts godoc
@@ -138,40 +144,112 @@ func (h *AccountHandler) GetAccount(c *gin.Context) {
 // @Tags accounts
 // @Accept json
 // @Produce json
-// @Success 200 {object} AccountResponse
+// @Success 200 {object} FullAccountResponse
 // @Failure 401 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /accounts/me [get]
 func (h *AccountHandler) GetCurrentAccount(c *gin.Context) {
-	userID := c.GetString("userID")
-	if userID == "" {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "Not authenticated"})
+	// Check account access
+	access, err := h.CheckAccountAccess(c)
+	if HandleAccountAccessError(c, err) {
 		return
-	}
-
-	parsedUserID, err := uuid.Parse(userID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid user ID format"})
-		return
-	}
-
-	// Get user's accounts
-	accounts, err := h.common.db.ListAccountsByUser(c.Request.Context(), parsedUserID)
-	if err != nil || len(accounts) == 0 {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "No account found"})
-		return
-	}
-
-	// Find the account where the user is the owner
-	for _, acc := range accounts {
-		if acc.IsOwner.Bool {
-			c.JSON(http.StatusOK, toAccountResponseFromUserAccount(acc))
-			return
-		}
 	}
 
 	// If no owned account found, return the first associated account
-	c.JSON(http.StatusOK, toAccountResponseFromUserAccount(accounts[0]))
+	c.JSON(http.StatusOK, toFullAccountResponse(access))
+}
+
+// UpdateCurrentAccount godoc
+// @Summary Update current account
+// @Description Updates the currently authenticated user's account details
+// @Tags accounts
+// @Accept json
+// @Produce json
+// @Param account body UpdateAccountRequest true "Account update data"
+// @Success 200 {object} FullAccountResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /accounts/me [put]
+func (h *AccountHandler) UpdateCurrentAccount(c *gin.Context) {
+	// Check account access
+	access, err := h.CheckAccountAccess(c)
+	if HandleAccountAccessError(c, err) {
+		return
+	}
+
+	var req UpdateAccountRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	// Prepare update parameters starting with existing values
+	params := db.UpdateAccountParams{
+		ID:                 access.Account.ID,
+		Name:               access.Account.Name,
+		AccountType:        access.Account.AccountType,
+		BusinessName:       access.Account.BusinessName,
+		BusinessType:       access.Account.BusinessType,
+		WebsiteUrl:         access.Account.WebsiteUrl,
+		SupportEmail:       access.Account.SupportEmail,
+		SupportPhone:       access.Account.SupportPhone,
+		FinishedOnboarding: access.Account.FinishedOnboarding,
+		Metadata:           access.Account.Metadata,
+	}
+
+	// Only update fields that are provided in the request
+	if req.Name != "" {
+		params.Name = req.Name
+	}
+	if req.AccountType != "" {
+		params.AccountType = db.AccountType(req.AccountType)
+	}
+	if req.BusinessName != "" {
+		params.BusinessName = pgtype.Text{String: req.BusinessName, Valid: true}
+	}
+	if req.BusinessType != "" {
+		params.BusinessType = pgtype.Text{String: req.BusinessType, Valid: true}
+	}
+	if req.WebsiteURL != "" {
+		params.WebsiteUrl = pgtype.Text{String: req.WebsiteURL, Valid: true}
+	}
+	if req.SupportEmail != "" {
+		params.SupportEmail = pgtype.Text{String: req.SupportEmail, Valid: true}
+	}
+	if req.SupportPhone != "" {
+		params.SupportPhone = pgtype.Text{String: req.SupportPhone, Valid: true}
+	}
+
+	// Handle metadata separately - only update if provided
+	if req.Metadata != nil {
+		metadata, err := json.Marshal(req.Metadata)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
+			return
+		}
+		params.Metadata = metadata
+	}
+
+	// Handle finished_onboarding separately since it's a boolean
+	if !access.Account.FinishedOnboarding.Bool {
+		params.FinishedOnboarding = pgtype.Bool{Bool: true, Valid: true}
+	}
+
+	_, err = h.common.db.UpdateAccount(c.Request.Context(), params)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update account"})
+		return
+	}
+
+	fullAccountResponse, err := h.getAccountDetails(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve account details"})
+		return
+	}
+
+	c.JSON(http.StatusOK, toFullAccountResponse(fullAccountResponse))
 }
 
 // CreateAccount godoc
@@ -221,20 +299,20 @@ func (h *AccountHandler) CreateAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, accountResponse)
 }
 
-// CreateAccount godoc
-// @Summary Create an account
-// @Description Creates a new account object. Only accessible by admins.
+// SignInAccount godoc
+// @Summary Register or sign in to an account
+// @Description Creates a new account or returns back existing account. Only accessible by admins.
 // @Tags accounts
 // @Accept json
 // @Produce json
 // @Param account body CreateAccountRequest true "Account creation data"
-// @Success 200 {object} InitializeAccountResponse
+// @Success 200 {object} FullAccountResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /accounts/initialize [post]
-func (h *AccountHandler) InitializeAccount(c *gin.Context) {
+// @Router /accounts/signin [post]
+func (h *AccountHandler) SignInAccount(c *gin.Context) {
 	var req CreateAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
@@ -320,13 +398,14 @@ func (h *AccountHandler) InitializeAccount(c *gin.Context) {
 		userResponse := toUserResponse(user)
 		workspaceResponse := toWorkspaceResponse(workspace)
 
-		accountResponseWithUser := InitializeAccountResponse{
+		fullAccountResponse := FullAccountResponse{
 			AccountResponse: accountResponse,
 			User:            userResponse,
-			Workspace:       workspaceResponse,
+			Workspaces:      []WorkspaceResponse{workspaceResponse},
 		}
 
-		c.JSON(http.StatusOK, accountResponseWithUser)
+		c.JSON(http.StatusOK, fullAccountResponse)
+		return
 	}
 
 	// user and account is already created so we can return the data that is there.
@@ -349,19 +428,40 @@ func (h *AccountHandler) InitializeAccount(c *gin.Context) {
 		return
 	}
 
-	workspace := workspaces[0]
-
 	accountResponse := toAccountResponse(account)
 	userResponse := toUserResponse(user)
-	workspaceResponse := toWorkspaceResponse(workspace)
 
-	accountResponseWithUser := InitializeAccountResponse{
-		AccountResponse: accountResponse,
-		User:            userResponse,
-		Workspace:       workspaceResponse,
+	workspaceResponses := []WorkspaceResponse{}
+	for _, workspace := range workspaces {
+		workspaceResponses = append(workspaceResponses, toWorkspaceResponse(workspace))
 	}
 
-	c.JSON(http.StatusOK, accountResponseWithUser)
+	getAccountResponse := FullAccountResponse{
+		AccountResponse: accountResponse,
+		User:            userResponse,
+		Workspaces:      workspaceResponses,
+	}
+
+	c.JSON(http.StatusOK, getAccountResponse)
+}
+
+// HandleAccountAccessError is a helper function to handle account access errors consistently
+func HandleAccountAccessError(c *gin.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+
+	switch err.Error() {
+	case "invalid account ID format", "invalid user ID format":
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+	case "account not found", "user not found":
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: err.Error()})
+	case "user does not have access to this account":
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: err.Error()})
+	default:
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to verify account access"})
+	}
+	return true
 }
 
 // UpdateAccount godoc
@@ -370,7 +470,6 @@ func (h *AccountHandler) InitializeAccount(c *gin.Context) {
 // @Tags accounts
 // @Accept json
 // @Produce json
-// @Param id path string true "Account ID"
 // @Param account body UpdateAccountRequest true "Account update data"
 // @Success 200 {object} AccountResponse
 // @Failure 400 {object} ErrorResponse
@@ -378,39 +477,12 @@ func (h *AccountHandler) InitializeAccount(c *gin.Context) {
 // @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /accounts/{id} [put]
+// @Router /accounts/:id [put]
 func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid account ID format"})
-		return
-	}
-
-	// Check if user has access to this account
-	userID := c.GetString("userID")
-	parsedUserID, err := uuid.Parse(userID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid user ID format"})
-		return
-	}
-
-	accounts, err := h.common.db.ListAccountsByUser(c.Request.Context(), parsedUserID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to verify account access"})
-		return
-	}
-
-	var hasAccess bool
-	for _, acc := range accounts {
-		if acc.ID == parsedUUID {
-			hasAccess = true
-			break
-		}
-	}
-
-	if !hasAccess {
-		c.JSON(http.StatusForbidden, ErrorResponse{Error: "You don't have access to this account"})
 		return
 	}
 
@@ -420,13 +492,8 @@ func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 		return
 	}
 
-	metadata, err := json.Marshal(req.Metadata)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
-		return
-	}
-
-	account, err := h.common.db.UpdateAccount(c.Request.Context(), db.UpdateAccountParams{
+	// Prepare update parameters
+	params := db.UpdateAccountParams{
 		ID:                 parsedUUID,
 		Name:               req.Name,
 		AccountType:        db.AccountType(req.AccountType),
@@ -436,14 +503,26 @@ func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 		SupportEmail:       pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
 		SupportPhone:       pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
 		FinishedOnboarding: pgtype.Bool{Bool: req.FinishedOnboarding, Valid: true},
-		Metadata:           metadata,
-	})
+	}
+
+	// Handle metadata separately
+	if req.Metadata != nil {
+		metadata, err := json.Marshal(req.Metadata)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
+			return
+		}
+		params.Metadata = metadata
+	}
+
+	account, err := h.common.db.UpdateAccount(c.Request.Context(), params)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update account"})
 		return
 	}
 
 	c.JSON(http.StatusOK, toAccountResponse(account))
+
 }
 
 // DeleteAccount godoc
@@ -508,27 +587,92 @@ func toAccountResponse(a db.Account) AccountResponse {
 	}
 }
 
-// Helper function to convert ListAccountsByUserRow to API response
-func toAccountResponseFromUserAccount(a db.ListAccountsByUserRow) AccountResponse {
-	var metadata map[string]interface{}
-	if err := json.Unmarshal(a.Metadata, &metadata); err != nil {
-		log.Printf("Error unmarshaling account metadata: %v", err)
-		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
+// Helper function to convert AccountAccessResponse to FullAccountResponse
+func toFullAccountResponse(acc *AccountAccessResponse) FullAccountResponse {
+	// Convert account data
+	accountResponse := toAccountResponse(acc.Account)
+
+	// Convert user data
+	userResponse := toUserResponse(acc.User)
+
+	// Convert workspace data
+	workspaceResponses := make([]WorkspaceResponse, len(acc.Workspace))
+	for i, workspace := range acc.Workspace {
+		workspaceResponses[i] = toWorkspaceResponse(workspace)
 	}
 
-	return AccountResponse{
-		ID:                 a.ID.String(),
-		Object:             "account",
-		Name:               a.Name,
-		AccountType:        string(a.AccountType),
-		BusinessName:       a.BusinessName.String,
-		BusinessType:       a.BusinessType.String,
-		WebsiteURL:         a.WebsiteUrl.String,
-		SupportEmail:       a.SupportEmail.String,
-		SupportPhone:       a.SupportPhone.String,
-		Metadata:           metadata,
-		FinishedOnboarding: a.FinishedOnboarding.Bool,
-		Created:            a.CreatedAt.Time.Unix(),
-		Updated:            a.UpdatedAt.Time.Unix(),
+	return FullAccountResponse{
+		AccountResponse: accountResponse,
+		User:            userResponse,
+		Workspaces:      workspaceResponses,
 	}
+}
+
+// getAccountDetails retrieves and validates account, user, and workspace information from context
+func (h *AccountHandler) getAccountDetails(c *gin.Context) (*AccountAccessResponse, error) {
+	// Get and parse account ID from context
+	accountID := c.GetString("accountID")
+	parsedAccountID, err := uuid.Parse(accountID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid account ID format")
+	}
+
+	// Get the account
+	account, err := h.common.db.GetAccount(c.Request.Context(), parsedAccountID)
+	if err != nil {
+		return nil, fmt.Errorf("account not found")
+	}
+
+	// Get and parse user ID from context
+	userID := c.GetString("userID")
+	parsedUserID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID format")
+	}
+
+	// Get the user
+	user, err := h.common.db.GetUserByID(c.Request.Context(), parsedUserID)
+	if err != nil {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	// get workspace by account id
+	workspaces, err := h.common.db.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve workspace")
+	}
+
+	return &AccountAccessResponse{
+		User:      user,
+		Account:   account,
+		Workspace: workspaces,
+	}, nil
+}
+
+// CheckAccountAccess verifies if a user has access to an account and returns both objects if they do
+func (h *AccountHandler) CheckAccountAccess(c *gin.Context) (*AccountAccessResponse, error) {
+	accountDetails, err := h.getAccountDetails(c)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if user has access to this account
+	var hasAccess bool
+	accounts, err := h.common.db.ListAccountsByUser(c.Request.Context(), accountDetails.User.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify account access")
+	}
+
+	for _, acc := range accounts {
+		if acc.ID == accountDetails.Account.ID {
+			hasAccess = true
+			break
+		}
+	}
+
+	if !hasAccess {
+		return nil, fmt.Errorf("user does not have access to this account")
+	}
+
+	return accountDetails, nil
 }
