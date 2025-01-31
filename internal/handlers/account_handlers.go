@@ -362,7 +362,6 @@ func (h *AccountHandler) InitializeAccount(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, accountResponseWithUser)
-	return
 }
 
 // UpdateAccount godoc
