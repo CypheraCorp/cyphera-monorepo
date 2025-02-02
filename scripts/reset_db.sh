@@ -7,17 +7,13 @@ DB_PORT="5432"
 DB_USER="postgres"
 DB_NAME="cyphera"
 DB_USER="apiuser"
+DB_PASSWORD="apipassword"
 
 
 # Path to init SQL script
 INIT_SCRIPT="internal/db/init-scripts/01-init.sql"
 
-# Prompt for password
-echo -n "Enter database password: "
-read -s DB_PASSWORD
-echo
-
-echo "Connecting to database and resetting data..."
+echo "Connecting to database, dropping all tables and custom types..."
 
 # Connect to the database and perform operations
 PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME << EOF
