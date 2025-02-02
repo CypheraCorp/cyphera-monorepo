@@ -63,7 +63,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Creates a new account object. Only accessible by admins.",
+                "description": "Creates a new account with a default workspace. Only accessible by admins.",
                 "consumes": [
                     "application/json"
                 ],
@@ -86,26 +86,32 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "201": {
+                        "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/handlers.CreateAccountRequest"
+                            "$ref": "#/definitions/handlers.AccountResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request body or metadata format",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "Not authenticated",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
                     "403": {
-                        "description": "Forbidden",
+                        "description": "Not authorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -272,7 +278,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Creates a new account or returns back existing account. Only accessible by admins.",
+                "description": "Creates a new account with user and workspace, or returns existing account details",
                 "consumes": [
                     "application/json"
                 ],
@@ -296,78 +302,25 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Existing account details",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.FullAccountResponse"
+                        }
+                    },
+                    "201": {
+                        "description": "Newly created account",
                         "schema": {
                             "$ref": "#/definitions/handlers.FullAccountResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request body, metadata format, or missing required fields",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/accounts/{accountId}/users/{userId}": {
-            "delete": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Removes a user from an account",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Remove user from account",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Account ID",
-                        "name": "accountId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "User ID",
-                        "name": "userId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
+                    "500": {
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -407,64 +360,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handlers.AccountResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/accounts/{id}/users": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Adds a user to an account with specified role",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Add user to account",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Account ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "User account data",
-                        "name": "user",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.AddUserToAccountRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UserAccountResponse"
                         }
                     },
                     "400": {
@@ -1813,12 +1708,23 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "409": {
+                        "description": "User already exists",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
             }
         },
         "/users/auth0/{auth0_id}": {
             "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "description": "Retrieves a user's details using their Auth0 ID",
                 "consumes": [
                     "application/json"
@@ -1955,7 +1861,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Updates the specified user",
+                "description": "Updates an existing user's information",
                 "consumes": [
                     "application/json"
                 ],
@@ -2002,6 +1908,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
             },
@@ -2011,7 +1923,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Soft deletes a user",
+                "description": "Soft deletes a user from the system",
                 "consumes": [
                     "application/json"
                 ],
@@ -2046,18 +1958,24 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
             }
         },
-        "/users/{id}/accounts": {
+        "/users/{id}/account": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Lists all accounts associated with a user",
+                "description": "Gets the account details associated with a user",
                 "consumes": [
                     "application/json"
                 ],
@@ -2067,7 +1985,7 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "List user's accounts",
+                "summary": "Get user's account",
                 "parameters": [
                     {
                         "type": "string",
@@ -2081,10 +1999,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.UserAccountResponse"
-                            }
+                            "$ref": "#/definitions/handlers.UserAccountResponse"
                         }
                     },
                     "400": {
@@ -2095,6 +2010,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -2746,26 +2667,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.AddUserToAccountRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "role"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string",
-                    "enum": [
-                        "admin",
-                        "support",
-                        "developer"
-                    ]
-                }
-            }
-        },
         "handlers.CreateAPIKeyRequest": {
             "type": "object",
             "required": [
@@ -2889,10 +2790,15 @@ const docTemplate = `{
         "handlers.CreateUserRequest": {
             "type": "object",
             "required": [
+                "account_id",
                 "auth0_id",
-                "email"
+                "email",
+                "role"
             ],
             "properties": {
+                "account_id": {
+                    "type": "string"
+                },
                 "auth0_id": {
                     "type": "string"
                 },
@@ -2907,6 +2813,9 @@ const docTemplate = `{
                 },
                 "first_name": {
                     "type": "string"
+                },
+                "is_account_owner": {
+                    "type": "boolean"
                 },
                 "last_name": {
                     "type": "string"
@@ -2923,6 +2832,14 @@ const docTemplate = `{
                 },
                 "picture_url": {
                     "type": "string"
+                },
+                "role": {
+                    "type": "string",
+                    "enum": [
+                        "admin",
+                        "support",
+                        "developer"
+                    ]
                 },
                 "timezone": {
                     "type": "string"

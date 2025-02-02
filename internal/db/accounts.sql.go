@@ -136,22 +136,23 @@ func (q *Queries) GetAccountByID(ctx context.Context, id uuid.UUID) (Account, er
 
 const getAccountUsers = `-- name: GetAccountUsers :many
 SELECT 
-    u.id, u.auth0_id, u.email, u.first_name, u.last_name, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
-    ua.role,
-    ua.is_owner,
-    ua.created_at as joined_at
+    u.id, u.auth0_id, u.email, u.account_id, u.role, u.is_account_owner, u.first_name, u.last_name, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
+    u.role,
+    u.is_account_owner,
+    u.created_at as joined_at
 FROM users u
-JOIN user_accounts ua ON u.id = ua.user_id
-WHERE ua.account_id = $1 
-AND u.deleted_at IS NULL 
-AND ua.deleted_at IS NULL
-ORDER BY ua.is_owner DESC, ua.created_at DESC
+WHERE u.account_id = $1 
+AND u.deleted_at IS NULL
+ORDER BY u.is_account_owner DESC, u.created_at DESC
 `
 
 type GetAccountUsersRow struct {
 	ID               uuid.UUID          `json:"id"`
 	Auth0ID          string             `json:"auth0_id"`
 	Email            string             `json:"email"`
+	AccountID        uuid.UUID          `json:"account_id"`
+	Role             UserRole           `json:"role"`
+	IsAccountOwner   pgtype.Bool        `json:"is_account_owner"`
 	FirstName        pgtype.Text        `json:"first_name"`
 	LastName         pgtype.Text        `json:"last_name"`
 	DisplayName      pgtype.Text        `json:"display_name"`
@@ -162,13 +163,13 @@ type GetAccountUsersRow struct {
 	LastLoginAt      pgtype.Timestamptz `json:"last_login_at"`
 	EmailVerified    pgtype.Bool        `json:"email_verified"`
 	TwoFactorEnabled pgtype.Bool        `json:"two_factor_enabled"`
-	Status           pgtype.Text        `json:"status"`
+	Status           NullUserStatus     `json:"status"`
 	Metadata         []byte             `json:"metadata"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
-	Role             UserRole           `json:"role"`
-	IsOwner          pgtype.Bool        `json:"is_owner"`
+	Role_2           UserRole           `json:"role_2"`
+	IsAccountOwner_2 pgtype.Bool        `json:"is_account_owner_2"`
 	JoinedAt         pgtype.Timestamptz `json:"joined_at"`
 }
 
@@ -185,6 +186,9 @@ func (q *Queries) GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]G
 			&i.ID,
 			&i.Auth0ID,
 			&i.Email,
+			&i.AccountID,
+			&i.Role,
+			&i.IsAccountOwner,
 			&i.FirstName,
 			&i.LastName,
 			&i.DisplayName,
@@ -200,8 +204,8 @@ func (q *Queries) GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]G
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
-			&i.Role,
-			&i.IsOwner,
+			&i.Role_2,
+			&i.IsAccountOwner_2,
 			&i.JoinedAt,
 		); err != nil {
 			return nil, err
@@ -344,45 +348,24 @@ func (q *Queries) ListAccountsByType(ctx context.Context, accountType AccountTyp
 }
 
 const listAccountsByUser = `-- name: ListAccountsByUser :many
-SELECT 
-    a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at,
-    ua.role as user_role,
-    ua.is_owner
+SELECT a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at
 FROM accounts a
-JOIN user_accounts ua ON a.id = ua.account_id
-WHERE ua.user_id = $1 
+JOIN users u ON a.id = u.account_id
+WHERE u.id = $1 
 AND a.deleted_at IS NULL 
-AND ua.deleted_at IS NULL
+AND u.deleted_at IS NULL
 ORDER BY a.created_at DESC
 `
 
-type ListAccountsByUserRow struct {
-	ID                 uuid.UUID          `json:"id"`
-	Name               string             `json:"name"`
-	AccountType        AccountType        `json:"account_type"`
-	BusinessName       pgtype.Text        `json:"business_name"`
-	BusinessType       pgtype.Text        `json:"business_type"`
-	WebsiteUrl         pgtype.Text        `json:"website_url"`
-	SupportEmail       pgtype.Text        `json:"support_email"`
-	SupportPhone       pgtype.Text        `json:"support_phone"`
-	Metadata           []byte             `json:"metadata"`
-	FinishedOnboarding pgtype.Bool        `json:"finished_onboarding"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
-	UserRole           UserRole           `json:"user_role"`
-	IsOwner            pgtype.Bool        `json:"is_owner"`
-}
-
-func (q *Queries) ListAccountsByUser(ctx context.Context, userID uuid.UUID) ([]ListAccountsByUserRow, error) {
-	rows, err := q.db.Query(ctx, listAccountsByUser, userID)
+func (q *Queries) ListAccountsByUser(ctx context.Context, id uuid.UUID) ([]Account, error) {
+	rows, err := q.db.Query(ctx, listAccountsByUser, id)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListAccountsByUserRow{}
+	items := []Account{}
 	for rows.Next() {
-		var i ListAccountsByUserRow
+		var i Account
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -397,8 +380,6 @@ func (q *Queries) ListAccountsByUser(ctx context.Context, userID uuid.UUID) ([]L
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
-			&i.UserRole,
-			&i.IsOwner,
 		); err != nil {
 			return nil, err
 		}
@@ -413,8 +394,7 @@ func (q *Queries) ListAccountsByUser(ctx context.Context, userID uuid.UUID) ([]L
 const searchAccounts = `-- name: SearchAccounts :many
 SELECT DISTINCT a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at 
 FROM accounts a
-LEFT JOIN user_accounts ua ON a.id = ua.account_id
-LEFT JOIN users u ON ua.user_id = u.id
+LEFT JOIN users u ON a.id = u.account_id
 WHERE 
     (
         a.name ILIKE $1 OR

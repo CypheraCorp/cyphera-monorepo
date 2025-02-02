@@ -140,6 +140,50 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 	return string(ns.UserRole), nil
 }
 
+type UserStatus string
+
+const (
+	UserStatusActive    UserStatus = "active"
+	UserStatusInactive  UserStatus = "inactive"
+	UserStatusSuspended UserStatus = "suspended"
+	UserStatusPending   UserStatus = "pending"
+)
+
+func (e *UserStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = UserStatus(s)
+	case string:
+		*e = UserStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for UserStatus: %T", src)
+	}
+	return nil
+}
+
+type NullUserStatus struct {
+	UserStatus UserStatus `json:"user_status"`
+	Valid      bool       `json:"valid"` // Valid is true if UserStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullUserStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.UserStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.UserStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullUserStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.UserStatus), nil
+}
+
 type Account struct {
 	ID                 uuid.UUID          `json:"id"`
 	Name               string             `json:"name"`
@@ -196,6 +240,9 @@ type User struct {
 	ID               uuid.UUID          `json:"id"`
 	Auth0ID          string             `json:"auth0_id"`
 	Email            string             `json:"email"`
+	AccountID        uuid.UUID          `json:"account_id"`
+	Role             UserRole           `json:"role"`
+	IsAccountOwner   pgtype.Bool        `json:"is_account_owner"`
 	FirstName        pgtype.Text        `json:"first_name"`
 	LastName         pgtype.Text        `json:"last_name"`
 	DisplayName      pgtype.Text        `json:"display_name"`
@@ -206,22 +253,11 @@ type User struct {
 	LastLoginAt      pgtype.Timestamptz `json:"last_login_at"`
 	EmailVerified    pgtype.Bool        `json:"email_verified"`
 	TwoFactorEnabled pgtype.Bool        `json:"two_factor_enabled"`
-	Status           pgtype.Text        `json:"status"`
+	Status           NullUserStatus     `json:"status"`
 	Metadata         []byte             `json:"metadata"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
-}
-
-type UserAccount struct {
-	ID        uuid.UUID          `json:"id"`
-	UserID    uuid.UUID          `json:"user_id"`
-	AccountID uuid.UUID          `json:"account_id"`
-	Role      UserRole           `json:"role"`
-	IsOwner   pgtype.Bool        `json:"is_owner"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type Workspace struct {

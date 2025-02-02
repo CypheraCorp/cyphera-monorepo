@@ -10,6 +10,9 @@ CREATE TYPE account_type AS ENUM ('admin', 'merchant');
 -- Enum for user roles within an account
 CREATE TYPE user_role AS ENUM ('admin', 'support', 'developer');
 
+-- Enum for user status
+CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended', 'pending');
+
 -- Accounts table (top level organization)
 CREATE TABLE IF NOT EXISTS accounts (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -32,6 +35,9 @@ CREATE TABLE IF NOT EXISTS users (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     auth0_id VARCHAR(255) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
+    account_id UUID NOT NULL REFERENCES accounts(id),
+    role user_role NOT NULL,
+    is_account_owner BOOLEAN DEFAULT false,
     first_name VARCHAR(255),
     last_name VARCHAR(255),
     display_name VARCHAR(255),
@@ -42,25 +48,12 @@ CREATE TABLE IF NOT EXISTS users (
     last_login_at TIMESTAMP WITH TIME ZONE,
     email_verified BOOLEAN DEFAULT false,
     two_factor_enabled BOOLEAN DEFAULT false,
-    status VARCHAR(50) DEFAULT 'active',
+    status user_status DEFAULT 'active',
     metadata JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE
-);
-
--- User Account relationships table
-CREATE TABLE IF NOT EXISTS user_accounts (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(id),
-    account_id UUID NOT NULL REFERENCES accounts(id),
-    role user_role NOT NULL,
-    is_owner BOOLEAN DEFAULT false,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
-    UNIQUE(user_id, account_id),
-    CONSTRAINT one_owner_per_account EXCLUDE (account_id WITH =) WHERE (is_owner = true AND deleted_at IS NULL)
+    CONSTRAINT one_owner_per_account EXCLUDE (account_id WITH =) WHERE (is_account_owner = true AND deleted_at IS NULL)
 );
 
 -- Workspaces table
@@ -126,17 +119,9 @@ CREATE INDEX idx_customers_workspace_id ON customers(workspace_id);
 CREATE INDEX idx_api_keys_workspace_id ON api_keys(workspace_id);
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_auth0_id ON users(auth0_id);
-CREATE INDEX idx_user_accounts_user_id ON user_accounts(user_id);
-CREATE INDEX idx_user_accounts_account_id ON user_accounts(account_id);
-CREATE INDEX idx_user_accounts_role ON user_accounts(role);
+CREATE INDEX idx_users_account_id ON users(account_id);
 
 -- Insert test data for development
-INSERT INTO users (auth0_id, email, first_name, last_name, display_name)
-VALUES 
-    ('auth0|admin', 'admin@cyphera.com', 'Admin', 'User', 'Admin User'),
-    ('auth0|merchant', 'merchant@example.com', 'Test', 'Merchant', 'Test Merchant')
-ON CONFLICT DO NOTHING;
-
 INSERT INTO accounts (name, account_type, business_name, business_type)
 VALUES 
     (
@@ -153,20 +138,12 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
-INSERT INTO user_accounts (user_id, account_id, role, is_owner)
+INSERT INTO users (auth0_id, email, first_name, last_name, display_name, account_id, role, is_account_owner)
 VALUES 
-    (
-        (SELECT id FROM users WHERE email = 'merchant@example.com'),
-        (SELECT id FROM accounts WHERE name = 'Test Account'),
-        'admin',
-        true
-    ),
-    (
-        (SELECT id FROM users WHERE email = 'admin@cyphera.com'),
-        (SELECT id FROM accounts WHERE name = 'Admin Account'),
-        'admin',
-        true
-    )
+    ('auth0|admin', 'admin@cyphera.com', 'Admin', 'User', 'Admin User',
+     (SELECT id FROM accounts WHERE name = 'Admin Account'), 'admin', true),
+    ('auth0|merchant', 'merchant@example.com', 'Test', 'Merchant', 'Test Merchant',
+     (SELECT id FROM accounts WHERE name = 'Test Account'), 'admin', true)
 ON CONFLICT DO NOTHING;
 
 -- Insert test workspaces

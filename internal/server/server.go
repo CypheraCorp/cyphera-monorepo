@@ -134,10 +134,6 @@ func InitializeRoutes(router *gin.Engine) {
 
 				accounts.GET("/:id", accountHandler.GetAccount)
 				accounts.PUT("/:id", accountHandler.UpdateAccount)
-
-				// User-Account relationship routes
-				accounts.POST("/:id/users", userHandler.AddUserToAccount)
-				accounts.DELETE("/:id/users/:userId", userHandler.RemoveUserFromAccount)
 			}
 
 			// Current User routes
@@ -145,8 +141,7 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				users.GET("/me", userHandler.GetCurrentUser)
 				users.PUT("/me", userHandler.UpdateUser)
-				users.GET("/:id/accounts", userHandler.ListUserAccounts)
-				users.GET("/auth0/:auth0_id", userHandler.GetUserByAuth0IDHandler)
+				users.GET("/auth0", userHandler.GetUserByAuth0ID)
 			}
 
 			// Customers

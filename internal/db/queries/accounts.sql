@@ -56,35 +56,29 @@ DELETE FROM accounts
 WHERE id = $1;
 
 -- name: ListAccountsByUser :many
-SELECT 
-    a.*,
-    ua.role as user_role,
-    ua.is_owner
+SELECT a.*
 FROM accounts a
-JOIN user_accounts ua ON a.id = ua.account_id
-WHERE ua.user_id = $1 
+JOIN users u ON a.id = u.account_id
+WHERE u.id = $1 
 AND a.deleted_at IS NULL 
-AND ua.deleted_at IS NULL
+AND u.deleted_at IS NULL
 ORDER BY a.created_at DESC;
 
 -- name: GetAccountUsers :many
 SELECT 
     u.*,
-    ua.role,
-    ua.is_owner,
-    ua.created_at as joined_at
+    u.role,
+    u.is_account_owner,
+    u.created_at as joined_at
 FROM users u
-JOIN user_accounts ua ON u.id = ua.user_id
-WHERE ua.account_id = $1 
-AND u.deleted_at IS NULL 
-AND ua.deleted_at IS NULL
-ORDER BY ua.is_owner DESC, ua.created_at DESC;
+WHERE u.account_id = $1 
+AND u.deleted_at IS NULL
+ORDER BY u.is_account_owner DESC, u.created_at DESC;
 
 -- name: SearchAccounts :many
 SELECT DISTINCT a.* 
 FROM accounts a
-LEFT JOIN user_accounts ua ON a.id = ua.account_id
-LEFT JOIN users u ON ua.user_id = u.id
+LEFT JOIN users u ON a.id = u.account_id
 WHERE 
     (
         a.name ILIKE $1 OR

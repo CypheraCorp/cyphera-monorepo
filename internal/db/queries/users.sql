@@ -2,6 +2,9 @@
 INSERT INTO users (
     auth0_id,
     email,
+    account_id,
+    role,
+    is_account_owner,
     first_name,
     last_name,
     display_name,
@@ -12,7 +15,7 @@ INSERT INTO users (
     email_verified,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 ) RETURNING *;
 
 -- name: GetUserByID :one
@@ -46,87 +49,35 @@ SET
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
 
+-- name: UpdateUserRole :one
+UPDATE users
+SET
+    role = $2,
+    is_account_owner = $3,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING *;
+
 -- name: DeleteUser :exec
 UPDATE users
 SET deleted_at = CURRENT_TIMESTAMP
 WHERE id = $1;
 
 -- name: ListUsersByAccount :many
-SELECT u.* FROM users u
-JOIN user_accounts ua ON u.id = ua.user_id
-WHERE ua.account_id = $1 
-AND u.deleted_at IS NULL 
-AND ua.deleted_at IS NULL
-ORDER BY u.created_at DESC;
-
--- User Account Relationship Queries
-
--- name: AddUserToAccount :one
-INSERT INTO user_accounts (
-    user_id,
-    account_id,
-    role,
-    is_owner
-) VALUES (
-    $1, $2, $3, $4
-) RETURNING *;
-
--- name: GetUserAccountRole :one
-SELECT * FROM user_accounts
-WHERE user_id = $1 
-AND account_id = $2 
-AND deleted_at IS NULL;
-
--- name: UpdateUserAccountRole :one
-UPDATE user_accounts
-SET 
-    role = $3,
-    is_owner = $4,
-    updated_at = CURRENT_TIMESTAMP
-WHERE user_id = $1 
-AND account_id = $2 
-AND deleted_at IS NULL
-RETURNING *;
-
--- name: RemoveUserFromAccount :exec
-UPDATE user_accounts
-SET deleted_at = CURRENT_TIMESTAMP
-WHERE user_id = $1 
-AND account_id = $2 
-AND is_owner = false; -- Prevent removal of account owners
+SELECT * FROM users
+WHERE account_id = $1 AND deleted_at IS NULL
+ORDER BY is_account_owner DESC, created_at DESC;
 
 -- name: GetAccountOwner :one
-SELECT u.* FROM users u
-JOIN user_accounts ua ON u.id = ua.user_id
-WHERE ua.account_id = $1 
-AND ua.is_owner = true 
-AND u.deleted_at IS NULL 
-AND ua.deleted_at IS NULL;
+SELECT * FROM users
+WHERE account_id = $1 AND is_account_owner = true AND deleted_at IS NULL;
 
--- name: ListUserAccounts :many
+-- name: GetUserAccount :one
 SELECT 
     u.*,
-    a.name as account_name,
-    ua.role,
-    ua.is_owner
+    a.name as account_name
 FROM users u
-JOIN user_accounts ua ON u.id = ua.user_id
-JOIN accounts a ON ua.account_id = a.id
+JOIN accounts a ON u.account_id = a.id
 WHERE u.id = $1 
 AND u.deleted_at IS NULL 
-AND ua.deleted_at IS NULL
-AND a.deleted_at IS NULL
-ORDER BY ua.created_at DESC;
-
--- name: GetUserAssociatedAccounts :many
-SELECT 
-    a.*,
-    ua.role as user_role,
-    ua.is_owner,
-    ua.created_at as joined_at
-FROM accounts a
-JOIN user_accounts ua ON a.id = ua.account_id
-WHERE ua.user_id = $1 
-AND a.deleted_at IS NULL 
-AND ua.deleted_at IS NULL
-ORDER BY ua.created_at DESC; 
+AND a.deleted_at IS NULL; 
