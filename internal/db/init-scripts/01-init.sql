@@ -13,6 +13,12 @@ CREATE TYPE user_role AS ENUM ('admin', 'support', 'developer');
 -- Enum for user status
 CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended', 'pending');
 
+-- Create product type enum
+CREATE TYPE product_type AS ENUM ('recurring', 'one_off');
+
+-- Create interval type enum
+CREATE TYPE interval_type AS ENUM ('5minutes', 'Daily', 'Weekly', 'Monthly', 'Yearly');
+
 -- Accounts table (top level organization)
 CREATE TABLE IF NOT EXISTS accounts (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -113,13 +119,104 @@ CREATE TABLE IF NOT EXISTS api_keys (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
+-- Create products table
+CREATE TABLE products (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    name TEXT NOT NULL,
+    description TEXT,
+    product_type product_type NOT NULL,
+    interval_type interval_type,
+    term_length INTEGER, -- number of intervals
+    price_in_pennies INTEGER NOT NULL,
+    image_url TEXT,
+    url TEXT,
+    merchant_paid_gas BOOLEAN NOT NULL DEFAULT false,
+    active BOOLEAN NOT NULL DEFAULT true,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    CONSTRAINT products_term_length_check CHECK (
+        (product_type = 'recurring' AND term_length IS NOT NULL AND term_length > 0) OR
+        (product_type = 'one_off' AND term_length IS NULL)
+    ),
+    CONSTRAINT products_interval_type_check CHECK (
+        (product_type = 'recurring' AND interval_type IS NOT NULL) OR
+        (product_type = 'one_off' AND interval_type IS NULL)
+    )
+);
+
+-- Create networks table
+CREATE TABLE networks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    chain_id INTEGER NOT NULL UNIQUE,
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Create tokens table
+CREATE TABLE tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    network_id UUID NOT NULL REFERENCES networks(id),
+    gas_token BOOLEAN NOT NULL DEFAULT false,
+    name TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    contract_address TEXT NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    UNIQUE(network_id, contract_address)
+);
+
+-- Create products_tokens table
+CREATE TABLE products_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID NOT NULL REFERENCES products(id),
+    network_id UUID NOT NULL REFERENCES networks(id),
+    token_id UUID NOT NULL REFERENCES tokens(id),
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    UNIQUE(product_id, network_id, token_id),
+    CONSTRAINT valid_token_network CHECK (
+        network_id = (SELECT network_id FROM tokens WHERE id = token_id)
+    )
+);
+
 -- Create indexes
 CREATE INDEX idx_workspaces_account_id ON workspaces(account_id);
+
 CREATE INDEX idx_customers_workspace_id ON customers(workspace_id);
+
 CREATE INDEX idx_api_keys_workspace_id ON api_keys(workspace_id);
+
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_auth0_id ON users(auth0_id);
 CREATE INDEX idx_users_account_id ON users(account_id);
+
+CREATE INDEX idx_products_workspace_id ON products(workspace_id);
+CREATE INDEX idx_products_active ON products(active) WHERE deleted_at IS NULL;
+CREATE INDEX idx_products_created_at ON products(created_at);
+
+CREATE INDEX idx_networks_chain_id ON networks(chain_id);
+CREATE INDEX idx_networks_active ON networks(active) WHERE deleted_at IS NULL;
+
+CREATE INDEX idx_tokens_network_id ON tokens(network_id);
+CREATE INDEX idx_tokens_active ON tokens(active) WHERE deleted_at IS NULL;
+CREATE INDEX idx_tokens_contract_address ON tokens(contract_address);
+
+CREATE INDEX idx_products_tokens_product_id ON products_tokens(product_id);
+CREATE INDEX idx_products_tokens_network_id ON products_tokens(network_id);
+CREATE INDEX idx_products_tokens_token_id ON products_tokens(token_id);
+CREATE INDEX idx_products_tokens_active ON products_tokens(active) WHERE deleted_at IS NULL;
+CREATE INDEX idx_products_tokens_composite ON products_tokens(product_id, network_id, active) WHERE deleted_at IS NULL;
 
 -- Insert test data for development
 INSERT INTO accounts (name, account_type, business_name, business_type)
@@ -200,3 +297,168 @@ VALUES
         5000
     )
 ON CONFLICT DO NOTHING;
+
+-- Insert some test networks
+INSERT INTO networks (name, type, chain_id, active)
+VALUES 
+    ('Ethereum Mainnet', 'mainnet', 1, true),
+    ('Polygon', 'mainnet', 137, true),
+    ('Polygon', 'mumbai', 80001, true)
+ON CONFLICT DO NOTHING;
+
+-- Insert some test tokens
+INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token)
+VALUES 
+    ((SELECT id FROM networks WHERE chain_id = 137), 'MATIC', 'MATIC', '0x0000000000000000000000000000000000000000', true),
+    ((SELECT id FROM networks WHERE chain_id = 137), 'USDC', 'USDC', '0x2791bca1f2de4661ed88a30c99a7a9449aa84174', false),
+    ((SELECT id FROM networks WHERE chain_id = 80001), 'MATIC', 'MATIC', '0x0000000000000000000000000000000000000000', true)
+ON CONFLICT DO NOTHING;
+
+-- Insert test products
+INSERT INTO products (
+    workspace_id,
+    name,
+    description,
+    product_type,
+    interval_type,
+    term_length,
+    price_in_pennies,
+    image_url,
+    url,
+    merchant_paid_gas,
+    active,
+    metadata
+) VALUES 
+    (
+        (SELECT id FROM workspaces WHERE name = 'Test Workspace'),
+        'Basic Subscription',
+        'Monthly subscription plan with basic features, ends in 12 months',
+        'recurring',
+        'Monthly',
+        12,
+        1000,
+        'https://example.com/basic.png',
+        'https://example.com/basic',
+        true,
+        true,
+        '{"features": ["basic_support", "standard_limits"]}'::jsonb
+    ),
+    (
+        (SELECT id FROM workspaces WHERE name = 'Test Workspace'),
+        'Annual Pro Plan',
+        'Annual subscription with all features, ends in 3 years',
+        'recurring',
+        'Yearly',
+        3,
+        10000,
+        'https://example.com/pro.png',
+        'https://example.com/pro',
+        true,
+        true,
+        '{"features": ["priority_support", "advanced_features"]}'::jsonb
+    )
+ON CONFLICT DO NOTHING;
+
+-- Insert test product tokens (enabling specific tokens for products)
+INSERT INTO products_tokens (
+    product_id,
+    network_id,
+    token_id,
+    active
+) 
+-- Enable MATIC and USDC on Polygon for Basic Subscription
+SELECT 
+    p.id as product_id,
+    t.network_id,
+    t.id as token_id,
+    true as active
+FROM products p
+CROSS JOIN tokens t
+WHERE p.name = 'Basic Subscription'
+AND t.network_id = (SELECT id FROM networks WHERE chain_id = 137)
+AND t.symbol IN ('MATIC', 'USDC')
+
+UNION ALL
+
+-- Enable only MATIC on Mumbai for Basic Subscription
+SELECT 
+    p.id as product_id,
+    t.network_id,
+    t.id as token_id,
+    true as active
+FROM products p
+CROSS JOIN tokens t
+WHERE p.name = 'Annual Pro Plan'
+AND t.network_id = (SELECT id FROM networks WHERE chain_id = 80001)
+AND t.symbol = 'MATIC'
+
+UNION ALL
+
+-- Enable only USDC on Polygon for Annual Pro Plan
+SELECT 
+    p.id as product_id,
+    t.network_id,
+    t.id as token_id,
+    true as active
+FROM products p
+CROSS JOIN tokens t
+WHERE p.name = 'Annual Pro Plan'
+AND t.network_id = (SELECT id FROM networks WHERE chain_id = 137)
+AND t.symbol = 'USDC'
+ON CONFLICT DO NOTHING;
+
+-- Create function for updating updated_at timestamp
+CREATE OR REPLACE FUNCTION trigger_set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Add triggers for updated_at
+CREATE TRIGGER set_accounts_updated_at
+    BEFORE UPDATE ON accounts
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_users_updated_at
+    BEFORE UPDATE ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_workspaces_updated_at
+    BEFORE UPDATE ON workspaces
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_customers_updated_at
+    BEFORE UPDATE ON customers
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_api_keys_updated_at
+    BEFORE UPDATE ON api_keys
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_products_updated_at
+    BEFORE UPDATE ON products
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+-- Add triggers for updated_at
+CREATE TRIGGER set_networks_updated_at
+    BEFORE UPDATE ON networks
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_tokens_updated_at
+    BEFORE UPDATE ON tokens
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_products_tokens_updated_at
+    BEFORE UPDATE ON products_tokens
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();

@@ -97,6 +97,93 @@ func (ns NullApiKeyLevel) Value() (driver.Value, error) {
 	return string(ns.ApiKeyLevel), nil
 }
 
+type IntervalType string
+
+const (
+	IntervalType5minutes IntervalType = "5minutes"
+	IntervalTypeDaily    IntervalType = "Daily"
+	IntervalTypeWeekly   IntervalType = "Weekly"
+	IntervalTypeMonthly  IntervalType = "Monthly"
+	IntervalTypeYearly   IntervalType = "Yearly"
+)
+
+func (e *IntervalType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = IntervalType(s)
+	case string:
+		*e = IntervalType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for IntervalType: %T", src)
+	}
+	return nil
+}
+
+type NullIntervalType struct {
+	IntervalType IntervalType `json:"interval_type"`
+	Valid        bool         `json:"valid"` // Valid is true if IntervalType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullIntervalType) Scan(value interface{}) error {
+	if value == nil {
+		ns.IntervalType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.IntervalType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullIntervalType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.IntervalType), nil
+}
+
+type ProductType string
+
+const (
+	ProductTypeRecurring ProductType = "recurring"
+	ProductTypeOneOff    ProductType = "one-off"
+)
+
+func (e *ProductType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ProductType(s)
+	case string:
+		*e = ProductType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ProductType: %T", src)
+	}
+	return nil
+}
+
+type NullProductType struct {
+	ProductType ProductType `json:"product_type"`
+	Valid       bool        `json:"valid"` // Valid is true if ProductType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullProductType) Scan(value interface{}) error {
+	if value == nil {
+		ns.ProductType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ProductType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullProductType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ProductType), nil
+}
+
 type UserRole string
 
 const (
@@ -234,6 +321,60 @@ type Customer struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type Network struct {
+	ID        uuid.UUID          `json:"id"`
+	Name      string             `json:"name"`
+	Type      string             `json:"type"`
+	ChainID   int32              `json:"chain_id"`
+	Active    bool               `json:"active"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type Product struct {
+	ID              uuid.UUID          `json:"id"`
+	WorkspaceID     uuid.UUID          `json:"workspace_id"`
+	Name            string             `json:"name"`
+	Description     pgtype.Text        `json:"description"`
+	ProductType     ProductType        `json:"product_type"`
+	IntervalType    NullIntervalType   `json:"interval_type"`
+	TermLength      pgtype.Int4        `json:"term_length"`
+	PriceInPennies  int32              `json:"price_in_pennies"`
+	ImageUrl        pgtype.Text        `json:"image_url"`
+	Url             pgtype.Text        `json:"url"`
+	MerchantPaidGas bool               `json:"merchant_paid_gas"`
+	Active          bool               `json:"active"`
+	Metadata        []byte             `json:"metadata"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type ProductsToken struct {
+	ID        uuid.UUID          `json:"id"`
+	ProductID uuid.UUID          `json:"product_id"`
+	NetworkID uuid.UUID          `json:"network_id"`
+	TokenID   uuid.UUID          `json:"token_id"`
+	Active    bool               `json:"active"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type Token struct {
+	ID              uuid.UUID          `json:"id"`
+	NetworkID       uuid.UUID          `json:"network_id"`
+	GasToken        bool               `json:"gas_token"`
+	Name            string             `json:"name"`
+	Symbol          string             `json:"symbol"`
+	ContractAddress string             `json:"contract_address"`
+	Active          bool               `json:"active"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type User struct {

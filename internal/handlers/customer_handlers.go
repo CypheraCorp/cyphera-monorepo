@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -71,6 +74,14 @@ type UpdateCustomerRequest struct {
 	TaxIDs      map[string]interface{} `json:"tax_ids,omitempty"`
 }
 
+// ListCustomersResponse represents the paginated response for customer list operations
+type ListCustomersResponse struct {
+	Object  string             `json:"object"`
+	Data    []CustomerResponse `json:"data"`
+	HasMore bool               `json:"has_more"`
+	Total   int64              `json:"total"`
+}
+
 // GetCustomer godoc
 // @Summary Get a customer
 // @Description Retrieves a specific customer by its ID
@@ -100,26 +111,105 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 	c.JSON(http.StatusOK, toCustomerResponse(customer))
 }
 
+// checkWorkspaceAccess verifies if a user has access to the workspace through their account
+func (h *CustomerHandler) checkWorkspaceAccess(c *gin.Context, workspaceID uuid.UUID) error {
+	// Get account ID from context
+	accountID := c.GetString("accountID")
+	parsedAccountID, err := uuid.Parse(accountID)
+	if err != nil {
+		return fmt.Errorf("invalid account ID format")
+	}
+
+	// Get workspace
+	workspace, err := h.common.db.GetWorkspace(c.Request.Context(), workspaceID)
+	if err != nil {
+		return fmt.Errorf("workspace not found")
+	}
+
+	// Verify workspace belongs to user's account
+	if workspace.AccountID != parsedAccountID {
+		return fmt.Errorf("workspace does not belong to user's account")
+	}
+
+	return nil
+}
+
 // ListCustomers godoc
 // @Summary List customers
-// @Description Retrieves all customers for the current workspace
+// @Description Retrieves paginated customers for the current workspace
 // @Tags customers
 // @Accept json
 // @Produce json
-// @Success 200 {array} CustomerResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
+// @Param limit query int false "Number of customers to return (default 10, max 100)"
+// @Param offset query int false "Number of customers to skip (default 0)"
+// @Success 200 {object} ListCustomersResponse
+// @Failure 400 {object} ErrorResponse "Invalid workspace ID format or pagination parameters"
+// @Failure 401 {object} ErrorResponse "Unauthorized access to workspace"
+// @Failure 500 {object} ErrorResponse "Server error"
 // @Security ApiKeyAuth
 // @Router /customers [get]
 func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	workspaceID := c.GetString("workspaceID")
-	parsedUUID, err := uuid.Parse(workspaceID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID format"})
+	if workspaceID == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Workspace ID not specified"})
 		return
 	}
 
-	customers, err := h.common.db.ListCustomers(c.Request.Context(), parsedUUID)
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid workspace ID format"})
+		return
+	}
+
+	// Check workspace access only for JWT auth
+	authType := c.GetString("authType")
+	if authType == constants.AuthTypeJWT {
+		if err := h.checkWorkspaceAccess(c, parsedWorkspaceID); err != nil {
+			c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
+			return
+		}
+	}
+
+	// Parse pagination parameters
+	limit := 10 // default limit
+	if limitStr := c.Query("limit"); limitStr != "" {
+		parsedLimit, err := strconv.Atoi(limitStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid limit parameter"})
+			return
+		}
+		if parsedLimit > 100 {
+			limit = 100 // max limit
+		} else if parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	offset := 0 // default offset
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		parsedOffset, err := strconv.Atoi(offsetStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid offset parameter"})
+			return
+		}
+		if parsedOffset > 0 {
+			offset = parsedOffset
+		}
+	}
+
+	// Get total count
+	total, err := h.common.db.CountCustomers(c.Request.Context(), parsedWorkspaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to count customers"})
+		return
+	}
+
+	// Get paginated customers
+	customers, err := h.common.db.ListCustomersWithPagination(c.Request.Context(), db.ListCustomersWithPaginationParams{
+		WorkspaceID: parsedWorkspaceID,
+		Limit:       int32(limit),
+		Offset:      int32(offset),
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve customers"})
 		return
@@ -130,9 +220,13 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 		response[i] = toCustomerResponse(customer)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"object": "list",
-		"data":   response,
+	hasMore := offset+len(response) < int(total)
+
+	c.JSON(http.StatusOK, ListCustomersResponse{
+		Object:  "list",
+		Data:    response,
+		HasMore: hasMore,
+		Total:   total,
 	})
 }
 

@@ -11,14 +11,35 @@ import (
 )
 
 type Querier interface {
+	ActivateNetwork(ctx context.Context, id uuid.UUID) (Network, error)
+	ActivateProduct(ctx context.Context, id uuid.UUID) (Product, error)
+	ActivateProductToken(ctx context.Context, id uuid.UUID) (ProductsToken, error)
+	ActivateToken(ctx context.Context, id uuid.UUID) (Token, error)
+	CountCustomers(ctx context.Context, workspaceID uuid.UUID) (int64, error)
+	CountProducts(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
+	CreateNetwork(ctx context.Context, arg CreateNetworkParams) (Network, error)
+	CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error)
+	CreateProductToken(ctx context.Context, arg CreateProductTokenParams) (ProductsToken, error)
+	CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
+	DeactivateAllProductTokens(ctx context.Context, productID uuid.UUID) error
+	DeactivateAllProductTokensForNetwork(ctx context.Context, arg DeactivateAllProductTokensForNetworkParams) error
+	DeactivateNetwork(ctx context.Context, id uuid.UUID) (Network, error)
+	DeactivateProduct(ctx context.Context, id uuid.UUID) (Product, error)
+	DeactivateProductToken(ctx context.Context, id uuid.UUID) (ProductsToken, error)
+	DeactivateToken(ctx context.Context, id uuid.UUID) (Token, error)
 	DeleteAPIKey(ctx context.Context, id uuid.UUID) error
 	DeleteAccount(ctx context.Context, id uuid.UUID) error
 	DeleteCustomer(ctx context.Context, id uuid.UUID) error
+	DeleteNetwork(ctx context.Context, id uuid.UUID) error
+	DeleteProduct(ctx context.Context, id uuid.UUID) error
+	DeleteProductToken(ctx context.Context, id uuid.UUID) error
+	DeleteProductTokenByIds(ctx context.Context, arg DeleteProductTokenByIdsParams) error
+	DeleteToken(ctx context.Context, id uuid.UUID) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	DeleteWorkspace(ctx context.Context, id uuid.UUID) error
 	GetAPIKey(ctx context.Context, id uuid.UUID) (ApiKey, error)
@@ -29,6 +50,8 @@ type Querier interface {
 	GetAccountOwner(ctx context.Context, accountID uuid.UUID) (User, error)
 	GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]GetAccountUsersRow, error)
 	GetActiveAPIKeysCount(ctx context.Context, workspaceID uuid.UUID) (int64, error)
+	GetActiveProductTokensByNetwork(ctx context.Context, arg GetActiveProductTokensByNetworkParams) ([]GetActiveProductTokensByNetworkRow, error)
+	GetActiveProductTokensByProduct(ctx context.Context, productID uuid.UUID) ([]GetActiveProductTokensByProductRow, error)
 	GetAllAPIKeys(ctx context.Context) ([]ApiKey, error)
 	GetAllAccounts(ctx context.Context) ([]Account, error)
 	GetAllCustomers(ctx context.Context) ([]Customer, error)
@@ -39,6 +62,17 @@ type Querier interface {
 	GetCustomersByBalance(ctx context.Context, arg GetCustomersByBalanceParams) ([]Customer, error)
 	GetCustomersWithWorkspaceInfo(ctx context.Context, workspaceID uuid.UUID) ([]GetCustomersWithWorkspaceInfoRow, error)
 	GetExpiredAPIKeys(ctx context.Context) ([]ApiKey, error)
+	GetGasToken(ctx context.Context, networkID uuid.UUID) (Token, error)
+	GetNetwork(ctx context.Context, id uuid.UUID) (Network, error)
+	GetNetworkByChainID(ctx context.Context, chainID int32) (Network, error)
+	GetProduct(ctx context.Context, id uuid.UUID) (Product, error)
+	GetProductNetworks(ctx context.Context, productID uuid.UUID) ([]GetProductNetworksRow, error)
+	GetProductToken(ctx context.Context, id uuid.UUID) (GetProductTokenRow, error)
+	GetProductTokenByIds(ctx context.Context, arg GetProductTokenByIdsParams) (GetProductTokenByIdsRow, error)
+	GetProductTokensByNetwork(ctx context.Context, arg GetProductTokensByNetworkParams) ([]GetProductTokensByNetworkRow, error)
+	GetProductTokensByProduct(ctx context.Context, productID uuid.UUID) ([]GetProductTokensByProductRow, error)
+	GetToken(ctx context.Context, id uuid.UUID) (Token, error)
+	GetTokenByAddress(ctx context.Context, arg GetTokenByAddressParams) (Token, error)
 	GetUserAccount(ctx context.Context, id uuid.UUID) (GetUserAccountRow, error)
 	GetUserByAuth0ID(ctx context.Context, auth0ID string) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
@@ -50,7 +84,16 @@ type Querier interface {
 	ListAccounts(ctx context.Context) ([]Account, error)
 	ListAccountsByType(ctx context.Context, accountType AccountType) ([]Account, error)
 	ListAccountsByUser(ctx context.Context, id uuid.UUID) ([]Account, error)
+	ListActiveNetworks(ctx context.Context) ([]Network, error)
+	ListActiveProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
+	ListActiveTokensByNetwork(ctx context.Context, networkID uuid.UUID) ([]Token, error)
 	ListCustomers(ctx context.Context, workspaceID uuid.UUID) ([]Customer, error)
+	ListCustomersWithPagination(ctx context.Context, arg ListCustomersWithPaginationParams) ([]Customer, error)
+	ListNetworks(ctx context.Context) ([]Network, error)
+	ListProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
+	ListProductsWithPagination(ctx context.Context, arg ListProductsWithPaginationParams) ([]Product, error)
+	ListTokens(ctx context.Context) ([]Token, error)
+	ListTokensByNetwork(ctx context.Context, networkID uuid.UUID) ([]Token, error)
 	ListUsersByAccount(ctx context.Context, accountID uuid.UUID) ([]User, error)
 	ListWorkspaceCustomers(ctx context.Context, id uuid.UUID) ([]Customer, error)
 	ListWorkspaces(ctx context.Context) ([]Workspace, error)
@@ -60,6 +103,10 @@ type Querier interface {
 	UpdateAccount(ctx context.Context, arg UpdateAccountParams) (Account, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
 	UpdateCustomerBalance(ctx context.Context, arg UpdateCustomerBalanceParams) (Customer, error)
+	UpdateNetwork(ctx context.Context, arg UpdateNetworkParams) (Network, error)
+	UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error)
+	UpdateProductToken(ctx context.Context, arg UpdateProductTokenParams) (ProductsToken, error)
+	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)

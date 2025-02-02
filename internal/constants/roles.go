@@ -19,3 +19,9 @@ const (
 	AccountTypeAdmin    = "admin"
 	AccountTypeMerchant = "merchant"
 )
+
+// Auth types
+const (
+	AuthTypeAPIKey = "api_key"
+	AuthTypeJWT    = "jwt"
+)
