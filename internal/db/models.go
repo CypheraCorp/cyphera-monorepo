@@ -146,7 +146,7 @@ type ProductType string
 
 const (
 	ProductTypeRecurring ProductType = "recurring"
-	ProductTypeOneOff    ProductType = "one-off"
+	ProductTypeOneOff    ProductType = "one_off"
 )
 
 func (e *ProductType) Scan(src interface{}) error {

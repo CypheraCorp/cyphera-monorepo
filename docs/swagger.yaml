@@ -488,6 +488,19 @@ definitions:
       status:
         type: string
     type: object
+  handlers.ListCustomersResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/handlers.CustomerResponse'
+        type: array
+      has_more:
+        type: boolean
+      object:
+        type: string
+      total:
+        type: integer
+    type: object
   handlers.OperationsResponse:
     properties:
       data:
@@ -921,26 +934,6 @@ paths:
       tags:
       - accounts
   /accounts/me:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves the details of the currently authenticated user's account
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.FullAccountResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get current account
-      tags:
-      - accounts
     put:
       consumes:
       - application/json
@@ -974,6 +967,27 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Update current account
+      tags:
+      - accounts
+  /accounts/me/details:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of the currently authenticated user's account
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.FullAccountResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get current account
       tags:
       - accounts
   /accounts/signin:
@@ -1333,22 +1347,33 @@ paths:
     get:
       consumes:
       - application/json
-      description: Retrieves all customers for the current workspace
+      description: Retrieves paginated customers for the current workspace
+      parameters:
+      - description: Number of customers to return (default 10, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of customers to skip (default 0)
+        in: query
+        name: offset
+        type: integer
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/handlers.CustomerResponse'
-            type: array
+            $ref: '#/definitions/handlers.ListCustomersResponse'
         "400":
-          description: Bad Request
+          description: Invalid workspace ID format or pagination parameters
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized access to workspace
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
         "500":
-          description: Internal Server Error
+          description: Server error
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
