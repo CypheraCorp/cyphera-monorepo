@@ -102,45 +102,45 @@ func setupAuth() (*validator.Validator, error) {
 }
 
 // validateJWTToken validates the JWT token and returns user information
-func validateJWTToken(c *gin.Context, queries *db.Queries, authHeader string) (db.User, []db.ListAccountsByUserRow, error) {
+func validateJWTToken(c *gin.Context, queries *db.Queries, authHeader string) (db.User, db.Account, error) {
 	// Remove "Bearer " prefix
 	token := strings.TrimPrefix(authHeader, "Bearer ")
 	if token == "" {
-		return db.User{}, nil, ErrInvalidToken
+		return db.User{}, db.Account{}, ErrInvalidToken
 	}
 
 	// Get or setup validator
 	v, err := setupAuth()
 	if err != nil {
 		log.Printf("Auth setup failed: %v", err)
-		return db.User{}, nil, fmt.Errorf("auth setup failed: %w", err)
+		return db.User{}, db.Account{}, fmt.Errorf("auth setup failed: %w", err)
 	}
 
 	// Validate token and get claims
 	claims, err := v.ValidateToken(c.Request.Context(), token)
 	if err != nil {
 		log.Printf("Token validation failed: %v", err)
-		return db.User{}, nil, ErrInvalidToken
+		return db.User{}, db.Account{}, ErrInvalidToken
 	}
 
 	validatedClaims, ok := claims.(*validator.ValidatedClaims)
 	if !ok {
-		return db.User{}, nil, fmt.Errorf("invalid claims type")
+		return db.User{}, db.Account{}, fmt.Errorf("invalid claims type")
 	}
 
 	// Get user by Auth0 ID (sub claim)
 	user, err := queries.GetUserByAuth0ID(c.Request.Context(), validatedClaims.RegisteredClaims.Subject)
 	if err != nil {
-		return db.User{}, nil, fmt.Errorf("user not found")
+		return db.User{}, db.Account{}, fmt.Errorf("user not found")
 	}
 
-	// Get user's accounts
-	accounts, err := queries.ListAccountsByUser(c.Request.Context(), user.ID)
+	// Get user's account
+	account, err := queries.GetAccountByID(c.Request.Context(), user.AccountID)
 	if err != nil {
-		return db.User{}, nil, fmt.Errorf("failed to get user accounts")
+		return db.User{}, db.Account{}, fmt.Errorf("failed to get user account")
 	}
 
-	return user, accounts, nil
+	return user, account, nil
 }
 
 // EnsureValidAPIKeyOrToken is a middleware that checks for either a valid API key or JWT token
@@ -177,49 +177,22 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 			return
 		}
 
-		user, accounts, err := validateJWTToken(c, queries, jwtToken)
+		user, account, err := validateJWTToken(c, queries, jwtToken)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			c.Abort()
 			return
 		}
 
-		// Get account ID from header
-		accountIDStr := c.GetHeader("X-Account-ID")
-		if accountIDStr == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Account ID not specified"})
-			c.Abort()
-			return
-		}
-
-		// get current user's account
-		var account *db.ListAccountsByUserRow
-		for _, acc := range accounts {
-			if acc.ID.String() == accountIDStr {
-				account = &acc
-				break
-			}
-		}
-
-		if account == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Account not associated with user"})
-			c.Abort()
-			return
-		}
-
-		_, err = uuid.Parse(accountIDStr)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid account ID format"})
-			c.Abort()
-			return
-		}
-
+		// Get workspace ID from header
 		workspaceIdStr := c.GetHeader("X-Workspace-ID")
 		if workspaceIdStr == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Workspace ID not specified"})
 			c.Abort()
 			return
 		}
+
+		// Validate workspace ID format
 		_, err = uuid.Parse(workspaceIdStr)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID format"})
@@ -227,12 +200,26 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 			return
 		}
 
+		// Verify workspace belongs to account
+		workspace, err := queries.GetWorkspace(c.Request.Context(), uuid.MustParse(workspaceIdStr))
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid workspace"})
+			c.Abort()
+			return
+		}
+
+		if workspace.AccountID != account.ID {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Workspace does not belong to user's account"})
+			c.Abort()
+			return
+		}
+
 		// Set context with user and account information
 		c.Set("userID", user.ID.String())
-		c.Set("accountID", accountIDStr)
+		c.Set("accountID", account.ID.String())
 		c.Set("workspaceID", workspaceIdStr)
 		c.Set("accountType", string(account.AccountType))
-		c.Set("userRole", string(account.UserRole))
+		c.Set("userRole", string(user.Role))
 		c.Set("authType", "jwt")
 		c.Next()
 	}

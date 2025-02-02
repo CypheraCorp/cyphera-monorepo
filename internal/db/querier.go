@@ -11,8 +11,6 @@ import (
 )
 
 type Querier interface {
-	// User Account Relationship Queries
-	AddUserToAccount(ctx context.Context, arg AddUserToAccountParams) (UserAccount, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
@@ -28,7 +26,6 @@ type Querier interface {
 	GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
 	GetAccountByID(ctx context.Context, id uuid.UUID) (Account, error)
 	GetAccountByWorkspaceID(ctx context.Context, id uuid.UUID) (Account, error)
-	// Prevent removal of account owners
 	GetAccountOwner(ctx context.Context, accountID uuid.UUID) (User, error)
 	GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]GetAccountUsersRow, error)
 	GetActiveAPIKeysCount(ctx context.Context, workspaceID uuid.UUID) (int64, error)
@@ -42,8 +39,7 @@ type Querier interface {
 	GetCustomersByBalance(ctx context.Context, arg GetCustomersByBalanceParams) ([]Customer, error)
 	GetCustomersWithWorkspaceInfo(ctx context.Context, workspaceID uuid.UUID) ([]GetCustomersWithWorkspaceInfoRow, error)
 	GetExpiredAPIKeys(ctx context.Context) ([]ApiKey, error)
-	GetUserAccountRole(ctx context.Context, arg GetUserAccountRoleParams) (UserAccount, error)
-	GetUserAssociatedAccounts(ctx context.Context, userID uuid.UUID) ([]GetUserAssociatedAccountsRow, error)
+	GetUserAccount(ctx context.Context, id uuid.UUID) (GetUserAccountRow, error)
 	GetUserByAuth0ID(ctx context.Context, auth0ID string) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
@@ -53,21 +49,19 @@ type Querier interface {
 	ListAPIKeys(ctx context.Context, workspaceID uuid.UUID) ([]ApiKey, error)
 	ListAccounts(ctx context.Context) ([]Account, error)
 	ListAccountsByType(ctx context.Context, accountType AccountType) ([]Account, error)
-	ListAccountsByUser(ctx context.Context, userID uuid.UUID) ([]ListAccountsByUserRow, error)
+	ListAccountsByUser(ctx context.Context, id uuid.UUID) ([]Account, error)
 	ListCustomers(ctx context.Context, workspaceID uuid.UUID) ([]Customer, error)
-	ListUserAccounts(ctx context.Context, id uuid.UUID) ([]ListUserAccountsRow, error)
 	ListUsersByAccount(ctx context.Context, accountID uuid.UUID) ([]User, error)
 	ListWorkspaceCustomers(ctx context.Context, id uuid.UUID) ([]Customer, error)
 	ListWorkspaces(ctx context.Context) ([]Workspace, error)
 	ListWorkspacesByAccountID(ctx context.Context, accountID uuid.UUID) ([]Workspace, error)
-	RemoveUserFromAccount(ctx context.Context, arg RemoveUserFromAccountParams) error
 	SearchAccounts(ctx context.Context, arg SearchAccountsParams) ([]Account, error)
 	UpdateAPIKey(ctx context.Context, arg UpdateAPIKeyParams) (ApiKey, error)
 	UpdateAccount(ctx context.Context, arg UpdateAccountParams) (Account, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
 	UpdateCustomerBalance(ctx context.Context, arg UpdateCustomerBalanceParams) (Customer, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
-	UpdateUserAccountRole(ctx context.Context, arg UpdateUserAccountRoleParams) (UserAccount, error)
+	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
 }
 

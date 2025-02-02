@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -254,18 +255,25 @@ func (h *AccountHandler) UpdateCurrentAccount(c *gin.Context) {
 
 // CreateAccount godoc
 // @Summary Create an account
-// @Description Creates a new account object. Only accessible by admins.
+// @Description Creates a new account with a default workspace. Only accessible by admins.
 // @Tags accounts
 // @Accept json
 // @Produce json
 // @Param account body CreateAccountRequest true "Account creation data"
-// @Success 200 {object} CreateAccountRequest
-// @Failure 400 {object} ErrorResponse
-// @Failure 401 {object} ErrorResponse
-// @Failure 403 {object} ErrorResponse
+// @Success 201 {object} AccountResponse
+// @Failure 400 {object} ErrorResponse "Invalid request body or metadata format"
+// @Failure 401 {object} ErrorResponse "Not authenticated"
+// @Failure 403 {object} ErrorResponse "Not authorized"
+// @Failure 500 {object} ErrorResponse "Server error"
 // @Security ApiKeyAuth
 // @Router /accounts [post]
 func (h *AccountHandler) CreateAccount(c *gin.Context) {
+	// Only admins can create accounts
+	if c.GetString("accountType") != constants.AccountTypeAdmin {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Only admin accounts can create accounts"})
+		return
+	}
+
 	var req CreateAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
@@ -294,22 +302,30 @@ func (h *AccountHandler) CreateAccount(c *gin.Context) {
 		return
 	}
 
-	accountResponse := toAccountResponse(account)
+	// Create default workspace for the account
+	_, err = h.common.db.CreateWorkspace(c.Request.Context(), db.CreateWorkspaceParams{
+		Name:      "my_workspace",
+		AccountID: account.ID,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create workspace"})
+		return
+	}
 
-	c.JSON(http.StatusOK, accountResponse)
+	c.JSON(http.StatusCreated, toAccountResponse(account))
 }
 
 // SignInAccount godoc
 // @Summary Register or sign in to an account
-// @Description Creates a new account or returns back existing account. Only accessible by admins.
+// @Description Creates a new account with user and workspace, or returns existing account details
 // @Tags accounts
 // @Accept json
 // @Produce json
 // @Param account body CreateAccountRequest true "Account creation data"
-// @Success 200 {object} FullAccountResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 401 {object} ErrorResponse
-// @Failure 403 {object} ErrorResponse
+// @Success 200 {object} FullAccountResponse "Existing account details"
+// @Success 201 {object} FullAccountResponse "Newly created account"
+// @Failure 400 {object} ErrorResponse "Invalid request body, metadata format, or missing required fields"
+// @Failure 500 {object} ErrorResponse "Server error"
 // @Security ApiKeyAuth
 // @Router /accounts/signin [post]
 func (h *AccountHandler) SignInAccount(c *gin.Context) {
@@ -332,14 +348,14 @@ func (h *AccountHandler) SignInAccount(c *gin.Context) {
 		return
 	}
 
-	ownerAuth0Id := metaDataMap["ownerAuth0Id"].(string)
-	if ownerAuth0Id == "" {
+	ownerAuth0Id, ok := metaDataMap["ownerAuth0Id"].(string)
+	if !ok || ownerAuth0Id == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Owner Auth0 ID is required"})
 		return
 	}
 
-	email := metaDataMap["email"].(string)
-	if email == "" {
+	email, ok := metaDataMap["email"].(string)
+	if !ok || email == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Email is required"})
 		return
 	}
@@ -347,6 +363,12 @@ func (h *AccountHandler) SignInAccount(c *gin.Context) {
 	// Check if user already exists
 	user, err := h.common.db.GetUserByAuth0ID(c.Request.Context(), ownerAuth0Id)
 	if err != nil {
+		if err != pgx.ErrNoRows {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to check existing user"})
+			return
+		}
+
+		// User doesn't exist, create new account and user
 		account, err := h.common.db.CreateAccount(c.Request.Context(), db.CreateAccountParams{
 			Name:               req.Name,
 			AccountType:        db.AccountType(req.AccountType),
@@ -363,10 +385,13 @@ func (h *AccountHandler) SignInAccount(c *gin.Context) {
 			return
 		}
 
-		// Create user account
+		// Create user with account association
 		user, err = h.common.db.CreateUser(c.Request.Context(), db.CreateUserParams{
-			Auth0ID: ownerAuth0Id,
-			Email:   email,
+			Auth0ID:        ownerAuth0Id,
+			Email:          email,
+			AccountID:      account.ID,
+			Role:           db.UserRoleAdmin,
+			IsAccountOwner: pgtype.Bool{Bool: true, Valid: true},
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create user"})
@@ -382,63 +407,38 @@ func (h *AccountHandler) SignInAccount(c *gin.Context) {
 			return
 		}
 
-		// add user to account
-		_, err = h.common.db.AddUserToAccount(c.Request.Context(), db.AddUserToAccountParams{
-			UserID:    user.ID,
-			AccountID: account.ID,
-			Role:      db.UserRoleAdmin,
-			IsOwner:   pgtype.Bool{Bool: true, Valid: true},
-		})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to add user to account"})
-			return
-		}
-
-		accountResponse := toAccountResponse(account)
-		userResponse := toUserResponse(user)
-		workspaceResponse := toWorkspaceResponse(workspace)
-
 		fullAccountResponse := FullAccountResponse{
-			AccountResponse: accountResponse,
-			User:            userResponse,
-			Workspaces:      []WorkspaceResponse{workspaceResponse},
+			AccountResponse: toAccountResponse(account),
+			User:            toUserResponse(user),
+			Workspaces:      []WorkspaceResponse{toWorkspaceResponse(workspace)},
 		}
 
-		c.JSON(http.StatusOK, fullAccountResponse)
+		c.JSON(http.StatusCreated, fullAccountResponse)
 		return
 	}
 
-	// user and account is already created so we can return the data that is there.
-	accounts, err := h.common.db.GetUserAssociatedAccounts(c.Request.Context(), user.ID)
+	// User exists, get their account
+	account, err := h.common.db.GetAccountByID(c.Request.Context(), user.AccountID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve account"})
 		return
 	}
 
-	account, err := h.common.db.GetAccountByID(c.Request.Context(), accounts[0].ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve account"})
-		return
-	}
-
-	// get workspace by account id
+	// Get workspaces for the account
 	workspaces, err := h.common.db.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve workspace"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve workspaces"})
 		return
 	}
 
-	accountResponse := toAccountResponse(account)
-	userResponse := toUserResponse(user)
-
-	workspaceResponses := []WorkspaceResponse{}
-	for _, workspace := range workspaces {
-		workspaceResponses = append(workspaceResponses, toWorkspaceResponse(workspace))
+	workspaceResponses := make([]WorkspaceResponse, len(workspaces))
+	for i, workspace := range workspaces {
+		workspaceResponses[i] = toWorkspaceResponse(workspace)
 	}
 
 	getAccountResponse := FullAccountResponse{
-		AccountResponse: accountResponse,
-		User:            userResponse,
+		AccountResponse: toAccountResponse(account),
+		User:            toUserResponse(user),
 		Workspaces:      workspaceResponses,
 	}
 
@@ -656,21 +656,8 @@ func (h *AccountHandler) CheckAccountAccess(c *gin.Context) (*AccountAccessRespo
 		return nil, err
 	}
 
-	// Check if user has access to this account
-	var hasAccess bool
-	accounts, err := h.common.db.ListAccountsByUser(c.Request.Context(), accountDetails.User.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify account access")
-	}
-
-	for _, acc := range accounts {
-		if acc.ID == accountDetails.Account.ID {
-			hasAccess = true
-			break
-		}
-	}
-
-	if !hasAccess {
+	// Check if user has access to this account (user.AccountID should match the account.ID)
+	if accountDetails.User.AccountID != accountDetails.Account.ID {
 		return nil, fmt.Errorf("user does not have access to this account")
 	}
 

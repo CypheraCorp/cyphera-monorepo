@@ -12,51 +12,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const addUserToAccount = `-- name: AddUserToAccount :one
-
-INSERT INTO user_accounts (
-    user_id,
-    account_id,
-    role,
-    is_owner
-) VALUES (
-    $1, $2, $3, $4
-) RETURNING id, user_id, account_id, role, is_owner, created_at, updated_at, deleted_at
-`
-
-type AddUserToAccountParams struct {
-	UserID    uuid.UUID   `json:"user_id"`
-	AccountID uuid.UUID   `json:"account_id"`
-	Role      UserRole    `json:"role"`
-	IsOwner   pgtype.Bool `json:"is_owner"`
-}
-
-// User Account Relationship Queries
-func (q *Queries) AddUserToAccount(ctx context.Context, arg AddUserToAccountParams) (UserAccount, error) {
-	row := q.db.QueryRow(ctx, addUserToAccount,
-		arg.UserID,
-		arg.AccountID,
-		arg.Role,
-		arg.IsOwner,
-	)
-	var i UserAccount
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.AccountID,
-		&i.Role,
-		&i.IsOwner,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (
     auth0_id,
     email,
+    account_id,
+    role,
+    is_account_owner,
     first_name,
     last_name,
     display_name,
@@ -67,28 +29,34 @@ INSERT INTO users (
     email_verified,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-) RETURNING id, auth0_id, email, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+) RETURNING id, auth0_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
 `
 
 type CreateUserParams struct {
-	Auth0ID       string      `json:"auth0_id"`
-	Email         string      `json:"email"`
-	FirstName     pgtype.Text `json:"first_name"`
-	LastName      pgtype.Text `json:"last_name"`
-	DisplayName   pgtype.Text `json:"display_name"`
-	PictureUrl    pgtype.Text `json:"picture_url"`
-	Phone         pgtype.Text `json:"phone"`
-	Timezone      pgtype.Text `json:"timezone"`
-	Locale        pgtype.Text `json:"locale"`
-	EmailVerified pgtype.Bool `json:"email_verified"`
-	Metadata      []byte      `json:"metadata"`
+	Auth0ID        string      `json:"auth0_id"`
+	Email          string      `json:"email"`
+	AccountID      uuid.UUID   `json:"account_id"`
+	Role           UserRole    `json:"role"`
+	IsAccountOwner pgtype.Bool `json:"is_account_owner"`
+	FirstName      pgtype.Text `json:"first_name"`
+	LastName       pgtype.Text `json:"last_name"`
+	DisplayName    pgtype.Text `json:"display_name"`
+	PictureUrl     pgtype.Text `json:"picture_url"`
+	Phone          pgtype.Text `json:"phone"`
+	Timezone       pgtype.Text `json:"timezone"`
+	Locale         pgtype.Text `json:"locale"`
+	EmailVerified  pgtype.Bool `json:"email_verified"`
+	Metadata       []byte      `json:"metadata"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, createUser,
 		arg.Auth0ID,
 		arg.Email,
+		arg.AccountID,
+		arg.Role,
+		arg.IsAccountOwner,
 		arg.FirstName,
 		arg.LastName,
 		arg.DisplayName,
@@ -104,6 +72,9 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.ID,
 		&i.Auth0ID,
 		&i.Email,
+		&i.AccountID,
+		&i.Role,
+		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
 		&i.DisplayName,
@@ -135,16 +106,10 @@ func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAccountOwner = `-- name: GetAccountOwner :one
-
-SELECT u.id, u.auth0_id, u.email, u.first_name, u.last_name, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at FROM users u
-JOIN user_accounts ua ON u.id = ua.user_id
-WHERE ua.account_id = $1 
-AND ua.is_owner = true 
-AND u.deleted_at IS NULL 
-AND ua.deleted_at IS NULL
+SELECT id, auth0_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+WHERE account_id = $1 AND is_account_owner = true AND deleted_at IS NULL
 `
 
-// Prevent removal of account owners
 func (q *Queries) GetAccountOwner(ctx context.Context, accountID uuid.UUID) (User, error) {
 	row := q.db.QueryRow(ctx, getAccountOwner, accountID)
 	var i User
@@ -152,6 +117,9 @@ func (q *Queries) GetAccountOwner(ctx context.Context, accountID uuid.UUID) (Use
 		&i.ID,
 		&i.Auth0ID,
 		&i.Email,
+		&i.AccountID,
+		&i.Role,
+		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
 		&i.DisplayName,
@@ -171,106 +139,74 @@ func (q *Queries) GetAccountOwner(ctx context.Context, accountID uuid.UUID) (Use
 	return i, err
 }
 
-const getUserAccountRole = `-- name: GetUserAccountRole :one
-SELECT id, user_id, account_id, role, is_owner, created_at, updated_at, deleted_at FROM user_accounts
-WHERE user_id = $1 
-AND account_id = $2 
-AND deleted_at IS NULL
+const getUserAccount = `-- name: GetUserAccount :one
+SELECT 
+    u.id, u.auth0_id, u.email, u.account_id, u.role, u.is_account_owner, u.first_name, u.last_name, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
+    a.name as account_name
+FROM users u
+JOIN accounts a ON u.account_id = a.id
+WHERE u.id = $1 
+AND u.deleted_at IS NULL 
+AND a.deleted_at IS NULL
 `
 
-type GetUserAccountRoleParams struct {
-	UserID    uuid.UUID `json:"user_id"`
-	AccountID uuid.UUID `json:"account_id"`
+type GetUserAccountRow struct {
+	ID               uuid.UUID          `json:"id"`
+	Auth0ID          string             `json:"auth0_id"`
+	Email            string             `json:"email"`
+	AccountID        uuid.UUID          `json:"account_id"`
+	Role             UserRole           `json:"role"`
+	IsAccountOwner   pgtype.Bool        `json:"is_account_owner"`
+	FirstName        pgtype.Text        `json:"first_name"`
+	LastName         pgtype.Text        `json:"last_name"`
+	DisplayName      pgtype.Text        `json:"display_name"`
+	PictureUrl       pgtype.Text        `json:"picture_url"`
+	Phone            pgtype.Text        `json:"phone"`
+	Timezone         pgtype.Text        `json:"timezone"`
+	Locale           pgtype.Text        `json:"locale"`
+	LastLoginAt      pgtype.Timestamptz `json:"last_login_at"`
+	EmailVerified    pgtype.Bool        `json:"email_verified"`
+	TwoFactorEnabled pgtype.Bool        `json:"two_factor_enabled"`
+	Status           NullUserStatus     `json:"status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	AccountName      string             `json:"account_name"`
 }
 
-func (q *Queries) GetUserAccountRole(ctx context.Context, arg GetUserAccountRoleParams) (UserAccount, error) {
-	row := q.db.QueryRow(ctx, getUserAccountRole, arg.UserID, arg.AccountID)
-	var i UserAccount
+func (q *Queries) GetUserAccount(ctx context.Context, id uuid.UUID) (GetUserAccountRow, error) {
+	row := q.db.QueryRow(ctx, getUserAccount, id)
+	var i GetUserAccountRow
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
+		&i.Auth0ID,
+		&i.Email,
 		&i.AccountID,
 		&i.Role,
-		&i.IsOwner,
+		&i.IsAccountOwner,
+		&i.FirstName,
+		&i.LastName,
+		&i.DisplayName,
+		&i.PictureUrl,
+		&i.Phone,
+		&i.Timezone,
+		&i.Locale,
+		&i.LastLoginAt,
+		&i.EmailVerified,
+		&i.TwoFactorEnabled,
+		&i.Status,
+		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.AccountName,
 	)
 	return i, err
 }
 
-const getUserAssociatedAccounts = `-- name: GetUserAssociatedAccounts :many
-SELECT 
-    a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at,
-    ua.role as user_role,
-    ua.is_owner,
-    ua.created_at as joined_at
-FROM accounts a
-JOIN user_accounts ua ON a.id = ua.account_id
-WHERE ua.user_id = $1 
-AND a.deleted_at IS NULL 
-AND ua.deleted_at IS NULL
-ORDER BY ua.created_at DESC
-`
-
-type GetUserAssociatedAccountsRow struct {
-	ID                 uuid.UUID          `json:"id"`
-	Name               string             `json:"name"`
-	AccountType        AccountType        `json:"account_type"`
-	BusinessName       pgtype.Text        `json:"business_name"`
-	BusinessType       pgtype.Text        `json:"business_type"`
-	WebsiteUrl         pgtype.Text        `json:"website_url"`
-	SupportEmail       pgtype.Text        `json:"support_email"`
-	SupportPhone       pgtype.Text        `json:"support_phone"`
-	Metadata           []byte             `json:"metadata"`
-	FinishedOnboarding pgtype.Bool        `json:"finished_onboarding"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
-	UserRole           UserRole           `json:"user_role"`
-	IsOwner            pgtype.Bool        `json:"is_owner"`
-	JoinedAt           pgtype.Timestamptz `json:"joined_at"`
-}
-
-func (q *Queries) GetUserAssociatedAccounts(ctx context.Context, userID uuid.UUID) ([]GetUserAssociatedAccountsRow, error) {
-	rows, err := q.db.Query(ctx, getUserAssociatedAccounts, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetUserAssociatedAccountsRow{}
-	for rows.Next() {
-		var i GetUserAssociatedAccountsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.AccountType,
-			&i.BusinessName,
-			&i.BusinessType,
-			&i.WebsiteUrl,
-			&i.SupportEmail,
-			&i.SupportPhone,
-			&i.Metadata,
-			&i.FinishedOnboarding,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-			&i.UserRole,
-			&i.IsOwner,
-			&i.JoinedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getUserByAuth0ID = `-- name: GetUserByAuth0ID :one
-SELECT id, auth0_id, email, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, auth0_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
 WHERE auth0_id = $1 AND deleted_at IS NULL
 `
 
@@ -281,6 +217,9 @@ func (q *Queries) GetUserByAuth0ID(ctx context.Context, auth0ID string) (User, e
 		&i.ID,
 		&i.Auth0ID,
 		&i.Email,
+		&i.AccountID,
+		&i.Role,
+		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
 		&i.DisplayName,
@@ -301,7 +240,7 @@ func (q *Queries) GetUserByAuth0ID(ctx context.Context, auth0ID string) (User, e
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, auth0_id, email, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, auth0_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
 WHERE email = $1 AND deleted_at IS NULL
 `
 
@@ -312,6 +251,9 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.ID,
 		&i.Auth0ID,
 		&i.Email,
+		&i.AccountID,
+		&i.Role,
+		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
 		&i.DisplayName,
@@ -332,7 +274,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, auth0_id, email, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, auth0_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -343,6 +285,9 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.ID,
 		&i.Auth0ID,
 		&i.Email,
+		&i.AccountID,
+		&i.Role,
+		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
 		&i.DisplayName,
@@ -362,95 +307,10 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
-const listUserAccounts = `-- name: ListUserAccounts :many
-SELECT 
-    u.id, u.auth0_id, u.email, u.first_name, u.last_name, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
-    a.name as account_name,
-    ua.role,
-    ua.is_owner
-FROM users u
-JOIN user_accounts ua ON u.id = ua.user_id
-JOIN accounts a ON ua.account_id = a.id
-WHERE u.id = $1 
-AND u.deleted_at IS NULL 
-AND ua.deleted_at IS NULL
-AND a.deleted_at IS NULL
-ORDER BY ua.created_at DESC
-`
-
-type ListUserAccountsRow struct {
-	ID               uuid.UUID          `json:"id"`
-	Auth0ID          string             `json:"auth0_id"`
-	Email            string             `json:"email"`
-	FirstName        pgtype.Text        `json:"first_name"`
-	LastName         pgtype.Text        `json:"last_name"`
-	DisplayName      pgtype.Text        `json:"display_name"`
-	PictureUrl       pgtype.Text        `json:"picture_url"`
-	Phone            pgtype.Text        `json:"phone"`
-	Timezone         pgtype.Text        `json:"timezone"`
-	Locale           pgtype.Text        `json:"locale"`
-	LastLoginAt      pgtype.Timestamptz `json:"last_login_at"`
-	EmailVerified    pgtype.Bool        `json:"email_verified"`
-	TwoFactorEnabled pgtype.Bool        `json:"two_factor_enabled"`
-	Status           pgtype.Text        `json:"status"`
-	Metadata         []byte             `json:"metadata"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
-	AccountName      string             `json:"account_name"`
-	Role             UserRole           `json:"role"`
-	IsOwner          pgtype.Bool        `json:"is_owner"`
-}
-
-func (q *Queries) ListUserAccounts(ctx context.Context, id uuid.UUID) ([]ListUserAccountsRow, error) {
-	rows, err := q.db.Query(ctx, listUserAccounts, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListUserAccountsRow{}
-	for rows.Next() {
-		var i ListUserAccountsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Auth0ID,
-			&i.Email,
-			&i.FirstName,
-			&i.LastName,
-			&i.DisplayName,
-			&i.PictureUrl,
-			&i.Phone,
-			&i.Timezone,
-			&i.Locale,
-			&i.LastLoginAt,
-			&i.EmailVerified,
-			&i.TwoFactorEnabled,
-			&i.Status,
-			&i.Metadata,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-			&i.AccountName,
-			&i.Role,
-			&i.IsOwner,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listUsersByAccount = `-- name: ListUsersByAccount :many
-SELECT u.id, u.auth0_id, u.email, u.first_name, u.last_name, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at FROM users u
-JOIN user_accounts ua ON u.id = ua.user_id
-WHERE ua.account_id = $1 
-AND u.deleted_at IS NULL 
-AND ua.deleted_at IS NULL
-ORDER BY u.created_at DESC
+SELECT id, auth0_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+WHERE account_id = $1 AND deleted_at IS NULL
+ORDER BY is_account_owner DESC, created_at DESC
 `
 
 func (q *Queries) ListUsersByAccount(ctx context.Context, accountID uuid.UUID) ([]User, error) {
@@ -466,6 +326,9 @@ func (q *Queries) ListUsersByAccount(ctx context.Context, accountID uuid.UUID) (
 			&i.ID,
 			&i.Auth0ID,
 			&i.Email,
+			&i.AccountID,
+			&i.Role,
+			&i.IsAccountOwner,
 			&i.FirstName,
 			&i.LastName,
 			&i.DisplayName,
@@ -490,24 +353,6 @@ func (q *Queries) ListUsersByAccount(ctx context.Context, accountID uuid.UUID) (
 		return nil, err
 	}
 	return items, nil
-}
-
-const removeUserFromAccount = `-- name: RemoveUserFromAccount :exec
-UPDATE user_accounts
-SET deleted_at = CURRENT_TIMESTAMP
-WHERE user_id = $1 
-AND account_id = $2 
-AND is_owner = false
-`
-
-type RemoveUserFromAccountParams struct {
-	UserID    uuid.UUID `json:"user_id"`
-	AccountID uuid.UUID `json:"account_id"`
-}
-
-func (q *Queries) RemoveUserFromAccount(ctx context.Context, arg RemoveUserFromAccountParams) error {
-	_, err := q.db.Exec(ctx, removeUserFromAccount, arg.UserID, arg.AccountID)
-	return err
 }
 
 const updateUser = `-- name: UpdateUser :one
@@ -527,23 +372,23 @@ SET
     metadata = COALESCE($13, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, auth0_id, email, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
+RETURNING id, auth0_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateUserParams struct {
-	ID               uuid.UUID   `json:"id"`
-	Email            string      `json:"email"`
-	FirstName        pgtype.Text `json:"first_name"`
-	LastName         pgtype.Text `json:"last_name"`
-	DisplayName      pgtype.Text `json:"display_name"`
-	PictureUrl       pgtype.Text `json:"picture_url"`
-	Phone            pgtype.Text `json:"phone"`
-	Timezone         pgtype.Text `json:"timezone"`
-	Locale           pgtype.Text `json:"locale"`
-	EmailVerified    pgtype.Bool `json:"email_verified"`
-	TwoFactorEnabled pgtype.Bool `json:"two_factor_enabled"`
-	Status           pgtype.Text `json:"status"`
-	Metadata         []byte      `json:"metadata"`
+	ID               uuid.UUID      `json:"id"`
+	Email            string         `json:"email"`
+	FirstName        pgtype.Text    `json:"first_name"`
+	LastName         pgtype.Text    `json:"last_name"`
+	DisplayName      pgtype.Text    `json:"display_name"`
+	PictureUrl       pgtype.Text    `json:"picture_url"`
+	Phone            pgtype.Text    `json:"phone"`
+	Timezone         pgtype.Text    `json:"timezone"`
+	Locale           pgtype.Text    `json:"locale"`
+	EmailVerified    pgtype.Bool    `json:"email_verified"`
+	TwoFactorEnabled pgtype.Bool    `json:"two_factor_enabled"`
+	Status           NullUserStatus `json:"status"`
+	Metadata         []byte         `json:"metadata"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
@@ -567,6 +412,9 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.ID,
 		&i.Auth0ID,
 		&i.Email,
+		&i.AccountID,
+		&i.Role,
+		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
 		&i.DisplayName,
@@ -586,39 +434,44 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 	return i, err
 }
 
-const updateUserAccountRole = `-- name: UpdateUserAccountRole :one
-UPDATE user_accounts
-SET 
-    role = $3,
-    is_owner = $4,
+const updateUserRole = `-- name: UpdateUserRole :one
+UPDATE users
+SET
+    role = $2,
+    is_account_owner = $3,
     updated_at = CURRENT_TIMESTAMP
-WHERE user_id = $1 
-AND account_id = $2 
-AND deleted_at IS NULL
-RETURNING id, user_id, account_id, role, is_owner, created_at, updated_at, deleted_at
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, auth0_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
 `
 
-type UpdateUserAccountRoleParams struct {
-	UserID    uuid.UUID   `json:"user_id"`
-	AccountID uuid.UUID   `json:"account_id"`
-	Role      UserRole    `json:"role"`
-	IsOwner   pgtype.Bool `json:"is_owner"`
+type UpdateUserRoleParams struct {
+	ID             uuid.UUID   `json:"id"`
+	Role           UserRole    `json:"role"`
+	IsAccountOwner pgtype.Bool `json:"is_account_owner"`
 }
 
-func (q *Queries) UpdateUserAccountRole(ctx context.Context, arg UpdateUserAccountRoleParams) (UserAccount, error) {
-	row := q.db.QueryRow(ctx, updateUserAccountRole,
-		arg.UserID,
-		arg.AccountID,
-		arg.Role,
-		arg.IsOwner,
-	)
-	var i UserAccount
+func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserRole, arg.ID, arg.Role, arg.IsAccountOwner)
+	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
+		&i.Auth0ID,
+		&i.Email,
 		&i.AccountID,
 		&i.Role,
-		&i.IsOwner,
+		&i.IsAccountOwner,
+		&i.FirstName,
+		&i.LastName,
+		&i.DisplayName,
+		&i.PictureUrl,
+		&i.Phone,
+		&i.Timezone,
+		&i.Locale,
+		&i.LastLoginAt,
+		&i.EmailVerified,
+		&i.TwoFactorEnabled,
+		&i.Status,
+		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
