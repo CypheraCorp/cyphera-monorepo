@@ -160,6 +160,47 @@ func (h *AccountHandler) GetCurrentAccountDetails(c *gin.Context) {
 	c.JSON(http.StatusOK, toFullAccountResponse(access))
 }
 
+// GetAccountDetails retrieves and validates account, user, and workspace information from context
+func (h *AccountHandler) getAccountDetails(c *gin.Context) (*AccountAccessResponse, error) {
+	// Get and parse account ID from context
+	accountID := c.GetString("accountID")
+	parsedAccountID, err := uuid.Parse(accountID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid account ID format")
+	}
+
+	// Get the account
+	account, err := h.common.db.GetAccount(c.Request.Context(), parsedAccountID)
+	if err != nil {
+		return nil, fmt.Errorf("account not found")
+	}
+
+	// Get and parse user ID from context
+	userID := c.GetString("userID")
+	parsedUserID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID format")
+	}
+
+	// Get the user
+	user, err := h.common.db.GetUserByID(c.Request.Context(), parsedUserID)
+	if err != nil {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	// get workspace by account id
+	workspaces, err := h.common.db.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve workspace")
+	}
+
+	return &AccountAccessResponse{
+		User:      user,
+		Account:   account,
+		Workspace: workspaces,
+	}, nil
+}
+
 // UpdateCurrentAccount godoc
 // @Summary Update current account
 // @Description Updates the currently authenticated user's account details
@@ -606,47 +647,6 @@ func toFullAccountResponse(acc *AccountAccessResponse) FullAccountResponse {
 		User:            userResponse,
 		Workspaces:      workspaceResponses,
 	}
-}
-
-// getAccountDetails retrieves and validates account, user, and workspace information from context
-func (h *AccountHandler) getAccountDetails(c *gin.Context) (*AccountAccessResponse, error) {
-	// Get and parse account ID from context
-	accountID := c.GetString("accountID")
-	parsedAccountID, err := uuid.Parse(accountID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid account ID format")
-	}
-
-	// Get the account
-	account, err := h.common.db.GetAccount(c.Request.Context(), parsedAccountID)
-	if err != nil {
-		return nil, fmt.Errorf("account not found")
-	}
-
-	// Get and parse user ID from context
-	userID := c.GetString("userID")
-	parsedUserID, err := uuid.Parse(userID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user ID format")
-	}
-
-	// Get the user
-	user, err := h.common.db.GetUserByID(c.Request.Context(), parsedUserID)
-	if err != nil {
-		return nil, fmt.Errorf("user not found")
-	}
-
-	// get workspace by account id
-	workspaces, err := h.common.db.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve workspace")
-	}
-
-	return &AccountAccessResponse{
-		User:      user,
-		Account:   account,
-		Workspace: workspaces,
-	}, nil
 }
 
 // CheckAccountAccess verifies if a user has access to an account and returns both objects if they do

@@ -91,3 +91,13 @@ WHERE workspace_id = $1
 AND deleted_at IS NULL 
 AND balance > $2
 ORDER BY balance DESC;
+
+-- name: CountCustomers :one
+SELECT COUNT(*) FROM customers
+WHERE workspace_id = $1 AND deleted_at IS NULL;
+
+-- name: ListCustomersWithPagination :many
+SELECT * FROM customers
+WHERE workspace_id = $1 AND deleted_at IS NULL
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;

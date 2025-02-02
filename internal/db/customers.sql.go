@@ -12,6 +12,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countCustomers = `-- name: CountCustomers :one
+SELECT COUNT(*) FROM customers
+WHERE workspace_id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) CountCustomers(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countCustomers, workspaceID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCustomer = `-- name: CreateCustomer :one
 INSERT INTO customers (
     workspace_id,
@@ -399,6 +411,59 @@ ORDER BY created_at DESC
 
 func (q *Queries) ListCustomers(ctx context.Context, workspaceID uuid.UUID) ([]Customer, error) {
 	rows, err := q.db.Query(ctx, listCustomers, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Customer{}
+	for rows.Next() {
+		var i Customer
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ExternalID,
+			&i.Email,
+			&i.Name,
+			&i.Phone,
+			&i.Description,
+			&i.Balance,
+			&i.Currency,
+			&i.DefaultSourceID,
+			&i.InvoicePrefix,
+			&i.NextInvoiceSequence,
+			&i.TaxExempt,
+			&i.TaxIds,
+			&i.Metadata,
+			&i.Livemode,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCustomersWithPagination = `-- name: ListCustomersWithPagination :many
+SELECT id, workspace_id, external_id, email, name, phone, description, balance, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
+WHERE workspace_id = $1 AND deleted_at IS NULL
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListCustomersWithPaginationParams struct {
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+	Limit       int32     `json:"limit"`
+	Offset      int32     `json:"offset"`
+}
+
+func (q *Queries) ListCustomersWithPagination(ctx context.Context, arg ListCustomersWithPaginationParams) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, listCustomersWithPagination, arg.WorkspaceID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

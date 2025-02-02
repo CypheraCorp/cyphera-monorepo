@@ -164,7 +164,7 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 			c.Set("accountID", workspace.AccountID.String())
 			c.Set("accountType", string(account.AccountType))
 			c.Set("apiKeyLevel", string(key.AccessLevel))
-			c.Set("authType", "api_key")
+			c.Set("authType", constants.AuthTypeAPIKey)
 			c.Next()
 			return
 		}
@@ -220,7 +220,7 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 		c.Set("workspaceID", workspaceIdStr)
 		c.Set("accountType", string(account.AccountType))
 		c.Set("userRole", string(user.Role))
-		c.Set("authType", "jwt")
+		c.Set("authType", constants.AuthTypeJWT)
 		c.Next()
 	}
 }
@@ -235,7 +235,7 @@ func RequireRoles(roles ...string) gin.HandlerFunc {
 		authType := c.GetString("authType")
 
 		// For API key auth, check access level
-		if authType == "api_key" {
+		if authType == constants.AuthTypeAPIKey {
 			if apiKeyLevel != constants.AccessLevelAdmin {
 				c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient API key access level"})
 				c.Abort()
