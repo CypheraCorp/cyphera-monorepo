@@ -129,7 +129,7 @@ func InitializeRoutes(router *gin.Engine) {
 			// Current Account routes
 			accounts := protected.Group("/accounts")
 			{
-				accounts.GET("/me", accountHandler.GetCurrentAccount)
+				accounts.GET("/me/details", accountHandler.GetAccountDetails)
 				accounts.PUT("/me", accountHandler.UpdateCurrentAccount)
 
 				accounts.GET("/:id", accountHandler.GetAccount)

@@ -139,7 +139,7 @@ func (h *AccountHandler) GetAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, toAccountResponse(account))
 }
 
-// GetCurrentAccount godoc
+// GetCurrentAccountDetails godoc
 // @Summary Get current account
 // @Description Retrieves the details of the currently authenticated user's account
 // @Tags accounts
@@ -148,8 +148,8 @@ func (h *AccountHandler) GetAccount(c *gin.Context) {
 // @Success 200 {object} FullAccountResponse
 // @Failure 401 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /accounts/me [get]
-func (h *AccountHandler) GetCurrentAccount(c *gin.Context) {
+// @Router /accounts/me/details [get]
+func (h *AccountHandler) GetCurrentAccountDetails(c *gin.Context) {
 	// Check account access
 	access, err := h.CheckAccountAccess(c)
 	if HandleAccountAccessError(c, err) {
