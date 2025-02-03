@@ -310,10 +310,92 @@ definitions:
     required:
     - email
     type: object
+  handlers.CreateNetworkRequest:
+    properties:
+      active:
+        type: boolean
+      chain_id:
+        type: integer
+      name:
+        type: string
+      type:
+        type: string
+    required:
+    - chain_id
+    - name
+    - type
+    type: object
+  handlers.CreateProductRequest:
+    properties:
+      active:
+        type: boolean
+      description:
+        type: string
+      image_url:
+        type: string
+      interval_type:
+        type: string
+      merchant_paid_gas:
+        type: boolean
+      metadata:
+        type: object
+      name:
+        type: string
+      price_in_pennies:
+        type: integer
+      product_type:
+        type: string
+      term_length:
+        type: integer
+      url:
+        type: string
+      workspace_id:
+        type: string
+    required:
+    - name
+    - price_in_pennies
+    - product_type
+    - workspace_id
+    type: object
+  handlers.CreateProductTokenRequest:
+    properties:
+      active:
+        type: boolean
+      network_id:
+        type: string
+      product_id:
+        type: string
+      token_id:
+        type: string
+    required:
+    - network_id
+    - product_id
+    - token_id
+    type: object
   handlers.CreateSubscriptionResponse:
     properties:
       message:
         type: string
+    type: object
+  handlers.CreateTokenRequest:
+    properties:
+      active:
+        type: boolean
+      contract_address:
+        type: string
+      gas_token:
+        type: boolean
+      name:
+        type: string
+      network_id:
+        type: string
+      symbol:
+        type: string
+    required:
+    - contract_address
+    - name
+    - network_id
+    - symbol
     type: object
   handlers.CreateUserRequest:
     properties:
@@ -501,12 +583,93 @@ definitions:
       total:
         type: integer
     type: object
+  handlers.NetworkResponse:
+    properties:
+      active:
+        type: boolean
+      chain_id:
+        type: integer
+      created_at:
+        type: integer
+      id:
+        type: string
+      name:
+        type: string
+      type:
+        type: string
+      updated_at:
+        type: integer
+    type: object
   handlers.OperationsResponse:
     properties:
       data:
         items:
           $ref: '#/definitions/actalink.Operation'
         type: array
+    type: object
+  handlers.ProductResponse:
+    properties:
+      active:
+        type: boolean
+      created_at:
+        type: integer
+      description:
+        type: string
+      id:
+        type: string
+      image_url:
+        type: string
+      interval_type:
+        type: string
+      merchant_paid_gas:
+        type: boolean
+      metadata:
+        type: object
+      name:
+        type: string
+      price_in_pennies:
+        type: integer
+      product_type:
+        type: string
+      term_length:
+        type: integer
+      updated_at:
+        type: integer
+      url:
+        type: string
+      workspace_id:
+        type: string
+    type: object
+  handlers.ProductTokenResponse:
+    properties:
+      active:
+        type: boolean
+      chain_id:
+        type: integer
+      contract_address:
+        type: string
+      created_at:
+        type: integer
+      gas_token:
+        type: boolean
+      id:
+        type: string
+      network_id:
+        type: string
+      network_name:
+        type: string
+      network_type:
+        type: string
+      product_id:
+        type: string
+      token_id:
+        type: string
+      token_name:
+        type: string
+      token_symbol:
+        type: string
+      updated_at:
+        type: integer
     type: object
   handlers.RegisterOrLoginUserResponse:
     properties:
@@ -532,6 +695,27 @@ definitions:
           type: string
         type: array
       trialDays:
+        type: integer
+    type: object
+  handlers.TokenResponse:
+    properties:
+      active:
+        type: boolean
+      contract_address:
+        type: string
+      created_at:
+        type: integer
+      gas_token:
+        type: boolean
+      id:
+        type: string
+      name:
+        type: string
+      network_id:
+        type: string
+      symbol:
+        type: string
+      updated_at:
         type: integer
     type: object
   handlers.UpdateAPIKeyRequest:
@@ -601,6 +785,62 @@ definitions:
       tax_ids:
         additionalProperties: true
         type: object
+    type: object
+  handlers.UpdateNetworkRequest:
+    properties:
+      active:
+        type: boolean
+      chain_id:
+        type: integer
+      name:
+        type: string
+      type:
+        type: string
+    type: object
+  handlers.UpdateProductRequest:
+    properties:
+      active:
+        type: boolean
+      description:
+        type: string
+      image_url:
+        type: string
+      interval_type:
+        type: string
+      merchant_paid_gas:
+        type: boolean
+      metadata:
+        type: object
+      name:
+        type: string
+      price_in_pennies:
+        type: integer
+      product_type:
+        type: string
+      term_length:
+        type: integer
+      url:
+        type: string
+    type: object
+  handlers.UpdateProductTokenRequest:
+    properties:
+      active:
+        type: boolean
+    required:
+    - active
+    type: object
+  handlers.UpdateTokenRequest:
+    properties:
+      active:
+        type: boolean
+      contract_address:
+        type: string
+      gas_token:
+        type: boolean
+      name:
+        type: string
+      symbol:
+        type: string
     type: object
   handlers.UpdateUserRequest:
     properties:
@@ -1560,25 +1800,193 @@ paths:
     get:
       consumes:
       - application/json
-      description: Retrieves all supported blockchain networks
+      description: Returns a list of all networks
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.GetNetworksResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      summary: List networks
+            items:
+              $ref: '#/definitions/handlers.NetworkResponse'
+            type: array
+      security:
+      - ApiKeyAuth: []
+      summary: List all networks
       tags:
-      - Actalink
+      - networks
+    post:
+      consumes:
+      - application/json
+      description: Creates a new network
+      parameters:
+      - description: Network creation data
+        in: body
+        name: network
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateNetworkRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.NetworkResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a network
+      tags:
+      - networks
+  /networks/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft deletes a network
+      parameters:
+      - description: Network ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a network
+      tags:
+      - networks
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of an existing network
+      parameters:
+      - description: Network ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.NetworkResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a network
+      tags:
+      - networks
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing network
+      parameters:
+      - description: Network ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Network update data
+        in: body
+        name: network
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateNetworkRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.NetworkResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update a network
+      tags:
+      - networks
+  /networks/active:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of all active networks
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.NetworkResponse'
+            type: array
+      security:
+      - ApiKeyAuth: []
+      summary: List active networks
+      tags:
+      - networks
+  /networks/chain/{chain_id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of an existing network by its chain ID
+      parameters:
+      - description: Chain ID
+        in: path
+        name: chain_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.NetworkResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a network by chain ID
+      tags:
+      - networks
   /nonce:
     get:
       consumes:
@@ -1651,6 +2059,444 @@ paths:
       summary: List operations
       tags:
       - Actalink
+  /products:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new product
+      parameters:
+      - description: Product creation data
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a product
+      tags:
+      - products
+  /products/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft deletes a product
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a product
+      tags:
+      - products
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of an existing product
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a product
+      tags:
+      - products
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing product
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Product update data
+        in: body
+        name: product
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update a product
+      tags:
+      - products
+  /products/{product_id}/networks/{network_id}/tokens:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of all product tokens for a specific network
+      parameters:
+      - description: Product ID
+        in: path
+        name: product_id
+        required: true
+        type: string
+      - description: Network ID
+        in: path
+        name: network_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.ProductTokenResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get product tokens by network
+      tags:
+      - product-tokens
+  /products/{product_id}/networks/{network_id}/tokens/{token_id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft deletes a product token
+      parameters:
+      - description: Product ID
+        in: path
+        name: product_id
+        required: true
+        type: string
+      - description: Network ID
+        in: path
+        name: network_id
+        required: true
+        type: string
+      - description: Token ID
+        in: path
+        name: token_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a product token
+      tags:
+      - product-tokens
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of an existing product token by product,
+        network, and token IDs
+      parameters:
+      - description: Product ID
+        in: path
+        name: product_id
+        required: true
+        type: string
+      - description: Network ID
+        in: path
+        name: network_id
+        required: true
+        type: string
+      - description: Token ID
+        in: path
+        name: token_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ProductTokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a product token by IDs
+      tags:
+      - product-tokens
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing product token
+      parameters:
+      - description: Product ID
+        in: path
+        name: product_id
+        required: true
+        type: string
+      - description: Network ID
+        in: path
+        name: network_id
+        required: true
+        type: string
+      - description: Token ID
+        in: path
+        name: token_id
+        required: true
+        type: string
+      - description: Product Token update data
+        in: body
+        name: token
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateProductTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ProductTokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update a product token
+      tags:
+      - product-tokens
+  /products/{product_id}/networks/{network_id}/tokens/active:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of all active product tokens for a specific network
+      parameters:
+      - description: Product ID
+        in: path
+        name: product_id
+        required: true
+        type: string
+      - description: Network ID
+        in: path
+        name: network_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.ProductTokenResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get active product tokens by network
+      tags:
+      - product-tokens
+  /products/{product_id}/tokens:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of all product tokens for a specific product
+      parameters:
+      - description: Product ID
+        in: path
+        name: product_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.ProductTokenResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get product tokens by product
+      tags:
+      - product-tokens
+    post:
+      consumes:
+      - application/json
+      description: Creates a new product token
+      parameters:
+      - description: Product ID
+        in: path
+        name: product_id
+        required: true
+        type: string
+      - description: Product Token creation data
+        in: body
+        name: token
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateProductTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.ProductTokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a product token
+      tags:
+      - product-tokens
+  /products/{product_id}/tokens/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of an existing product token
+      parameters:
+      - description: Product Token ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ProductTokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a product token
+      tags:
+      - product-tokens
+  /products/{product_id}/tokens/active:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of all active product tokens for a specific product
+      parameters:
+      - description: Product ID
+        in: path
+        name: product_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.ProductTokenResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get active product tokens by product
+      tags:
+      - product-tokens
   /subscribers:
     get:
       consumes:
@@ -1780,29 +2626,269 @@ paths:
     get:
       consumes:
       - application/json
-      description: Retrieves all available tokens
+      description: Returns a list of all tokens
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.GetTokensResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      summary: List tokens
+            items:
+              $ref: '#/definitions/handlers.TokenResponse'
+            type: array
+      security:
+      - ApiKeyAuth: []
+      summary: List all tokens
       tags:
-      - Actalink
+      - tokens
+    post:
+      consumes:
+      - application/json
+      description: Creates a new token
+      parameters:
+      - description: Token creation data
+        in: body
+        name: token
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a token
+      tags:
+      - tokens
+  /tokens/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft deletes a token
+      parameters:
+      - description: Token ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete a token
+      tags:
+      - tokens
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of an existing token
+      parameters:
+      - description: Token ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a token
+      tags:
+      - tokens
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing token
+      parameters:
+      - description: Token ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Token update data
+        in: body
+        name: token
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update a token
+      tags:
+      - tokens
+  /tokens/network/{network_id}:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of all tokens for a specific network
+      parameters:
+      - description: Network ID
+        in: path
+        name: network_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.TokenResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List tokens by network
+      tags:
+      - tokens
+  /tokens/network/{network_id}/active:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of all active tokens for a specific network
+      parameters:
+      - description: Network ID
+        in: path
+        name: network_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.TokenResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List active tokens by network
+      tags:
+      - tokens
+  /tokens/network/{network_id}/address/{address}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the details of an existing token by its network ID and
+        contract address
+      parameters:
+      - description: Network ID
+        in: path
+        name: network_id
+        required: true
+        type: string
+      - description: Contract Address
+        in: path
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a token by address
+      tags:
+      - tokens
+  /tokens/network/{network_id}/gas:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the gas token for a specific network
+      parameters:
+      - description: Network ID
+        in: path
+        name: network_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get gas token for network
+      tags:
+      - tokens
   /user/login:
     post:
       consumes:
@@ -2250,22 +3336,28 @@ paths:
     get:
       consumes:
       - application/json
-      description: Retrieves all customers for a workspace
+      description: Retrieves paginated customers for a workspace
       parameters:
       - description: Workspace ID
         in: path
         name: id
         required: true
         type: string
+      - description: Number of customers to return (default 10, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of customers to skip (default 0)
+        in: query
+        name: offset
+        type: integer
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/handlers.CustomerResponse'
-            type: array
+            $ref: '#/definitions/handlers.ListCustomersResponse'
         "400":
           description: Bad Request
           schema:
@@ -2279,6 +3371,64 @@ paths:
       summary: List workspace customers
       tags:
       - workspaces
+  /workspaces/{workspace_id}/products:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of all products for a workspace
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.ProductResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List products
+      tags:
+      - products
+  /workspaces/{workspace_id}/products/active:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of all active products for a workspace
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.ProductResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List active products
+      tags:
+      - products
 securityDefinitions:
   Bearer:
     description: Type "Bearer" followed by a space and JWT token.

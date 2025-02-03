@@ -72,3 +72,17 @@ WHERE w.id = $1
 AND w.deleted_at IS NULL 
 AND a.deleted_at IS NULL
 LIMIT 1;
+
+-- name: CountWorkspaceCustomers :one
+SELECT COUNT(*) FROM customers
+WHERE workspace_id = $1 AND deleted_at IS NULL;
+
+-- name: ListWorkspaceCustomersWithPagination :many
+SELECT 
+    c.*,
+    w.name as workspace_name
+FROM customers c
+JOIN workspaces w ON c.workspace_id = w.id
+WHERE c.workspace_id = $1 AND c.deleted_at IS NULL
+ORDER BY c.created_at DESC
+LIMIT $2 OFFSET $3;

@@ -10,6 +10,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// SwaggerMetadata is used to represent JSON metadata in Swagger docs
+type SwaggerMetadata map[string]interface{}
+
 // ProductHandler handles product-related operations
 type ProductHandler struct {
 	common *CommonServices
@@ -34,7 +37,7 @@ type ProductResponse struct {
 	URL             string          `json:"url,omitempty"`
 	MerchantPaidGas bool            `json:"merchant_paid_gas"`
 	Active          bool            `json:"active"`
-	Metadata        json.RawMessage `json:"metadata,omitempty"`
+	Metadata        json.RawMessage `json:"metadata,omitempty" swaggertype:"object"`
 	CreatedAt       int64           `json:"created_at"`
 	UpdatedAt       int64           `json:"updated_at"`
 }
@@ -52,7 +55,7 @@ type CreateProductRequest struct {
 	URL             string          `json:"url"`
 	MerchantPaidGas bool            `json:"merchant_paid_gas"`
 	Active          bool            `json:"active"`
-	Metadata        json.RawMessage `json:"metadata"`
+	Metadata        json.RawMessage `json:"metadata" swaggertype:"object"`
 }
 
 // UpdateProductRequest represents the request body for updating a product
@@ -67,7 +70,7 @@ type UpdateProductRequest struct {
 	URL             string          `json:"url,omitempty"`
 	MerchantPaidGas *bool           `json:"merchant_paid_gas,omitempty"`
 	Active          *bool           `json:"active,omitempty"`
-	Metadata        json.RawMessage `json:"metadata,omitempty"`
+	Metadata        json.RawMessage `json:"metadata,omitempty" swaggertype:"object"`
 }
 
 // GetProduct godoc
@@ -189,6 +192,12 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
+	metadata, err := json.Marshal(req.Metadata)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
+		return
+	}
+
 	product, err := h.common.db.CreateProduct(c.Request.Context(), db.CreateProductParams{
 		WorkspaceID:     workspaceID,
 		Name:            req.Name,
@@ -201,7 +210,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		Url:             pgtype.Text{String: req.URL, Valid: req.URL != ""},
 		MerchantPaidGas: req.MerchantPaidGas,
 		Active:          req.Active,
-		Metadata:        req.Metadata,
+		Metadata:        metadata,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create product"})
@@ -238,6 +247,12 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
+	metadata, err := json.Marshal(req.Metadata)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
+		return
+	}
+
 	product, err := h.common.db.UpdateProduct(c.Request.Context(), db.UpdateProductParams{
 		ID:              parsedUUID,
 		Name:            req.Name,
@@ -250,7 +265,7 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		Url:             pgtype.Text{String: req.URL, Valid: req.URL != ""},
 		MerchantPaidGas: *req.MerchantPaidGas,
 		Active:          *req.Active,
-		Metadata:        req.Metadata,
+		Metadata:        metadata,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update product"})
