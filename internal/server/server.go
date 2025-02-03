@@ -24,6 +24,9 @@ var (
 	customerHandler  *handlers.CustomerHandler
 	apiKeyHandler    *handlers.APIKeyHandler
 	userHandler      *handlers.UserHandler
+	networkHandler   *handlers.NetworkHandler
+	tokenHandler     *handlers.TokenHandler
+	productHandler   *handlers.ProductHandler
 
 	// Actalink
 	actalinkHandler *handlers.ActalinkHandler
@@ -66,6 +69,9 @@ func InitializeHandlers() {
 	customerHandler = handlers.NewCustomerHandler(commonServices)
 	apiKeyHandler = handlers.NewAPIKeyHandler(commonServices)
 	userHandler = handlers.NewUserHandler(commonServices)
+	networkHandler = handlers.NewNetworkHandler(commonServices)
+	tokenHandler = handlers.NewTokenHandler(commonServices)
+	productHandler = handlers.NewProductHandler(commonServices)
 	// Actalink Handler initialization
 	actalinkHandler = handlers.NewActalinkHandler(commonServices)
 }
@@ -124,6 +130,16 @@ func InitializeRoutes(router *gin.Engine) {
 				// API Key management
 				admin.GET("/api-keys", apiKeyHandler.GetAllAPIKeys)
 				admin.GET("/api-keys/expired", apiKeyHandler.GetExpiredAPIKeys)
+
+				// Network management
+				admin.POST("/networks", networkHandler.CreateNetwork)
+				admin.PUT("/networks/:id", networkHandler.UpdateNetwork)
+				admin.DELETE("/networks/:id", networkHandler.DeleteNetwork)
+
+				// Token management
+				admin.POST("/tokens", tokenHandler.CreateToken)
+				admin.PUT("/tokens/:id", tokenHandler.UpdateToken)
+				admin.DELETE("/tokens/:id", tokenHandler.DeleteToken)
 			}
 
 			// Current Account routes
@@ -161,6 +177,64 @@ func InitializeRoutes(router *gin.Engine) {
 				apiKeys.GET("/:id", apiKeyHandler.GetAPIKeyByID)
 				apiKeys.PUT("/:id", apiKeyHandler.UpdateAPIKey)
 				apiKeys.DELETE("/:id", apiKeyHandler.DeleteAPIKey)
+			}
+
+			// Networks
+			networks := protected.Group("/networks")
+			{
+				networks.GET("", networkHandler.ListNetworks)
+				networks.GET("/active", networkHandler.ListActiveNetworks)
+				networks.GET("/:id", networkHandler.GetNetwork)
+				networks.GET("/chain/:chain_id", networkHandler.GetNetworkByChainID)
+			}
+
+			// Tokens
+			tokens := protected.Group("/tokens")
+			{
+				tokens.GET("", tokenHandler.ListTokens)
+				tokens.GET("/:id", tokenHandler.GetToken)
+				tokens.GET("/network/:network_id", tokenHandler.ListTokensByNetwork)
+				tokens.GET("/network/:network_id/active", tokenHandler.ListActiveTokensByNetwork)
+				tokens.GET("/network/:network_id/gas", tokenHandler.GetGasToken)
+				tokens.GET("/network/:network_id/address/:address", tokenHandler.GetTokenByAddress)
+			}
+
+			// Products
+			products := protected.Group("/products")
+			{
+				products.GET("", productHandler.ListProducts)
+				products.POST("", productHandler.CreateProduct)
+				products.GET("/:id", productHandler.GetProduct)
+				products.PUT("/:id", productHandler.UpdateProduct)
+				products.DELETE("/:id", productHandler.DeleteProduct)
+
+				// Product Tokens
+				products.GET("/:product_id/tokens", productHandler.GetProductTokensByProduct)
+				products.GET("/:product_id/tokens/active", productHandler.GetActiveProductTokensByProduct)
+				products.POST("/:product_id/tokens", productHandler.CreateProductToken)
+				products.GET("/:product_id/tokens/:id", productHandler.GetProductToken)
+				products.GET("/:product_id/networks/:network_id/tokens", productHandler.GetProductTokensByNetwork)
+				products.GET("/:product_id/networks/:network_id/tokens/active", productHandler.GetActiveProductTokensByNetwork)
+				products.GET("/:product_id/networks/:network_id/tokens/:token_id", productHandler.GetProductTokenByIds)
+				products.PUT("/:product_id/networks/:network_id/tokens/:token_id", productHandler.UpdateProductToken)
+				products.DELETE("/:product_id/networks/:network_id/tokens/:token_id", productHandler.DeleteProductToken)
+			}
+
+			// Workspaces
+			workspaces := protected.Group("/workspaces")
+			{
+				workspaces.GET("", workspaceHandler.ListWorkspaces)
+				workspaces.POST("", workspaceHandler.CreateWorkspace)
+				workspaces.GET("/all", workspaceHandler.GetAllWorkspaces)
+				workspaces.GET("/:id", workspaceHandler.GetWorkspace)
+				workspaces.PUT("/:id", workspaceHandler.UpdateWorkspace)
+				workspaces.DELETE("/:id", workspaceHandler.DeleteWorkspace)
+				workspaces.DELETE("/:id/hard", workspaceHandler.HardDeleteWorkspace)
+				workspaces.GET("/:id/customers", workspaceHandler.ListWorkspaceCustomers)
+
+				// Workspace Products
+				workspaces.GET("/:workspace_id/products", productHandler.ListProducts)
+				workspaces.GET("/:workspace_id/products/active", productHandler.ListActiveProducts)
 			}
 
 			// ActaLink routes
