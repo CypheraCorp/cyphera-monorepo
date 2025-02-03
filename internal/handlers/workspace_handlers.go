@@ -4,6 +4,7 @@ import (
 	"cyphera-api/internal/db"
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -340,14 +341,45 @@ func (h *WorkspaceHandler) HardDeleteWorkspace(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// parsePaginationParams is a helper function to parse limit and offset from query parameters
+func parsePaginationParams(c *gin.Context) (limit, offset int, err error) {
+	limit = 10 // default limit
+	if limitStr := c.Query("limit"); limitStr != "" {
+		parsedLimit, err := strconv.Atoi(limitStr)
+		if err != nil {
+			return 0, 0, err
+		}
+		if parsedLimit > 100 {
+			limit = 100 // max limit
+		} else if parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	offset = 0 // default offset
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		parsedOffset, err := strconv.Atoi(offsetStr)
+		if err != nil {
+			return 0, 0, err
+		}
+		if parsedOffset > 0 {
+			offset = parsedOffset
+		}
+	}
+
+	return limit, offset, nil
+}
+
 // ListWorkspaceCustomers retrieves all customers for a workspace
 // @Summary List workspace customers
-// @Description Retrieves all customers for a workspace
+// @Description Retrieves paginated customers for a workspace
 // @Tags workspaces
 // @Accept json
 // @Produce json
 // @Param id path string true "Workspace ID"
-// @Success 200 {array} CustomerResponse
+// @Param limit query int false "Number of customers to return (default 10, max 100)"
+// @Param offset query int false "Number of customers to skip (default 0)"
+// @Success 200 {object} ListCustomersResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
@@ -356,19 +388,50 @@ func (h *WorkspaceHandler) ListWorkspaceCustomers(c *gin.Context) {
 	id := c.Param("id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid UUID format"})
 		return
 	}
 
+	// Parse pagination parameters
+	limit, offset, err := parsePaginationParams(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid pagination parameters"})
+		return
+	}
+
+	// For now, we'll use the existing ListWorkspaceCustomers method
+	// TODO: Update once the new database methods are created
 	customers, err := h.common.db.ListWorkspaceCustomers(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve customers"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve customers"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"object": "list",
-		"data":   customers,
+	// Apply pagination in memory for now
+	// TODO: Replace with database-level pagination once the new methods are created
+	total := len(customers)
+	start := offset
+	end := offset + limit
+	if start > total {
+		start = total
+	}
+	if end > total {
+		end = total
+	}
+
+	paginatedCustomers := customers[start:end]
+	response := make([]CustomerResponse, len(paginatedCustomers))
+	for i, customer := range paginatedCustomers {
+		response[i] = toCustomerResponse(customer)
+	}
+
+	hasMore := end < total
+
+	c.JSON(http.StatusOK, ListCustomersResponse{
+		Object:  "list",
+		Data:    response,
+		HasMore: hasMore,
+		Total:   int64(total),
 	})
 }
 

@@ -12,6 +12,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countWorkspaceCustomers = `-- name: CountWorkspaceCustomers :one
+SELECT COUNT(*) FROM customers
+WHERE workspace_id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) CountWorkspaceCustomers(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countWorkspaceCustomers, workspaceID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createWorkspace = `-- name: CreateWorkspace :one
 INSERT INTO workspaces (
     account_id,
@@ -230,6 +242,87 @@ func (q *Queries) ListWorkspaceCustomers(ctx context.Context, id uuid.UUID) ([]C
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceCustomersWithPagination = `-- name: ListWorkspaceCustomersWithPagination :many
+SELECT 
+    c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.balance, c.currency, c.default_source_id, c.invoice_prefix, c.next_invoice_sequence, c.tax_exempt, c.tax_ids, c.metadata, c.livemode, c.created_at, c.updated_at, c.deleted_at,
+    w.name as workspace_name
+FROM customers c
+JOIN workspaces w ON c.workspace_id = w.id
+WHERE c.workspace_id = $1 AND c.deleted_at IS NULL
+ORDER BY c.created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListWorkspaceCustomersWithPaginationParams struct {
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+	Limit       int32     `json:"limit"`
+	Offset      int32     `json:"offset"`
+}
+
+type ListWorkspaceCustomersWithPaginationRow struct {
+	ID                  uuid.UUID          `json:"id"`
+	WorkspaceID         uuid.UUID          `json:"workspace_id"`
+	ExternalID          pgtype.Text        `json:"external_id"`
+	Email               pgtype.Text        `json:"email"`
+	Name                pgtype.Text        `json:"name"`
+	Phone               pgtype.Text        `json:"phone"`
+	Description         pgtype.Text        `json:"description"`
+	Balance             pgtype.Int4        `json:"balance"`
+	Currency            pgtype.Text        `json:"currency"`
+	DefaultSourceID     pgtype.UUID        `json:"default_source_id"`
+	InvoicePrefix       pgtype.Text        `json:"invoice_prefix"`
+	NextInvoiceSequence pgtype.Int4        `json:"next_invoice_sequence"`
+	TaxExempt           pgtype.Bool        `json:"tax_exempt"`
+	TaxIds              []byte             `json:"tax_ids"`
+	Metadata            []byte             `json:"metadata"`
+	Livemode            pgtype.Bool        `json:"livemode"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
+	WorkspaceName       string             `json:"workspace_name"`
+}
+
+func (q *Queries) ListWorkspaceCustomersWithPagination(ctx context.Context, arg ListWorkspaceCustomersWithPaginationParams) ([]ListWorkspaceCustomersWithPaginationRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceCustomersWithPagination, arg.WorkspaceID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceCustomersWithPaginationRow{}
+	for rows.Next() {
+		var i ListWorkspaceCustomersWithPaginationRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.ExternalID,
+			&i.Email,
+			&i.Name,
+			&i.Phone,
+			&i.Description,
+			&i.Balance,
+			&i.Currency,
+			&i.DefaultSourceID,
+			&i.InvoicePrefix,
+			&i.NextInvoiceSequence,
+			&i.TaxExempt,
+			&i.TaxIds,
+			&i.Metadata,
+			&i.Livemode,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.WorkspaceName,
 		); err != nil {
 			return nil, err
 		}
