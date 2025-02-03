@@ -22,6 +22,7 @@ func NewNetworkHandler(common *CommonServices) *NetworkHandler {
 // NetworkResponse represents the standardized API response for network operations
 type NetworkResponse struct {
 	ID        string `json:"id"`
+	Object    string `json:"object"`
 	Name      string `json:"name"`
 	Type      string `json:"type"`
 	ChainID   int32  `json:"chain_id"`
@@ -52,15 +53,15 @@ type UpdateNetworkRequest struct {
 // @Tags networks
 // @Accept json
 // @Produce json
-// @Param id path string true "Network ID"
+// @Param network_id path string true "Network ID"
 // @Success 200 {object} NetworkResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /networks/{id} [get]
+// @Router /networks/{network_id} [get]
 func (h *NetworkHandler) GetNetwork(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	networkId := c.Param("network_id")
+	parsedUUID, err := uuid.Parse(networkId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
 		return
@@ -190,16 +191,16 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 // @Tags networks
 // @Accept json
 // @Produce json
-// @Param id path string true "Network ID"
+// @Param network_id path string true "Network ID"
 // @Param network body UpdateNetworkRequest true "Network update data"
 // @Success 200 {object} NetworkResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /networks/{id} [put]
+// @Router /networks/{network_id} [put]
 func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	networkId := c.Param("network_id")
+	parsedUUID, err := uuid.Parse(networkId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
 		return
@@ -232,15 +233,15 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 // @Tags networks
 // @Accept json
 // @Produce json
-// @Param id path string true "Network ID"
+// @Param network_id path string true "Network ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /networks/{id} [delete]
+// @Router /networks/{network_id} [delete]
 func (h *NetworkHandler) DeleteNetwork(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	networkId := c.Param("network_id")
+	parsedUUID, err := uuid.Parse(networkId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
 		return
@@ -259,6 +260,7 @@ func (h *NetworkHandler) DeleteNetwork(c *gin.Context) {
 func toNetworkResponse(n db.Network) NetworkResponse {
 	return NetworkResponse{
 		ID:        n.ID.String(),
+		Object:    "network",
 		Name:      n.Name,
 		Type:      n.Type,
 		ChainID:   n.ChainID,

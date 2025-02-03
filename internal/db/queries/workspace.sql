@@ -79,10 +79,9 @@ WHERE workspace_id = $1 AND deleted_at IS NULL;
 
 -- name: ListWorkspaceCustomersWithPagination :many
 SELECT 
-    c.*,
-    w.name as workspace_name
+    c.*
 FROM customers c
 JOIN workspaces w ON c.workspace_id = w.id
-WHERE c.workspace_id = $1 AND c.deleted_at IS NULL
+WHERE w.id = $1 AND c.deleted_at IS NULL
 ORDER BY c.created_at DESC
 LIMIT $2 OFFSET $3;

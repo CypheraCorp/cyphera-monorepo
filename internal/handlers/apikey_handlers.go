@@ -64,15 +64,15 @@ type UpdateAPIKeyRequest struct {
 // @Tags api-keys
 // @Accept json
 // @Produce json
-// @Param id path string true "API Key ID"
+// @Param api_key_id path string true "API Key ID"
 // @Success 200 {object} APIKeyResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /api-keys/{id} [get]
+// @Router /api-keys/{api_key_id} [get]
 func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	apiKeyId := c.Param("api_key_id")
+	parsedUUID, err := uuid.Parse(apiKeyId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
 		return
@@ -211,16 +211,16 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 // @Tags api-keys
 // @Accept json
 // @Produce json
-// @Param id path string true "API Key ID"
+// @Param api_key_id path string true "API Key ID"
 // @Param key body UpdateAPIKeyRequest true "API key update data"
 // @Success 200 {object} APIKeyResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /api-keys/{id} [put]
+// @Router /api-keys/{api_key_id} [put]
 func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	apiKeyId := c.Param("api_key_id")
+	parsedUUID, err := uuid.Parse(apiKeyId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
 		return
@@ -265,15 +265,15 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 // @Tags api-keys
 // @Accept json
 // @Produce json
-// @Param id path string true "API Key ID"
+// @Param api_key_id path string true "API Key ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /api-keys/{id} [delete]
+// @Router /api-keys/{api_key_id} [delete]
 func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	apiKeyId := c.Param("api_key_id")
+	parsedUUID, err := uuid.Parse(apiKeyId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
 		return

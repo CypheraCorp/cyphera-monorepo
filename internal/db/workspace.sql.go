@@ -255,53 +255,29 @@ func (q *Queries) ListWorkspaceCustomers(ctx context.Context, id uuid.UUID) ([]C
 
 const listWorkspaceCustomersWithPagination = `-- name: ListWorkspaceCustomersWithPagination :many
 SELECT 
-    c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.balance, c.currency, c.default_source_id, c.invoice_prefix, c.next_invoice_sequence, c.tax_exempt, c.tax_ids, c.metadata, c.livemode, c.created_at, c.updated_at, c.deleted_at,
-    w.name as workspace_name
+    c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.balance, c.currency, c.default_source_id, c.invoice_prefix, c.next_invoice_sequence, c.tax_exempt, c.tax_ids, c.metadata, c.livemode, c.created_at, c.updated_at, c.deleted_at
 FROM customers c
 JOIN workspaces w ON c.workspace_id = w.id
-WHERE c.workspace_id = $1 AND c.deleted_at IS NULL
+WHERE w.id = $1 AND c.deleted_at IS NULL
 ORDER BY c.created_at DESC
 LIMIT $2 OFFSET $3
 `
 
 type ListWorkspaceCustomersWithPaginationParams struct {
-	WorkspaceID uuid.UUID `json:"workspace_id"`
-	Limit       int32     `json:"limit"`
-	Offset      int32     `json:"offset"`
+	ID     uuid.UUID `json:"id"`
+	Limit  int32     `json:"limit"`
+	Offset int32     `json:"offset"`
 }
 
-type ListWorkspaceCustomersWithPaginationRow struct {
-	ID                  uuid.UUID          `json:"id"`
-	WorkspaceID         uuid.UUID          `json:"workspace_id"`
-	ExternalID          pgtype.Text        `json:"external_id"`
-	Email               pgtype.Text        `json:"email"`
-	Name                pgtype.Text        `json:"name"`
-	Phone               pgtype.Text        `json:"phone"`
-	Description         pgtype.Text        `json:"description"`
-	Balance             pgtype.Int4        `json:"balance"`
-	Currency            pgtype.Text        `json:"currency"`
-	DefaultSourceID     pgtype.UUID        `json:"default_source_id"`
-	InvoicePrefix       pgtype.Text        `json:"invoice_prefix"`
-	NextInvoiceSequence pgtype.Int4        `json:"next_invoice_sequence"`
-	TaxExempt           pgtype.Bool        `json:"tax_exempt"`
-	TaxIds              []byte             `json:"tax_ids"`
-	Metadata            []byte             `json:"metadata"`
-	Livemode            pgtype.Bool        `json:"livemode"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
-	WorkspaceName       string             `json:"workspace_name"`
-}
-
-func (q *Queries) ListWorkspaceCustomersWithPagination(ctx context.Context, arg ListWorkspaceCustomersWithPaginationParams) ([]ListWorkspaceCustomersWithPaginationRow, error) {
-	rows, err := q.db.Query(ctx, listWorkspaceCustomersWithPagination, arg.WorkspaceID, arg.Limit, arg.Offset)
+func (q *Queries) ListWorkspaceCustomersWithPagination(ctx context.Context, arg ListWorkspaceCustomersWithPaginationParams) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceCustomersWithPagination, arg.ID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListWorkspaceCustomersWithPaginationRow{}
+	items := []Customer{}
 	for rows.Next() {
-		var i ListWorkspaceCustomersWithPaginationRow
+		var i Customer
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
@@ -322,7 +298,6 @@ func (q *Queries) ListWorkspaceCustomersWithPagination(ctx context.Context, arg 
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
-			&i.WorkspaceName,
 		); err != nil {
 			return nil, err
 		}

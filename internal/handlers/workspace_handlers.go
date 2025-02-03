@@ -27,25 +27,25 @@ func NewWorkspaceHandler(common *CommonServices) *WorkspaceHandler {
 // @Tags workspaces
 // @Accept json
 // @Produce json
-// @Param id path string true "Workspace ID"
+// @Param workspace_id path string true "Workspace ID"
 // @Success 200 {object} WorkspaceResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /workspaces/{id} [get]
+// @Router /workspaces/{workspace_id} [get]
 func (h *WorkspaceHandler) GetWorkspace(c *gin.Context) {
-	id := c.Param("id")
+	workspaceId := c.Param("workspace_id")
 
 	// Validate UUID format
-	parsedUUID, err := uuid.Parse(id)
+	parsedUUID, err := uuid.Parse(workspaceId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid UUID format"})
 		return
 	}
 
 	workspace, err := h.common.db.GetWorkspace(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Workspace not found"})
 		return
 	}
 
@@ -139,13 +139,13 @@ type CreateWorkspaceRequest struct {
 // @Tags workspaces
 // @Accept json
 // @Produce json
-// @Param id path string true "Workspace ID"
+// @Param workspace_id path string true "Workspace ID"
 // @Param workspace body UpdateWorkspaceRequest true "Workspace update data"
 // @Success 200 {object} WorkspaceResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /workspaces/{id} [put]
+// @Router /workspaces/{workspace_id} [put]
 type UpdateWorkspaceRequest struct {
 	Name         string                 `json:"name,omitempty"`
 	Description  string                 `json:"description,omitempty"`
@@ -236,18 +236,18 @@ func (h *WorkspaceHandler) CreateWorkspace(c *gin.Context) {
 // @Tags workspaces
 // @Accept json
 // @Produce json
-// @Param id path string true "Workspace ID"
+// @Param workspace_id path string true "Workspace ID"
 // @Param workspace body UpdateWorkspaceRequest true "Workspace update data"
 // @Success 200 {object} WorkspaceResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /workspaces/{id} [put]
+// @Router /workspaces/{workspace_id} [put]
 func (h *WorkspaceHandler) UpdateWorkspace(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	workspaceId := c.Param("workspace_id")
+	parsedUUID, err := uuid.Parse(workspaceId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid UUID format"})
 		return
 	}
 
@@ -289,23 +289,23 @@ func (h *WorkspaceHandler) UpdateWorkspace(c *gin.Context) {
 // @Tags workspaces
 // @Accept json
 // @Produce json
-// @Param id path string true "Workspace ID"
+// @Param workspace_id path string true "Workspace ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /workspaces/{id} [delete]
+// @Router /workspaces/{workspace_id} [delete]
 func (h *WorkspaceHandler) DeleteWorkspace(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	workspaceId := c.Param("workspace_id")
+	parsedUUID, err := uuid.Parse(workspaceId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid UUID format"})
 		return
 	}
 
 	err = h.common.db.DeleteWorkspace(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Workspace not found"})
 		return
 	}
 
@@ -318,23 +318,23 @@ func (h *WorkspaceHandler) DeleteWorkspace(c *gin.Context) {
 // @Tags workspaces
 // @Accept json
 // @Produce json
-// @Param id path string true "Workspace ID"
+// @Param workspace_id path string true "Workspace ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /admin/workspaces/{id}/hard [delete]
+// @Router /admin/workspaces/{workspace_id}/hard [delete]
 func (h *WorkspaceHandler) HardDeleteWorkspace(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	workspaceId := c.Param("workspace_id")
+	parsedUUID, err := uuid.Parse(workspaceId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid UUID format"})
 		return
 	}
 
 	err = h.common.db.HardDeleteWorkspace(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Workspace not found"})
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Workspace not found"})
 		return
 	}
 
@@ -376,17 +376,17 @@ func parsePaginationParams(c *gin.Context) (limit, offset int, err error) {
 // @Tags workspaces
 // @Accept json
 // @Produce json
-// @Param id path string true "Workspace ID"
+// @Param workspace_id path string true "Workspace ID"
 // @Param limit query int false "Number of customers to return (default 10, max 100)"
 // @Param offset query int false "Number of customers to skip (default 0)"
 // @Success 200 {object} ListCustomersResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /workspaces/{id}/customers [get]
+// @Router /workspaces/{workspace_id}/customers [get]
 func (h *WorkspaceHandler) ListWorkspaceCustomers(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	workspaceId := c.Param("workspace_id")
+	parsedUUID, err := uuid.Parse(workspaceId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid UUID format"})
 		return
@@ -399,39 +399,36 @@ func (h *WorkspaceHandler) ListWorkspaceCustomers(c *gin.Context) {
 		return
 	}
 
-	// For now, we'll use the existing ListWorkspaceCustomers method
-	// TODO: Update once the new database methods are created
-	customers, err := h.common.db.ListWorkspaceCustomers(c.Request.Context(), parsedUUID)
+	// Get total count of customers for the workspace
+	total, err := h.common.db.CountWorkspaceCustomers(c.Request.Context(), parsedUUID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to count customers"})
+		return
+	}
+
+	// Get paginated customers
+	customers, err := h.common.db.ListWorkspaceCustomersWithPagination(c.Request.Context(), db.ListWorkspaceCustomersWithPaginationParams{
+		ID:     parsedUUID,
+		Limit:  int32(limit),
+		Offset: int32(offset),
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve customers"})
 		return
 	}
 
-	// Apply pagination in memory for now
-	// TODO: Replace with database-level pagination once the new methods are created
-	total := len(customers)
-	start := offset
-	end := offset + limit
-	if start > total {
-		start = total
-	}
-	if end > total {
-		end = total
-	}
-
-	paginatedCustomers := customers[start:end]
-	response := make([]CustomerResponse, len(paginatedCustomers))
-	for i, customer := range paginatedCustomers {
+	response := make([]CustomerResponse, len(customers))
+	for i, customer := range customers {
 		response[i] = toCustomerResponse(customer)
 	}
 
-	hasMore := end < total
+	hasMore := offset+len(response) < int(total)
 
 	c.JSON(http.StatusOK, ListCustomersResponse{
 		Object:  "list",
 		Data:    response,
 		HasMore: hasMore,
-		Total:   int64(total),
+		Total:   total,
 	})
 }
 

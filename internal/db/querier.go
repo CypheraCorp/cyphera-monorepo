@@ -97,7 +97,7 @@ type Querier interface {
 	ListTokensByNetwork(ctx context.Context, networkID uuid.UUID) ([]Token, error)
 	ListUsersByAccount(ctx context.Context, accountID uuid.UUID) ([]User, error)
 	ListWorkspaceCustomers(ctx context.Context, id uuid.UUID) ([]Customer, error)
-	ListWorkspaceCustomersWithPagination(ctx context.Context, arg ListWorkspaceCustomersWithPaginationParams) ([]ListWorkspaceCustomersWithPaginationRow, error)
+	ListWorkspaceCustomersWithPagination(ctx context.Context, arg ListWorkspaceCustomersWithPaginationParams) ([]Customer, error)
 	ListWorkspaces(ctx context.Context) ([]Workspace, error)
 	ListWorkspacesByAccountID(ctx context.Context, accountID uuid.UUID) ([]Workspace, error)
 	SearchAccounts(ctx context.Context, arg SearchAccountsParams) ([]Account, error)

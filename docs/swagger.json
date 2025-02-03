@@ -113,7 +113,7 @@
                 }
             }
         },
-        "/accounts/:id": {
+        "/accounts/:account_id": {
             "put": {
                 "security": [
                     {
@@ -324,7 +324,7 @@
                 }
             }
         },
-        "/accounts/{id}": {
+        "/accounts/{account_id}": {
             "get": {
                 "security": [
                     {
@@ -346,7 +346,7 @@
                     {
                         "type": "string",
                         "description": "Account ID",
-                        "name": "id",
+                        "name": "account_id",
                         "in": "path",
                         "required": true
                     }
@@ -373,7 +373,7 @@
                 }
             }
         },
-        "/admin/accounts/{id}": {
+        "/admin/accounts/{account_id}": {
             "delete": {
                 "security": [
                     {
@@ -395,7 +395,7 @@
                     {
                         "type": "string",
                         "description": "Account ID",
-                        "name": "id",
+                        "name": "account_id",
                         "in": "path",
                         "required": true
                     }
@@ -542,7 +542,7 @@
                 }
             }
         },
-        "/admin/workspaces/{id}/hard": {
+        "/admin/workspaces/{workspace_id}/hard": {
             "delete": {
                 "security": [
                     {
@@ -564,7 +564,7 @@
                     {
                         "type": "string",
                         "description": "Workspace ID",
-                        "name": "id",
+                        "name": "workspace_id",
                         "in": "path",
                         "required": true
                     }
@@ -723,7 +723,7 @@
                 }
             }
         },
-        "/api-keys/{id}": {
+        "/api-keys/{api_key_id}": {
             "get": {
                 "security": [
                     {
@@ -745,7 +745,7 @@
                     {
                         "type": "string",
                         "description": "API Key ID",
-                        "name": "id",
+                        "name": "api_key_id",
                         "in": "path",
                         "required": true
                     }
@@ -792,7 +792,7 @@
                     {
                         "type": "string",
                         "description": "API Key ID",
-                        "name": "id",
+                        "name": "api_key_id",
                         "in": "path",
                         "required": true
                     },
@@ -848,7 +848,7 @@
                     {
                         "type": "string",
                         "description": "API Key ID",
-                        "name": "id",
+                        "name": "api_key_id",
                         "in": "path",
                         "required": true
                     }
@@ -981,7 +981,7 @@
                 }
             }
         },
-        "/customers/{id}": {
+        "/customers/{customer_id}": {
             "get": {
                 "security": [
                     {
@@ -1003,7 +1003,7 @@
                     {
                         "type": "string",
                         "description": "Customer ID",
-                        "name": "id",
+                        "name": "customer_id",
                         "in": "path",
                         "required": true
                     }
@@ -1050,7 +1050,7 @@
                     {
                         "type": "string",
                         "description": "Customer ID",
-                        "name": "id",
+                        "name": "customer_id",
                         "in": "path",
                         "required": true
                     },
@@ -1106,7 +1106,7 @@
                     {
                         "type": "string",
                         "description": "Customer ID",
-                        "name": "id",
+                        "name": "customer_id",
                         "in": "path",
                         "required": true
                     }
@@ -1358,7 +1358,7 @@
                 }
             }
         },
-        "/networks/{id}": {
+        "/networks/{network_id}": {
             "get": {
                 "security": [
                     {
@@ -1380,7 +1380,7 @@
                     {
                         "type": "string",
                         "description": "Network ID",
-                        "name": "id",
+                        "name": "network_id",
                         "in": "path",
                         "required": true
                     }
@@ -1427,7 +1427,7 @@
                     {
                         "type": "string",
                         "description": "Network ID",
-                        "name": "id",
+                        "name": "network_id",
                         "in": "path",
                         "required": true
                     },
@@ -1483,7 +1483,7 @@
                     {
                         "type": "string",
                         "description": "Network ID",
-                        "name": "id",
+                        "name": "network_id",
                         "in": "path",
                         "required": true
                     }
@@ -1659,7 +1659,7 @@
                 }
             }
         },
-        "/products/{id}": {
+        "/products/{product_id}": {
             "get": {
                 "security": [
                     {
@@ -1681,7 +1681,7 @@
                     {
                         "type": "string",
                         "description": "Product ID",
-                        "name": "id",
+                        "name": "product_id",
                         "in": "path",
                         "required": true
                     }
@@ -1728,7 +1728,7 @@
                     {
                         "type": "string",
                         "description": "Product ID",
-                        "name": "id",
+                        "name": "product_id",
                         "in": "path",
                         "required": true
                     },
@@ -1784,7 +1784,7 @@
                     {
                         "type": "string",
                         "description": "Product ID",
-                        "name": "id",
+                        "name": "product_id",
                         "in": "path",
                         "required": true
                     }
@@ -2247,7 +2247,7 @@
                 }
             }
         },
-        "/products/{product_id}/tokens/{id}": {
+        "/products/{product_id}/tokens/{token_id}": {
             "get": {
                 "security": [
                     {
@@ -2268,8 +2268,15 @@
                 "parameters": [
                     {
                         "type": "string",
+                        "description": "Product ID",
+                        "name": "product_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
                         "description": "Product Token ID",
-                        "name": "id",
+                        "name": "token_id",
                         "in": "path",
                         "required": true
                     }
@@ -2756,7 +2763,7 @@
                 }
             }
         },
-        "/tokens/{id}": {
+        "/tokens/{token_id}": {
             "get": {
                 "security": [
                     {
@@ -2778,7 +2785,7 @@
                     {
                         "type": "string",
                         "description": "Token ID",
-                        "name": "id",
+                        "name": "token_id",
                         "in": "path",
                         "required": true
                     }
@@ -2825,7 +2832,7 @@
                     {
                         "type": "string",
                         "description": "Token ID",
-                        "name": "id",
+                        "name": "token_id",
                         "in": "path",
                         "required": true
                     },
@@ -2881,7 +2888,7 @@
                     {
                         "type": "string",
                         "description": "Token ID",
-                        "name": "id",
+                        "name": "token_id",
                         "in": "path",
                         "required": true
                     }
@@ -3149,7 +3156,7 @@
                 }
             }
         },
-        "/users/{id}": {
+        "/users/{user_id}": {
             "get": {
                 "security": [
                     {
@@ -3171,7 +3178,7 @@
                     {
                         "type": "string",
                         "description": "User ID",
-                        "name": "id",
+                        "name": "user_id",
                         "in": "path",
                         "required": true
                     }
@@ -3218,7 +3225,7 @@
                     {
                         "type": "string",
                         "description": "User ID",
-                        "name": "id",
+                        "name": "user_id",
                         "in": "path",
                         "required": true
                     },
@@ -3280,7 +3287,7 @@
                     {
                         "type": "string",
                         "description": "User ID",
-                        "name": "id",
+                        "name": "user_id",
                         "in": "path",
                         "required": true
                     }
@@ -3310,7 +3317,7 @@
                 }
             }
         },
-        "/users/{id}/account": {
+        "/users/{user_id}/account": {
             "get": {
                 "security": [
                     {
@@ -3332,7 +3339,7 @@
                     {
                         "type": "string",
                         "description": "User ID",
-                        "name": "id",
+                        "name": "user_id",
                         "in": "path",
                         "required": true
                     }
@@ -3451,7 +3458,7 @@
                 }
             }
         },
-        "/workspaces/{id}": {
+        "/workspaces/{workspace_id}": {
             "get": {
                 "security": [
                     {
@@ -3473,7 +3480,7 @@
                     {
                         "type": "string",
                         "description": "Workspace ID",
-                        "name": "id",
+                        "name": "workspace_id",
                         "in": "path",
                         "required": true
                     }
@@ -3520,7 +3527,7 @@
                     {
                         "type": "string",
                         "description": "Workspace ID",
-                        "name": "id",
+                        "name": "workspace_id",
                         "in": "path",
                         "required": true
                     },
@@ -3576,7 +3583,7 @@
                     {
                         "type": "string",
                         "description": "Workspace ID",
-                        "name": "id",
+                        "name": "workspace_id",
                         "in": "path",
                         "required": true
                     }
@@ -3600,7 +3607,7 @@
                 }
             }
         },
-        "/workspaces/{id}/customers": {
+        "/workspaces/{workspace_id}/customers": {
             "get": {
                 "security": [
                     {
@@ -3622,7 +3629,7 @@
                     {
                         "type": "string",
                         "description": "Workspace ID",
-                        "name": "id",
+                        "name": "workspace_id",
                         "in": "path",
                         "required": true
                     },

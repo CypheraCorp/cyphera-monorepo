@@ -88,15 +88,15 @@ type ListCustomersResponse struct {
 // @Tags customers
 // @Accept json
 // @Produce json
-// @Param id path string true "Customer ID"
+// @Param customer_id path string true "Customer ID"
 // @Success 200 {object} CustomerResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /customers/{id} [get]
+// @Router /customers/{customer_id} [get]
 func (h *CustomerHandler) GetCustomer(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	customerId := c.Param("customer_id")
+	parsedUUID, err := uuid.Parse(customerId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid customer ID format"})
 		return
@@ -293,16 +293,16 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 // @Tags customers
 // @Accept json
 // @Produce json
-// @Param id path string true "Customer ID"
+// @Param customer_id path string true "Customer ID"
 // @Param customer body UpdateCustomerRequest true "Customer update data"
 // @Success 200 {object} CustomerResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /customers/{id} [put]
+// @Router /customers/{customer_id} [put]
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	customerId := c.Param("customer_id")
+	parsedUUID, err := uuid.Parse(customerId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid customer ID format"})
 		return
@@ -351,15 +351,15 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 // @Tags customers
 // @Accept json
 // @Produce json
-// @Param id path string true "Customer ID"
+// @Param customer_id path string true "Customer ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /customers/{id} [delete]
+// @Router /customers/{customer_id} [delete]
 func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	customerId := c.Param("customer_id")
+	parsedUUID, err := uuid.Parse(customerId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid customer ID format"})
 		return

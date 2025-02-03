@@ -163,15 +163,16 @@ func toProductTokensByProductResponse(pt db.GetProductTokensByProductRow) Produc
 // @Tags product-tokens
 // @Accept json
 // @Produce json
-// @Param id path string true "Product Token ID"
+// @Param product_id path string true "Product ID"
+// @Param token_id path string true "Product Token ID"
 // @Success 200 {object} ProductTokenResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /products/{product_id}/tokens/{id} [get]
+// @Router /products/{product_id}/tokens/{token_id} [get]
 func (h *ProductHandler) GetProductToken(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	productId := c.Param("product_id")
+	parsedUUID, err := uuid.Parse(productId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product token ID format"})
 		return

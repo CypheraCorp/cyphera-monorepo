@@ -124,15 +124,15 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 // @Tags users
 // @Accept json
 // @Produce json
-// @Param id path string true "User ID"
+// @Param user_id path string true "User ID"
 // @Success 200 {object} UserResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /users/{id} [get]
+// @Router /users/{user_id} [get]
 func (h *UserHandler) GetUser(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	userId := c.Param("user_id")
+	parsedUUID, err := uuid.Parse(userId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid user ID format"})
 		return
@@ -206,17 +206,17 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 // @Tags users
 // @Accept json
 // @Produce json
-// @Param id path string true "User ID"
+// @Param user_id path string true "User ID"
 // @Param user body UpdateUserRequest true "User update data"
 // @Success 200 {object} UserResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /users/{id} [put]
+// @Router /users/{user_id} [put]
 func (h *UserHandler) UpdateUser(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	userId := c.Param("user_id")
+	parsedUUID, err := uuid.Parse(userId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid user ID format"})
 		return
@@ -263,16 +263,16 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 // @Tags users
 // @Accept json
 // @Produce json
-// @Param id path string true "User ID"
+// @Param user_id path string true "User ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /users/{id} [delete]
+// @Router /users/{user_id} [delete]
 func (h *UserHandler) DeleteUser(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	userId := c.Param("user_id")
+	parsedUUID, err := uuid.Parse(userId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid user ID format"})
 		return
@@ -293,16 +293,16 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 // @Tags users
 // @Accept json
 // @Produce json
-// @Param id path string true "User ID"
+// @Param user_id path string true "User ID"
 // @Success 200 {object} UserAccountResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /users/{id}/account [get]
+// @Router /users/{user_id}/account [get]
 func (h *UserHandler) GetUserAccount(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	userId := c.Param("user_id")
+	parsedUUID, err := uuid.Parse(userId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid user ID format"})
 		return
