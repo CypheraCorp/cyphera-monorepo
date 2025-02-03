@@ -116,15 +116,15 @@ func (h *AccountHandler) ListAccounts(c *gin.Context) {
 // @Tags accounts
 // @Accept json
 // @Produce json
-// @Param id path string true "Account ID"
+// @Param account_id path string true "Account ID"
 // @Success 200 {object} AccountResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /accounts/{id} [get]
+// @Router /accounts/{account_id} [get]
 func (h *AccountHandler) GetAccount(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	accountId := c.Param("account_id")
+	parsedUUID, err := uuid.Parse(accountId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid account ID format"})
 		return
@@ -518,10 +518,10 @@ func HandleAccountAccessError(c *gin.Context, err error) bool {
 // @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /accounts/:id [put]
+// @Router /accounts/:account_id [put]
 func (h *AccountHandler) UpdateAccount(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	accountId := c.Param("account_id")
+	parsedUUID, err := uuid.Parse(accountId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid account ID format"})
 		return
@@ -572,14 +572,14 @@ func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 // @Tags accounts
 // @Accept json
 // @Produce json
-// @Param id path string true "Account ID"
+// @Param account_id path string true "Account ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /admin/accounts/{id} [delete]
+// @Router /admin/accounts/{account_id} [delete]
 func (h *AccountHandler) DeleteAccount(c *gin.Context) {
 	// Only admins can delete accounts
 	if c.GetString("accountType") != constants.AccountTypeAdmin {
@@ -587,8 +587,8 @@ func (h *AccountHandler) DeleteAccount(c *gin.Context) {
 		return
 	}
 
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	accountId := c.Param("account_id")
+	parsedUUID, err := uuid.Parse(accountId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid account ID format"})
 		return

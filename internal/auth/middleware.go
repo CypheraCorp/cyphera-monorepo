@@ -16,7 +16,6 @@ import (
 	"github.com/auth0/go-jwt-middleware/v2/jwks"
 	"github.com/auth0/go-jwt-middleware/v2/validator"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 var (
@@ -184,40 +183,20 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 			return
 		}
 
-		// Get workspace ID from header
-		workspaceIdStr := c.GetHeader("X-Workspace-ID")
-		if workspaceIdStr == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Workspace ID not specified"})
-			c.Abort()
-			return
-		}
-
-		// Validate workspace ID format
-		_, err = uuid.Parse(workspaceIdStr)
+		// Get workspaces for the account
+		workspaces, err := queries.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID format"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve workspaces"})
 			c.Abort()
 			return
 		}
 
-		// Verify workspace belongs to account
-		workspace, err := queries.GetWorkspace(c.Request.Context(), uuid.MustParse(workspaceIdStr))
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid workspace"})
-			c.Abort()
-			return
-		}
-
-		if workspace.AccountID != account.ID {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Workspace does not belong to user's account"})
-			c.Abort()
-			return
-		}
+		defaultWorkspace := workspaces[0]
 
 		// Set context with user and account information
 		c.Set("userID", user.ID.String())
 		c.Set("accountID", account.ID.String())
-		c.Set("workspaceID", workspaceIdStr)
+		c.Set("workspaceID", defaultWorkspace.ID.String())
 		c.Set("accountType", string(account.AccountType))
 		c.Set("userRole", string(user.Role))
 		c.Set("authType", constants.AuthTypeJWT)

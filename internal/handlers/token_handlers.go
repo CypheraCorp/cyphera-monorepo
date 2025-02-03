@@ -21,6 +21,7 @@ func NewTokenHandler(common *CommonServices) *TokenHandler {
 // TokenResponse represents the standardized API response for token operations
 type TokenResponse struct {
 	ID              string `json:"id"`
+	Object          string `json:"object"`
 	NetworkID       string `json:"network_id"`
 	GasToken        bool   `json:"gas_token"`
 	Name            string `json:"name"`
@@ -56,15 +57,15 @@ type UpdateTokenRequest struct {
 // @Tags tokens
 // @Accept json
 // @Produce json
-// @Param id path string true "Token ID"
+// @Param token_id path string true "Token ID"
 // @Success 200 {object} TokenResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /tokens/{id} [get]
+// @Router /tokens/{token_id} [get]
 func (h *TokenHandler) GetToken(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	tokenId := c.Param("token_id")
+	parsedUUID, err := uuid.Parse(tokenId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid token ID format"})
 		return
@@ -278,16 +279,16 @@ func (h *TokenHandler) CreateToken(c *gin.Context) {
 // @Tags tokens
 // @Accept json
 // @Produce json
-// @Param id path string true "Token ID"
+// @Param token_id path string true "Token ID"
 // @Param token body UpdateTokenRequest true "Token update data"
 // @Success 200 {object} TokenResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /tokens/{id} [put]
+// @Router /tokens/{token_id} [put]
 func (h *TokenHandler) UpdateToken(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	tokenId := c.Param("token_id")
+	parsedUUID, err := uuid.Parse(tokenId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid token ID format"})
 		return
@@ -321,15 +322,15 @@ func (h *TokenHandler) UpdateToken(c *gin.Context) {
 // @Tags tokens
 // @Accept json
 // @Produce json
-// @Param id path string true "Token ID"
+// @Param token_id path string true "Token ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /tokens/{id} [delete]
+// @Router /tokens/{token_id} [delete]
 func (h *TokenHandler) DeleteToken(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	tokenId := c.Param("token_id")
+	parsedUUID, err := uuid.Parse(tokenId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid token ID format"})
 		return
@@ -348,6 +349,7 @@ func (h *TokenHandler) DeleteToken(c *gin.Context) {
 func toTokenResponse(t db.Token) TokenResponse {
 	return TokenResponse{
 		ID:              t.ID.String(),
+		Object:          "token",
 		NetworkID:       t.NetworkID.String(),
 		GasToken:        t.GasToken,
 		Name:            t.Name,

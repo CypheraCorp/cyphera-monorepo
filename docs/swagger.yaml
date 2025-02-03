@@ -1101,7 +1101,7 @@ paths:
       summary: Create an account
       tags:
       - accounts
-  /accounts/:id:
+  /accounts/:account_id:
     put:
       consumes:
       - application/json
@@ -1142,7 +1142,7 @@ paths:
       summary: Update an account
       tags:
       - accounts
-  /accounts/{id}:
+  /accounts/{account_id}:
     get:
       consumes:
       - application/json
@@ -1150,7 +1150,7 @@ paths:
       parameters:
       - description: Account ID
         in: path
-        name: id
+        name: account_id
         required: true
         type: string
       produces:
@@ -1268,7 +1268,7 @@ paths:
       summary: Register or sign in to an account
       tags:
       - accounts
-  /admin/accounts/{id}:
+  /admin/accounts/{account_id}:
     delete:
       consumes:
       - application/json
@@ -1276,7 +1276,7 @@ paths:
       parameters:
       - description: Account ID
         in: path
-        name: id
+        name: account_id
         required: true
         type: string
       produces:
@@ -1351,7 +1351,7 @@ paths:
       summary: Get expired API keys
       tags:
       - api-keys
-  /admin/workspaces/{id}/hard:
+  /admin/workspaces/{workspace_id}/hard:
     delete:
       consumes:
       - application/json
@@ -1359,7 +1359,7 @@ paths:
       parameters:
       - description: Workspace ID
         in: path
-        name: id
+        name: workspace_id
         required: true
         type: string
       produces:
@@ -1461,7 +1461,7 @@ paths:
       summary: Create API key
       tags:
       - api-keys
-  /api-keys/{id}:
+  /api-keys/{api_key_id}:
     delete:
       consumes:
       - application/json
@@ -1469,7 +1469,7 @@ paths:
       parameters:
       - description: API Key ID
         in: path
-        name: id
+        name: api_key_id
         required: true
         type: string
       produces:
@@ -1497,7 +1497,7 @@ paths:
       parameters:
       - description: API Key ID
         in: path
-        name: id
+        name: api_key_id
         required: true
         type: string
       produces:
@@ -1527,7 +1527,7 @@ paths:
       parameters:
       - description: API Key ID
         in: path
-        name: id
+        name: api_key_id
         required: true
         type: string
       - description: API key update data
@@ -1652,7 +1652,7 @@ paths:
       summary: Create customer
       tags:
       - customers
-  /customers/{id}:
+  /customers/{customer_id}:
     delete:
       consumes:
       - application/json
@@ -1660,7 +1660,7 @@ paths:
       parameters:
       - description: Customer ID
         in: path
-        name: id
+        name: customer_id
         required: true
         type: string
       produces:
@@ -1688,7 +1688,7 @@ paths:
       parameters:
       - description: Customer ID
         in: path
-        name: id
+        name: customer_id
         required: true
         type: string
       produces:
@@ -1718,7 +1718,7 @@ paths:
       parameters:
       - description: Customer ID
         in: path
-        name: id
+        name: customer_id
         required: true
         type: string
       - description: Customer update data
@@ -1842,7 +1842,7 @@ paths:
       summary: Create a network
       tags:
       - networks
-  /networks/{id}:
+  /networks/{network_id}:
     delete:
       consumes:
       - application/json
@@ -1850,7 +1850,7 @@ paths:
       parameters:
       - description: Network ID
         in: path
-        name: id
+        name: network_id
         required: true
         type: string
       produces:
@@ -1878,7 +1878,7 @@ paths:
       parameters:
       - description: Network ID
         in: path
-        name: id
+        name: network_id
         required: true
         type: string
       produces:
@@ -1908,7 +1908,7 @@ paths:
       parameters:
       - description: Network ID
         in: path
-        name: id
+        name: network_id
         required: true
         type: string
       - description: Network update data
@@ -2087,7 +2087,7 @@ paths:
       summary: Create a product
       tags:
       - products
-  /products/{id}:
+  /products/{product_id}:
     delete:
       consumes:
       - application/json
@@ -2095,7 +2095,7 @@ paths:
       parameters:
       - description: Product ID
         in: path
-        name: id
+        name: product_id
         required: true
         type: string
       produces:
@@ -2123,7 +2123,7 @@ paths:
       parameters:
       - description: Product ID
         in: path
-        name: id
+        name: product_id
         required: true
         type: string
       produces:
@@ -2153,7 +2153,7 @@ paths:
       parameters:
       - description: Product ID
         in: path
-        name: id
+        name: product_id
         required: true
         type: string
       - description: Product update data
@@ -2437,15 +2437,20 @@ paths:
       summary: Create a product token
       tags:
       - product-tokens
-  /products/{product_id}/tokens/{id}:
+  /products/{product_id}/tokens/{token_id}:
     get:
       consumes:
       - application/json
       description: Retrieves the details of an existing product token
       parameters:
+      - description: Product ID
+        in: path
+        name: product_id
+        required: true
+        type: string
       - description: Product Token ID
         in: path
-        name: id
+        name: token_id
         required: true
         type: string
       produces:
@@ -2668,7 +2673,7 @@ paths:
       summary: Create a token
       tags:
       - tokens
-  /tokens/{id}:
+  /tokens/{token_id}:
     delete:
       consumes:
       - application/json
@@ -2676,7 +2681,7 @@ paths:
       parameters:
       - description: Token ID
         in: path
-        name: id
+        name: token_id
         required: true
         type: string
       produces:
@@ -2704,7 +2709,7 @@ paths:
       parameters:
       - description: Token ID
         in: path
-        name: id
+        name: token_id
         required: true
         type: string
       produces:
@@ -2734,7 +2739,7 @@ paths:
       parameters:
       - description: Token ID
         in: path
-        name: id
+        name: token_id
         required: true
         type: string
       - description: Token update data
@@ -2989,7 +2994,7 @@ paths:
       summary: Create a user
       tags:
       - users
-  /users/{id}:
+  /users/{user_id}:
     delete:
       consumes:
       - application/json
@@ -2997,7 +3002,7 @@ paths:
       parameters:
       - description: User ID
         in: path
-        name: id
+        name: user_id
         required: true
         type: string
       produces:
@@ -3029,7 +3034,7 @@ paths:
       parameters:
       - description: User ID
         in: path
-        name: id
+        name: user_id
         required: true
         type: string
       produces:
@@ -3059,7 +3064,7 @@ paths:
       parameters:
       - description: User ID
         in: path
-        name: id
+        name: user_id
         required: true
         type: string
       - description: User update data
@@ -3092,7 +3097,7 @@ paths:
       summary: Update a user
       tags:
       - users
-  /users/{id}/account:
+  /users/{user_id}/account:
     get:
       consumes:
       - application/json
@@ -3100,7 +3105,7 @@ paths:
       parameters:
       - description: User ID
         in: path
-        name: id
+        name: user_id
         required: true
         type: string
       produces:
@@ -3237,7 +3242,7 @@ paths:
       summary: Create workspace
       tags:
       - workspaces
-  /workspaces/{id}:
+  /workspaces/{workspace_id}:
     delete:
       consumes:
       - application/json
@@ -3245,7 +3250,7 @@ paths:
       parameters:
       - description: Workspace ID
         in: path
-        name: id
+        name: workspace_id
         required: true
         type: string
       produces:
@@ -3273,7 +3278,7 @@ paths:
       parameters:
       - description: Workspace ID
         in: path
-        name: id
+        name: workspace_id
         required: true
         type: string
       produces:
@@ -3303,7 +3308,7 @@ paths:
       parameters:
       - description: Workspace ID
         in: path
-        name: id
+        name: workspace_id
         required: true
         type: string
       - description: Workspace update data
@@ -3332,7 +3337,7 @@ paths:
       summary: Update workspace
       tags:
       - workspaces
-  /workspaces/{id}/customers:
+  /workspaces/{workspace_id}/customers:
     get:
       consumes:
       - application/json
@@ -3340,7 +3345,7 @@ paths:
       parameters:
       - description: Workspace ID
         in: path
-        name: id
+        name: workspace_id
         required: true
         type: string
       - description: Number of customers to return (default 10, max 100)

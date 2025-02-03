@@ -109,23 +109,23 @@ func InitializeRoutes(router *gin.Engine) {
 				admin.GET("/accounts", accountHandler.ListAccounts)
 				admin.POST("/accounts", accountHandler.CreateAccount)
 				admin.POST("/accounts/signin", accountHandler.SignInAccount)
-				admin.DELETE("/accounts/:id", accountHandler.DeleteAccount)
+				admin.DELETE("/accounts/:account_id", accountHandler.DeleteAccount)
 
 				// User management
 				admin.POST("/users", userHandler.CreateUser)
-				admin.GET("/users/:id", userHandler.GetUser)
-				admin.PUT("/users/:id", userHandler.UpdateUser)
-				admin.DELETE("/users/:id", userHandler.DeleteUser)
+				admin.GET("/users/:user_id", userHandler.GetUser)
+				admin.PUT("/users/:user_id", userHandler.UpdateUser)
+				admin.DELETE("/users/:user_id", userHandler.DeleteUser)
 
 				// Workspace management
 				admin.GET("/workspaces", workspaceHandler.ListWorkspaces)
 				admin.POST("/workspaces", workspaceHandler.CreateWorkspace)
 				admin.GET("/workspaces/all", workspaceHandler.GetAllWorkspaces)
-				admin.GET("/workspaces/:id", workspaceHandler.GetWorkspace)
-				admin.PUT("/workspaces/:id", workspaceHandler.UpdateWorkspace)
-				admin.DELETE("/workspaces/:id", workspaceHandler.DeleteWorkspace)
-				admin.DELETE("/workspaces/:id/hard", workspaceHandler.HardDeleteWorkspace)
-				admin.GET("/workspaces/:id/customers", workspaceHandler.ListWorkspaceCustomers)
+				admin.GET("/workspaces/:workspace_id", workspaceHandler.GetWorkspace)
+				admin.PUT("/workspaces/:workspace_id", workspaceHandler.UpdateWorkspace)
+				admin.DELETE("/workspaces/:workspace_id", workspaceHandler.DeleteWorkspace)
+				admin.DELETE("/workspaces/:workspace_id/hard", workspaceHandler.HardDeleteWorkspace)
+				admin.GET("/workspaces/:workspace_id/customers", workspaceHandler.ListWorkspaceCustomers)
 
 				// API Key management
 				admin.GET("/api-keys", apiKeyHandler.GetAllAPIKeys)
@@ -133,13 +133,13 @@ func InitializeRoutes(router *gin.Engine) {
 
 				// Network management
 				admin.POST("/networks", networkHandler.CreateNetwork)
-				admin.PUT("/networks/:id", networkHandler.UpdateNetwork)
-				admin.DELETE("/networks/:id", networkHandler.DeleteNetwork)
+				admin.PUT("/networks/:network_id", networkHandler.UpdateNetwork)
+				admin.DELETE("/networks/:network_id", networkHandler.DeleteNetwork)
 
 				// Token management
 				admin.POST("/tokens", tokenHandler.CreateToken)
-				admin.PUT("/tokens/:id", tokenHandler.UpdateToken)
-				admin.DELETE("/tokens/:id", tokenHandler.DeleteToken)
+				admin.PUT("/tokens/:token_id", tokenHandler.UpdateToken)
+				admin.DELETE("/tokens/:token_id", tokenHandler.DeleteToken)
 			}
 
 			// Current Account routes
@@ -148,8 +148,8 @@ func InitializeRoutes(router *gin.Engine) {
 				accounts.GET("/me/details", accountHandler.GetCurrentAccountDetails)
 				accounts.PUT("/me", accountHandler.UpdateCurrentAccount)
 
-				accounts.GET("/:id", accountHandler.GetAccount)
-				accounts.PUT("/:id", accountHandler.UpdateAccount)
+				accounts.GET("/:account_id", accountHandler.GetAccount)
+				accounts.PUT("/:account_id", accountHandler.UpdateAccount)
 			}
 
 			// Current User routes
@@ -163,9 +163,9 @@ func InitializeRoutes(router *gin.Engine) {
 			// Customers
 			protected.GET("/customers", customerHandler.ListCustomers)
 			protected.POST("/customers", customerHandler.CreateCustomer)
-			protected.GET("/customers/:id", customerHandler.GetCustomer)
-			protected.PUT("/customers/:id", customerHandler.UpdateCustomer)
-			protected.DELETE("/customers/:id", customerHandler.DeleteCustomer)
+			protected.GET("/customers/:customer_id", customerHandler.GetCustomer)
+			protected.PUT("/customers/:customer_id", customerHandler.UpdateCustomer)
+			protected.DELETE("/customers/:customer_id", customerHandler.DeleteCustomer)
 
 			// API Keys
 			apiKeys := protected.Group("/api-keys")
@@ -174,9 +174,9 @@ func InitializeRoutes(router *gin.Engine) {
 				apiKeys.GET("", apiKeyHandler.ListAPIKeys)
 				apiKeys.POST("", apiKeyHandler.CreateAPIKey)
 				apiKeys.GET("/count", apiKeyHandler.GetActiveAPIKeysCount)
-				apiKeys.GET("/:id", apiKeyHandler.GetAPIKeyByID)
-				apiKeys.PUT("/:id", apiKeyHandler.UpdateAPIKey)
-				apiKeys.DELETE("/:id", apiKeyHandler.DeleteAPIKey)
+				apiKeys.GET("/:api_key_id", apiKeyHandler.GetAPIKeyByID)
+				apiKeys.PUT("/:api_key_id", apiKeyHandler.UpdateAPIKey)
+				apiKeys.DELETE("/:api_key_id", apiKeyHandler.DeleteAPIKey)
 			}
 
 			// Networks
@@ -184,7 +184,7 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				networks.GET("", networkHandler.ListNetworks)
 				networks.GET("/active", networkHandler.ListActiveNetworks)
-				networks.GET("/:id", networkHandler.GetNetwork)
+				networks.GET("/:network_id", networkHandler.GetNetwork)
 				networks.GET("/chain/:chain_id", networkHandler.GetNetworkByChainID)
 			}
 
@@ -192,7 +192,7 @@ func InitializeRoutes(router *gin.Engine) {
 			tokens := protected.Group("/tokens")
 			{
 				tokens.GET("", tokenHandler.ListTokens)
-				tokens.GET("/:id", tokenHandler.GetToken)
+				tokens.GET("/:token_id", tokenHandler.GetToken)
 				tokens.GET("/network/:network_id", tokenHandler.ListTokensByNetwork)
 				tokens.GET("/network/:network_id/active", tokenHandler.ListActiveTokensByNetwork)
 				tokens.GET("/network/:network_id/gas", tokenHandler.GetGasToken)
@@ -204,15 +204,15 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				products.GET("", productHandler.ListProducts)
 				products.POST("", productHandler.CreateProduct)
-				products.GET("/:id", productHandler.GetProduct)
-				products.PUT("/:id", productHandler.UpdateProduct)
-				products.DELETE("/:id", productHandler.DeleteProduct)
+				products.GET("/:product_id", productHandler.GetProduct)
+				products.PUT("/:product_id", productHandler.UpdateProduct)
+				products.DELETE("/:product_id", productHandler.DeleteProduct)
 
 				// Product Tokens
 				products.GET("/:product_id/tokens", productHandler.GetProductTokensByProduct)
 				products.GET("/:product_id/tokens/active", productHandler.GetActiveProductTokensByProduct)
 				products.POST("/:product_id/tokens", productHandler.CreateProductToken)
-				products.GET("/:product_id/tokens/:id", productHandler.GetProductToken)
+				products.GET("/:product_id/tokens/:token_id", productHandler.GetProductToken)
 				products.GET("/:product_id/networks/:network_id/tokens", productHandler.GetProductTokensByNetwork)
 				products.GET("/:product_id/networks/:network_id/tokens/active", productHandler.GetActiveProductTokensByNetwork)
 				products.GET("/:product_id/networks/:network_id/tokens/:token_id", productHandler.GetProductTokenByIds)
@@ -226,11 +226,11 @@ func InitializeRoutes(router *gin.Engine) {
 				workspaces.GET("", workspaceHandler.ListWorkspaces)
 				workspaces.POST("", workspaceHandler.CreateWorkspace)
 				workspaces.GET("/all", workspaceHandler.GetAllWorkspaces)
-				workspaces.GET("/:id", workspaceHandler.GetWorkspace)
-				workspaces.PUT("/:id", workspaceHandler.UpdateWorkspace)
-				workspaces.DELETE("/:id", workspaceHandler.DeleteWorkspace)
-				workspaces.DELETE("/:id/hard", workspaceHandler.HardDeleteWorkspace)
-				workspaces.GET("/:id/customers", workspaceHandler.ListWorkspaceCustomers)
+				workspaces.GET("/:workspace_id", workspaceHandler.GetWorkspace)
+				workspaces.PUT("/:workspace_id", workspaceHandler.UpdateWorkspace)
+				workspaces.DELETE("/:workspace_id", workspaceHandler.DeleteWorkspace)
+				workspaces.DELETE("/:workspace_id/hard", workspaceHandler.HardDeleteWorkspace)
+				workspaces.GET("/:workspace_id/customers", workspaceHandler.ListWorkspaceCustomers)
 
 				// Workspace Products
 				workspaces.GET("/:workspace_id/products", productHandler.ListProducts)

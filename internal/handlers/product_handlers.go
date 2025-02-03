@@ -26,6 +26,7 @@ func NewProductHandler(common *CommonServices) *ProductHandler {
 // ProductResponse represents the standardized API response for product operations
 type ProductResponse struct {
 	ID              string          `json:"id"`
+	Object          string          `json:"object"`
 	WorkspaceID     string          `json:"workspace_id"`
 	Name            string          `json:"name"`
 	Description     string          `json:"description,omitempty"`
@@ -79,15 +80,15 @@ type UpdateProductRequest struct {
 // @Tags products
 // @Accept json
 // @Produce json
-// @Param id path string true "Product ID"
+// @Param product_id path string true "Product ID"
 // @Success 200 {object} ProductResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /products/{id} [get]
+// @Router /products/{product_id} [get]
 func (h *ProductHandler) GetProduct(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	productId := c.Param("product_id")
+	parsedUUID, err := uuid.Parse(productId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
 		return
@@ -226,15 +227,15 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 // @Tags products
 // @Accept json
 // @Produce json
-// @Param id path string true "Product ID"
+// @Param product_id path string true "Product ID"
 // @Param product body UpdateProductRequest true "Product update data"
 // @Success 200 {object} ProductResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /products/{id} [put]
+// @Router /products/{product_id} [put]
 func (h *ProductHandler) UpdateProduct(c *gin.Context) {
-	id := c.Param("id")
+	id := c.Param("product_id")
 	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
@@ -281,15 +282,15 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 // @Tags products
 // @Accept json
 // @Produce json
-// @Param id path string true "Product ID"
+// @Param product_id path string true "Product ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /products/{id} [delete]
+// @Router /products/{product_id} [delete]
 func (h *ProductHandler) DeleteProduct(c *gin.Context) {
-	id := c.Param("id")
-	parsedUUID, err := uuid.Parse(id)
+	productId := c.Param("product_id")
+	parsedUUID, err := uuid.Parse(productId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
 		return
@@ -308,6 +309,7 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 func toProductResponse(p db.Product) ProductResponse {
 	return ProductResponse{
 		ID:              p.ID.String(),
+		Object:          "product",
 		WorkspaceID:     p.WorkspaceID.String(),
 		Name:            p.Name,
 		Description:     p.Description.String,

@@ -119,7 +119,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/accounts/:id": {
+        "/accounts/:account_id": {
             "put": {
                 "security": [
                     {
@@ -330,7 +330,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/accounts/{id}": {
+        "/accounts/{account_id}": {
             "get": {
                 "security": [
                     {
@@ -352,7 +352,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Account ID",
-                        "name": "id",
+                        "name": "account_id",
                         "in": "path",
                         "required": true
                     }
@@ -379,7 +379,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/admin/accounts/{id}": {
+        "/admin/accounts/{account_id}": {
             "delete": {
                 "security": [
                     {
@@ -401,7 +401,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Account ID",
-                        "name": "id",
+                        "name": "account_id",
                         "in": "path",
                         "required": true
                     }
@@ -548,7 +548,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/admin/workspaces/{id}/hard": {
+        "/admin/workspaces/{workspace_id}/hard": {
             "delete": {
                 "security": [
                     {
@@ -570,7 +570,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Workspace ID",
-                        "name": "id",
+                        "name": "workspace_id",
                         "in": "path",
                         "required": true
                     }
@@ -729,7 +729,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api-keys/{id}": {
+        "/api-keys/{api_key_id}": {
             "get": {
                 "security": [
                     {
@@ -751,7 +751,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "API Key ID",
-                        "name": "id",
+                        "name": "api_key_id",
                         "in": "path",
                         "required": true
                     }
@@ -798,7 +798,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "API Key ID",
-                        "name": "id",
+                        "name": "api_key_id",
                         "in": "path",
                         "required": true
                     },
@@ -854,7 +854,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "API Key ID",
-                        "name": "id",
+                        "name": "api_key_id",
                         "in": "path",
                         "required": true
                     }
@@ -987,7 +987,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/customers/{id}": {
+        "/customers/{customer_id}": {
             "get": {
                 "security": [
                     {
@@ -1009,7 +1009,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Customer ID",
-                        "name": "id",
+                        "name": "customer_id",
                         "in": "path",
                         "required": true
                     }
@@ -1056,7 +1056,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Customer ID",
-                        "name": "id",
+                        "name": "customer_id",
                         "in": "path",
                         "required": true
                     },
@@ -1112,7 +1112,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Customer ID",
-                        "name": "id",
+                        "name": "customer_id",
                         "in": "path",
                         "required": true
                     }
@@ -1364,7 +1364,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/networks/{id}": {
+        "/networks/{network_id}": {
             "get": {
                 "security": [
                     {
@@ -1386,7 +1386,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Network ID",
-                        "name": "id",
+                        "name": "network_id",
                         "in": "path",
                         "required": true
                     }
@@ -1433,7 +1433,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Network ID",
-                        "name": "id",
+                        "name": "network_id",
                         "in": "path",
                         "required": true
                     },
@@ -1489,7 +1489,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Network ID",
-                        "name": "id",
+                        "name": "network_id",
                         "in": "path",
                         "required": true
                     }
@@ -1665,7 +1665,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/products/{id}": {
+        "/products/{product_id}": {
             "get": {
                 "security": [
                     {
@@ -1687,7 +1687,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Product ID",
-                        "name": "id",
+                        "name": "product_id",
                         "in": "path",
                         "required": true
                     }
@@ -1734,7 +1734,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Product ID",
-                        "name": "id",
+                        "name": "product_id",
                         "in": "path",
                         "required": true
                     },
@@ -1790,7 +1790,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Product ID",
-                        "name": "id",
+                        "name": "product_id",
                         "in": "path",
                         "required": true
                     }
@@ -2253,7 +2253,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/products/{product_id}/tokens/{id}": {
+        "/products/{product_id}/tokens/{token_id}": {
             "get": {
                 "security": [
                     {
@@ -2274,8 +2274,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "description": "Product ID",
+                        "name": "product_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
                         "description": "Product Token ID",
-                        "name": "id",
+                        "name": "token_id",
                         "in": "path",
                         "required": true
                     }
@@ -2762,7 +2769,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/tokens/{id}": {
+        "/tokens/{token_id}": {
             "get": {
                 "security": [
                     {
@@ -2784,7 +2791,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Token ID",
-                        "name": "id",
+                        "name": "token_id",
                         "in": "path",
                         "required": true
                     }
@@ -2831,7 +2838,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Token ID",
-                        "name": "id",
+                        "name": "token_id",
                         "in": "path",
                         "required": true
                     },
@@ -2887,7 +2894,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Token ID",
-                        "name": "id",
+                        "name": "token_id",
                         "in": "path",
                         "required": true
                     }
@@ -3155,7 +3162,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/users/{id}": {
+        "/users/{user_id}": {
             "get": {
                 "security": [
                     {
@@ -3177,7 +3184,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "User ID",
-                        "name": "id",
+                        "name": "user_id",
                         "in": "path",
                         "required": true
                     }
@@ -3224,7 +3231,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "User ID",
-                        "name": "id",
+                        "name": "user_id",
                         "in": "path",
                         "required": true
                     },
@@ -3286,7 +3293,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "User ID",
-                        "name": "id",
+                        "name": "user_id",
                         "in": "path",
                         "required": true
                     }
@@ -3316,7 +3323,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/users/{id}/account": {
+        "/users/{user_id}/account": {
             "get": {
                 "security": [
                     {
@@ -3338,7 +3345,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "User ID",
-                        "name": "id",
+                        "name": "user_id",
                         "in": "path",
                         "required": true
                     }
@@ -3457,7 +3464,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/workspaces/{id}": {
+        "/workspaces/{workspace_id}": {
             "get": {
                 "security": [
                     {
@@ -3479,7 +3486,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Workspace ID",
-                        "name": "id",
+                        "name": "workspace_id",
                         "in": "path",
                         "required": true
                     }
@@ -3526,7 +3533,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Workspace ID",
-                        "name": "id",
+                        "name": "workspace_id",
                         "in": "path",
                         "required": true
                     },
@@ -3582,7 +3589,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Workspace ID",
-                        "name": "id",
+                        "name": "workspace_id",
                         "in": "path",
                         "required": true
                     }
@@ -3606,7 +3613,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/workspaces/{id}/customers": {
+        "/workspaces/{workspace_id}/customers": {
             "get": {
                 "security": [
                     {
@@ -3628,7 +3635,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Workspace ID",
-                        "name": "id",
+                        "name": "workspace_id",
                         "in": "path",
                         "required": true
                     },
