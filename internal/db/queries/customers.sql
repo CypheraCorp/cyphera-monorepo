@@ -23,7 +23,7 @@ INSERT INTO customers (
     name,
     phone,
     description,
-    balance,
+    balance_in_pennies,
     currency,
     default_source_id,
     invoice_prefix,
@@ -44,7 +44,7 @@ SET
     name = COALESCE($3, name),
     phone = COALESCE($4, phone),
     description = COALESCE($5, description),
-    balance = COALESCE($6, balance),
+    balance_in_pennies = COALESCE($6, balance_in_pennies),
     currency = COALESCE($7, currency),
     default_source_id = COALESCE($8, default_source_id),
     invoice_prefix = COALESCE($9, invoice_prefix),
@@ -80,7 +80,7 @@ ORDER BY c.created_at DESC;
 -- name: UpdateCustomerBalance :one
 UPDATE customers
 SET 
-    balance = balance + $2,
+    balance_in_pennies = balance_in_pennies + $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
@@ -89,8 +89,8 @@ RETURNING *;
 SELECT * FROM customers
 WHERE workspace_id = $1 
 AND deleted_at IS NULL 
-AND balance > $2
-ORDER BY balance DESC;
+AND balance_in_pennies > $2
+ORDER BY balance_in_pennies DESC;
 
 -- name: CountCustomers :one
 SELECT COUNT(*) FROM customers

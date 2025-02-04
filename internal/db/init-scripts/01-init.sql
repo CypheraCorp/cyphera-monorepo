@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS customers (
     name VARCHAR(255),
     phone VARCHAR(255),
     description TEXT,
-    balance INTEGER DEFAULT 0,
+    balance_in_pennies INTEGER DEFAULT 0,
     currency VARCHAR(3) DEFAULT 'USD',
     default_source_id UUID,
     invoice_prefix VARCHAR(255),
@@ -278,7 +278,7 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 -- Insert test customers
-INSERT INTO customers (workspace_id, external_id, email, name, description, balance)
+INSERT INTO customers (workspace_id, external_id, email, name, description, balance_in_pennies)
 VALUES 
     (
         (SELECT id FROM workspaces WHERE name = 'Test Workspace'),

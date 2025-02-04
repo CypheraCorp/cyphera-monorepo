@@ -309,7 +309,7 @@ type Customer struct {
 	Name                pgtype.Text        `json:"name"`
 	Phone               pgtype.Text        `json:"phone"`
 	Description         pgtype.Text        `json:"description"`
-	Balance             pgtype.Int4        `json:"balance"`
+	BalanceInPennies    pgtype.Int4        `json:"balance_in_pennies"`
 	Currency            pgtype.Text        `json:"currency"`
 	DefaultSourceID     pgtype.UUID        `json:"default_source_id"`
 	InvoicePrefix       pgtype.Text        `json:"invoice_prefix"`

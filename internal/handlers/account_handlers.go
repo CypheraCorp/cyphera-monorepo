@@ -563,7 +563,6 @@ func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, toAccountResponse(account))
-
 }
 
 // DeleteAccount godoc
