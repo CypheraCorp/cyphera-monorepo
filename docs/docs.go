@@ -4204,7 +4204,13 @@ const docTemplate = `{
                 "email"
             ],
             "properties": {
+                "balance_in_pennies": {
+                    "type": "integer"
+                },
                 "currency": {
+                    "type": "string"
+                },
+                "default_source_id": {
                     "type": "string"
                 },
                 "description": {
@@ -4216,12 +4222,21 @@ const docTemplate = `{
                 "external_id": {
                     "type": "string"
                 },
+                "invoice_prefix": {
+                    "type": "string"
+                },
+                "livemode": {
+                    "type": "boolean"
+                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": true
                 },
                 "name": {
                     "type": "string"
+                },
+                "next_invoice_sequence": {
+                    "type": "integer"
                 },
                 "phone": {
                     "type": "string"
@@ -4466,7 +4481,7 @@ const docTemplate = `{
         "handlers.CustomerResponse": {
             "type": "object",
             "properties": {
-                "balance": {
+                "balance_in_pennies": {
                     "type": "integer"
                 },
                 "business_name": {
@@ -4661,6 +4676,9 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "object": {
+                    "type": "string"
+                },
                 "type": {
                     "type": "string"
                 },
@@ -4708,6 +4726,9 @@ const docTemplate = `{
                     "type": "object"
                 },
                 "name": {
+                    "type": "string"
+                },
+                "object": {
                     "type": "string"
                 },
                 "price_in_pennies": {
@@ -4841,6 +4862,9 @@ const docTemplate = `{
                 "network_id": {
                     "type": "string"
                 },
+                "object": {
+                    "type": "string"
+                },
                 "symbol": {
                     "type": "string"
                 },
@@ -4918,7 +4942,13 @@ const docTemplate = `{
         "handlers.UpdateCustomerRequest": {
             "type": "object",
             "properties": {
+                "balance_in_pennies": {
+                    "type": "integer"
+                },
                 "currency": {
+                    "type": "string"
+                },
+                "default_source_id": {
                     "type": "string"
                 },
                 "description": {
@@ -4930,12 +4960,21 @@ const docTemplate = `{
                 "external_id": {
                     "type": "string"
                 },
+                "invoice_prefix": {
+                    "type": "string"
+                },
+                "livemode": {
+                    "type": "boolean"
+                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": true
                 },
                 "name": {
                     "type": "string"
+                },
+                "next_invoice_sequence": {
+                    "type": "integer"
                 },
                 "phone": {
                     "type": "string"

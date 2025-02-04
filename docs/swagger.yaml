@@ -287,7 +287,11 @@ definitions:
     type: object
   handlers.CreateCustomerRequest:
     properties:
+      balance_in_pennies:
+        type: integer
       currency:
+        type: string
+      default_source_id:
         type: string
       description:
         type: string
@@ -295,11 +299,17 @@ definitions:
         type: string
       external_id:
         type: string
+      invoice_prefix:
+        type: string
+      livemode:
+        type: boolean
       metadata:
         additionalProperties: true
         type: object
       name:
         type: string
+      next_invoice_sequence:
+        type: integer
       phone:
         type: string
       tax_exempt:
@@ -468,7 +478,7 @@ definitions:
     type: object
   handlers.CustomerResponse:
     properties:
-      balance:
+      balance_in_pennies:
         type: integer
       business_name:
         type: string
@@ -595,6 +605,8 @@ definitions:
         type: string
       name:
         type: string
+      object:
+        type: string
       type:
         type: string
       updated_at:
@@ -626,6 +638,8 @@ definitions:
       metadata:
         type: object
       name:
+        type: string
+      object:
         type: string
       price_in_pennies:
         type: integer
@@ -713,6 +727,8 @@ definitions:
         type: string
       network_id:
         type: string
+      object:
+        type: string
       symbol:
         type: string
       updated_at:
@@ -765,7 +781,11 @@ definitions:
     type: object
   handlers.UpdateCustomerRequest:
     properties:
+      balance_in_pennies:
+        type: integer
       currency:
+        type: string
+      default_source_id:
         type: string
       description:
         type: string
@@ -773,11 +793,17 @@ definitions:
         type: string
       external_id:
         type: string
+      invoice_prefix:
+        type: string
+      livemode:
+        type: boolean
       metadata:
         additionalProperties: true
         type: object
       name:
         type: string
+      next_invoice_sequence:
+        type: integer
       phone:
         type: string
       tax_exempt:
