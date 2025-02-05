@@ -167,6 +167,17 @@ func (q *Queries) DeleteProductTokenByIds(ctx context.Context, arg DeleteProduct
 	return err
 }
 
+const deleteProductTokensByProduct = `-- name: DeleteProductTokensByProduct :exec
+DELETE FROM products_tokens
+WHERE product_id = $1 
+    AND deleted_at IS NULL
+`
+
+func (q *Queries) DeleteProductTokensByProduct(ctx context.Context, productID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteProductTokensByProduct, productID)
+	return err
+}
+
 const getActiveProductTokensByNetwork = `-- name: GetActiveProductTokensByNetwork :many
 SELECT 
     pt.id, pt.product_id, pt.network_id, pt.token_id, pt.active, pt.created_at, pt.updated_at, pt.deleted_at,

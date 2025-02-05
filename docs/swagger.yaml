@@ -353,6 +353,10 @@ definitions:
         type: string
       price_in_pennies:
         type: integer
+      product_tokens:
+        items:
+          $ref: '#/definitions/handlers.CreateProductTokenRequest'
+        type: array
       product_type:
         type: string
       term_length:
@@ -593,6 +597,19 @@ definitions:
       total:
         type: integer
     type: object
+  handlers.ListProductsResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/handlers.ProductResponse'
+        type: array
+      has_more:
+        type: boolean
+      object:
+        type: string
+      total:
+        type: integer
+    type: object
   handlers.NetworkResponse:
     properties:
       active:
@@ -643,6 +660,10 @@ definitions:
         type: string
       price_in_pennies:
         type: integer
+      product_tokens:
+        items:
+          $ref: '#/definitions/handlers.ProductTokenResponse'
+        type: array
       product_type:
         type: string
       term_length:
@@ -2403,6 +2424,34 @@ paths:
       tags:
       - product-tokens
   /products/{product_id}/tokens:
+    delete:
+      consumes:
+      - application/json
+      description: Soft deletes all product tokens for a specific product
+      parameters:
+      - description: Product ID
+        in: path
+        name: product_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete all product tokens by product
+      tags:
+      - product-tokens
     get:
       consumes:
       - application/json
@@ -3406,22 +3455,28 @@ paths:
     get:
       consumes:
       - application/json
-      description: Returns a list of all products for a workspace
+      description: Returns a paginated list of all products for a workspace
       parameters:
       - description: Workspace ID
         in: path
         name: workspace_id
         required: true
         type: string
+      - description: Number of products to return (default 10, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Number of products to skip (default 0)
+        in: query
+        name: offset
+        type: integer
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/handlers.ProductResponse'
-            type: array
+            $ref: '#/definitions/handlers.ListProductsResponse'
         "400":
           description: Bad Request
           schema:
