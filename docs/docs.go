@@ -2205,6 +2205,50 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Soft deletes all product tokens for a specific product",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "product-tokens"
+                ],
+                "summary": "Delete all product tokens by product",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "product_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/products/{product_id}/tokens/active": {
@@ -3681,7 +3725,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns a list of all products for a workspace",
+                "description": "Returns a paginated list of all products for a workspace",
                 "consumes": [
                     "application/json"
                 ],
@@ -3699,16 +3743,25 @@ const docTemplate = `{
                         "name": "workspace_id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of products to return (default 10, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of products to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.ProductResponse"
-                            }
+                            "$ref": "#/definitions/handlers.ListProductsResponse"
                         }
                     },
                     "400": {
@@ -4305,6 +4358,12 @@ const docTemplate = `{
                 "price_in_pennies": {
                     "type": "integer"
                 },
+                "product_tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.CreateProductTokenRequest"
+                    }
+                },
                 "product_type": {
                     "type": "string"
                 },
@@ -4658,6 +4717,26 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.ListProductsResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.ProductResponse"
+                    }
+                },
+                "has_more": {
+                    "type": "boolean"
+                },
+                "object": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "handlers.NetworkResponse": {
             "type": "object",
             "properties": {
@@ -4733,6 +4812,12 @@ const docTemplate = `{
                 },
                 "price_in_pennies": {
                     "type": "integer"
+                },
+                "product_tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.ProductTokenResponse"
+                    }
                 },
                 "product_type": {
                     "type": "string"

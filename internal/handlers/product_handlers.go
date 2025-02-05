@@ -4,6 +4,7 @@ import (
 	"cyphera-api/internal/db"
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -25,38 +26,40 @@ func NewProductHandler(common *CommonServices) *ProductHandler {
 
 // ProductResponse represents the standardized API response for product operations
 type ProductResponse struct {
-	ID              string          `json:"id"`
-	Object          string          `json:"object"`
-	WorkspaceID     string          `json:"workspace_id"`
-	Name            string          `json:"name"`
-	Description     string          `json:"description,omitempty"`
-	ProductType     string          `json:"product_type"`
-	IntervalType    string          `json:"interval_type,omitempty"`
-	TermLength      int32           `json:"term_length,omitempty"`
-	PriceInPennies  int32           `json:"price_in_pennies"`
-	ImageURL        string          `json:"image_url,omitempty"`
-	URL             string          `json:"url,omitempty"`
-	MerchantPaidGas bool            `json:"merchant_paid_gas"`
-	Active          bool            `json:"active"`
-	Metadata        json.RawMessage `json:"metadata,omitempty" swaggertype:"object"`
-	CreatedAt       int64           `json:"created_at"`
-	UpdatedAt       int64           `json:"updated_at"`
+	ID              string                 `json:"id"`
+	Object          string                 `json:"object"`
+	WorkspaceID     string                 `json:"workspace_id"`
+	Name            string                 `json:"name"`
+	Description     string                 `json:"description,omitempty"`
+	ProductType     string                 `json:"product_type"`
+	IntervalType    string                 `json:"interval_type,omitempty"`
+	TermLength      int32                  `json:"term_length,omitempty"`
+	PriceInPennies  int32                  `json:"price_in_pennies"`
+	ImageURL        string                 `json:"image_url,omitempty"`
+	URL             string                 `json:"url,omitempty"`
+	MerchantPaidGas bool                   `json:"merchant_paid_gas"`
+	Active          bool                   `json:"active"`
+	Metadata        json.RawMessage        `json:"metadata,omitempty" swaggertype:"object"`
+	CreatedAt       int64                  `json:"created_at"`
+	UpdatedAt       int64                  `json:"updated_at"`
+	ProductTokens   []ProductTokenResponse `json:"product_tokens,omitempty"`
 }
 
 // CreateProductRequest represents the request body for creating a product
 type CreateProductRequest struct {
-	WorkspaceID     string          `json:"workspace_id" binding:"required"`
-	Name            string          `json:"name" binding:"required"`
-	Description     string          `json:"description"`
-	ProductType     string          `json:"product_type" binding:"required"`
-	IntervalType    string          `json:"interval_type"`
-	TermLength      int32           `json:"term_length"`
-	PriceInPennies  int32           `json:"price_in_pennies" binding:"required"`
-	ImageURL        string          `json:"image_url"`
-	URL             string          `json:"url"`
-	MerchantPaidGas bool            `json:"merchant_paid_gas"`
-	Active          bool            `json:"active"`
-	Metadata        json.RawMessage `json:"metadata" swaggertype:"object"`
+	WorkspaceID     string                      `json:"workspace_id" binding:"required"`
+	Name            string                      `json:"name" binding:"required"`
+	Description     string                      `json:"description"`
+	ProductType     string                      `json:"product_type" binding:"required"`
+	IntervalType    string                      `json:"interval_type"`
+	TermLength      int32                       `json:"term_length"`
+	PriceInPennies  int32                       `json:"price_in_pennies" binding:"required"`
+	ImageURL        string                      `json:"image_url"`
+	URL             string                      `json:"url"`
+	MerchantPaidGas bool                        `json:"merchant_paid_gas"`
+	Active          bool                        `json:"active"`
+	Metadata        json.RawMessage             `json:"metadata" swaggertype:"object"`
+	ProductTokens   []CreateProductTokenRequest `json:"product_tokens,omitempty"`
 }
 
 // UpdateProductRequest represents the request body for updating a product
@@ -72,6 +75,14 @@ type UpdateProductRequest struct {
 	MerchantPaidGas *bool           `json:"merchant_paid_gas,omitempty"`
 	Active          *bool           `json:"active,omitempty"`
 	Metadata        json.RawMessage `json:"metadata,omitempty" swaggertype:"object"`
+}
+
+// ListProductsResponse represents the paginated response for product list operations
+type ListProductsResponse struct {
+	Object  string            `json:"object"`
+	Data    []ProductResponse `json:"data"`
+	HasMore bool              `json:"has_more"`
+	Total   int64             `json:"total"`
 }
 
 // GetProduct godoc
@@ -105,12 +116,14 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 
 // ListProducts godoc
 // @Summary List products
-// @Description Returns a list of all products for a workspace
+// @Description Returns a paginated list of all products for a workspace
 // @Tags products
 // @Accept json
 // @Produce json
 // @Param workspace_id path string true "Workspace ID"
-// @Success 200 {array} ProductResponse
+// @Param limit query int false "Number of products to return (default 10, max 100)"
+// @Param offset query int false "Number of products to skip (default 0)"
+// @Success 200 {object} ListProductsResponse
 // @Failure 400 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /workspaces/{workspace_id}/products [get]
@@ -122,18 +135,76 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		return
 	}
 
-	products, err := h.common.db.ListProducts(c.Request.Context(), parsedWorkspaceID)
+	// Parse pagination parameters
+	limit := 10 // default limit
+	if limitStr := c.Query("limit"); limitStr != "" {
+		parsedLimit, err := strconv.Atoi(limitStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid limit parameter"})
+			return
+		}
+		if parsedLimit > 100 {
+			limit = 100 // max limit
+		} else if parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	offset := 0 // default offset
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		parsedOffset, err := strconv.Atoi(offsetStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid offset parameter"})
+			return
+		}
+		if parsedOffset > 0 {
+			offset = parsedOffset
+		}
+	}
+
+	// Get total count
+	total, err := h.common.db.CountProducts(c.Request.Context(), parsedWorkspaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to count products"})
+		return
+	}
+
+	// Get paginated products
+	products, err := h.common.db.ListProductsWithPagination(c.Request.Context(), db.ListProductsWithPaginationParams{
+		WorkspaceID: parsedWorkspaceID,
+		Limit:       int32(limit),
+		Offset:      int32(offset),
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve products"})
 		return
 	}
 
-	response := make([]ProductResponse, len(products))
+	responseList := make([]ProductResponse, len(products))
+	// for each product, get the active product tokens
 	for i, product := range products {
-		response[i] = toProductResponse(product)
+		productResponse := toProductResponse(product)
+		productTokenList, err := h.common.db.GetActiveProductTokensByProduct(c.Request.Context(), product.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve product tokens"})
+			return
+		}
+		productTokenListResponse := make([]ProductTokenResponse, len(productTokenList))
+		for _, productToken := range productTokenList {
+			productTokenListResponse[i] = toActiveProductTokenByProductResponse(productToken)
+		}
+		productResponse.ProductTokens = productTokenListResponse
+		responseList[i] = productResponse
 	}
 
-	c.JSON(http.StatusOK, response)
+	hasMore := offset+len(responseList) < int(total)
+
+	c.JSON(http.StatusOK, ListProductsResponse{
+		Object:  "list",
+		Data:    responseList,
+		HasMore: hasMore,
+		Total:   total,
+	})
 }
 
 // ListActiveProducts godoc
@@ -218,6 +289,29 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
+	for _, productToken := range req.ProductTokens {
+		networkID, err := uuid.Parse(productToken.NetworkID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid workspace ID format"})
+			return
+		}
+		tokenID, err := uuid.Parse(productToken.TokenID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid token ID format"})
+			return
+		}
+		_, err = h.common.db.CreateProductToken(c.Request.Context(), db.CreateProductTokenParams{
+			ProductID: product.ID,
+			NetworkID: networkID,
+			TokenID:   tokenID,
+			Active:    productToken.Active,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create product token"})
+			return
+		}
+	}
+
 	c.JSON(http.StatusCreated, toProductResponse(product))
 }
 
@@ -248,26 +342,50 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	metadata, err := json.Marshal(req.Metadata)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
-		return
+	params := db.UpdateProductParams{
+		ID: parsedUUID,
 	}
 
-	product, err := h.common.db.UpdateProduct(c.Request.Context(), db.UpdateProductParams{
-		ID:              parsedUUID,
-		Name:            req.Name,
-		Description:     pgtype.Text{String: req.Description, Valid: req.Description != ""},
-		ProductType:     db.ProductType(req.ProductType),
-		IntervalType:    db.NullIntervalType{IntervalType: db.IntervalType(req.IntervalType), Valid: req.IntervalType != ""},
-		TermLength:      pgtype.Int4{Int32: *req.TermLength, Valid: req.TermLength != nil},
-		PriceInPennies:  int32(*req.PriceInPennies),
-		ImageUrl:        pgtype.Text{String: req.ImageURL, Valid: req.ImageURL != ""},
-		Url:             pgtype.Text{String: req.URL, Valid: req.URL != ""},
-		MerchantPaidGas: *req.MerchantPaidGas,
-		Active:          *req.Active,
-		Metadata:        metadata,
-	})
+	if req.Name != "" {
+		params.Name = req.Name
+	}
+	if req.Description != "" {
+		params.Description = pgtype.Text{String: req.Description, Valid: true}
+	}
+	if req.ProductType != "" {
+		params.ProductType = db.ProductType(req.ProductType)
+	}
+	if req.IntervalType != "" {
+		params.IntervalType = db.NullIntervalType{IntervalType: db.IntervalType(req.IntervalType), Valid: true}
+	}
+	if req.TermLength != nil {
+		params.TermLength = pgtype.Int4{Int32: *req.TermLength, Valid: true}
+	}
+	if req.PriceInPennies != nil {
+		params.PriceInPennies = *req.PriceInPennies
+	}
+	if req.ImageURL != "" {
+		params.ImageUrl = pgtype.Text{String: req.ImageURL, Valid: true}
+	}
+	if req.URL != "" {
+		params.Url = pgtype.Text{String: req.URL, Valid: true}
+	}
+	if req.MerchantPaidGas != nil {
+		params.MerchantPaidGas = *req.MerchantPaidGas
+	}
+	if req.Active != nil {
+		params.Active = *req.Active
+	}
+	if req.Metadata != nil {
+		metadata, err := json.Marshal(req.Metadata)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
+			return
+		}
+		params.Metadata = metadata
+	}
+
+	product, err := h.common.db.UpdateProduct(c.Request.Context(), params)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update product"})
 		return
@@ -299,6 +417,12 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 	err = h.common.db.DeleteProduct(c.Request.Context(), parsedUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Product not found"})
+		return
+	}
+
+	err = h.common.db.DeleteProductTokensByProduct(c.Request.Context(), parsedUUID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to delete product tokens"})
 		return
 	}
 

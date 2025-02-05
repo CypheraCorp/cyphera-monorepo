@@ -546,3 +546,32 @@ func (h *ProductHandler) DeleteProductToken(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+
+// DeleteProductTokensByProduct godoc
+// @Summary Delete all product tokens by product
+// @Description Soft deletes all product tokens for a specific product
+// @Tags product-tokens
+// @Accept json
+// @Produce json
+// @Param product_id path string true "Product ID"
+// @Success 204 "No Content"
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /products/{product_id}/tokens [delete]
+func (h *ProductHandler) DeleteProductTokensByProduct(c *gin.Context) {
+	productID := c.Param("product_id")
+	parsedProductID, err := uuid.Parse(productID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
+		return
+	}
+
+	err = h.common.db.DeleteProductTokensByProduct(c.Request.Context(), parsedProductID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to delete product tokens"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}

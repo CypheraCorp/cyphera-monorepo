@@ -187,3 +187,8 @@ SET
     updated_at = CURRENT_TIMESTAMP
 WHERE product_id = $1 
     AND deleted_at IS NULL; 
+
+-- name: DeleteProductTokensByProduct :exec
+DELETE FROM products_tokens
+WHERE product_id = $1 
+    AND deleted_at IS NULL;

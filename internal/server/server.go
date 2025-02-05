@@ -193,10 +193,10 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				tokens.GET("", tokenHandler.ListTokens)
 				tokens.GET("/:token_id", tokenHandler.GetToken)
-				tokens.GET("/network/:network_id", tokenHandler.ListTokensByNetwork)
-				tokens.GET("/network/:network_id/active", tokenHandler.ListActiveTokensByNetwork)
-				tokens.GET("/network/:network_id/gas", tokenHandler.GetGasToken)
-				tokens.GET("/network/:network_id/address/:address", tokenHandler.GetTokenByAddress)
+				tokens.GET("/networks/:network_id", tokenHandler.ListTokensByNetwork)
+				tokens.GET("/networks/:network_id/active", tokenHandler.ListActiveTokensByNetwork)
+				tokens.GET("/networks/:network_id/gas", tokenHandler.GetGasToken)
+				tokens.GET("/networks/:network_id/address/:address", tokenHandler.GetTokenByAddress)
 			}
 
 			// Products
@@ -218,6 +218,7 @@ func InitializeRoutes(router *gin.Engine) {
 				products.GET("/:product_id/networks/:network_id/tokens/:token_id", productHandler.GetProductTokenByIds)
 				products.PUT("/:product_id/networks/:network_id/tokens/:token_id", productHandler.UpdateProductToken)
 				products.DELETE("/:product_id/networks/:network_id/tokens/:token_id", productHandler.DeleteProductToken)
+				products.DELETE("/:product_id/tokens", productHandler.DeleteProductTokensByProduct)
 			}
 
 			// Workspaces
