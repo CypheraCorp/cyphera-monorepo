@@ -1,13 +1,11 @@
 package handlers
 
 import (
-	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -68,15 +66,15 @@ type CreateCustomerRequest struct {
 
 // UpdateCustomerRequest represents the request body for updating a customer
 type UpdateCustomerRequest struct {
-	ExternalID          string                 `json:"external_id,omitempty"`
-	Email               string                 `json:"email,omitempty" binding:"omitempty,email"`
-	Name                string                 `json:"name,omitempty"`
-	Phone               string                 `json:"phone,omitempty"`
-	Description         string                 `json:"description,omitempty"`
+	ExternalID          *string                `json:"external_id,omitempty"`
+	Email               *string                `json:"email,omitempty" binding:"omitempty,email"`
+	Name                *string                `json:"name,omitempty"`
+	Phone               *string                `json:"phone,omitempty"`
+	Description         *string                `json:"description,omitempty"`
 	BalanceInPennies    *int32                 `json:"balance_in_pennies,omitempty"`
-	Currency            string                 `json:"currency,omitempty" binding:"omitempty,required_with=BalanceInPennies"`
-	DefaultSourceID     string                 `json:"default_source_id,omitempty" binding:"omitempty,uuid4"`
-	InvoicePrefix       string                 `json:"invoice_prefix,omitempty"`
+	Currency            *string                `json:"currency,omitempty" binding:"omitempty,required_with=BalanceInPennies"`
+	DefaultSourceID     *string                `json:"default_source_id,omitempty" binding:"omitempty,uuid4"`
+	InvoicePrefix       *string                `json:"invoice_prefix,omitempty"`
 	NextInvoiceSequence *int32                 `json:"next_invoice_sequence,omitempty"`
 	TaxExempt           *bool                  `json:"tax_exempt,omitempty"`
 	TaxIDs              map[string]interface{} `json:"tax_ids,omitempty"`
@@ -121,27 +119,89 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 	c.JSON(http.StatusOK, toCustomerResponse(customer))
 }
 
-// checkWorkspaceAccess verifies if a user has access to the workspace through their account
-func (h *CustomerHandler) checkWorkspaceAccess(c *gin.Context, workspaceID uuid.UUID) error {
-	// Get account ID from context
-	accountID := c.GetString("accountID")
-	parsedAccountID, err := uuid.Parse(accountID)
-	if err != nil {
-		return fmt.Errorf("invalid account ID format")
+// updateBasicCustomerFields updates basic text fields of the customer
+func (h *CustomerHandler) updateBasicCustomerFields(params *db.UpdateCustomerParams, req UpdateCustomerRequest) {
+	if req.Email != nil {
+		params.Email = pgtype.Text{String: *req.Email, Valid: true}
 	}
-
-	// Get workspace
-	workspace, err := h.common.db.GetWorkspace(c.Request.Context(), workspaceID)
-	if err != nil {
-		return fmt.Errorf("workspace not found")
+	if req.Name != nil {
+		params.Name = pgtype.Text{String: *req.Name, Valid: true}
 	}
-
-	// Verify workspace belongs to user's account
-	if workspace.AccountID != parsedAccountID {
-		return fmt.Errorf("workspace does not belong to user's account")
+	if req.Phone != nil {
+		params.Phone = pgtype.Text{String: *req.Phone, Valid: true}
 	}
+	if req.Description != nil {
+		params.Description = pgtype.Text{String: *req.Description, Valid: true}
+	}
+	if req.InvoicePrefix != nil {
+		params.InvoicePrefix = pgtype.Text{String: *req.InvoicePrefix, Valid: true}
+	}
+	if req.Currency != nil {
+		params.Currency = pgtype.Text{String: *req.Currency, Valid: true}
+	}
+}
 
+// updateCustomerNumericFields updates numeric fields of the customer
+func (h *CustomerHandler) updateCustomerNumericFields(params *db.UpdateCustomerParams, req UpdateCustomerRequest) {
+	if req.BalanceInPennies != nil {
+		params.BalanceInPennies = pgtype.Int4{Int32: *req.BalanceInPennies, Valid: true}
+	}
+	if req.NextInvoiceSequence != nil {
+		params.NextInvoiceSequence = pgtype.Int4{Int32: *req.NextInvoiceSequence, Valid: true}
+	}
+}
+
+// updateCustomerJSONFields updates JSON fields of the customer
+func (h *CustomerHandler) updateCustomerJSONFields(params *db.UpdateCustomerParams, req UpdateCustomerRequest) error {
+	if req.TaxIDs != nil {
+		taxIDs, err := json.Marshal(req.TaxIDs)
+		if err != nil {
+			return fmt.Errorf("invalid tax IDs format: %w", err)
+		}
+		params.TaxIds = taxIDs
+	}
+	if req.Metadata != nil {
+		metadata, err := json.Marshal(req.Metadata)
+		if err != nil {
+			return fmt.Errorf("invalid metadata format: %w", err)
+		}
+		params.Metadata = metadata
+	}
 	return nil
+}
+
+// updateCustomerParams creates the update parameters for a customer
+func (h *CustomerHandler) updateCustomerParams(id uuid.UUID, req UpdateCustomerRequest) (db.UpdateCustomerParams, error) {
+	params := db.UpdateCustomerParams{
+		ID: id,
+	}
+
+	// Update basic text fields
+	h.updateBasicCustomerFields(&params, req)
+
+	// Update numeric fields
+	h.updateCustomerNumericFields(&params, req)
+
+	// Update boolean fields
+	if req.TaxExempt != nil {
+		params.TaxExempt = pgtype.Bool{Bool: *req.TaxExempt, Valid: true}
+	}
+
+	// Update UUID fields
+	if req.DefaultSourceID != nil {
+		parsedSourceID, err := uuid.Parse(*req.DefaultSourceID)
+		if err != nil {
+			return params, fmt.Errorf("invalid default source ID: %w", err)
+		}
+		params.DefaultSourceID = pgtype.UUID{Bytes: parsedSourceID, Valid: true}
+	}
+
+	// Update JSON fields
+	if err := h.updateCustomerJSONFields(&params, req); err != nil {
+		return params, err
+	}
+
+	return params, nil
 }
 
 // ListCustomers godoc
@@ -159,52 +219,18 @@ func (h *CustomerHandler) checkWorkspaceAccess(c *gin.Context, workspaceID uuid.
 // @Security ApiKeyAuth
 // @Router /customers [get]
 func (h *CustomerHandler) ListCustomers(c *gin.Context) {
-	workspaceID := c.GetString("workspaceID")
-	if workspaceID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Workspace ID not specified"})
-		return
-	}
-
+	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid workspace ID format"})
 		return
 	}
 
-	// Check workspace access only for JWT auth
-	authType := c.GetString("authType")
-	if authType == constants.AuthTypeJWT {
-		if err := h.checkWorkspaceAccess(c, parsedWorkspaceID); err != nil {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
-			return
-		}
-	}
-
-	// Parse pagination parameters
-	limit := 10 // default limit
-	if limitStr := c.Query("limit"); limitStr != "" {
-		parsedLimit, err := strconv.Atoi(limitStr)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid limit parameter"})
-			return
-		}
-		if parsedLimit > 100 {
-			limit = 100 // max limit
-		} else if parsedLimit > 0 {
-			limit = parsedLimit
-		}
-	}
-
-	offset := 0 // default offset
-	if offsetStr := c.Query("offset"); offsetStr != "" {
-		parsedOffset, err := strconv.Atoi(offsetStr)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid offset parameter"})
-			return
-		}
-		if parsedOffset > 0 {
-			offset = parsedOffset
-		}
+	// Get pagination parameters
+	limit, offset, err := validatePaginationParams(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
 	}
 
 	// Get total count
@@ -217,11 +243,10 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	// Get paginated customers
 	customers, err := h.common.db.ListCustomersWithPagination(c.Request.Context(), db.ListCustomersWithPaginationParams{
 		WorkspaceID: parsedWorkspaceID,
-		Limit:       int32(limit),
-		Offset:      int32(offset),
+		Limit:       limit,
+		Offset:      offset,
 	})
 	if err != nil {
-		fmt.Println("Error retrieving customers", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve customers"})
 		return
 	}
@@ -231,7 +256,7 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 		response[i] = toCustomerResponse(customer)
 	}
 
-	hasMore := offset+len(response) < int(total)
+	hasMore := int64(offset)+int64(len(response)) < total
 
 	c.JSON(http.StatusOK, ListCustomersResponse{
 		Object:  "list",
@@ -353,8 +378,8 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /customers/{customer_id} [put]
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
-	customerId := c.Param("customer_id")
-	parsedUUID, err := uuid.Parse(customerId)
+	id := c.Param("customer_id")
+	parsedUUID, err := uuid.Parse(id)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid customer ID format"})
 		return
@@ -366,98 +391,15 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 		return
 	}
 
-	// Get current customer values
-	currentCustomer, err := h.common.db.GetCustomer(c.Request.Context(), parsedUUID)
+	params, err := h.updateCustomerParams(parsedUUID, req)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Customer not found"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 		return
-	}
-
-	// Start with current values
-	params := db.UpdateCustomerParams{
-		ID:                  parsedUUID,
-		Email:               currentCustomer.Email,
-		Name:                currentCustomer.Name,
-		Phone:               currentCustomer.Phone,
-		Description:         currentCustomer.Description,
-		BalanceInPennies:    currentCustomer.BalanceInPennies,
-		Currency:            currentCustomer.Currency,
-		DefaultSourceID:     currentCustomer.DefaultSourceID,
-		InvoicePrefix:       currentCustomer.InvoicePrefix,
-		NextInvoiceSequence: currentCustomer.NextInvoiceSequence,
-		TaxExempt:           currentCustomer.TaxExempt,
-		TaxIds:              currentCustomer.TaxIds,
-		Metadata:            currentCustomer.Metadata,
-		Livemode:            currentCustomer.Livemode,
-	}
-
-	// Only update fields that are provided in the request
-	if req.Email != "" {
-		params.Email = pgtype.Text{String: req.Email, Valid: true}
-	}
-	if req.Name != "" {
-		params.Name = pgtype.Text{String: req.Name, Valid: true}
-	}
-	if req.Phone != "" {
-		params.Phone = pgtype.Text{String: req.Phone, Valid: true}
-	}
-	if req.Description != "" {
-		params.Description = pgtype.Text{String: req.Description, Valid: true}
-	}
-	if req.BalanceInPennies != nil {
-		params.BalanceInPennies = pgtype.Int4{Int32: *req.BalanceInPennies, Valid: true}
-	}
-	if req.Currency != "" {
-		params.Currency = pgtype.Text{String: req.Currency, Valid: true}
-	}
-	if req.DefaultSourceID != "" {
-		parsedSourceID, err := uuid.Parse(req.DefaultSourceID)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid default source ID format"})
-			return
-		}
-		params.DefaultSourceID = pgtype.UUID{Bytes: parsedSourceID, Valid: true}
-	}
-	if req.InvoicePrefix != "" {
-		params.InvoicePrefix = pgtype.Text{String: req.InvoicePrefix, Valid: true}
-	}
-	if req.NextInvoiceSequence != nil {
-		params.NextInvoiceSequence = pgtype.Int4{Int32: *req.NextInvoiceSequence, Valid: true}
-	}
-
-	// Handle TaxExempt separately since it's a pointer to bool
-	if req.TaxExempt != nil {
-		params.TaxExempt = pgtype.Bool{Bool: *req.TaxExempt, Valid: true}
-	}
-
-	// Handle Metadata separately - only update if provided
-	if req.Metadata != nil {
-		metadata, err := json.Marshal(req.Metadata)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
-			return
-		}
-		params.Metadata = metadata
-	}
-
-	// Handle TaxIDs separately - only update if provided
-	if req.TaxIDs != nil {
-		taxIDs, err := json.Marshal(req.TaxIDs)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid tax IDs format"})
-			return
-		}
-		params.TaxIds = taxIDs
-	}
-
-	// Handle Livemode separately since it's a pointer to bool
-	if req.Livemode != nil {
-		params.Livemode = pgtype.Bool{Bool: *req.Livemode, Valid: true}
 	}
 
 	customer, err := h.common.db.UpdateCustomer(c.Request.Context(), params)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Customer not found"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update customer"})
 		return
 	}
 
