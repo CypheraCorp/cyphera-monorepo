@@ -356,6 +356,102 @@ func (h *AccountHandler) CreateAccount(c *gin.Context) {
 	c.JSON(http.StatusCreated, toAccountResponse(account))
 }
 
+// validateSignInRequest validates the sign in request and extracts required metadata
+func (h *AccountHandler) validateSignInRequest(req CreateAccountRequest) (string, string, []byte, error) {
+	metadata, err := json.Marshal(req.Metadata)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("invalid metadata format")
+	}
+
+	metaDataMap := make(map[string]interface{})
+	err = json.Unmarshal(metadata, &metaDataMap)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("failed to unmarshal metadata")
+	}
+
+	ownerAuth0Id, ok := metaDataMap["ownerAuth0Id"].(string)
+	if !ok || ownerAuth0Id == "" {
+		return "", "", nil, fmt.Errorf("owner Auth0 ID is required")
+	}
+
+	email, ok := metaDataMap["email"].(string)
+	if !ok || email == "" {
+		return "", "", nil, fmt.Errorf("email is required")
+	}
+
+	return ownerAuth0Id, email, metadata, nil
+}
+
+// createNewAccountWithUser creates a new account with associated user and workspace
+func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAccountRequest, ownerAuth0Id string, email string, metadata []byte) (*FullAccountResponse, error) {
+	// Create account
+	account, err := h.common.db.CreateAccount(ctx.Request.Context(), db.CreateAccountParams{
+		Name:               req.Name,
+		AccountType:        db.AccountType(req.AccountType),
+		BusinessName:       pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
+		BusinessType:       pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
+		WebsiteUrl:         pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
+		SupportEmail:       pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
+		SupportPhone:       pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
+		FinishedOnboarding: pgtype.Bool{Bool: req.FinishedOnboarding, Valid: true},
+		Metadata:           metadata,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create account")
+	}
+
+	// Create user
+	user, err := h.common.db.CreateUser(ctx.Request.Context(), db.CreateUserParams{
+		Auth0ID:        ownerAuth0Id,
+		Email:          email,
+		AccountID:      account.ID,
+		Role:           db.UserRoleAdmin,
+		IsAccountOwner: pgtype.Bool{Bool: true, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user")
+	}
+
+	// Create workspace
+	workspace, err := h.common.db.CreateWorkspace(ctx.Request.Context(), db.CreateWorkspaceParams{
+		Name:      strings.ToLower(fmt.Sprintf("%s's Workspace", strings.ReplaceAll(account.Name, " ", "_"))),
+		AccountID: account.ID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create workspace")
+	}
+
+	return &FullAccountResponse{
+		AccountResponse: toAccountResponse(account),
+		User:            toUserResponse(user),
+		Workspaces:      []WorkspaceResponse{toWorkspaceResponse(workspace)},
+	}, nil
+}
+
+// getExistingAccountDetails retrieves account details for an existing user
+func (h *AccountHandler) getExistingAccountDetails(ctx *gin.Context, user db.User) (*FullAccountResponse, error) {
+	account, err := h.common.db.GetAccountByID(ctx.Request.Context(), user.AccountID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve account")
+	}
+
+	workspaces, err := h.common.db.ListWorkspacesByAccountID(ctx.Request.Context(), account.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve workspaces")
+	}
+
+	workspaceResponses := make([]WorkspaceResponse, len(workspaces))
+	for i, workspace := range workspaces {
+		workspaceResponses[i] = toWorkspaceResponse(workspace)
+	}
+
+	return &FullAccountResponse{
+		AccountResponse: toAccountResponse(account),
+		User:            toUserResponse(user),
+		Workspaces:      workspaceResponses,
+	}, nil
+}
+
 // SignInAccount godoc
 // @Summary Register or sign in to an account
 // @Description Creates a new account with user and workspace, or returns existing account details
@@ -376,28 +472,9 @@ func (h *AccountHandler) SignInAccount(c *gin.Context) {
 		return
 	}
 
-	metadata, err := json.Marshal(req.Metadata)
+	ownerAuth0Id, email, metadata, err := h.validateSignInRequest(req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
-		return
-	}
-
-	metaDataMap := make(map[string]interface{})
-	err = json.Unmarshal(metadata, &metaDataMap)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to unmarshal metadata"})
-		return
-	}
-
-	ownerAuth0Id, ok := metaDataMap["ownerAuth0Id"].(string)
-	if !ok || ownerAuth0Id == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Owner Auth0 ID is required"})
-		return
-	}
-
-	email, ok := metaDataMap["email"].(string)
-	if !ok || email == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Email is required"})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 		return
 	}
 
@@ -410,80 +487,24 @@ func (h *AccountHandler) SignInAccount(c *gin.Context) {
 		}
 
 		// User doesn't exist, create new account and user
-		account, err := h.common.db.CreateAccount(c.Request.Context(), db.CreateAccountParams{
-			Name:               req.Name,
-			AccountType:        db.AccountType(req.AccountType),
-			BusinessName:       pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
-			BusinessType:       pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
-			WebsiteUrl:         pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
-			SupportEmail:       pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
-			SupportPhone:       pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
-			FinishedOnboarding: pgtype.Bool{Bool: req.FinishedOnboarding, Valid: true},
-			Metadata:           metadata,
-		})
+		response, err := h.createNewAccountWithUser(c, req, ownerAuth0Id, email, metadata)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create account"})
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 			return
 		}
 
-		// Create user with account association
-		user, err = h.common.db.CreateUser(c.Request.Context(), db.CreateUserParams{
-			Auth0ID:        ownerAuth0Id,
-			Email:          email,
-			AccountID:      account.ID,
-			Role:           db.UserRoleAdmin,
-			IsAccountOwner: pgtype.Bool{Bool: true, Valid: true},
-		})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create user"})
-			return
-		}
-
-		workspace, err := h.common.db.CreateWorkspace(c.Request.Context(), db.CreateWorkspaceParams{
-			Name:      strings.ToLower(fmt.Sprintf("%s's Workspace", strings.ReplaceAll(account.Name, " ", "_"))),
-			AccountID: account.ID,
-		})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create workspace"})
-			return
-		}
-
-		fullAccountResponse := FullAccountResponse{
-			AccountResponse: toAccountResponse(account),
-			User:            toUserResponse(user),
-			Workspaces:      []WorkspaceResponse{toWorkspaceResponse(workspace)},
-		}
-
-		c.JSON(http.StatusCreated, fullAccountResponse)
+		c.JSON(http.StatusCreated, response)
 		return
 	}
 
-	// User exists, get their account
-	account, err := h.common.db.GetAccountByID(c.Request.Context(), user.AccountID)
+	// User exists, get their account details
+	response, err := h.getExistingAccountDetails(c, user)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve account"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	// Get workspaces for the account
-	workspaces, err := h.common.db.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve workspaces"})
-		return
-	}
-
-	workspaceResponses := make([]WorkspaceResponse, len(workspaces))
-	for i, workspace := range workspaces {
-		workspaceResponses[i] = toWorkspaceResponse(workspace)
-	}
-
-	getAccountResponse := FullAccountResponse{
-		AccountResponse: toAccountResponse(account),
-		User:            toUserResponse(user),
-		Workspaces:      workspaceResponses,
-	}
-
-	c.JSON(http.StatusOK, getAccountResponse)
+	c.JSON(http.StatusOK, response)
 }
 
 // HandleAccountAccessError is a helper function to handle account access errors consistently

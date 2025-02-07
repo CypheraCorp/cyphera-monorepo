@@ -3,6 +3,7 @@ package handlers
 import (
 	"cyphera-api/internal/db"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -65,7 +66,7 @@ func (h *WorkspaceHandler) GetWorkspace(c *gin.Context) {
 func (h *WorkspaceHandler) ListWorkspaces(c *gin.Context) {
 	workspaces, err := h.common.db.ListWorkspaces(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve workspaces"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve workspaces"})
 		return
 	}
 
@@ -74,9 +75,9 @@ func (h *WorkspaceHandler) ListWorkspaces(c *gin.Context) {
 		response[i] = toWorkspaceResponse(workspace)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"object": "list",
-		"data":   response,
+	c.JSON(http.StatusOK, ListWorkspacesResponse{
+		Object: "list",
+		Data:   response,
 	})
 }
 
@@ -177,6 +178,12 @@ type WorkspaceResponse struct {
 	Livemode     bool                   `json:"livemode"`
 	Created      int64                  `json:"created"`
 	Updated      int64                  `json:"updated"`
+}
+
+// ListWorkspacesResponse represents the response for listing workspaces
+type ListWorkspacesResponse struct {
+	Object string              `json:"object"`
+	Data   []WorkspaceResponse `json:"data"`
 }
 
 // CreateWorkspace creates a new workspace
@@ -342,28 +349,29 @@ func (h *WorkspaceHandler) HardDeleteWorkspace(c *gin.Context) {
 }
 
 // parsePaginationParams is a helper function to parse limit and offset from query parameters
-func parsePaginationParams(c *gin.Context) (limit, offset int, err error) {
+func parsePaginationParams(c *gin.Context) (limit int32, offset int32, err error) {
+	const maxLimit int32 = 100
 	limit = 10 // default limit
+
 	if limitStr := c.Query("limit"); limitStr != "" {
-		parsedLimit, err := strconv.Atoi(limitStr)
+		parsedLimit, err := strconv.ParseInt(limitStr, 10, 32)
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, fmt.Errorf("invalid limit parameter")
 		}
-		if parsedLimit > 100 {
-			limit = 100 // max limit
+		if parsedLimit > int64(maxLimit) {
+			limit = maxLimit
 		} else if parsedLimit > 0 {
-			limit = parsedLimit
+			limit = int32(parsedLimit)
 		}
 	}
 
-	offset = 0 // default offset
 	if offsetStr := c.Query("offset"); offsetStr != "" {
-		parsedOffset, err := strconv.Atoi(offsetStr)
+		parsedOffset, err := strconv.ParseInt(offsetStr, 10, 32)
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, fmt.Errorf("invalid offset parameter")
 		}
 		if parsedOffset > 0 {
-			offset = parsedOffset
+			offset = int32(parsedOffset)
 		}
 	}
 
@@ -409,8 +417,8 @@ func (h *WorkspaceHandler) ListWorkspaceCustomers(c *gin.Context) {
 	// Get paginated customers
 	customers, err := h.common.db.ListWorkspaceCustomersWithPagination(c.Request.Context(), db.ListWorkspaceCustomersWithPaginationParams{
 		ID:     parsedUUID,
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		Limit:  limit,
+		Offset: offset,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve customers"})
@@ -422,7 +430,7 @@ func (h *WorkspaceHandler) ListWorkspaceCustomers(c *gin.Context) {
 		response[i] = toCustomerResponse(customer)
 	}
 
-	hasMore := offset+len(response) < int(total)
+	hasMore := int64(offset)+int64(len(response)) < total
 
 	c.JSON(http.StatusOK, ListCustomersResponse{
 		Object:  "list",

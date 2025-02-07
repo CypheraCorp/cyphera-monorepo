@@ -3,6 +3,7 @@ package handlers
 import (
 	"cyphera-api/internal/db"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -115,6 +116,83 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 	c.JSON(http.StatusOK, toProductResponse(product))
 }
 
+// updateProductParams creates the update parameters for a product
+func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequest) (db.UpdateProductParams, error) {
+	params := db.UpdateProductParams{
+		ID: id,
+	}
+
+	if req.Name != "" {
+		params.Name = req.Name
+	}
+	if req.Description != "" {
+		params.Description = pgtype.Text{String: req.Description, Valid: true}
+	}
+	if req.ProductType != "" {
+		params.ProductType = db.ProductType(req.ProductType)
+	}
+	if req.IntervalType != "" {
+		params.IntervalType = db.NullIntervalType{IntervalType: db.IntervalType(req.IntervalType), Valid: true}
+	}
+	if req.TermLength != nil {
+		params.TermLength = pgtype.Int4{Int32: *req.TermLength, Valid: true}
+	}
+	if req.PriceInPennies != nil {
+		params.PriceInPennies = *req.PriceInPennies
+	}
+	if req.ImageURL != "" {
+		params.ImageUrl = pgtype.Text{String: req.ImageURL, Valid: true}
+	}
+	if req.URL != "" {
+		params.Url = pgtype.Text{String: req.URL, Valid: true}
+	}
+	if req.MerchantPaidGas != nil {
+		params.MerchantPaidGas = *req.MerchantPaidGas
+	}
+	if req.Active != nil {
+		params.Active = *req.Active
+	}
+	if req.Metadata != nil {
+		metadata, err := json.Marshal(req.Metadata)
+		if err != nil {
+			return params, fmt.Errorf("invalid metadata format: %w", err)
+		}
+		params.Metadata = metadata
+	}
+
+	return params, nil
+}
+
+// validatePaginationParams validates and returns pagination parameters
+func validatePaginationParams(c *gin.Context) (limit int32, offset int32, err error) {
+	const maxLimit int32 = 100
+	limit = 10 // default limit
+
+	if limitStr := c.Query("limit"); limitStr != "" {
+		parsedLimit, err := strconv.ParseInt(limitStr, 10, 32)
+		if err != nil {
+			return 0, 0, fmt.Errorf("invalid limit parameter")
+		}
+		if parsedLimit > int64(maxLimit) {
+			limit = maxLimit
+		} else if parsedLimit > 0 {
+			limit = int32(parsedLimit)
+		}
+	}
+
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		parsedOffset, err := strconv.ParseInt(offsetStr, 10, 32)
+		if err != nil {
+			return 0, 0, fmt.Errorf("invalid offset parameter")
+		}
+		if parsedOffset > 0 {
+			offset = int32(parsedOffset)
+		}
+	}
+
+	return limit, offset, nil
+}
+
 // ListProducts godoc
 // @Summary List products
 // @Description Returns a paginated list of all products for a workspace
@@ -135,31 +213,11 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		return
 	}
 
-	// Parse pagination parameters
-	limit := 10 // default limit
-	if limitStr := c.Query("limit"); limitStr != "" {
-		parsedLimit, err := strconv.Atoi(limitStr)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid limit parameter"})
-			return
-		}
-		if parsedLimit > 100 {
-			limit = 100 // max limit
-		} else if parsedLimit > 0 {
-			limit = parsedLimit
-		}
-	}
-
-	offset := 0 // default offset
-	if offsetStr := c.Query("offset"); offsetStr != "" {
-		parsedOffset, err := strconv.Atoi(offsetStr)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid offset parameter"})
-			return
-		}
-		if parsedOffset > 0 {
-			offset = parsedOffset
-		}
+	// Get pagination parameters
+	limit, offset, err := validatePaginationParams(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
 	}
 
 	// Get total count
@@ -172,8 +230,8 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 	// Get paginated products
 	products, err := h.common.db.ListProductsWithPagination(c.Request.Context(), db.ListProductsWithPaginationParams{
 		WorkspaceID: parsedWorkspaceID,
-		Limit:       int32(limit),
-		Offset:      int32(offset),
+		Limit:       limit,
+		Offset:      offset,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve products"})
@@ -197,7 +255,7 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		responseList[i] = productResponse
 	}
 
-	hasMore := offset+len(responseList) < int(total)
+	hasMore := int64(offset)+int64(len(responseList)) < total
 
 	c.JSON(http.StatusOK, ListProductsResponse{
 		Object:  "list",
@@ -342,47 +400,10 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	params := db.UpdateProductParams{
-		ID: parsedUUID,
-	}
-
-	if req.Name != "" {
-		params.Name = req.Name
-	}
-	if req.Description != "" {
-		params.Description = pgtype.Text{String: req.Description, Valid: true}
-	}
-	if req.ProductType != "" {
-		params.ProductType = db.ProductType(req.ProductType)
-	}
-	if req.IntervalType != "" {
-		params.IntervalType = db.NullIntervalType{IntervalType: db.IntervalType(req.IntervalType), Valid: true}
-	}
-	if req.TermLength != nil {
-		params.TermLength = pgtype.Int4{Int32: *req.TermLength, Valid: true}
-	}
-	if req.PriceInPennies != nil {
-		params.PriceInPennies = *req.PriceInPennies
-	}
-	if req.ImageURL != "" {
-		params.ImageUrl = pgtype.Text{String: req.ImageURL, Valid: true}
-	}
-	if req.URL != "" {
-		params.Url = pgtype.Text{String: req.URL, Valid: true}
-	}
-	if req.MerchantPaidGas != nil {
-		params.MerchantPaidGas = *req.MerchantPaidGas
-	}
-	if req.Active != nil {
-		params.Active = *req.Active
-	}
-	if req.Metadata != nil {
-		metadata, err := json.Marshal(req.Metadata)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
-			return
-		}
-		params.Metadata = metadata
+	params, err := h.updateProductParams(parsedUUID, req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
 	}
 
 	product, err := h.common.db.UpdateProduct(c.Request.Context(), params)
