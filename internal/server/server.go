@@ -186,6 +186,7 @@ func InitializeRoutes(router *gin.Engine) {
 				networks.GET("/active", networkHandler.ListActiveNetworks)
 				networks.GET("/:network_id", networkHandler.GetNetwork)
 				networks.GET("/chain/:chain_id", networkHandler.GetNetworkByChainID)
+				networks.GET("/tokens", networkHandler.ListNetworksWithTokens)
 			}
 
 			// Tokens
@@ -234,7 +235,6 @@ func InitializeRoutes(router *gin.Engine) {
 				workspaces.GET("/:workspace_id/customers", workspaceHandler.ListWorkspaceCustomers)
 
 				// Workspace Products
-				workspaces.GET("/:workspace_id/products", productHandler.ListProducts)
 				workspaces.GET("/:workspace_id/products/active", productHandler.ListActiveProducts)
 			}
 
