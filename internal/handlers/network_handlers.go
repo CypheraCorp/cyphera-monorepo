@@ -21,14 +21,15 @@ func NewNetworkHandler(common *CommonServices) *NetworkHandler {
 
 // NetworkResponse represents the standardized API response for network operations
 type NetworkResponse struct {
-	ID        string `json:"id"`
-	Object    string `json:"object"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	ChainID   int32  `json:"chain_id"`
-	Active    bool   `json:"active"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	ID        string          `json:"id"`
+	Object    string          `json:"object"`
+	Name      string          `json:"name"`
+	Type      string          `json:"type"`
+	ChainID   int32           `json:"chain_id"`
+	Active    bool            `json:"active"`
+	CreatedAt int64           `json:"created_at"`
+	UpdatedAt int64           `json:"updated_at"`
+	Tokens    []TokenResponse `json:"tokens"`
 }
 
 // CreateNetworkRequest represents the request body for creating a network
@@ -254,6 +255,42 @@ func (h *NetworkHandler) DeleteNetwork(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+//	ListNetworksWithTokens godoc
+//
+// @Summary List all tokens on each network
+// @Description Returns a list of all tokens for each network
+// @Tags networks
+// @Accept json
+// @Produce json
+// @Success 200 {array} NetworkResponse
+// @Security ApiKeyAuth
+// @Router /networks/tokens [get]
+func (h *NetworkHandler) ListNetworksWithTokens(c *gin.Context) {
+	networks, err := h.common.db.ListNetworks(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve networks"})
+		return
+	}
+
+	networkResponses := make([]NetworkResponse, len(networks))
+
+	for i, network := range networks {
+		networkResponses[i] = toNetworkResponse(network)
+		tokens, err := h.common.db.ListTokensByNetwork(c.Request.Context(), network.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve tokens"})
+			return
+		}
+		tokenResponses := make([]TokenResponse, len(tokens))
+		for j, token := range tokens {
+			tokenResponses[j] = toTokenResponse(token)
+		}
+		networkResponses[i].Tokens = tokenResponses
+	}
+
+	c.JSON(http.StatusOK, networkResponses)
 }
 
 // Helper function to convert database model to API response

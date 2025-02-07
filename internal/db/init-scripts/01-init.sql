@@ -184,11 +184,29 @@ CREATE TABLE products_tokens (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
-    UNIQUE(product_id, network_id, token_id),
-    CONSTRAINT valid_token_network CHECK (
-        network_id = (SELECT network_id FROM tokens WHERE id = token_id)
-    )
+    UNIQUE(product_id, network_id, token_id)
 );
+
+-- Create trigger function to validate token network relationship
+CREATE OR REPLACE FUNCTION validate_token_network()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM tokens 
+        WHERE id = NEW.token_id 
+        AND network_id = NEW.network_id
+    ) THEN
+        RAISE EXCEPTION 'Token % does not belong to network %', NEW.token_id, NEW.network_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for token network validation
+CREATE TRIGGER validate_token_network_trigger
+    BEFORE INSERT OR UPDATE ON products_tokens
+    FOR EACH ROW
+    EXECUTE FUNCTION validate_token_network();
 
 -- Create indexes
 CREATE INDEX idx_workspaces_account_id ON workspaces(account_id);
@@ -301,17 +319,15 @@ ON CONFLICT DO NOTHING;
 -- Insert some test networks
 INSERT INTO networks (name, type, chain_id, active)
 VALUES 
-    ('Ethereum Mainnet', 'mainnet', 1, true),
-    ('Polygon', 'mainnet', 137, true),
-    ('Polygon', 'mumbai', 80001, true)
+    ('Ethereum', 'mainnet', 1, true),
+    ('Polygon', 'mainnet', 137, true)
 ON CONFLICT DO NOTHING;
 
 -- Insert some test tokens
 INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token)
 VALUES 
-    ((SELECT id FROM networks WHERE chain_id = 137), 'MATIC', 'MATIC', '0x0000000000000000000000000000000000000000', true),
-    ((SELECT id FROM networks WHERE chain_id = 137), 'USDC', 'USDC', '0x2791bca1f2de4661ed88a30c99a7a9449aa84174', false),
-    ((SELECT id FROM networks WHERE chain_id = 80001), 'MATIC', 'MATIC', '0x0000000000000000000000000000000000000000', true)
+    ((SELECT id FROM networks WHERE chain_id = 137 AND deleted_at IS NULL), 'MATIC', 'MATIC', '0x0000000000000000000000000000000000000000', true),
+    ((SELECT id FROM networks WHERE chain_id = 1 AND deleted_at IS NULL), 'USDC', 'USDC', '0x2791bca1f2de4661ed88a30c99a7a9449aa84174', false)
 ON CONFLICT DO NOTHING;
 
 -- Insert test products

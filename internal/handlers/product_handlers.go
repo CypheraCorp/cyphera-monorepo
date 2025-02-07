@@ -47,7 +47,7 @@ type ProductResponse struct {
 
 // CreateProductRequest represents the request body for creating a product
 type CreateProductRequest struct {
-	WorkspaceID     string                      `json:"workspace_id" binding:"required"`
+	WorkspaceID     string                      `json:"workspace_id"`
 	Name            string                      `json:"name" binding:"required"`
 	Description     string                      `json:"description"`
 	ProductType     string                      `json:"product_type" binding:"required"`
@@ -64,17 +64,18 @@ type CreateProductRequest struct {
 
 // UpdateProductRequest represents the request body for updating a product
 type UpdateProductRequest struct {
-	Name            string          `json:"name,omitempty"`
-	Description     string          `json:"description,omitempty"`
-	ProductType     string          `json:"product_type,omitempty"`
-	IntervalType    string          `json:"interval_type,omitempty"`
-	TermLength      *int32          `json:"term_length,omitempty"`
-	PriceInPennies  *int32          `json:"price_in_pennies,omitempty"`
-	ImageURL        string          `json:"image_url,omitempty"`
-	URL             string          `json:"url,omitempty"`
-	MerchantPaidGas *bool           `json:"merchant_paid_gas,omitempty"`
-	Active          *bool           `json:"active,omitempty"`
-	Metadata        json.RawMessage `json:"metadata,omitempty" swaggertype:"object"`
+	Name            string                      `json:"name,omitempty"`
+	Description     string                      `json:"description,omitempty"`
+	ProductType     string                      `json:"product_type,omitempty"`
+	IntervalType    string                      `json:"interval_type,omitempty"`
+	TermLength      *int32                      `json:"term_length,omitempty"`
+	PriceInPennies  *int32                      `json:"price_in_pennies,omitempty"`
+	ImageURL        string                      `json:"image_url,omitempty"`
+	URL             string                      `json:"url,omitempty"`
+	MerchantPaidGas *bool                       `json:"merchant_paid_gas,omitempty"`
+	Active          *bool                       `json:"active,omitempty"`
+	Metadata        json.RawMessage             `json:"metadata,omitempty" swaggertype:"object"`
+	ProductTokens   []CreateProductTokenRequest `json:"product_tokens,omitempty"`
 }
 
 // ListProductsResponse represents the paginated response for product list operations
@@ -120,15 +121,14 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 // @Tags products
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
 // @Param limit query int false "Number of products to return (default 10, max 100)"
 // @Param offset query int false "Number of products to skip (default 0)"
 // @Success 200 {object} ListProductsResponse
 // @Failure 400 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /workspaces/{workspace_id}/products [get]
+// @Router /products [get]
 func (h *ProductHandler) ListProducts(c *gin.Context) {
-	workspaceID := c.Param("workspace_id")
+	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid workspace ID format"})
@@ -190,8 +190,8 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 			return
 		}
 		productTokenListResponse := make([]ProductTokenResponse, len(productTokenList))
-		for _, productToken := range productTokenList {
-			productTokenListResponse[i] = toActiveProductTokenByProductResponse(productToken)
+		for j, productToken := range productTokenList {
+			productTokenListResponse[j] = toActiveProductTokenByProductResponse(productToken)
 		}
 		productResponse.ProductTokens = productTokenListResponse
 		responseList[i] = productResponse
@@ -258,7 +258,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
-	workspaceID, err := uuid.Parse(req.WorkspaceID)
+	parsedWorkspaceID, err := uuid.Parse(c.GetHeader("X-Workspace-ID"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid workspace ID format"})
 		return
@@ -271,7 +271,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	}
 
 	product, err := h.common.db.CreateProduct(c.Request.Context(), db.CreateProductParams{
-		WorkspaceID:     workspaceID,
+		WorkspaceID:     parsedWorkspaceID,
 		Name:            req.Name,
 		Description:     pgtype.Text{String: req.Description, Valid: req.Description != ""},
 		ProductType:     db.ProductType(req.ProductType),
