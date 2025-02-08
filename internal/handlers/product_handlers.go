@@ -118,6 +118,112 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toProductResponse(product))
 }
 
+// GetPublicProductByID godoc
+// @Summary Get public product by ID
+// @Description Get public product details by product ID
+// @Tags products
+// @Accept json
+// @Produce json
+// @Param product_id path string true "Product ID"
+// @Success 200 {object} ProductResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /products/public/{product_id} [get]
+func (h *ProductHandler) GetPublicProductByID(c *gin.Context) {
+	productId := c.Param("product_id")
+	parsedUUID, err := uuid.Parse(productId)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
+		return
+	}
+
+	product, err := h.common.db.GetProduct(c.Request.Context(), parsedUUID)
+	if err != nil {
+		handleDBError(c, err, "Product not found")
+		return
+	}
+
+	wallet, err := h.common.db.GetWalletByID(c.Request.Context(), product.WalletID)
+	if err != nil {
+		handleDBError(c, err, "Wallet not found")
+		return
+	}
+
+	workspace, err := h.common.db.GetWorkspace(c.Request.Context(), product.WorkspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
+		return
+	}
+
+	productTokens, err := h.common.db.GetActiveProductTokensByProduct(c.Request.Context(), parsedUUID)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve product tokens", err)
+		return
+	}
+
+	sendSuccess(c, http.StatusOK, toPublicProductResponse(workspace, product, productTokens, wallet))
+}
+
+func toPublicProductResponse(workspace db.Workspace, product db.Product, productTokens []db.GetActiveProductTokensByProductRow, wallet db.Wallet) PublicProductResponse {
+	// Convert product tokens to public response format
+	publicProductTokens := make([]PublicProductTokenResponse, len(productTokens))
+	for i, pt := range productTokens {
+		publicProductTokens[i] = PublicProductTokenResponse{
+			ProductTokenID: pt.ID.String(),
+			NetworkID:      pt.NetworkID.String(),
+			NetworkName:    pt.NetworkName,
+			NetworkChainID: strconv.Itoa(int(pt.ChainID)),
+			TokenID:        pt.TokenID.String(),
+			TokenName:      pt.TokenName,
+			TokenSymbol:    pt.TokenSymbol,
+		}
+	}
+
+	return PublicProductResponse{
+		ProductID:       product.ID.String(),
+		AccountID:       workspace.AccountID.String(),
+		WorkspaceID:     workspace.ID.String(),
+		WalletAddress:   wallet.WalletAddress,
+		Name:            product.Name,
+		Description:     product.Description.String,
+		ProductType:     string(product.ProductType),
+		IntervalType:    string(product.IntervalType.IntervalType),
+		TermLength:      product.TermLength.Int32,
+		PriceInPennies:  product.PriceInPennies,
+		ImageURL:        product.ImageUrl.String,
+		MerchantPaidGas: product.MerchantPaidGas,
+		ProductTokens:   publicProductTokens,
+	}
+}
+
+type PublicProductResponse struct {
+	ProductID       string                       `json:"product_id"`
+	AccountID       string                       `json:"account_id"`
+	WorkspaceID     string                       `json:"workspace_id"`
+	WalletAddress   string                       `json:"wallet_address"`
+	Name            string                       `json:"name"`
+	Description     string                       `json:"description"`
+	ProductType     string                       `json:"product_type"`
+	IntervalType    string                       `json:"interval_type,omitempty"`
+	TermLength      int32                        `json:"term_length,omitempty"`
+	PriceInPennies  int32                        `json:"price_in_pennies"`
+	ImageURL        string                       `json:"image_url,omitempty"`
+	MerchantPaidGas bool                         `json:"merchant_paid_gas"`
+	ProductTokens   []PublicProductTokenResponse `json:"product_tokens,omitempty"`
+}
+
+type PublicProductTokenResponse struct {
+	ProductTokenID string `json:"product_token_id"`
+	NetworkID      string `json:"network_id"`
+	NetworkName    string `json:"network_name"`
+	NetworkChainID string `json:"network_chain_id"`
+	TokenID        string `json:"token_id"`
+	TokenName      string `json:"token_name"`
+	TokenSymbol    string `json:"token_symbol"`
+	TokenImageURL  string `json:"token_image_url"`
+}
+
 // updateProductParams creates the update parameters for a product
 func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequest) (db.UpdateProductParams, error) {
 	params := db.UpdateProductParams{
@@ -138,9 +244,22 @@ func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequ
 		params.Description = pgtype.Text{String: req.Description, Valid: true}
 	}
 	if req.ProductType != "" {
+		if req.ProductType != "recurring" && req.ProductType != "one_off" {
+			return params, fmt.Errorf("invalid product type. Must be 'recurring' or 'one_off'")
+		}
 		params.ProductType = db.ProductType(req.ProductType)
 	}
 	if req.IntervalType != "" {
+		validIntervalTypes := map[string]bool{
+			"5minutes": true,
+			"Daily":    true,
+			"Weekly":   true,
+			"Monthly":  true,
+			"Yearly":   true,
+		}
+		if !validIntervalTypes[req.IntervalType] {
+			return params, fmt.Errorf("invalid interval type")
+		}
 		params.IntervalType = db.NullIntervalType{IntervalType: db.IntervalType(req.IntervalType), Valid: true}
 	}
 	if req.TermLength != nil {
@@ -331,6 +450,39 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	var req CreateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	// Validate product type
+	if req.ProductType != "recurring" && req.ProductType != "one_off" {
+		sendError(c, http.StatusBadRequest, "Invalid product type. Must be 'recurring' or 'one_off'", nil)
+		return
+	}
+
+	// Validate interval type based on product type
+	if req.ProductType == "recurring" {
+		validIntervalTypes := map[string]bool{
+			"5minutes": true,
+			"Daily":    true,
+			"Weekly":   true,
+			"Monthly":  true,
+			"Yearly":   true,
+		}
+		if !validIntervalTypes[req.IntervalType] {
+			sendError(c, http.StatusBadRequest, "Invalid interval type for recurring product", nil)
+			return
+		}
+	} else if req.IntervalType != "" {
+		sendError(c, http.StatusBadRequest, "Interval type must be empty for one_off products", nil)
+		return
+	}
+
+	// Validate term length based on product type
+	if req.ProductType == "recurring" && req.TermLength <= 0 {
+		sendError(c, http.StatusBadRequest, "Term length must be greater than 0 for recurring products", nil)
+		return
+	} else if req.ProductType == "one_off" && req.TermLength != 0 {
+		sendError(c, http.StatusBadRequest, "Term length must be empty for one_off products", nil)
 		return
 	}
 

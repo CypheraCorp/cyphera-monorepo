@@ -148,7 +148,7 @@ CREATE TABLE products (
     name TEXT NOT NULL,
     description TEXT,
     product_type product_type NOT NULL,
-    interval_type interval_type,
+    interval_type interval_type NOT NULL,
     term_length INTEGER, -- number of intervals
     price_in_pennies INTEGER NOT NULL,
     image_url TEXT,

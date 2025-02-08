@@ -107,6 +107,9 @@ func InitializeRoutes(router *gin.Engine) {
 			admin := protected.Group("/admin")
 			admin.Use(auth.RequireRoles("admin"))
 			{
+				// public routes
+				admin.GET("/public/products/:product_id", productHandler.GetPublicProductByID)
+
 				// Account management
 				admin.GET("/accounts", accountHandler.ListAccounts)
 				admin.POST("/accounts", accountHandler.CreateAccount)
