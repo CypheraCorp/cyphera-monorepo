@@ -332,12 +332,7 @@ const docTemplate = `{
         },
         "/accounts/{account_id}": {
             "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves the details of an existing account",
+                "description": "Get account details by account ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -347,7 +342,7 @@ const docTemplate = `{
                 "tags": [
                     "accounts"
                 ],
-                "summary": "Get an account",
+                "summary": "Get account by ID",
                 "parameters": [
                     {
                         "type": "string",
@@ -616,10 +611,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.APIKeyResponse"
-                            }
+                            "$ref": "#/definitions/handlers.ListAPIKeysResponse"
                         }
                     },
                     "400": {
@@ -943,7 +935,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Creates a new customer in the current workspace",
+                "description": "Creates a new customer",
                 "consumes": [
                     "application/json"
                 ],
@@ -966,8 +958,8 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "201": {
+                        "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/handlers.CustomerResponse"
                         }
@@ -994,7 +986,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves a specific customer by its ID",
+                "description": "Get customer details by customer ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -1004,7 +996,7 @@ const docTemplate = `{
                 "tags": [
                     "customers"
                 ],
-                "summary": "Get a customer",
+                "summary": "Get customer by ID",
                 "parameters": [
                     {
                         "type": "string",
@@ -1088,6 +1080,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
             },
@@ -1097,7 +1095,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Soft deletes a customer",
+                "description": "Deletes a customer",
                 "consumes": [
                     "application/json"
                 ],
@@ -1217,7 +1215,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns a list of all networks",
+                "description": "Retrieves all networks",
                 "consumes": [
                     "application/json"
                 ],
@@ -1227,15 +1225,18 @@ const docTemplate = `{
                 "tags": [
                     "networks"
                 ],
-                "summary": "List all networks",
+                "summary": "List networks",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.NetworkResponse"
-                            }
+                            "$ref": "#/definitions/handlers.ListNetworksResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
                 }
@@ -1256,7 +1257,7 @@ const docTemplate = `{
                 "tags": [
                     "networks"
                 ],
-                "summary": "Create a network",
+                "summary": "Create network",
                 "parameters": [
                     {
                         "description": "Network creation data",
@@ -1280,6 +1281,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -1291,7 +1298,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns a list of all active networks",
+                "description": "Retrieves all active networks",
                 "consumes": [
                     "application/json"
                 ],
@@ -1306,10 +1313,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.NetworkResponse"
-                            }
+                            "$ref": "#/definitions/handlers.ListNetworksResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
                 }
@@ -1322,7 +1332,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves the details of an existing network by its chain ID",
+                "description": "Get network details by chain ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -1332,7 +1342,7 @@ const docTemplate = `{
                 "tags": [
                     "networks"
                 ],
-                "summary": "Get a network by chain ID",
+                "summary": "Get network by chain ID",
                 "parameters": [
                     {
                         "type": "integer",
@@ -1364,14 +1374,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/networks/{network_id}": {
+        "/networks/tokens": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves the details of an existing network",
+                "description": "Retrieves all networks with their associated tokens",
                 "consumes": [
                     "application/json"
                 ],
@@ -1381,7 +1391,41 @@ const docTemplate = `{
                 "tags": [
                     "networks"
                 ],
-                "summary": "Get a network",
+                "summary": "List networks with tokens",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ListNetworksWithTokensResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/networks/{network_id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get network details by network ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "networks"
+                ],
+                "summary": "Get network by ID",
                 "parameters": [
                     {
                         "type": "string",
@@ -1428,7 +1472,7 @@ const docTemplate = `{
                 "tags": [
                     "networks"
                 ],
-                "summary": "Update a network",
+                "summary": "Update network",
                 "parameters": [
                     {
                         "type": "string",
@@ -1465,6 +1509,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
             },
@@ -1474,7 +1524,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Soft deletes a network",
+                "description": "Deletes a network",
                 "consumes": [
                     "application/json"
                 ],
@@ -1484,7 +1534,7 @@ const docTemplate = `{
                 "tags": [
                     "networks"
                 ],
-                "summary": "Delete a network",
+                "summary": "Delete network",
                 "parameters": [
                     {
                         "type": "string",
@@ -1621,6 +1671,58 @@ const docTemplate = `{
             }
         },
         "/products": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieves paginated products for a workspace",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "products"
+                ],
+                "summary": "List products",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of products to return (default 10, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of products to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ListProductsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -1637,7 +1739,7 @@ const docTemplate = `{
                 "tags": [
                     "products"
                 ],
-                "summary": "Create a product",
+                "summary": "Create product",
                 "parameters": [
                     {
                         "description": "Product creation data",
@@ -1661,6 +1763,52 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/products/active": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieves all active products for a workspace",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "products"
+                ],
+                "summary": "List active products",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ListProductsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -1672,7 +1820,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves the details of an existing product",
+                "description": "Get product details by product ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -1682,7 +1830,7 @@ const docTemplate = `{
                 "tags": [
                     "products"
                 ],
-                "summary": "Get a product",
+                "summary": "Get product by ID",
                 "parameters": [
                     {
                         "type": "string",
@@ -1729,7 +1877,7 @@ const docTemplate = `{
                 "tags": [
                     "products"
                 ],
-                "summary": "Update a product",
+                "summary": "Update product",
                 "parameters": [
                     {
                         "type": "string",
@@ -1766,6 +1914,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
             },
@@ -1775,7 +1929,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Soft deletes a product",
+                "description": "Deletes a product",
                 "consumes": [
                     "application/json"
                 ],
@@ -1785,7 +1939,7 @@ const docTemplate = `{
                 "tags": [
                     "products"
                 ],
-                "summary": "Delete a product",
+                "summary": "Delete product",
                 "parameters": [
                     {
                         "type": "string",
@@ -2549,7 +2703,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns a list of all tokens",
+                "description": "Retrieves all tokens",
                 "consumes": [
                     "application/json"
                 ],
@@ -2559,15 +2713,18 @@ const docTemplate = `{
                 "tags": [
                     "tokens"
                 ],
-                "summary": "List all tokens",
+                "summary": "List tokens",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.TokenResponse"
-                            }
+                            "$ref": "#/definitions/handlers.ListTokensResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
                 }
@@ -2588,7 +2745,7 @@ const docTemplate = `{
                 "tags": [
                     "tokens"
                 ],
-                "summary": "Create a token",
+                "summary": "Create token",
                 "parameters": [
                     {
                         "description": "Token creation data",
@@ -2612,6 +2769,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -2623,7 +2786,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns a list of all tokens for a specific network",
+                "description": "Retrieves all tokens for a specific network",
                 "consumes": [
                     "application/json"
                 ],
@@ -2647,14 +2810,17 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.TokenResponse"
-                            }
+                            "$ref": "#/definitions/handlers.ListTokensResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -2669,7 +2835,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns a list of all active tokens for a specific network",
+                "description": "Retrieves all active tokens for a specific network",
                 "consumes": [
                     "application/json"
                 ],
@@ -2693,14 +2859,17 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.TokenResponse"
-                            }
+                            "$ref": "#/definitions/handlers.ListTokensResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -2715,7 +2884,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves the details of an existing token by its network ID and contract address",
+                "description": "Get token details by network ID and contract address",
                 "consumes": [
                     "application/json"
                 ],
@@ -2725,7 +2894,7 @@ const docTemplate = `{
                 "tags": [
                     "tokens"
                 ],
-                "summary": "Get a token by address",
+                "summary": "Get token by address",
                 "parameters": [
                     {
                         "type": "string",
@@ -2820,7 +2989,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves the details of an existing token",
+                "description": "Get token details by token ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -2830,7 +2999,7 @@ const docTemplate = `{
                 "tags": [
                     "tokens"
                 ],
-                "summary": "Get a token",
+                "summary": "Get token by ID",
                 "parameters": [
                     {
                         "type": "string",
@@ -2877,7 +3046,7 @@ const docTemplate = `{
                 "tags": [
                     "tokens"
                 ],
-                "summary": "Update a token",
+                "summary": "Update token",
                 "parameters": [
                     {
                         "type": "string",
@@ -2914,6 +3083,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
             },
@@ -2923,7 +3098,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Soft deletes a token",
+                "description": "Deletes a token",
                 "consumes": [
                     "application/json"
                 ],
@@ -2933,7 +3108,7 @@ const docTemplate = `{
                 "tags": [
                     "tokens"
                 ],
-                "summary": "Delete a token",
+                "summary": "Delete token",
                 "parameters": [
                     {
                         "type": "string",
@@ -3083,7 +3258,7 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "Create a user",
+                "summary": "Create user",
                 "parameters": [
                     {
                         "description": "User creation data",
@@ -3108,8 +3283,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
-                    "409": {
-                        "description": "User already exists",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -3117,14 +3292,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/users/auth0/{auth0_id}": {
+        "/users/auth0": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves a user's details using their Auth0 ID",
+                "description": "Gets a user by their Auth0 ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -3140,7 +3315,7 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Auth0 ID",
                         "name": "auth0_id",
-                        "in": "path",
+                        "in": "query",
                         "required": true
                     }
                 ],
@@ -3159,12 +3334,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -3213,7 +3382,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves the details of an existing user",
+                "description": "Gets a user by their ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -3223,7 +3392,7 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "Get a user",
+                "summary": "Get user by ID",
                 "parameters": [
                     {
                         "type": "string",
@@ -3260,7 +3429,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Updates an existing user's information",
+                "description": "Updates an existing user",
                 "consumes": [
                     "application/json"
                 ],
@@ -3270,7 +3439,7 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "Update a user",
+                "summary": "Update user",
                 "parameters": [
                     {
                         "type": "string",
@@ -3322,7 +3491,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Soft deletes a user from the system",
+                "description": "Deletes a user",
                 "consumes": [
                     "application/json"
                 ],
@@ -3332,7 +3501,7 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "Delete a user",
+                "summary": "Delete user",
                 "parameters": [
                     {
                         "type": "string",
@@ -3354,12 +3523,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -3422,6 +3585,587 @@ const docTemplate = `{
                 }
             }
         },
+        "/wallets": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List all wallets for the authenticated account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallets"
+                ],
+                "summary": "List all wallets",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WalletListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates a new wallet for the authenticated account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallets"
+                ],
+                "summary": "Create a new wallet",
+                "parameters": [
+                    {
+                        "description": "Wallet creation request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateWalletRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WalletResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/wallets/address/{wallet_address}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get wallet details by wallet address and network type",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallets"
+                ],
+                "summary": "Get wallet by address",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Wallet address",
+                        "name": "wallet_address",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Network type",
+                        "name": "network_type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WalletResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/wallets/ens": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a list of wallets that have ENS names for the authenticated account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallets"
+                ],
+                "summary": "Get wallets with ENS names",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WalletListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/wallets/network/{network_type}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List all wallets for the authenticated account filtered by network type",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallets"
+                ],
+                "summary": "List wallets by network type",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Network type",
+                        "name": "network_type",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WalletListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/wallets/recent": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a list of recently used wallets for the authenticated account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallets"
+                ],
+                "summary": "Get recently used wallets",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of results to return (default 5)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WalletListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/wallets/search": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Search wallets by address, nickname, or ENS name",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallets"
+                ],
+                "summary": "Search wallets",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search query",
+                        "name": "query",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of results to return (default 10)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of results to skip (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WalletListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/wallets/stats": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get statistics about wallets for the authenticated account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallets"
+                ],
+                "summary": "Get wallet statistics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WalletStatsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/wallets/{wallet_id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get wallet details by wallet ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallets"
+                ],
+                "summary": "Get wallet by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Wallet ID",
+                        "name": "wallet_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WalletResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Soft delete a wallet",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallets"
+                ],
+                "summary": "Delete a wallet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Wallet ID",
+                        "name": "wallet_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update wallet details",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallets"
+                ],
+                "summary": "Update a wallet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Wallet ID",
+                        "name": "wallet_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Wallet update request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateWalletRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WalletResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/wallets/{wallet_id}/primary": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Set a wallet as the primary wallet for its network type",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "wallets"
+                ],
+                "summary": "Set wallet as primary",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Wallet ID",
+                        "name": "wallet_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.WalletResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/workspaces": {
             "get": {
                 "security": [
@@ -3429,7 +4173,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves all non-deleted workspaces",
+                "description": "Retrieves all workspaces for the current account",
                 "consumes": [
                     "application/json"
                 ],
@@ -3444,10 +4188,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.WorkspaceResponse"
-                            }
+                            "$ref": "#/definitions/handlers.ListWorkspacesResponse"
                         }
                     },
                     "500": {
@@ -3604,6 +4345,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -3711,107 +4458,6 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/workspaces/{workspace_id}/products": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Returns a paginated list of all products for a workspace",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "products"
-                ],
-                "summary": "List products",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace ID",
-                        "name": "workspace_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of products to return (default 10, max 100)",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of products to skip (default 0)",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ListProductsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/workspaces/{workspace_id}/products/active": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Returns a list of all active products for a workspace",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "products"
-                ],
-                "summary": "List active products",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace ID",
-                        "name": "workspace_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.ProductResponse"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -4104,7 +4750,7 @@ const docTemplate = `{
                 "access_level": {
                     "type": "string"
                 },
-                "created": {
+                "created_at": {
                     "type": "integer"
                 },
                 "expires_at": {
@@ -4126,7 +4772,7 @@ const docTemplate = `{
                 "object": {
                     "type": "string"
                 },
-                "updated": {
+                "updated_at": {
                     "type": "integer"
                 }
             }
@@ -4143,7 +4789,7 @@ const docTemplate = `{
                 "business_type": {
                     "type": "string"
                 },
-                "created": {
+                "created_at": {
                     "type": "integer"
                 },
                 "finished_onboarding": {
@@ -4168,7 +4814,7 @@ const docTemplate = `{
                 "support_phone": {
                     "type": "string"
                 },
-                "updated": {
+                "updated_at": {
                     "type": "integer"
                 },
                 "website_url": {
@@ -4331,7 +4977,7 @@ const docTemplate = `{
                 "name",
                 "price_in_pennies",
                 "product_type",
-                "workspace_id"
+                "wallet_id"
             ],
             "properties": {
                 "active": {
@@ -4373,7 +5019,7 @@ const docTemplate = `{
                 "url": {
                     "type": "string"
                 },
-                "workspace_id": {
+                "wallet_id": {
                     "type": "string"
                 }
             }
@@ -4496,6 +5142,37 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.CreateWalletRequest": {
+            "type": "object",
+            "required": [
+                "network_type",
+                "wallet_address"
+            ],
+            "properties": {
+                "ens": {
+                    "type": "string"
+                },
+                "is_primary": {
+                    "type": "boolean"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "network_type": {
+                    "type": "string"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "verified": {
+                    "type": "boolean"
+                },
+                "wallet_address": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.CreateWorkspaceRequest": {
             "description": "Creates a new workspace",
             "type": "object",
@@ -4546,7 +5223,7 @@ const docTemplate = `{
                 "business_name": {
                     "type": "string"
                 },
-                "created": {
+                "created_at": {
                     "type": "integer"
                 },
                 "currency": {
@@ -4595,6 +5272,9 @@ const docTemplate = `{
                 "tax_ids": {
                     "type": "object",
                     "additionalProperties": true
+                },
+                "updated_at": {
+                    "type": "integer"
                 },
                 "workspace_id": {
                     "type": "string"
@@ -4697,6 +5377,26 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.ListAPIKeysResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.APIKeyResponse"
+                    }
+                },
+                "has_more": {
+                    "type": "boolean"
+                },
+                "object": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "handlers.ListCustomersResponse": {
             "type": "object",
             "properties": {
@@ -4714,6 +5414,34 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "handlers.ListNetworksResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.NetworkResponse"
+                    }
+                },
+                "object": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.ListNetworksWithTokensResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.NetworkWithTokensResponse"
+                    }
+                },
+                "object": {
+                    "type": "string"
                 }
             }
         },
@@ -4737,6 +5465,34 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.ListTokensResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.TokenResponse"
+                    }
+                },
+                "object": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.ListWorkspacesResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.WorkspaceResponse"
+                    }
+                },
+                "object": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.NetworkResponse": {
             "type": "object",
             "properties": {
@@ -4757,6 +5513,41 @@ const docTemplate = `{
                 },
                 "object": {
                     "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.NetworkWithTokensResponse": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "chain_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "object": {
+                    "type": "string"
+                },
+                "tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.TokenResponse"
+                    }
                 },
                 "type": {
                     "type": "string"
@@ -4829,6 +5620,9 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "url": {
+                    "type": "string"
+                },
+                "wallet_id": {
                     "type": "string"
                 },
                 "workspace_id": {
@@ -5117,6 +5911,12 @@ const docTemplate = `{
                 "price_in_pennies": {
                     "type": "integer"
                 },
+                "product_tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.CreateProductTokenRequest"
+                    }
+                },
                 "product_type": {
                     "type": "string"
                 },
@@ -5124,6 +5924,9 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "url": {
+                    "type": "string"
+                },
+                "wallet_id": {
                     "type": "string"
                 }
             }
@@ -5201,6 +6004,27 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.UpdateWalletRequest": {
+            "type": "object",
+            "properties": {
+                "ens": {
+                    "type": "string"
+                },
+                "is_primary": {
+                    "type": "boolean"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "verified": {
+                    "type": "boolean"
+                }
+            }
+        },
         "handlers.UpdateWorkspaceRequest": {
             "description": "Updates an existing workspace",
             "type": "object",
@@ -5247,7 +6071,7 @@ const docTemplate = `{
                 "auth0_id": {
                     "type": "string"
                 },
-                "created": {
+                "created_at": {
                     "type": "integer"
                 },
                 "display_name": {
@@ -5299,7 +6123,7 @@ const docTemplate = `{
                 "two_factor_enabled": {
                     "type": "boolean"
                 },
-                "updated": {
+                "updated_at": {
                     "type": "integer"
                 }
             }
@@ -5335,7 +6159,7 @@ const docTemplate = `{
                 "auth0_id": {
                     "type": "string"
                 },
-                "created": {
+                "created_at": {
                     "type": "integer"
                 },
                 "display_name": {
@@ -5381,7 +6205,86 @@ const docTemplate = `{
                 "two_factor_enabled": {
                     "type": "boolean"
                 },
-                "updated": {
+                "updated_at": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.WalletListResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.WalletResponse"
+                    }
+                },
+                "object": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.WalletResponse": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "integer"
+                },
+                "ens": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_primary": {
+                    "type": "boolean"
+                },
+                "last_used_at": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "network_type": {
+                    "type": "string"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "object": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "integer"
+                },
+                "verified": {
+                    "type": "boolean"
+                },
+                "wallet_address": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.WalletStatsResponse": {
+            "type": "object",
+            "properties": {
+                "network_types_count": {
+                    "type": "integer"
+                },
+                "object": {
+                    "type": "string"
+                },
+                "primary_wallets": {
+                    "type": "integer"
+                },
+                "total_wallets": {
+                    "type": "integer"
+                },
+                "verified_wallets": {
                     "type": "integer"
                 }
             }
@@ -5399,7 +6302,7 @@ const docTemplate = `{
                 "business_type": {
                     "type": "string"
                 },
-                "created": {
+                "created_at": {
                     "type": "integer"
                 },
                 "description": {
@@ -5427,7 +6330,7 @@ const docTemplate = `{
                 "support_phone": {
                     "type": "string"
                 },
-                "updated": {
+                "updated_at": {
                     "type": "integer"
                 },
                 "website_url": {

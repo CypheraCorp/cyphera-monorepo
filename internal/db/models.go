@@ -142,6 +142,51 @@ func (ns NullIntervalType) Value() (driver.Value, error) {
 	return string(ns.IntervalType), nil
 }
 
+type NetworkType string
+
+const (
+	NetworkTypeEvm      NetworkType = "evm"
+	NetworkTypeSolana   NetworkType = "solana"
+	NetworkTypeCosmos   NetworkType = "cosmos"
+	NetworkTypeBitcoin  NetworkType = "bitcoin"
+	NetworkTypePolkadot NetworkType = "polkadot"
+)
+
+func (e *NetworkType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NetworkType(s)
+	case string:
+		*e = NetworkType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NetworkType: %T", src)
+	}
+	return nil
+}
+
+type NullNetworkType struct {
+	NetworkType NetworkType `json:"network_type"`
+	Valid       bool        `json:"valid"` // Valid is true if NetworkType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNetworkType) Scan(value interface{}) error {
+	if value == nil {
+		ns.NetworkType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NetworkType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNetworkType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NetworkType), nil
+}
+
 type ProductType string
 
 const (
@@ -337,6 +382,7 @@ type Network struct {
 type Product struct {
 	ID              uuid.UUID          `json:"id"`
 	WorkspaceID     uuid.UUID          `json:"workspace_id"`
+	WalletID        uuid.UUID          `json:"wallet_id"`
 	Name            string             `json:"name"`
 	Description     pgtype.Text        `json:"description"`
 	ProductType     ProductType        `json:"product_type"`
@@ -399,6 +445,22 @@ type User struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type Wallet struct {
+	ID            uuid.UUID          `json:"id"`
+	AccountID     uuid.UUID          `json:"account_id"`
+	WalletAddress string             `json:"wallet_address"`
+	NetworkType   NetworkType        `json:"network_type"`
+	Nickname      pgtype.Text        `json:"nickname"`
+	Ens           pgtype.Text        `json:"ens"`
+	IsPrimary     pgtype.Bool        `json:"is_primary"`
+	Verified      pgtype.Bool        `json:"verified"`
+	LastUsedAt    pgtype.Timestamptz `json:"last_used_at"`
+	Metadata      []byte             `json:"metadata"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt     pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type Workspace struct {

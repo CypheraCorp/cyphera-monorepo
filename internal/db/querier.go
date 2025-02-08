@@ -26,6 +26,7 @@ type Querier interface {
 	CreateProductToken(ctx context.Context, arg CreateProductTokenParams) (ProductsToken, error)
 	CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateWallet(ctx context.Context, arg CreateWalletParams) (Wallet, error)
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
 	DeactivateAllProductTokens(ctx context.Context, productID uuid.UUID) error
 	DeactivateAllProductTokensForNetwork(ctx context.Context, arg DeactivateAllProductTokensForNetworkParams) error
@@ -73,12 +74,17 @@ type Querier interface {
 	GetProductTokenByIds(ctx context.Context, arg GetProductTokenByIdsParams) (GetProductTokenByIdsRow, error)
 	GetProductTokensByNetwork(ctx context.Context, arg GetProductTokensByNetworkParams) ([]GetProductTokensByNetworkRow, error)
 	GetProductTokensByProduct(ctx context.Context, productID uuid.UUID) ([]GetProductTokensByProductRow, error)
+	GetRecentlyUsedWallets(ctx context.Context, arg GetRecentlyUsedWalletsParams) ([]Wallet, error)
 	GetToken(ctx context.Context, id uuid.UUID) (Token, error)
 	GetTokenByAddress(ctx context.Context, arg GetTokenByAddressParams) (Token, error)
 	GetUserAccount(ctx context.Context, id uuid.UUID) (GetUserAccountRow, error)
 	GetUserByAuth0ID(ctx context.Context, auth0ID string) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
+	GetWalletByAddress(ctx context.Context, arg GetWalletByAddressParams) (Wallet, error)
+	GetWalletByID(ctx context.Context, id uuid.UUID) (Wallet, error)
+	GetWalletStats(ctx context.Context, accountID uuid.UUID) (GetWalletStatsRow, error)
+	GetWalletsByENS(ctx context.Context, accountID uuid.UUID) ([]Wallet, error)
 	GetWorkspace(ctx context.Context, id uuid.UUID) (Workspace, error)
 	HardDeleteAccount(ctx context.Context, id uuid.UUID) error
 	HardDeleteWorkspace(ctx context.Context, id uuid.UUID) error
@@ -92,16 +98,22 @@ type Querier interface {
 	ListCustomers(ctx context.Context, workspaceID uuid.UUID) ([]Customer, error)
 	ListCustomersWithPagination(ctx context.Context, arg ListCustomersWithPaginationParams) ([]Customer, error)
 	ListNetworks(ctx context.Context) ([]Network, error)
+	ListPrimaryWalletsByAccountID(ctx context.Context, accountID uuid.UUID) ([]Wallet, error)
 	ListProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	ListProductsWithPagination(ctx context.Context, arg ListProductsWithPaginationParams) ([]Product, error)
 	ListTokens(ctx context.Context) ([]Token, error)
 	ListTokensByNetwork(ctx context.Context, networkID uuid.UUID) ([]Token, error)
 	ListUsersByAccount(ctx context.Context, accountID uuid.UUID) ([]User, error)
+	ListWalletsByAccountID(ctx context.Context, accountID uuid.UUID) ([]Wallet, error)
+	ListWalletsByNetworkType(ctx context.Context, arg ListWalletsByNetworkTypeParams) ([]Wallet, error)
 	ListWorkspaceCustomers(ctx context.Context, id uuid.UUID) ([]Customer, error)
 	ListWorkspaceCustomersWithPagination(ctx context.Context, arg ListWorkspaceCustomersWithPaginationParams) ([]Customer, error)
 	ListWorkspaces(ctx context.Context) ([]Workspace, error)
 	ListWorkspacesByAccountID(ctx context.Context, accountID uuid.UUID) ([]Workspace, error)
 	SearchAccounts(ctx context.Context, arg SearchAccountsParams) ([]Account, error)
+	SearchWallets(ctx context.Context, arg SearchWalletsParams) ([]Wallet, error)
+	SetWalletAsPrimary(ctx context.Context, arg SetWalletAsPrimaryParams) (int64, error)
+	SoftDeleteWallet(ctx context.Context, id uuid.UUID) error
 	UpdateAPIKey(ctx context.Context, arg UpdateAPIKeyParams) (ApiKey, error)
 	UpdateAccount(ctx context.Context, arg UpdateAccountParams) (Account, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
@@ -112,6 +124,9 @@ type Querier interface {
 	UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
+	UpdateWallet(ctx context.Context, arg UpdateWalletParams) (Wallet, error)
+	UpdateWalletLastUsed(ctx context.Context, id uuid.UUID) error
+	UpdateWalletVerificationStatus(ctx context.Context, arg UpdateWalletVerificationStatusParams) (Wallet, error)
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
 }
 
