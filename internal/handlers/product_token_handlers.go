@@ -174,17 +174,17 @@ func (h *ProductHandler) GetProductToken(c *gin.Context) {
 	productId := c.Param("product_id")
 	parsedUUID, err := uuid.Parse(productId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product token ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid product token ID format", err)
 		return
 	}
 
 	productToken, err := h.common.db.GetProductToken(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Product token not found"})
+		handleDBError(c, err, "Product token not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, toProductTokenResponse(productToken))
+	sendSuccess(c, http.StatusOK, toProductTokenResponse(productToken))
 }
 
 // GetProductTokenByIds godoc
@@ -205,21 +205,21 @@ func (h *ProductHandler) GetProductTokenByIds(c *gin.Context) {
 	productID := c.Param("product_id")
 	parsedProductID, err := uuid.Parse(productID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
 		return
 	}
 
 	networkID := c.Param("network_id")
 	parsedNetworkID, err := uuid.Parse(networkID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
 	tokenID := c.Param("token_id")
 	parsedTokenID, err := uuid.Parse(tokenID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid token ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid token ID format", err)
 		return
 	}
 
@@ -229,11 +229,11 @@ func (h *ProductHandler) GetProductTokenByIds(c *gin.Context) {
 		TokenID:   parsedTokenID,
 	})
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Product token not found"})
+		handleDBError(c, err, "Product token not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, toProductTokenByIdsResponse(productToken))
+	sendSuccess(c, http.StatusOK, toProductTokenByIdsResponse(productToken))
 }
 
 // GetProductTokensByNetwork godoc
@@ -252,14 +252,14 @@ func (h *ProductHandler) GetProductTokensByNetwork(c *gin.Context) {
 	productID := c.Param("product_id")
 	parsedProductID, err := uuid.Parse(productID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
 		return
 	}
 
 	networkID := c.Param("network_id")
 	parsedNetworkID, err := uuid.Parse(networkID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
@@ -268,7 +268,7 @@ func (h *ProductHandler) GetProductTokensByNetwork(c *gin.Context) {
 		NetworkID: parsedNetworkID,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve product tokens"})
+		handleDBError(c, err, "Failed to retrieve product tokens")
 		return
 	}
 
@@ -277,7 +277,7 @@ func (h *ProductHandler) GetProductTokensByNetwork(c *gin.Context) {
 		response[i] = toProductTokenByNetworkResponse(pt)
 	}
 
-	c.JSON(http.StatusOK, response)
+	sendSuccess(c, http.StatusOK, response)
 }
 
 // GetActiveProductTokensByNetwork godoc
@@ -296,14 +296,14 @@ func (h *ProductHandler) GetActiveProductTokensByNetwork(c *gin.Context) {
 	productID := c.Param("product_id")
 	parsedProductID, err := uuid.Parse(productID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
 		return
 	}
 
 	networkID := c.Param("network_id")
 	parsedNetworkID, err := uuid.Parse(networkID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
@@ -312,7 +312,7 @@ func (h *ProductHandler) GetActiveProductTokensByNetwork(c *gin.Context) {
 		NetworkID: parsedNetworkID,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve active product tokens"})
+		handleDBError(c, err, "Failed to retrieve active product tokens")
 		return
 	}
 
@@ -321,7 +321,7 @@ func (h *ProductHandler) GetActiveProductTokensByNetwork(c *gin.Context) {
 		response[i] = toActiveProductTokenByNetworkResponse(pt)
 	}
 
-	c.JSON(http.StatusOK, response)
+	sendSuccess(c, http.StatusOK, response)
 }
 
 // GetProductTokensByProduct godoc
@@ -339,13 +339,13 @@ func (h *ProductHandler) GetProductTokensByProduct(c *gin.Context) {
 	productID := c.Param("product_id")
 	parsedProductID, err := uuid.Parse(productID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
 		return
 	}
 
 	productTokens, err := h.common.db.GetProductTokensByProduct(c.Request.Context(), parsedProductID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve product tokens"})
+		handleDBError(c, err, "Failed to retrieve product tokens")
 		return
 	}
 
@@ -354,7 +354,7 @@ func (h *ProductHandler) GetProductTokensByProduct(c *gin.Context) {
 		response[i] = toProductTokensByProductResponse(pt)
 	}
 
-	c.JSON(http.StatusOK, response)
+	sendSuccess(c, http.StatusOK, response)
 }
 
 // GetActiveProductTokensByProduct godoc
@@ -372,13 +372,13 @@ func (h *ProductHandler) GetActiveProductTokensByProduct(c *gin.Context) {
 	productID := c.Param("product_id")
 	parsedProductID, err := uuid.Parse(productID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
 		return
 	}
 
 	productTokens, err := h.common.db.GetActiveProductTokensByProduct(c.Request.Context(), parsedProductID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve active product tokens"})
+		handleDBError(c, err, "Failed to retrieve active product tokens")
 		return
 	}
 
@@ -387,7 +387,7 @@ func (h *ProductHandler) GetActiveProductTokensByProduct(c *gin.Context) {
 		response[i] = toActiveProductTokenByProductResponse(pt)
 	}
 
-	c.JSON(http.StatusOK, response)
+	sendSuccess(c, http.StatusOK, response)
 }
 
 // CreateProductToken godoc
@@ -405,25 +405,25 @@ func (h *ProductHandler) GetActiveProductTokensByProduct(c *gin.Context) {
 func (h *ProductHandler) CreateProductToken(c *gin.Context) {
 	var req CreateProductTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
 	productID, err := uuid.Parse(req.ProductID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
 		return
 	}
 
 	networkID, err := uuid.Parse(req.NetworkID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
 	tokenID, err := uuid.Parse(req.TokenID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid token ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid token ID format", err)
 		return
 	}
 
@@ -434,11 +434,11 @@ func (h *ProductHandler) CreateProductToken(c *gin.Context) {
 		Active:    req.Active,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create product token"})
+		handleDBError(c, err, "Failed to create product token")
 		return
 	}
 
-	c.JSON(http.StatusCreated, toBasicProductTokenResponse(productToken))
+	sendSuccess(c, http.StatusCreated, toBasicProductTokenResponse(productToken))
 }
 
 // UpdateProductToken godoc
@@ -460,27 +460,27 @@ func (h *ProductHandler) UpdateProductToken(c *gin.Context) {
 	productID := c.Param("product_id")
 	parsedProductID, err := uuid.Parse(productID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
 		return
 	}
 
 	networkID := c.Param("network_id")
 	parsedNetworkID, err := uuid.Parse(networkID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
 	tokenID := c.Param("token_id")
 	parsedTokenID, err := uuid.Parse(tokenID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid token ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid token ID format", err)
 		return
 	}
 
 	var req UpdateProductTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -491,11 +491,11 @@ func (h *ProductHandler) UpdateProductToken(c *gin.Context) {
 		Active:    req.Active,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update product token"})
+		handleDBError(c, err, "Failed to update product token")
 		return
 	}
 
-	c.JSON(http.StatusOK, toBasicProductTokenResponse(productToken))
+	sendSuccess(c, http.StatusOK, toBasicProductTokenResponse(productToken))
 }
 
 // DeleteProductToken godoc
@@ -516,21 +516,21 @@ func (h *ProductHandler) DeleteProductToken(c *gin.Context) {
 	productID := c.Param("product_id")
 	parsedProductID, err := uuid.Parse(productID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
 		return
 	}
 
 	networkID := c.Param("network_id")
 	parsedNetworkID, err := uuid.Parse(networkID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
 	tokenID := c.Param("token_id")
 	parsedTokenID, err := uuid.Parse(tokenID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid token ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid token ID format", err)
 		return
 	}
 
@@ -540,11 +540,11 @@ func (h *ProductHandler) DeleteProductToken(c *gin.Context) {
 		TokenID:   parsedTokenID,
 	})
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Product token not found"})
+		handleDBError(c, err, "Product token not found")
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	sendSuccess(c, http.StatusNoContent, nil)
 }
 
 // DeleteProductTokensByProduct godoc
@@ -563,15 +563,15 @@ func (h *ProductHandler) DeleteProductTokensByProduct(c *gin.Context) {
 	productID := c.Param("product_id")
 	parsedProductID, err := uuid.Parse(productID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
 		return
 	}
 
 	err = h.common.db.DeleteProductTokensByProduct(c.Request.Context(), parsedProductID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to delete product tokens"})
+		handleDBError(c, err, "Failed to delete product tokens")
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	sendSuccess(c, http.StatusNoContent, nil)
 }

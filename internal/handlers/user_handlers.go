@@ -8,8 +8,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -40,8 +38,8 @@ type UserResponse struct {
 	TwoFactorEnabled bool                   `json:"two_factor_enabled"`
 	Status           string                 `json:"status"`
 	Metadata         map[string]interface{} `json:"metadata,omitempty"`
-	Created          int64                  `json:"created"`
-	Updated          int64                  `json:"updated"`
+	CreatedAt        int64                  `json:"created_at"`
+	UpdatedAt        int64                  `json:"updated_at"`
 }
 
 // UserAccountResponse represents a user's relationship with an account
@@ -103,24 +101,25 @@ type AddUserToAccountRequest struct {
 // @Security ApiKeyAuth
 // @Router /users/me [get]
 func (h *UserHandler) GetCurrentUser(c *gin.Context) {
-	auth0ID := c.GetString("auth0ID")
-	if auth0ID == "" {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "Not authenticated"})
-		return
-	}
-
-	user, err := h.common.db.GetUserByAuth0ID(c.Request.Context(), auth0ID)
+	userID := c.GetString("userID")
+	parsedUUID, err := uuid.Parse(userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "User not found"})
+		sendError(c, http.StatusBadRequest, "Invalid user ID format", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, toUserResponse(user))
+	user, err := h.common.db.GetUserByID(c.Request.Context(), parsedUUID)
+	if err != nil {
+		handleDBError(c, err, "User not found")
+		return
+	}
+
+	sendSuccess(c, http.StatusOK, toUserResponse(user))
 }
 
 // GetUser godoc
-// @Summary Get a user
-// @Description Retrieves the details of an existing user
+// @Summary Get user by ID
+// @Description Gets a user by their ID
 // @Tags users
 // @Accept json
 // @Produce json
@@ -134,21 +133,21 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid user ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid user ID format", err)
 		return
 	}
 
 	user, err := h.common.db.GetUserByID(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "User not found"})
+		handleDBError(c, err, "User not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, toUserResponse(user))
+	sendSuccess(c, http.StatusOK, toUserResponse(user))
 }
 
 // CreateUser godoc
-// @Summary Create a user
+// @Summary Create user
 // @Description Creates a new user
 // @Tags users
 // @Accept json
@@ -156,53 +155,41 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 // @Param user body CreateUserRequest true "User creation data"
 // @Success 201 {object} UserResponse
 // @Failure 400 {object} ErrorResponse
-// @Failure 409 {object} ErrorResponse "User already exists"
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users [post]
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
-	metadata, err := json.Marshal(req.Metadata)
+	accountID := c.GetString("accountID")
+	parsedAccountID, err := uuid.Parse(accountID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
+		sendError(c, http.StatusBadRequest, "Invalid account ID format", err)
 		return
 	}
 
 	user, err := h.common.db.CreateUser(c.Request.Context(), db.CreateUserParams{
 		Auth0ID:        req.Auth0ID,
 		Email:          req.Email,
-		AccountID:      req.AccountID,
+		AccountID:      parsedAccountID,
 		Role:           db.UserRole(req.Role),
 		IsAccountOwner: pgtype.Bool{Bool: req.IsAccountOwner, Valid: true},
-		FirstName:      pgtype.Text{String: req.FirstName, Valid: req.FirstName != ""},
-		LastName:       pgtype.Text{String: req.LastName, Valid: req.LastName != ""},
-		DisplayName:    pgtype.Text{String: req.DisplayName, Valid: req.DisplayName != ""},
-		PictureUrl:     pgtype.Text{String: req.PictureURL, Valid: req.PictureURL != ""},
-		Phone:          pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
-		Timezone:       pgtype.Text{String: req.Timezone, Valid: req.Timezone != ""},
-		Locale:         pgtype.Text{String: req.Locale, Valid: req.Locale != ""},
-		EmailVerified:  pgtype.Bool{Bool: req.EmailVerified, Valid: true},
-		Metadata:       metadata,
 	})
 	if err != nil {
-		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" {
-			c.JSON(http.StatusConflict, ErrorResponse{Error: "User already exists"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create user"})
+		sendError(c, http.StatusInternalServerError, "Failed to create user", err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, toUserResponse(user))
+	sendSuccess(c, http.StatusCreated, toUserResponse(user))
 }
 
 // UpdateUser godoc
-// @Summary Update a user
-// @Description Updates an existing user's information
+// @Summary Update user
+// @Description Updates an existing user
 // @Tags users
 // @Accept json
 // @Produce json
@@ -218,48 +205,31 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid user ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid user ID format", err)
 		return
 	}
 
 	var req UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
-		return
-	}
-
-	metadata, err := json.Marshal(req.Metadata)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
 	user, err := h.common.db.UpdateUser(c.Request.Context(), db.UpdateUserParams{
-		ID:               parsedUUID,
-		Email:            req.Email,
-		FirstName:        pgtype.Text{String: req.FirstName, Valid: req.FirstName != ""},
-		LastName:         pgtype.Text{String: req.LastName, Valid: req.LastName != ""},
-		DisplayName:      pgtype.Text{String: req.DisplayName, Valid: req.DisplayName != ""},
-		PictureUrl:       pgtype.Text{String: req.PictureURL, Valid: req.PictureURL != ""},
-		Phone:            pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
-		Timezone:         pgtype.Text{String: req.Timezone, Valid: req.Timezone != ""},
-		Locale:           pgtype.Text{String: req.Locale, Valid: req.Locale != ""},
-		EmailVerified:    pgtype.Bool{Bool: *req.EmailVerified, Valid: req.EmailVerified != nil},
-		TwoFactorEnabled: pgtype.Bool{Bool: *req.TwoFactorEnabled, Valid: req.TwoFactorEnabled != nil},
-		Status:           db.NullUserStatus{UserStatus: db.UserStatus(req.Status), Valid: req.Status != ""},
-		Metadata:         metadata,
+		ID:    parsedUUID,
+		Email: req.Email,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update user"})
+		handleDBError(c, err, "Failed to update user")
 		return
 	}
 
-	c.JSON(http.StatusOK, toUserResponse(user))
+	sendSuccess(c, http.StatusOK, toUserResponse(user))
 }
 
 // DeleteUser godoc
-// @Summary Delete a user
-// @Description Soft deletes a user from the system
+// @Summary Delete user
+// @Description Deletes a user
 // @Tags users
 // @Accept json
 // @Produce json
@@ -267,24 +237,23 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 // @Success 204 "No Content"
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users/{user_id} [delete]
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid user ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid user ID format", err)
 		return
 	}
 
 	err = h.common.db.DeleteUser(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "User not found"})
+		handleDBError(c, err, "Failed to delete user")
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	sendSuccess(c, http.StatusNoContent, nil)
 }
 
 // GetUserAccount godoc
@@ -304,51 +273,46 @@ func (h *UserHandler) GetUserAccount(c *gin.Context) {
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid user ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid user ID format", err)
 		return
 	}
 
 	userAccount, err := h.common.db.GetUserAccount(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "User not found"})
+		handleDBError(c, err, "User not found")
 		return
 	}
 
 	response := toUserAccountResponse(userAccount)
-	c.JSON(http.StatusOK, response)
+	sendSuccess(c, http.StatusOK, response)
 }
 
 // GetUserByAuth0ID godoc
 // @Summary Get user by Auth0 ID
-// @Description Retrieves a user's details using their Auth0 ID
+// @Description Gets a user by their Auth0 ID
 // @Tags users
 // @Accept json
 // @Produce json
-// @Param auth0_id path string true "Auth0 ID"
+// @Param auth0_id query string true "Auth0 ID"
 // @Success 200 {object} UserResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /users/auth0/{auth0_id} [get]
+// @Router /users/auth0 [get]
 func (h *UserHandler) GetUserByAuth0ID(c *gin.Context) {
-	auth0ID := c.Param("auth0_id")
+	auth0ID := c.Query("auth0_id")
 	if auth0ID == "" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "auth0_id is required"})
+		sendError(c, http.StatusBadRequest, "Auth0 ID is required", nil)
 		return
 	}
 
 	user, err := h.common.db.GetUserByAuth0ID(c.Request.Context(), auth0ID)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			c.JSON(http.StatusNotFound, ErrorResponse{Error: "user not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "failed to get user"})
+		handleDBError(c, err, "User not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, toUserResponse(user))
+	sendSuccess(c, http.StatusOK, toUserResponse(user))
 }
 
 // Helper function to convert database model to API response
@@ -375,8 +339,8 @@ func toUserResponse(u db.User) UserResponse {
 		TwoFactorEnabled: u.TwoFactorEnabled.Bool,
 		Status:           string(u.Status.UserStatus),
 		Metadata:         metadata,
-		Created:          u.CreatedAt.Time.Unix(),
-		Updated:          u.UpdatedAt.Time.Unix(),
+		CreatedAt:        u.CreatedAt.Time.Unix(),
+		UpdatedAt:        u.UpdatedAt.Time.Unix(),
 	}
 }
 
@@ -397,8 +361,8 @@ func toUserAccountResponse(u db.GetUserAccountRow) UserAccountResponse {
 		EmailVerified:    u.EmailVerified.Bool,
 		TwoFactorEnabled: u.TwoFactorEnabled.Bool,
 		Status:           string(u.Status.UserStatus),
-		Created:          u.CreatedAt.Time.Unix(),
-		Updated:          u.UpdatedAt.Time.Unix(),
+		CreatedAt:        u.CreatedAt.Time.Unix(),
+		UpdatedAt:        u.UpdatedAt.Time.Unix(),
 	}
 
 	var metadata map[string]interface{}

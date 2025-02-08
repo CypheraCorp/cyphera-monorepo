@@ -4,6 +4,7 @@ import (
 	"cyphera-api/internal/db"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -36,8 +37,8 @@ type APIKeyResponse struct {
 	ExpiresAt   *int64                 `json:"expires_at,omitempty"`
 	LastUsedAt  *int64                 `json:"last_used_at,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Created     int64                  `json:"created"`
-	Updated     int64                  `json:"updated"`
+	CreatedAt   int64                  `json:"created_at"`
+	UpdatedAt   int64                  `json:"updated_at"`
 }
 
 // CreateAPIKeyRequest represents the request body for creating an API key
@@ -58,6 +59,14 @@ type UpdateAPIKeyRequest struct {
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
+// ListAPIKeysResponse represents the paginated response for API key list operations
+type ListAPIKeysResponse struct {
+	Object  string           `json:"object"`
+	Data    []APIKeyResponse `json:"data"`
+	HasMore bool             `json:"has_more"`
+	Total   int64            `json:"total"`
+}
+
 // GetAPIKeyByID godoc
 // @Summary Get an API key
 // @Description Retrieves a specific API key by its ID
@@ -74,17 +83,17 @@ func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
 	apiKeyId := c.Param("api_key_id")
 	parsedUUID, err := uuid.Parse(apiKeyId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
+		sendError(c, http.StatusBadRequest, "Invalid UUID format", err)
 		return
 	}
 
 	apiKey, err := h.common.db.GetAPIKey(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
+		handleDBError(c, err, "API key not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, toAPIKeyResponse(apiKey))
+	sendSuccess(c, http.StatusOK, toAPIKeyResponse(apiKey))
 }
 
 // ListAPIKeys godoc
@@ -93,7 +102,7 @@ func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
 // @Tags api-keys
 // @Accept json
 // @Produce json
-// @Success 200 {array} APIKeyResponse
+// @Success 200 {object} ListAPIKeysResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
@@ -102,13 +111,13 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 	workspaceID := c.GetString("workspaceID")
 	parsedUUID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
 	apiKeys, err := h.common.db.ListAPIKeys(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve API keys"})
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve API keys", err)
 		return
 	}
 
@@ -117,10 +126,14 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 		response[i] = toAPIKeyResponse(key)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"object": "list",
-		"data":   response,
-	})
+	listAPIKeysResponse := ListAPIKeysResponse{
+		Object:  "list",
+		Data:    response,
+		HasMore: false,
+		Total:   int64(len(apiKeys)),
+	}
+
+	sendSuccess(c, http.StatusOK, listAPIKeysResponse)
 }
 
 // GetAllAPIKeys godoc
@@ -145,10 +158,14 @@ func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
 		response[i] = toAPIKeyResponse(key)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"object": "list",
-		"data":   response,
-	})
+	listAPIKeysResponse := ListAPIKeysResponse{
+		Object:  "list",
+		Data:    response,
+		HasMore: false,
+		Total:   int64(len(apiKeys)),
+	}
+
+	sendList(c, listAPIKeysResponse)
 }
 
 // CreateAPIKey godoc
@@ -166,20 +183,20 @@ func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
 func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	var req CreateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
 	workspaceID := c.GetString("workspaceID")
 	parsedUUID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
 	metadata, err := json.Marshal(req.Metadata)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid metadata format"})
+		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
 		return
 	}
 
@@ -198,11 +215,11 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 		Metadata:    metadata,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create API key"})
+		sendError(c, http.StatusInternalServerError, "Failed to create API key", err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, toAPIKeyResponse(apiKey))
+	sendSuccess(c, http.StatusCreated, toAPIKeyResponse(apiKey))
 }
 
 // UpdateAPIKey godoc
@@ -222,19 +239,19 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 	apiKeyId := c.Param("api_key_id")
 	parsedUUID, err := uuid.Parse(apiKeyId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
+		sendError(c, http.StatusBadRequest, "Invalid UUID format", err)
 		return
 	}
 
 	var req UpdateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
 	metadata, err := json.Marshal(req.Metadata)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid metadata format"})
+		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
 		return
 	}
 
@@ -252,11 +269,11 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 		Metadata:    metadata,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update API key"})
+		sendError(c, http.StatusInternalServerError, "Failed to update API key", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, toAPIKeyResponse(apiKey))
+	sendSuccess(c, http.StatusOK, toAPIKeyResponse(apiKey))
 }
 
 // DeleteAPIKey godoc
@@ -275,17 +292,17 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 	apiKeyId := c.Param("api_key_id")
 	parsedUUID, err := uuid.Parse(apiKeyId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID format"})
+		sendError(c, http.StatusBadRequest, "Invalid UUID format", err)
 		return
 	}
 
 	err = h.common.db.DeleteAPIKey(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
+		handleDBError(c, err, "Failed to delete API key")
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	sendSuccess(c, http.StatusNoContent, nil)
 }
 
 // GetExpiredAPIKeys godoc
@@ -301,7 +318,7 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 func (h *APIKeyHandler) GetExpiredAPIKeys(c *gin.Context) {
 	apiKeys, err := h.common.db.GetExpiredAPIKeys(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve expired API keys"})
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve expired API keys", err)
 		return
 	}
 
@@ -310,10 +327,14 @@ func (h *APIKeyHandler) GetExpiredAPIKeys(c *gin.Context) {
 		response[i] = toAPIKeyResponse(key)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"object": "list",
-		"data":   response,
-	})
+	listAPIKeysResponse := ListAPIKeysResponse{
+		Object:  "list",
+		Data:    response,
+		HasMore: false,
+		Total:   int64(len(apiKeys)),
+	}
+
+	sendList(c, listAPIKeysResponse)
 }
 
 // GetActiveAPIKeysCount godoc
@@ -331,50 +352,49 @@ func (h *APIKeyHandler) GetActiveAPIKeysCount(c *gin.Context) {
 	workspaceID := c.GetString("workspaceID")
 	parsedUUID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
 	count, err := h.common.db.GetActiveAPIKeysCount(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get API key count"})
+		sendError(c, http.StatusInternalServerError, "Failed to get API key count", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"count": count,
-	})
+	sendSuccess(c, http.StatusOK, gin.H{"count": count})
 }
 
 // Helper function to convert database model to API response
-func toAPIKeyResponse(k db.ApiKey) APIKeyResponse {
+func toAPIKeyResponse(a db.ApiKey) APIKeyResponse {
 	var metadata map[string]interface{}
-	if err := json.Unmarshal(k.Metadata, &metadata); err != nil {
+	if err := json.Unmarshal(a.Metadata, &metadata); err != nil {
+		log.Printf("Error unmarshaling API key metadata: %v", err)
 		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
 	}
 
 	var expiresAt *int64
-	if k.ExpiresAt.Valid {
-		unix := k.ExpiresAt.Time.Unix()
+	if a.ExpiresAt.Valid {
+		unix := a.ExpiresAt.Time.Unix()
 		expiresAt = &unix
 	}
 
 	var lastUsedAt *int64
-	if k.LastUsedAt.Valid {
-		unix := k.LastUsedAt.Time.Unix()
+	if a.LastUsedAt.Valid {
+		unix := a.LastUsedAt.Time.Unix()
 		lastUsedAt = &unix
 	}
 
 	return APIKeyResponse{
-		ID:          k.ID.String(),
+		ID:          a.ID.String(),
 		Object:      "api_key",
-		Name:        k.Name,
-		AccessLevel: string(k.AccessLevel),
+		Name:        a.Name,
+		AccessLevel: string(a.AccessLevel),
 		ExpiresAt:   expiresAt,
 		LastUsedAt:  lastUsedAt,
 		Metadata:    metadata,
-		Created:     k.CreatedAt.Time.Unix(),
-		Updated:     k.UpdatedAt.Time.Unix(),
+		CreatedAt:   a.CreatedAt.Time.Unix(),
+		UpdatedAt:   a.UpdatedAt.Time.Unix(),
 	}
 }
 

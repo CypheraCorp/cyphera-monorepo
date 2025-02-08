@@ -41,7 +41,8 @@ type CustomerResponse struct {
 	TaxExempt         bool                   `json:"tax_exempt"`
 	TaxIDs            map[string]interface{} `json:"tax_ids,omitempty"`
 	Livemode          bool                   `json:"livemode"`
-	Created           int64                  `json:"created"`
+	CreatedAt         int64                  `json:"created_at"`
+	UpdatedAt         int64                  `json:"updated_at"`
 	WorkspaceName     string                 `json:"workspace_name,omitempty"`
 	BusinessName      string                 `json:"business_name,omitempty"`
 }
@@ -53,7 +54,7 @@ type CreateCustomerRequest struct {
 	Name                string                 `json:"name,omitempty"`
 	Phone               string                 `json:"phone,omitempty"`
 	Description         string                 `json:"description,omitempty"`
-	BalanceInPennies    *int32                 `json:"balance_in_pennies,omitempty"`
+	BalanceInPennies    int32                  `json:"balance_in_pennies,omitempty"`
 	Currency            string                 `json:"currency,omitempty" binding:"required_with=BalanceInPennies"`
 	DefaultSourceID     string                 `json:"default_source_id,omitempty" binding:"omitempty,uuid4"`
 	InvoicePrefix       string                 `json:"invoice_prefix,omitempty"`
@@ -91,8 +92,8 @@ type ListCustomersResponse struct {
 }
 
 // GetCustomer godoc
-// @Summary Get a customer
-// @Description Retrieves a specific customer by its ID
+// @Summary Get customer by ID
+// @Description Get customer details by customer ID
 // @Tags customers
 // @Accept json
 // @Produce json
@@ -106,17 +107,17 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 	customerId := c.Param("customer_id")
 	parsedUUID, err := uuid.Parse(customerId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid customer ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid customer ID format", err)
 		return
 	}
 
 	customer, err := h.common.db.GetCustomer(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Customer not found"})
+		handleDBError(c, err, "Customer not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, toCustomerResponse(customer))
+	sendSuccess(c, http.StatusOK, toCustomerResponse(customer))
 }
 
 // updateBasicCustomerFields updates basic text fields of the customer
@@ -222,58 +223,49 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid workspace ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
 	// Get pagination parameters
 	limit, offset, err := validatePaginationParams(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		sendError(c, http.StatusBadRequest, "Invalid pagination parameters", err)
 		return
 	}
 
-	// Get total count
-	total, err := h.common.db.CountCustomers(c.Request.Context(), parsedWorkspaceID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to count customers"})
-		return
-	}
-
-	// Get paginated customers
 	customers, err := h.common.db.ListCustomersWithPagination(c.Request.Context(), db.ListCustomersWithPaginationParams{
 		WorkspaceID: parsedWorkspaceID,
-		Limit:       limit,
-		Offset:      offset,
+		Limit:       int32(limit),
+		Offset:      int32(offset),
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve customers"})
+		handleDBError(c, err, "Failed to retrieve customers")
 		return
 	}
 
-	response := make([]CustomerResponse, len(customers))
-	for i, customer := range customers {
-		response[i] = toCustomerResponse(customer)
+	listCustomersResponse := ListCustomersResponse{
+		Object:  "list",
+		Data:    make([]CustomerResponse, len(customers)),
+		HasMore: false,
+		Total:   int64(len(customers)),
 	}
 
-	hasMore := int64(offset)+int64(len(response)) < total
+	for i, customer := range customers {
+		listCustomersResponse.Data[i] = toCustomerResponse(customer)
+	}
 
-	c.JSON(http.StatusOK, ListCustomersResponse{
-		Object:  "list",
-		Data:    response,
-		HasMore: hasMore,
-		Total:   total,
-	})
+	sendSuccess(c, http.StatusOK, listCustomersResponse)
 }
 
 // CreateCustomer godoc
 // @Summary Create customer
-// @Description Creates a new customer in the current workspace
+// @Description Creates a new customer
 // @Tags customers
 // @Accept json
 // @Produce json
 // @Param customer body CreateCustomerRequest true "Customer creation data"
-// @Success 200 {object} CustomerResponse
+// @Success 201 {object} CustomerResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
@@ -281,87 +273,42 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	var req CreateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
-	workspaceID := c.GetString("workspaceID")
+	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
 	metadata, err := json.Marshal(req.Metadata)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
+		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
 		return
 	}
 
-	taxIDs, err := json.Marshal(req.TaxIDs)
+	customer, err := h.common.db.CreateCustomer(c.Request.Context(), db.CreateCustomerParams{
+		WorkspaceID: parsedWorkspaceID,
+		ExternalID:  pgtype.Text{String: req.ExternalID, Valid: req.ExternalID != ""},
+		Email:       pgtype.Text{String: req.Email, Valid: req.Email != ""},
+		Name:        pgtype.Text{String: req.Name, Valid: req.Name != ""},
+		Description: pgtype.Text{String: req.Description, Valid: req.Description != ""},
+		Phone:       pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
+		BalanceInPennies: pgtype.Int4{
+			Int32: req.BalanceInPennies,
+			Valid: req.BalanceInPennies != 0,
+		},
+		Metadata: metadata,
+	})
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid tax IDs format"})
+		sendError(c, http.StatusInternalServerError, "Failed to create customer", err)
 		return
 	}
 
-	// Parse DefaultSourceID if provided
-	var defaultSourceUUID pgtype.UUID
-	if req.DefaultSourceID != "" {
-		parsedSourceID, err := uuid.Parse(req.DefaultSourceID)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid default source ID format"})
-			return
-		}
-		defaultSourceUUID = pgtype.UUID{
-			Bytes: parsedSourceID,
-			Valid: true,
-		}
-	}
-
-	// Handle BalanceInPennies field
-	var balanceInPennies pgtype.Int4
-	if req.BalanceInPennies != nil {
-		balanceInPennies = pgtype.Int4{
-			Int32: *req.BalanceInPennies,
-			Valid: true,
-		}
-	}
-
-	// Handle NextInvoiceSequence field
-	var nextInvoiceSequence pgtype.Int4
-	if req.NextInvoiceSequence != nil {
-		nextInvoiceSequence = pgtype.Int4{
-			Int32: *req.NextInvoiceSequence,
-			Valid: true,
-		}
-	}
-
-	// Create customer params
-	params := db.CreateCustomerParams{
-		WorkspaceID:         parsedWorkspaceID,
-		ExternalID:          pgtype.Text{String: req.ExternalID, Valid: req.ExternalID != ""},
-		Email:               pgtype.Text{String: req.Email, Valid: req.Email != ""},
-		Name:                pgtype.Text{String: req.Name, Valid: req.Name != ""},
-		Phone:               pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
-		Description:         pgtype.Text{String: req.Description, Valid: req.Description != ""},
-		BalanceInPennies:    balanceInPennies,
-		Currency:            pgtype.Text{String: req.Currency, Valid: req.Currency != ""},
-		DefaultSourceID:     defaultSourceUUID,
-		InvoicePrefix:       pgtype.Text{String: req.InvoicePrefix, Valid: req.InvoicePrefix != ""},
-		NextInvoiceSequence: nextInvoiceSequence,
-		TaxExempt:           pgtype.Bool{Bool: req.TaxExempt != nil && *req.TaxExempt, Valid: req.TaxExempt != nil},
-		TaxIds:              taxIDs,
-		Metadata:            metadata,
-		Livemode:            pgtype.Bool{Bool: req.Livemode != nil && *req.Livemode, Valid: req.Livemode != nil},
-	}
-
-	customer, err := h.common.db.CreateCustomer(c.Request.Context(), params)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create customer"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, toCustomerResponse(customer))
+	sendSuccess(c, http.StatusCreated, toCustomerResponse(customer))
 }
 
 // UpdateCustomer godoc
@@ -375,40 +322,41 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 // @Success 200 {object} CustomerResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /customers/{customer_id} [put]
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
-	id := c.Param("customer_id")
-	parsedUUID, err := uuid.Parse(id)
+	customerId := c.Param("customer_id")
+	parsedUUID, err := uuid.Parse(customerId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid customer ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid customer ID format", err)
 		return
 	}
 
 	var req UpdateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
 	params, err := h.updateCustomerParams(parsedUUID, req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		sendError(c, http.StatusBadRequest, "Invalid update parameters", err)
 		return
 	}
 
 	customer, err := h.common.db.UpdateCustomer(c.Request.Context(), params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update customer"})
+		handleDBError(c, err, "Failed to update customer")
 		return
 	}
 
-	c.JSON(http.StatusOK, toCustomerResponse(customer))
+	sendSuccess(c, http.StatusOK, toCustomerResponse(customer))
 }
 
 // DeleteCustomer godoc
 // @Summary Delete customer
-// @Description Soft deletes a customer
+// @Description Deletes a customer
 // @Tags customers
 // @Accept json
 // @Produce json
@@ -422,17 +370,17 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 	customerId := c.Param("customer_id")
 	parsedUUID, err := uuid.Parse(customerId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid customer ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid customer ID format", err)
 		return
 	}
 
 	err = h.common.db.DeleteCustomer(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Customer not found"})
+		handleDBError(c, err, "Failed to delete customer")
 		return
 	}
 
-	c.JSON(http.StatusNoContent, gin.H{"message": fmt.Sprintf("Customer %v successfully deleted", customerId)})
+	c.Status(http.StatusNoContent)
 }
 
 // Helper function to convert database model to API response
@@ -472,6 +420,7 @@ func toCustomerResponse(c db.Customer) CustomerResponse {
 		TaxExempt:         c.TaxExempt.Bool,
 		TaxIDs:            taxIDs,
 		Livemode:          c.Livemode.Bool,
-		Created:           c.CreatedAt.Time.Unix(),
+		CreatedAt:         c.CreatedAt.Time.Unix(),
+		UpdatedAt:         c.UpdatedAt.Time.Unix(),
 	}
 }
