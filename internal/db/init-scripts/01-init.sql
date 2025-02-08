@@ -19,6 +19,9 @@ CREATE TYPE product_type AS ENUM ('recurring', 'one_off');
 -- Create interval type enum
 CREATE TYPE interval_type AS ENUM ('5minutes', 'Daily', 'Weekly', 'Monthly', 'Yearly');
 
+-- Create network type enum
+CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkadot');
+
 -- Accounts table (top level organization)
 CREATE TABLE IF NOT EXISTS accounts (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -34,6 +37,24 @@ CREATE TABLE IF NOT EXISTS accounts (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Wallets table
+CREATE TABLE IF NOT EXISTS wallets (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(id),
+    wallet_address TEXT NOT NULL,
+    network_type network_type NOT NULL,
+    nickname TEXT,
+    ens TEXT,
+    is_primary BOOLEAN DEFAULT false,
+    verified BOOLEAN DEFAULT false,
+    last_used_at TIMESTAMP WITH TIME ZONE,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    UNIQUE(account_id, wallet_address, network_type)
 );
 
 -- Users table
@@ -123,6 +144,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
 CREATE TABLE products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    wallet_id UUID NOT NULL REFERENCES wallets(id),
     name TEXT NOT NULL,
     description TEXT,
     product_type product_type NOT NULL,
@@ -219,7 +241,13 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_auth0_id ON users(auth0_id);
 CREATE INDEX idx_users_account_id ON users(account_id);
 
+CREATE INDEX idx_wallets_account_id ON wallets(account_id);
+CREATE INDEX idx_wallets_address ON wallets(wallet_address);
+CREATE INDEX idx_wallets_network_type ON wallets(network_type);
+CREATE INDEX idx_wallets_is_primary ON wallets(is_primary) WHERE deleted_at IS NULL;
+
 CREATE INDEX idx_products_workspace_id ON products(workspace_id);
+CREATE INDEX idx_products_wallet_id ON products(wallet_id);
 CREATE INDEX idx_products_active ON products(active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_created_at ON products(created_at);
 
@@ -250,6 +278,60 @@ VALUES
         'admin',
         'Cyphera Admin',
         'Corporation'
+    )
+ON CONFLICT DO NOTHING;
+
+-- Insert test wallets
+INSERT INTO wallets (
+    account_id,
+    wallet_address,
+    network_type,
+    nickname,
+    ens,
+    is_primary,
+    verified,
+    metadata
+)
+VALUES 
+    (
+        (SELECT id FROM accounts WHERE name = 'Test Account'),
+        '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+        'evm',
+        'Main Payment Wallet',
+        'test-merchant.eth',
+        true,
+        true,
+        '{"chain": "ethereum", "tags": ["payments"]}'::jsonb
+    ),
+    (
+        (SELECT id FROM accounts WHERE name = 'Test Account'),
+        '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
+        'polkadot',
+        'DOT Wallet',
+        null,
+        false,
+        true,
+        '{"chain": "polkadot", "tags": ["staking"]}'::jsonb
+    ),
+    (
+        (SELECT id FROM accounts WHERE name = 'Admin Account'),
+        '0x8894e0a0c962cb723c1976a4421c95949be2d4e3',
+        'evm',
+        'Admin ETH Wallet',
+        'cyphera-admin.eth',
+        true,
+        true,
+        '{"chain": "ethereum", "tags": ["admin", "treasury"]}'::jsonb
+    ),
+    (
+        (SELECT id FROM accounts WHERE name = 'Admin Account'),
+        '6fYU3gaCuDGK7HLqsMW2nwpBJqecxLmLDBo5Hc3YzKf5',
+        'solana',
+        'Admin SOL Wallet',
+        null,
+        false,
+        true,
+        '{"chain": "solana", "tags": ["admin"]}'::jsonb
     )
 ON CONFLICT DO NOTHING;
 
@@ -333,6 +415,7 @@ ON CONFLICT DO NOTHING;
 -- Insert test products
 INSERT INTO products (
     workspace_id,
+    wallet_id,
     name,
     description,
     product_type,
@@ -347,6 +430,7 @@ INSERT INTO products (
 ) VALUES 
     (
         (SELECT id FROM workspaces WHERE name = 'Test Workspace'),
+        (SELECT id FROM wallets WHERE nickname = 'Main Payment Wallet' AND deleted_at IS NULL LIMIT 1),
         'Basic Subscription',
         'Monthly subscription plan with basic features, ends in 12 months',
         'recurring',
@@ -361,6 +445,7 @@ INSERT INTO products (
     ),
     (
         (SELECT id FROM workspaces WHERE name = 'Test Workspace'),
+        (SELECT id FROM wallets WHERE nickname = 'Main Payment Wallet' AND deleted_at IS NULL LIMIT 1),
         'Annual Pro Plan',
         'Annual subscription with all features, ends in 3 years',
         'recurring',
@@ -435,6 +520,11 @@ $$ LANGUAGE plpgsql;
 -- Add triggers for updated_at
 CREATE TRIGGER set_accounts_updated_at
     BEFORE UPDATE ON accounts
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_wallets_updated_at
+    BEFORE UPDATE ON wallets
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 

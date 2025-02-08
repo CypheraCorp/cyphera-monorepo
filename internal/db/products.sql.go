@@ -18,7 +18,7 @@ SET
     active = true,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, workspace_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) ActivateProduct(ctx context.Context, id uuid.UUID) (Product, error) {
@@ -27,6 +27,7 @@ func (q *Queries) ActivateProduct(ctx context.Context, id uuid.UUID) (Product, e
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
+		&i.WalletID,
 		&i.Name,
 		&i.Description,
 		&i.ProductType,
@@ -60,6 +61,7 @@ func (q *Queries) CountProducts(ctx context.Context, workspaceID uuid.UUID) (int
 const createProduct = `-- name: CreateProduct :one
 INSERT INTO products (
     workspace_id,
+    wallet_id,
     name,
     description,
     product_type,
@@ -72,13 +74,14 @@ INSERT INTO products (
     active,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 )
-RETURNING id, workspace_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at
 `
 
 type CreateProductParams struct {
 	WorkspaceID     uuid.UUID        `json:"workspace_id"`
+	WalletID        uuid.UUID        `json:"wallet_id"`
 	Name            string           `json:"name"`
 	Description     pgtype.Text      `json:"description"`
 	ProductType     ProductType      `json:"product_type"`
@@ -95,6 +98,7 @@ type CreateProductParams struct {
 func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error) {
 	row := q.db.QueryRow(ctx, createProduct,
 		arg.WorkspaceID,
+		arg.WalletID,
 		arg.Name,
 		arg.Description,
 		arg.ProductType,
@@ -111,6 +115,7 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
+		&i.WalletID,
 		&i.Name,
 		&i.Description,
 		&i.ProductType,
@@ -135,7 +140,7 @@ SET
     active = false,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, workspace_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) DeactivateProduct(ctx context.Context, id uuid.UUID) (Product, error) {
@@ -144,6 +149,7 @@ func (q *Queries) DeactivateProduct(ctx context.Context, id uuid.UUID) (Product,
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
+		&i.WalletID,
 		&i.Name,
 		&i.Description,
 		&i.ProductType,
@@ -174,7 +180,7 @@ func (q *Queries) DeleteProduct(ctx context.Context, id uuid.UUID) error {
 }
 
 const getProduct = `-- name: GetProduct :one
-SELECT id, workspace_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at FROM products
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -184,6 +190,7 @@ func (q *Queries) GetProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
+		&i.WalletID,
 		&i.Name,
 		&i.Description,
 		&i.ProductType,
@@ -203,7 +210,7 @@ func (q *Queries) GetProduct(ctx context.Context, id uuid.UUID) (Product, error)
 }
 
 const listActiveProducts = `-- name: ListActiveProducts :many
-SELECT id, workspace_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at FROM products
 WHERE workspace_id = $1 AND active = true AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -220,6 +227,7 @@ func (q *Queries) ListActiveProducts(ctx context.Context, workspaceID uuid.UUID)
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
+			&i.WalletID,
 			&i.Name,
 			&i.Description,
 			&i.ProductType,
@@ -246,7 +254,7 @@ func (q *Queries) ListActiveProducts(ctx context.Context, workspaceID uuid.UUID)
 }
 
 const listProducts = `-- name: ListProducts :many
-SELECT id, workspace_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at FROM products
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -263,6 +271,7 @@ func (q *Queries) ListProducts(ctx context.Context, workspaceID uuid.UUID) ([]Pr
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
+			&i.WalletID,
 			&i.Name,
 			&i.Description,
 			&i.ProductType,
@@ -289,7 +298,7 @@ func (q *Queries) ListProducts(ctx context.Context, workspaceID uuid.UUID) ([]Pr
 }
 
 const listProductsWithPagination = `-- name: ListProductsWithPagination :many
-SELECT id, workspace_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at FROM products
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -313,6 +322,7 @@ func (q *Queries) ListProductsWithPagination(ctx context.Context, arg ListProduc
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
+			&i.WalletID,
 			&i.Name,
 			&i.Description,
 			&i.ProductType,
@@ -342,24 +352,26 @@ const updateProduct = `-- name: UpdateProduct :one
 UPDATE products
 SET
     name = COALESCE($2, name),
-    description = COALESCE($3, description),
-    product_type = COALESCE($4, product_type),
-    interval_type = COALESCE($5, interval_type),
-    term_length = COALESCE($6, term_length),
-    price_in_pennies = COALESCE($7, price_in_pennies),
-    image_url = COALESCE($8, image_url),
-    url = COALESCE($9, url),
-    merchant_paid_gas = COALESCE($10, merchant_paid_gas),
-    active = COALESCE($11, active),
-    metadata = COALESCE($12, metadata),
+    wallet_id = COALESCE($3, wallet_id),
+    description = COALESCE($4, description),
+    product_type = COALESCE($5, product_type),
+    interval_type = COALESCE($6, interval_type),
+    term_length = COALESCE($7, term_length),
+    price_in_pennies = COALESCE($8, price_in_pennies),
+    image_url = COALESCE($9, image_url),
+    url = COALESCE($10, url),
+    merchant_paid_gas = COALESCE($11, merchant_paid_gas),
+    active = COALESCE($12, active),
+    metadata = COALESCE($13, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, workspace_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateProductParams struct {
 	ID              uuid.UUID        `json:"id"`
 	Name            string           `json:"name"`
+	WalletID        uuid.UUID        `json:"wallet_id"`
 	Description     pgtype.Text      `json:"description"`
 	ProductType     ProductType      `json:"product_type"`
 	IntervalType    NullIntervalType `json:"interval_type"`
@@ -376,6 +388,7 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 	row := q.db.QueryRow(ctx, updateProduct,
 		arg.ID,
 		arg.Name,
+		arg.WalletID,
 		arg.Description,
 		arg.ProductType,
 		arg.IntervalType,
@@ -391,6 +404,7 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
+		&i.WalletID,
 		&i.Name,
 		&i.Description,
 		&i.ProductType,

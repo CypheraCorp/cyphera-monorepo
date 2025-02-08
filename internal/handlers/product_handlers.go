@@ -30,6 +30,7 @@ type ProductResponse struct {
 	ID              string                 `json:"id"`
 	Object          string                 `json:"object"`
 	WorkspaceID     string                 `json:"workspace_id"`
+	WalletID        string                 `json:"wallet_id"`
 	Name            string                 `json:"name"`
 	Description     string                 `json:"description,omitempty"`
 	ProductType     string                 `json:"product_type"`
@@ -48,8 +49,8 @@ type ProductResponse struct {
 
 // CreateProductRequest represents the request body for creating a product
 type CreateProductRequest struct {
-	WorkspaceID     string                      `json:"workspace_id"`
 	Name            string                      `json:"name" binding:"required"`
+	WalletID        string                      `json:"wallet_id" binding:"required"`
 	Description     string                      `json:"description"`
 	ProductType     string                      `json:"product_type" binding:"required"`
 	IntervalType    string                      `json:"interval_type"`
@@ -66,6 +67,7 @@ type CreateProductRequest struct {
 // UpdateProductRequest represents the request body for updating a product
 type UpdateProductRequest struct {
 	Name            string                      `json:"name,omitempty"`
+	WalletID        string                      `json:"wallet_id,omitempty"`
 	Description     string                      `json:"description,omitempty"`
 	ProductType     string                      `json:"product_type,omitempty"`
 	IntervalType    string                      `json:"interval_type,omitempty"`
@@ -124,6 +126,13 @@ func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequ
 
 	if req.Name != "" {
 		params.Name = req.Name
+	}
+	if req.WalletID != "" {
+		walletID, err := uuid.Parse(req.WalletID)
+		if err != nil {
+			return params, fmt.Errorf("invalid wallet ID format: %w", err)
+		}
+		params.WalletID = walletID
 	}
 	if req.Description != "" {
 		params.Description = pgtype.Text{String: req.Description, Valid: true}
@@ -332,8 +341,35 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
+	parsedWalletID, err := uuid.Parse(req.WalletID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid wallet ID format", err)
+		return
+	}
+
+	// Verify wallet belongs to workspace
+	wallet, err := h.common.db.GetWalletByID(c.Request.Context(), parsedWalletID)
+	if err != nil {
+		handleDBError(c, err, "Wallet not found")
+		return
+	}
+
+	// Get account ID from workspace
+	workspace, err := h.common.db.GetWorkspace(c.Request.Context(), parsedWorkspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
+		return
+	}
+
+	// Verify wallet belongs to account
+	if wallet.AccountID != workspace.AccountID {
+		sendError(c, http.StatusForbidden, "Wallet does not belong to account", nil)
+		return
+	}
+
 	product, err := h.common.db.CreateProduct(c.Request.Context(), db.CreateProductParams{
 		WorkspaceID:     parsedWorkspaceID,
+		WalletID:        parsedWalletID,
 		Name:            req.Name,
 		Description:     pgtype.Text{String: req.Description, Valid: req.Description != ""},
 		ProductType:     db.ProductType(req.ProductType),
@@ -410,9 +446,55 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
+	// Get existing product to verify workspace ownership
+	existingProduct, err := h.common.db.GetProduct(c.Request.Context(), parsedUUID)
+	if err != nil {
+		handleDBError(c, err, "Product not found")
+		return
+	}
+
+	// Verify workspace ownership
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	if existingProduct.WorkspaceID.String() != workspaceID {
+		sendError(c, http.StatusForbidden, "Product does not belong to workspace", nil)
+		return
+	}
+
 	params, err := h.updateProductParams(parsedUUID, req)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid update parameters", err)
+		return
+	}
+
+	// If wallet ID is being updated, verify it belongs to the same account
+	if req.WalletID != "" {
+		parsedWalletID, err := uuid.Parse(req.WalletID)
+		if err != nil {
+			sendError(c, http.StatusBadRequest, "Invalid wallet ID format", err)
+			return
+		}
+
+		// Verify wallet belongs to workspace
+		wallet, err := h.common.db.GetWalletByID(c.Request.Context(), parsedWalletID)
+		if err != nil {
+			handleDBError(c, err, "Wallet not found")
+			return
+		}
+
+		// Get account ID from workspace
+		workspace, err := h.common.db.GetWorkspace(c.Request.Context(), existingProduct.WorkspaceID)
+		if err != nil {
+			handleDBError(c, err, "Workspace not found")
+			return
+		}
+
+		// Verify wallet belongs to account
+		if wallet.AccountID != workspace.AccountID {
+			sendError(c, http.StatusForbidden, "Wallet does not belong to account", nil)
+			return
+		}
+	} else {
+		sendError(c, http.StatusBadRequest, "Wallet ID is required", nil)
 		return
 	}
 
@@ -496,6 +578,7 @@ func toProductResponse(p db.Product) ProductResponse {
 		ID:              p.ID.String(),
 		Object:          "product",
 		WorkspaceID:     p.WorkspaceID.String(),
+		WalletID:        p.WalletID.String(),
 		Name:            p.Name,
 		Description:     p.Description.String,
 		ProductType:     string(p.ProductType),

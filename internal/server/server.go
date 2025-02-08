@@ -27,6 +27,7 @@ var (
 	networkHandler   *handlers.NetworkHandler
 	tokenHandler     *handlers.TokenHandler
 	productHandler   *handlers.ProductHandler
+	walletHandler    *handlers.WalletHandler
 
 	// Actalink
 	actalinkHandler *handlers.ActalinkHandler
@@ -72,6 +73,7 @@ func InitializeHandlers() {
 	networkHandler = handlers.NewNetworkHandler(commonServices)
 	tokenHandler = handlers.NewTokenHandler(commonServices)
 	productHandler = handlers.NewProductHandler(commonServices)
+	walletHandler = handlers.NewWalletHandler(commonServices)
 	// Actalink Handler initialization
 	actalinkHandler = handlers.NewActalinkHandler(commonServices)
 }
@@ -236,6 +238,26 @@ func InitializeRoutes(router *gin.Engine) {
 
 				// Workspace Products
 				workspaces.GET("/:workspace_id/products/active", productHandler.ListActiveProducts)
+			}
+
+			// Wallets
+			wallets := protected.Group("/wallets")
+			{
+				// Basic CRUD operations
+				wallets.POST("", walletHandler.CreateWallet)
+				wallets.GET("", walletHandler.ListWallets)
+				wallets.GET("/:wallet_id", walletHandler.GetWallet)
+				wallets.PATCH("/:wallet_id", walletHandler.UpdateWallet)
+				wallets.DELETE("/:wallet_id", walletHandler.DeleteWallet)
+				wallets.GET("/address/:wallet_address", walletHandler.GetWalletByAddress)
+				wallets.POST("/:wallet_id/primary", walletHandler.SetWalletAsPrimary)
+
+				// Specialized endpoints
+				wallets.GET("/stats", walletHandler.GetWalletStats)
+				wallets.GET("/recent", walletHandler.GetRecentlyUsedWallets)
+				wallets.GET("/ens", walletHandler.GetWalletsByENS)
+				wallets.GET("/search", walletHandler.SearchWallets)
+				wallets.GET("/network/:network_type", walletHandler.ListWalletsByNetworkType)
 			}
 
 			// ActaLink routes
