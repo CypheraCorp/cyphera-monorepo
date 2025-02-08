@@ -2,10 +2,13 @@ package handlers
 
 import (
 	"bytes"
+	"cyphera-api/internal/logger"
+	"encoding/json"
 	"io"
-	"log"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // responseBodyWriter is a custom response writer that captures the response body
@@ -20,6 +23,24 @@ func (w *responseBodyWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
+// formatJSONBody attempts to format a JSON byte slice for pretty printing
+func formatJSONBody(body []byte, contentType string) interface{} {
+	// If empty or not JSON content type, return as is
+	if len(body) == 0 || !strings.Contains(strings.ToLower(contentType), "application/json") {
+		return string(body)
+	}
+
+	// Try to unmarshal JSON into interface{}
+	var jsonData interface{}
+	if err := json.Unmarshal(body, &jsonData); err != nil {
+		// If we can't parse as JSON, return original string
+		return string(body)
+	}
+
+	// Return the unmarshaled data directly
+	return jsonData
+}
+
 // LogRequestBody middleware logs the request and response body
 func LogRequestBody() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -32,47 +53,47 @@ func LogRequestBody() gin.HandlerFunc {
 		// Restore the io.ReadCloser to its original state
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-		// Log Request Info
-		log.Printf("Request URI: %s", c.Request.URL.Path)
-		log.Printf("Request Method: %s", c.Request.Method)
+		// Create fields for structured logging
+		fields := []zap.Field{
+			zap.String("uri", c.Request.URL.Path),
+			zap.String("method", c.Request.Method),
+		}
 
-		// Log Query Parameters
+		// Add query parameters if present
 		params := c.Request.URL.Query()
 		if len(params) > 0 {
-			log.Printf("Query Parameters:")
-			for key, value := range params {
-				log.Printf("  %s: %v", key, value)
-			}
+			fields = append(fields, zap.Any("query_params", params))
 		}
 
-		// Log Request Headers
-		log.Printf("Request Headers:")
-		accountIDStr := c.GetHeader("X-Account-ID")
-		workspaceIDStr := c.GetHeader("X-Workspace-ID")
-		userIDStr := c.GetHeader("X-User-ID")
-		apiKey := c.GetHeader("X-API-Key")
-		jwtToken := c.GetHeader("Authorization")
-
-		if accountIDStr != "" {
-			log.Printf("  X-Account-ID: %s", accountIDStr)
+		// Add relevant headers
+		headers := map[string]string{}
+		if accountID := c.GetHeader("X-Account-ID"); accountID != "" {
+			headers["X-Account-ID"] = accountID
 		}
-		if workspaceIDStr != "" {
-			log.Printf("  X-Workspace-ID: %s", workspaceIDStr)
+		if workspaceID := c.GetHeader("X-Workspace-ID"); workspaceID != "" {
+			headers["X-Workspace-ID"] = workspaceID
 		}
-		if userIDStr != "" {
-			log.Printf("  X-User-ID: %s", userIDStr)
+		if userID := c.GetHeader("X-User-ID"); userID != "" {
+			headers["X-User-ID"] = userID
 		}
-		if apiKey != "" {
-			log.Printf("  X-API-Key: %s", apiKey)
+		if apiKey := c.GetHeader("X-API-Key"); apiKey != "" {
+			headers["X-API-Key"] = apiKey[:8] + "..." // Only log first 8 chars for security
 		}
-		if jwtToken != "" {
-			log.Printf("  Authorization: %s", jwtToken[:50])
+		if jwt := c.GetHeader("Authorization"); jwt != "" {
+			headers["Authorization"] = jwt[:8] + "..." // Only log first 8 chars for security
 		}
 
-		// Log Request Body
+		if len(headers) > 0 {
+			fields = append(fields, zap.Any("headers", headers))
+		}
+
+		// Add request body if present
 		if len(bodyBytes) > 0 {
-			log.Printf("Request Body: %s", string(bodyBytes))
+			fields = append(fields, zap.Any("request_body", formatJSONBody(bodyBytes, c.GetHeader("Content-Type"))))
 		}
+
+		// Log the request
+		logger.Debug("Incoming request", fields...)
 
 		// Create a custom response writer to capture the response body
 		responseBody := &bytes.Buffer{}
@@ -85,12 +106,16 @@ func LogRequestBody() gin.HandlerFunc {
 		// Process request
 		c.Next()
 
-		// Log Response Info
-		log.Printf("Response Status: %d", c.Writer.Status())
-
-		// Log Response Body
-		if responseBody.Len() > 0 {
-			log.Printf("Response Body: %s", responseBody.String())
+		// Log the response
+		responseFields := []zap.Field{
+			zap.Int("status", c.Writer.Status()),
 		}
+
+		if responseBody.Len() > 0 {
+			responseFields = append(responseFields, zap.Any("response_body",
+				formatJSONBody(responseBody.Bytes(), c.Writer.Header().Get("Content-Type"))))
+		}
+
+		logger.Debug("Response sent", responseFields...)
 	}
 }

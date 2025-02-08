@@ -51,9 +51,15 @@ type UpdateTokenRequest struct {
 	Active          *bool  `json:"active,omitempty"`
 }
 
+// ListTokensResponse represents the paginated response for token list operations
+type ListTokensResponse struct {
+	Object string          `json:"object"`
+	Data   []TokenResponse `json:"data"`
+}
+
 // GetToken godoc
-// @Summary Get a token
-// @Description Retrieves the details of an existing token
+// @Summary Get token by ID
+// @Description Get token details by token ID
 // @Tags tokens
 // @Accept json
 // @Produce json
@@ -67,22 +73,22 @@ func (h *TokenHandler) GetToken(c *gin.Context) {
 	tokenId := c.Param("token_id")
 	parsedUUID, err := uuid.Parse(tokenId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid token ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid token ID format", err)
 		return
 	}
 
 	token, err := h.common.db.GetToken(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Token not found"})
+		handleDBError(c, err, "Token not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, toTokenResponse(token))
+	sendSuccess(c, http.StatusOK, toTokenResponse(token))
 }
 
 // GetTokenByAddress godoc
-// @Summary Get a token by address
-// @Description Retrieves the details of an existing token by its network ID and contract address
+// @Summary Get token by address
+// @Description Get token details by network ID and contract address
 // @Tags tokens
 // @Accept json
 // @Produce json
@@ -97,7 +103,7 @@ func (h *TokenHandler) GetTokenByAddress(c *gin.Context) {
 	networkID := c.Param("network_id")
 	parsedNetworkID, err := uuid.Parse(networkID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
@@ -107,26 +113,27 @@ func (h *TokenHandler) GetTokenByAddress(c *gin.Context) {
 		ContractAddress: address,
 	})
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Token not found"})
+		handleDBError(c, err, "Token not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, toTokenResponse(token))
+	sendSuccess(c, http.StatusOK, toTokenResponse(token))
 }
 
 // ListTokens godoc
-// @Summary List all tokens
-// @Description Returns a list of all tokens
+// @Summary List tokens
+// @Description Retrieves all tokens
 // @Tags tokens
 // @Accept json
 // @Produce json
-// @Success 200 {array} TokenResponse
+// @Success 200 {object} ListTokensResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /tokens [get]
 func (h *TokenHandler) ListTokens(c *gin.Context) {
 	tokens, err := h.common.db.ListTokens(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve tokens"})
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve tokens", err)
 		return
 	}
 
@@ -135,31 +142,32 @@ func (h *TokenHandler) ListTokens(c *gin.Context) {
 		response[i] = toTokenResponse(token)
 	}
 
-	c.JSON(http.StatusOK, response)
+	sendList(c, response)
 }
 
 // ListTokensByNetwork godoc
 // @Summary List tokens by network
-// @Description Returns a list of all tokens for a specific network
+// @Description Retrieves all tokens for a specific network
 // @Tags tokens
 // @Accept json
 // @Produce json
 // @Param network_id path string true "Network ID"
-// @Success 200 {array} TokenResponse
+// @Success 200 {object} ListTokensResponse
 // @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /tokens/network/{network_id} [get]
 func (h *TokenHandler) ListTokensByNetwork(c *gin.Context) {
 	networkID := c.Param("network_id")
 	parsedNetworkID, err := uuid.Parse(networkID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
 	tokens, err := h.common.db.ListTokensByNetwork(c.Request.Context(), parsedNetworkID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve tokens"})
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve tokens", err)
 		return
 	}
 
@@ -168,31 +176,32 @@ func (h *TokenHandler) ListTokensByNetwork(c *gin.Context) {
 		response[i] = toTokenResponse(token)
 	}
 
-	c.JSON(http.StatusOK, response)
+	sendList(c, response)
 }
 
 // ListActiveTokensByNetwork godoc
 // @Summary List active tokens by network
-// @Description Returns a list of all active tokens for a specific network
+// @Description Retrieves all active tokens for a specific network
 // @Tags tokens
 // @Accept json
 // @Produce json
 // @Param network_id path string true "Network ID"
-// @Success 200 {array} TokenResponse
+// @Success 200 {object} ListTokensResponse
 // @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /tokens/network/{network_id}/active [get]
 func (h *TokenHandler) ListActiveTokensByNetwork(c *gin.Context) {
 	networkID := c.Param("network_id")
 	parsedNetworkID, err := uuid.Parse(networkID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
 	tokens, err := h.common.db.ListActiveTokensByNetwork(c.Request.Context(), parsedNetworkID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve tokens"})
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve tokens", err)
 		return
 	}
 
@@ -201,7 +210,7 @@ func (h *TokenHandler) ListActiveTokensByNetwork(c *gin.Context) {
 		response[i] = toTokenResponse(token)
 	}
 
-	c.JSON(http.StatusOK, response)
+	sendList(c, response)
 }
 
 // GetGasToken godoc
@@ -220,21 +229,21 @@ func (h *TokenHandler) GetGasToken(c *gin.Context) {
 	networkID := c.Param("network_id")
 	parsedNetworkID, err := uuid.Parse(networkID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
 	token, err := h.common.db.GetGasToken(c.Request.Context(), parsedNetworkID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Gas token not found"})
+		handleDBError(c, err, "Gas token not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, toTokenResponse(token))
+	sendSuccess(c, http.StatusOK, toTokenResponse(token))
 }
 
 // CreateToken godoc
-// @Summary Create a token
+// @Summary Create token
 // @Description Creates a new token
 // @Tags tokens
 // @Accept json
@@ -242,23 +251,24 @@ func (h *TokenHandler) GetGasToken(c *gin.Context) {
 // @Param token body CreateTokenRequest true "Token creation data"
 // @Success 201 {object} TokenResponse
 // @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /tokens [post]
 func (h *TokenHandler) CreateToken(c *gin.Context) {
 	var req CreateTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
-	networkID, err := uuid.Parse(req.NetworkID)
+	parsedNetworkID, err := uuid.Parse(req.NetworkID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
 	token, err := h.common.db.CreateToken(c.Request.Context(), db.CreateTokenParams{
-		NetworkID:       networkID,
+		NetworkID:       parsedNetworkID,
 		GasToken:        req.GasToken,
 		Name:            req.Name,
 		Symbol:          req.Symbol,
@@ -266,15 +276,15 @@ func (h *TokenHandler) CreateToken(c *gin.Context) {
 		Active:          req.Active,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create token"})
+		sendError(c, http.StatusInternalServerError, "Failed to create token", err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, toTokenResponse(token))
+	sendSuccess(c, http.StatusCreated, toTokenResponse(token))
 }
 
 // UpdateToken godoc
-// @Summary Update a token
+// @Summary Update token
 // @Description Updates an existing token
 // @Tags tokens
 // @Accept json
@@ -284,19 +294,20 @@ func (h *TokenHandler) CreateToken(c *gin.Context) {
 // @Success 200 {object} TokenResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /tokens/{token_id} [put]
 func (h *TokenHandler) UpdateToken(c *gin.Context) {
 	tokenId := c.Param("token_id")
 	parsedUUID, err := uuid.Parse(tokenId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid token ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid token ID format", err)
 		return
 	}
 
 	var req UpdateTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -309,16 +320,16 @@ func (h *TokenHandler) UpdateToken(c *gin.Context) {
 		Active:          *req.Active,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update token"})
+		handleDBError(c, err, "Failed to update token")
 		return
 	}
 
-	c.JSON(http.StatusOK, toTokenResponse(token))
+	sendSuccess(c, http.StatusOK, toTokenResponse(token))
 }
 
 // DeleteToken godoc
-// @Summary Delete a token
-// @Description Soft deletes a token
+// @Summary Delete token
+// @Description Deletes a token
 // @Tags tokens
 // @Accept json
 // @Produce json
@@ -332,17 +343,17 @@ func (h *TokenHandler) DeleteToken(c *gin.Context) {
 	tokenId := c.Param("token_id")
 	parsedUUID, err := uuid.Parse(tokenId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid token ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid token ID format", err)
 		return
 	}
 
 	err = h.common.db.DeleteToken(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Token not found"})
+		handleDBError(c, err, "Failed to delete token")
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	sendSuccess(c, http.StatusNoContent, nil)
 }
 
 // Helper function to convert database model to API response

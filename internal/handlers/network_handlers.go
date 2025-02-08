@@ -9,27 +9,26 @@ import (
 	"github.com/google/uuid"
 )
 
-// NetworkHandler handles network-related operations
+// NetworkHandler handles network related operations
 type NetworkHandler struct {
 	common *CommonServices
 }
 
-// NewNetworkHandler creates a new NetworkHandler instance
+// NewNetworkHandler creates a new instance of NetworkHandler
 func NewNetworkHandler(common *CommonServices) *NetworkHandler {
 	return &NetworkHandler{common: common}
 }
 
 // NetworkResponse represents the standardized API response for network operations
 type NetworkResponse struct {
-	ID        string          `json:"id"`
-	Object    string          `json:"object"`
-	Name      string          `json:"name"`
-	Type      string          `json:"type"`
-	ChainID   int32           `json:"chain_id"`
-	Active    bool            `json:"active"`
-	CreatedAt int64           `json:"created_at"`
-	UpdatedAt int64           `json:"updated_at"`
-	Tokens    []TokenResponse `json:"tokens"`
+	ID        string `json:"id"`
+	Object    string `json:"object"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	ChainID   int32  `json:"chain_id"`
+	Active    bool   `json:"active"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 // CreateNetworkRequest represents the request body for creating a network
@@ -48,9 +47,27 @@ type UpdateNetworkRequest struct {
 	Active  *bool  `json:"active,omitempty"`
 }
 
+// ListNetworksResponse represents the paginated response for network list operations
+type ListNetworksResponse struct {
+	Object string            `json:"object"`
+	Data   []NetworkResponse `json:"data"`
+}
+
+// NetworkWithTokensResponse represents a network with its associated tokens
+type NetworkWithTokensResponse struct {
+	NetworkResponse
+	Tokens []TokenResponse `json:"tokens"`
+}
+
+// ListNetworksWithTokensResponse represents the response for listing networks with tokens
+type ListNetworksWithTokensResponse struct {
+	Object string                      `json:"object"`
+	Data   []NetworkWithTokensResponse `json:"data"`
+}
+
 // GetNetwork godoc
-// @Summary Get a network
-// @Description Retrieves the details of an existing network
+// @Summary Get network by ID
+// @Description Get network details by network ID
 // @Tags networks
 // @Accept json
 // @Produce json
@@ -64,22 +81,22 @@ func (h *NetworkHandler) GetNetwork(c *gin.Context) {
 	networkId := c.Param("network_id")
 	parsedUUID, err := uuid.Parse(networkId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
 	network, err := h.common.db.GetNetwork(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Network not found"})
+		handleDBError(c, err, "Network not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, toNetworkResponse(network))
+	sendSuccess(c, http.StatusOK, toNetworkResponse(network))
 }
 
 // GetNetworkByChainID godoc
-// @Summary Get a network by chain ID
-// @Description Retrieves the details of an existing network by its chain ID
+// @Summary Get network by chain ID
+// @Description Get network details by chain ID
 // @Tags networks
 // @Accept json
 // @Produce json
@@ -93,32 +110,33 @@ func (h *NetworkHandler) GetNetworkByChainID(c *gin.Context) {
 	chainIDStr := c.Param("chain_id")
 	chainID, err := strconv.ParseInt(chainIDStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid chain ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid chain ID format", err)
 		return
 	}
 
 	network, err := h.common.db.GetNetworkByChainID(c.Request.Context(), int32(chainID))
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Network not found"})
+		handleDBError(c, err, "Network not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, toNetworkResponse(network))
+	sendSuccess(c, http.StatusOK, toNetworkResponse(network))
 }
 
 // ListNetworks godoc
-// @Summary List all networks
-// @Description Returns a list of all networks
+// @Summary List networks
+// @Description Retrieves all networks
 // @Tags networks
 // @Accept json
 // @Produce json
-// @Success 200 {array} NetworkResponse
+// @Success 200 {object} ListNetworksResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /networks [get]
 func (h *NetworkHandler) ListNetworks(c *gin.Context) {
 	networks, err := h.common.db.ListNetworks(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve networks"})
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve networks", err)
 		return
 	}
 
@@ -127,22 +145,23 @@ func (h *NetworkHandler) ListNetworks(c *gin.Context) {
 		response[i] = toNetworkResponse(network)
 	}
 
-	c.JSON(http.StatusOK, response)
+	sendList(c, response)
 }
 
 // ListActiveNetworks godoc
 // @Summary List active networks
-// @Description Returns a list of all active networks
+// @Description Retrieves all active networks
 // @Tags networks
 // @Accept json
 // @Produce json
-// @Success 200 {array} NetworkResponse
+// @Success 200 {object} ListNetworksResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /networks/active [get]
 func (h *NetworkHandler) ListActiveNetworks(c *gin.Context) {
 	networks, err := h.common.db.ListActiveNetworks(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve active networks"})
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve active networks", err)
 		return
 	}
 
@@ -151,11 +170,11 @@ func (h *NetworkHandler) ListActiveNetworks(c *gin.Context) {
 		response[i] = toNetworkResponse(network)
 	}
 
-	c.JSON(http.StatusOK, response)
+	sendList(c, response)
 }
 
 // CreateNetwork godoc
-// @Summary Create a network
+// @Summary Create network
 // @Description Creates a new network
 // @Tags networks
 // @Accept json
@@ -163,12 +182,13 @@ func (h *NetworkHandler) ListActiveNetworks(c *gin.Context) {
 // @Param network body CreateNetworkRequest true "Network creation data"
 // @Success 201 {object} NetworkResponse
 // @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /networks [post]
 func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 	var req CreateNetworkRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -179,15 +199,15 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 		Active:  req.Active,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create network"})
+		sendError(c, http.StatusInternalServerError, "Failed to create network", err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, toNetworkResponse(network))
+	sendSuccess(c, http.StatusCreated, toNetworkResponse(network))
 }
 
 // UpdateNetwork godoc
-// @Summary Update a network
+// @Summary Update network
 // @Description Updates an existing network
 // @Tags networks
 // @Accept json
@@ -197,19 +217,20 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 // @Success 200 {object} NetworkResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /networks/{network_id} [put]
 func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 	networkId := c.Param("network_id")
 	parsedUUID, err := uuid.Parse(networkId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
 	var req UpdateNetworkRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -221,16 +242,16 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 		Active:  *req.Active,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update network"})
+		handleDBError(c, err, "Failed to update network")
 		return
 	}
 
-	c.JSON(http.StatusOK, toNetworkResponse(network))
+	sendSuccess(c, http.StatusOK, toNetworkResponse(network))
 }
 
 // DeleteNetwork godoc
-// @Summary Delete a network
-// @Description Soft deletes a network
+// @Summary Delete network
+// @Description Deletes a network
 // @Tags networks
 // @Accept json
 // @Produce json
@@ -244,53 +265,56 @@ func (h *NetworkHandler) DeleteNetwork(c *gin.Context) {
 	networkId := c.Param("network_id")
 	parsedUUID, err := uuid.Parse(networkId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid network ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
 		return
 	}
 
 	err = h.common.db.DeleteNetwork(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Network not found"})
+		handleDBError(c, err, "Failed to delete network")
 		return
 	}
 
 	c.Status(http.StatusNoContent)
 }
 
-//	ListNetworksWithTokens godoc
-//
-// @Summary List all tokens on each network
-// @Description Returns a list of all tokens for each network
+// ListNetworksWithTokens godoc
+// @Summary List networks with tokens
+// @Description Retrieves all networks with their associated tokens
 // @Tags networks
 // @Accept json
 // @Produce json
-// @Success 200 {array} NetworkResponse
+// @Success 200 {object} ListNetworksWithTokensResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /networks/tokens [get]
 func (h *NetworkHandler) ListNetworksWithTokens(c *gin.Context) {
 	networks, err := h.common.db.ListNetworks(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve networks"})
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve networks", err)
 		return
 	}
 
-	networkResponses := make([]NetworkResponse, len(networks))
-
+	response := make([]NetworkWithTokensResponse, len(networks))
 	for i, network := range networks {
-		networkResponses[i] = toNetworkResponse(network)
 		tokens, err := h.common.db.ListTokensByNetwork(c.Request.Context(), network.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve tokens"})
+			sendError(c, http.StatusInternalServerError, "Failed to retrieve tokens for network", err)
 			return
 		}
+
 		tokenResponses := make([]TokenResponse, len(tokens))
 		for j, token := range tokens {
 			tokenResponses[j] = toTokenResponse(token)
 		}
-		networkResponses[i].Tokens = tokenResponses
+
+		response[i] = NetworkWithTokensResponse{
+			NetworkResponse: toNetworkResponse(network),
+			Tokens:          tokenResponses,
+		}
 	}
 
-	c.JSON(http.StatusOK, networkResponses)
+	sendList(c, response)
 }
 
 // Helper function to convert database model to API response

@@ -4,12 +4,12 @@ import (
 	"cyphera-api/internal/db"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // WorkspaceHandler handles workspace related operations
@@ -36,37 +36,35 @@ func NewWorkspaceHandler(common *CommonServices) *WorkspaceHandler {
 // @Router /workspaces/{workspace_id} [get]
 func (h *WorkspaceHandler) GetWorkspace(c *gin.Context) {
 	workspaceId := c.Param("workspace_id")
-
-	// Validate UUID format
 	parsedUUID, err := uuid.Parse(workspaceId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid UUID format"})
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
 	workspace, err := h.common.db.GetWorkspace(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Workspace not found"})
+		handleDBError(c, err, "Workspace not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, toWorkspaceResponse(workspace))
+	sendSuccess(c, http.StatusOK, toWorkspaceResponse(workspace))
 }
 
-// ListWorkspaces retrieves all non-deleted workspaces
+// ListWorkspaces retrieves all workspaces for the current account
 // @Summary List workspaces
-// @Description Retrieves all non-deleted workspaces
+// @Description Retrieves all workspaces for the current account
 // @Tags workspaces
 // @Accept json
 // @Produce json
-// @Success 200 {array} WorkspaceResponse
+// @Success 200 {object} ListWorkspacesResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /workspaces [get]
 func (h *WorkspaceHandler) ListWorkspaces(c *gin.Context) {
 	workspaces, err := h.common.db.ListWorkspaces(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve workspaces"})
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve workspaces", err)
 		return
 	}
 
@@ -75,10 +73,7 @@ func (h *WorkspaceHandler) ListWorkspaces(c *gin.Context) {
 		response[i] = toWorkspaceResponse(workspace)
 	}
 
-	c.JSON(http.StatusOK, ListWorkspacesResponse{
-		Object: "list",
-		Data:   response,
-	})
+	sendList(c, response)
 }
 
 // GetAllWorkspaces retrieves all workspaces including deleted ones
@@ -94,7 +89,7 @@ func (h *WorkspaceHandler) ListWorkspaces(c *gin.Context) {
 func (h *WorkspaceHandler) GetAllWorkspaces(c *gin.Context) {
 	workspaces, err := h.common.db.GetAllWorkspaces(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve workspaces"})
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve workspaces", err)
 		return
 	}
 
@@ -103,10 +98,7 @@ func (h *WorkspaceHandler) GetAllWorkspaces(c *gin.Context) {
 		response[i] = toWorkspaceResponse(workspace)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"object": "list",
-		"data":   response,
-	})
+	sendList(c, response)
 }
 
 // CreateWorkspaceRequest represents the request body for creating a workspace
@@ -176,8 +168,8 @@ type WorkspaceResponse struct {
 	AccountID    string                 `json:"account_id"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	Livemode     bool                   `json:"livemode"`
-	Created      int64                  `json:"created"`
-	Updated      int64                  `json:"updated"`
+	CreatedAt    int64                  `json:"created_at"`
+	UpdatedAt    int64                  `json:"updated_at"`
 }
 
 // ListWorkspacesResponse represents the response for listing workspaces
@@ -201,40 +193,28 @@ type ListWorkspacesResponse struct {
 func (h *WorkspaceHandler) CreateWorkspace(c *gin.Context) {
 	var req CreateWorkspaceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
-	accountUUID, err := uuid.Parse(req.AccountID)
+	// Get account ID from context
+	accountID := c.GetString("accountID")
+	parsedAccountID, err := uuid.Parse(accountID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid account ID format"})
-		return
-	}
-
-	metadata, err := json.Marshal(req.Metadata)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid metadata format"})
+		sendError(c, http.StatusBadRequest, "Invalid account ID format", err)
 		return
 	}
 
 	workspace, err := h.common.db.CreateWorkspace(c.Request.Context(), db.CreateWorkspaceParams{
-		AccountID:    accountUUID,
-		Name:         req.Name,
-		Description:  pgtype.Text{String: req.Description, Valid: req.Description != ""},
-		BusinessName: pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
-		BusinessType: pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
-		WebsiteUrl:   pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
-		SupportEmail: pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
-		SupportPhone: pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
-		Metadata:     metadata,
-		Livemode:     pgtype.Bool{Bool: req.Livemode, Valid: true},
+		Name:      req.Name,
+		AccountID: parsedAccountID,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create workspace"})
+		sendError(c, http.StatusInternalServerError, "Failed to create workspace", err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, toWorkspaceResponse(workspace))
+	sendSuccess(c, http.StatusCreated, toWorkspaceResponse(workspace))
 }
 
 // UpdateWorkspace updates an existing workspace
@@ -247,6 +227,7 @@ func (h *WorkspaceHandler) CreateWorkspace(c *gin.Context) {
 // @Param workspace body UpdateWorkspaceRequest true "Workspace update data"
 // @Success 200 {object} WorkspaceResponse
 // @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /workspaces/{workspace_id} [put]
@@ -254,43 +235,29 @@ func (h *WorkspaceHandler) UpdateWorkspace(c *gin.Context) {
 	workspaceId := c.Param("workspace_id")
 	parsedUUID, err := uuid.Parse(workspaceId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid UUID format"})
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
 	var req UpdateWorkspaceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	metadata, err := json.Marshal(req.Metadata)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid metadata format"})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
 	workspace, err := h.common.db.UpdateWorkspace(c.Request.Context(), db.UpdateWorkspaceParams{
-		ID:           parsedUUID,
-		Name:         req.Name,
-		Description:  pgtype.Text{String: req.Description, Valid: req.Description != ""},
-		BusinessName: pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
-		BusinessType: pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
-		WebsiteUrl:   pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
-		SupportEmail: pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
-		SupportPhone: pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
-		Metadata:     metadata,
-		Livemode:     pgtype.Bool{Bool: req.Livemode, Valid: true},
+		ID:   parsedUUID,
+		Name: req.Name,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update workspace"})
+		handleDBError(c, err, "Failed to update workspace")
 		return
 	}
 
-	c.JSON(http.StatusOK, toWorkspaceResponse(workspace))
+	sendSuccess(c, http.StatusOK, toWorkspaceResponse(workspace))
 }
 
-// DeleteWorkspace godoc
+// DeleteWorkspace soft deletes a workspace
 // @Summary Delete workspace
 // @Description Soft deletes a workspace
 // @Tags workspaces
@@ -306,17 +273,17 @@ func (h *WorkspaceHandler) DeleteWorkspace(c *gin.Context) {
 	workspaceId := c.Param("workspace_id")
 	parsedUUID, err := uuid.Parse(workspaceId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid UUID format"})
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
 	err = h.common.db.DeleteWorkspace(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Workspace not found"})
+		handleDBError(c, err, "Failed to delete workspace")
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	sendSuccess(c, http.StatusNoContent, nil)
 }
 
 // HardDeleteWorkspace godoc
@@ -335,17 +302,17 @@ func (h *WorkspaceHandler) HardDeleteWorkspace(c *gin.Context) {
 	workspaceId := c.Param("workspace_id")
 	parsedUUID, err := uuid.Parse(workspaceId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid UUID format"})
+		sendError(c, http.StatusBadRequest, "Invalid UUID format", err)
 		return
 	}
 
 	err = h.common.db.HardDeleteWorkspace(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Workspace not found"})
+		handleDBError(c, err, "Workspace not found")
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	sendSuccess(c, http.StatusNoContent, nil)
 }
 
 // parsePaginationParams is a helper function to parse limit and offset from query parameters
@@ -396,32 +363,31 @@ func (h *WorkspaceHandler) ListWorkspaceCustomers(c *gin.Context) {
 	workspaceId := c.Param("workspace_id")
 	parsedUUID, err := uuid.Parse(workspaceId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid UUID format"})
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
 	// Parse pagination parameters
 	limit, offset, err := parsePaginationParams(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid pagination parameters"})
+		sendError(c, http.StatusBadRequest, "Invalid pagination parameters", err)
 		return
 	}
 
-	// Get total count of customers for the workspace
+	// Get total count
 	total, err := h.common.db.CountWorkspaceCustomers(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to count customers"})
+		sendError(c, http.StatusInternalServerError, "Failed to count customers", err)
 		return
 	}
 
-	// Get paginated customers
 	customers, err := h.common.db.ListWorkspaceCustomersWithPagination(c.Request.Context(), db.ListWorkspaceCustomersWithPaginationParams{
 		ID:     parsedUUID,
-		Limit:  limit,
-		Offset: offset,
+		Limit:  int32(limit),
+		Offset: int32(offset),
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve customers"})
+		handleDBError(c, err, "Failed to retrieve customers")
 		return
 	}
 
@@ -430,20 +396,21 @@ func (h *WorkspaceHandler) ListWorkspaceCustomers(c *gin.Context) {
 		response[i] = toCustomerResponse(customer)
 	}
 
-	hasMore := int64(offset)+int64(len(response)) < total
-
-	c.JSON(http.StatusOK, ListCustomersResponse{
+	listCustomersResponse := ListCustomersResponse{
 		Object:  "list",
 		Data:    response,
-		HasMore: hasMore,
+		HasMore: (offset + limit) < int32(total),
 		Total:   total,
-	})
+	}
+
+	sendSuccess(c, http.StatusOK, listCustomersResponse)
 }
 
 // Helper function to convert database model to API response
 func toWorkspaceResponse(w db.Workspace) WorkspaceResponse {
 	var metadata map[string]interface{}
 	if err := json.Unmarshal(w.Metadata, &metadata); err != nil {
+		log.Printf("Error unmarshaling workspace metadata: %v", err)
 		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
 	}
 
@@ -460,7 +427,7 @@ func toWorkspaceResponse(w db.Workspace) WorkspaceResponse {
 		AccountID:    w.AccountID.String(),
 		Metadata:     metadata,
 		Livemode:     w.Livemode.Bool,
-		Created:      w.CreatedAt.Time.Unix(),
-		Updated:      w.UpdatedAt.Time.Unix(),
+		CreatedAt:    w.CreatedAt.Time.Unix(),
+		UpdatedAt:    w.UpdatedAt.Time.Unix(),
 	}
 }

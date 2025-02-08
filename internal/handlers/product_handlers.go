@@ -88,8 +88,8 @@ type ListProductsResponse struct {
 }
 
 // GetProduct godoc
-// @Summary Get a product
-// @Description Retrieves the details of an existing product
+// @Summary Get product by ID
+// @Description Get product details by product ID
 // @Tags products
 // @Accept json
 // @Produce json
@@ -103,17 +103,17 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 	productId := c.Param("product_id")
 	parsedUUID, err := uuid.Parse(productId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
 		return
 	}
 
 	product, err := h.common.db.GetProduct(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Product not found"})
+		handleDBError(c, err, "Product not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, toProductResponse(product))
+	sendSuccess(c, http.StatusOK, toProductResponse(product))
 }
 
 // updateProductParams creates the update parameters for a product
@@ -195,7 +195,7 @@ func validatePaginationParams(c *gin.Context) (limit int32, offset int32, err er
 
 // ListProducts godoc
 // @Summary List products
-// @Description Returns a paginated list of all products for a workspace
+// @Description Retrieves paginated products for a workspace
 // @Tags products
 // @Accept json
 // @Produce json
@@ -203,27 +203,28 @@ func validatePaginationParams(c *gin.Context) (limit int32, offset int32, err er
 // @Param offset query int false "Number of products to skip (default 0)"
 // @Success 200 {object} ListProductsResponse
 // @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /products [get]
 func (h *ProductHandler) ListProducts(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid workspace ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
 	// Get pagination parameters
 	limit, offset, err := validatePaginationParams(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		sendError(c, http.StatusBadRequest, err.Error(), err)
 		return
 	}
 
 	// Get total count
 	total, err := h.common.db.CountProducts(c.Request.Context(), parsedWorkspaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to count products"})
+		sendError(c, http.StatusInternalServerError, "Failed to count products", err)
 		return
 	}
 
@@ -234,7 +235,7 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		Offset:      offset,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve products"})
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve products", err)
 		return
 	}
 
@@ -244,7 +245,7 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		productResponse := toProductResponse(product)
 		productTokenList, err := h.common.db.GetActiveProductTokensByProduct(c.Request.Context(), product.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve product tokens"})
+			sendError(c, http.StatusInternalServerError, "Failed to retrieve product tokens", err)
 			return
 		}
 		productTokenListResponse := make([]ProductTokenResponse, len(productTokenList))
@@ -255,51 +256,58 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		responseList[i] = productResponse
 	}
 
-	hasMore := int64(offset)+int64(len(responseList)) < total
-
-	c.JSON(http.StatusOK, ListProductsResponse{
+	listProductsResponse := ListProductsResponse{
 		Object:  "list",
 		Data:    responseList,
-		HasMore: hasMore,
+		HasMore: (offset + limit) < int32(total),
 		Total:   total,
-	})
+	}
+
+	sendSuccess(c, http.StatusOK, listProductsResponse)
 }
 
 // ListActiveProducts godoc
 // @Summary List active products
-// @Description Returns a list of all active products for a workspace
+// @Description Retrieves all active products for a workspace
 // @Tags products
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
-// @Success 200 {array} ProductResponse
+// @Success 200 {object} ListProductsResponse
 // @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /workspaces/{workspace_id}/products/active [get]
+// @Router /products/active [get]
 func (h *ProductHandler) ListActiveProducts(c *gin.Context) {
-	workspaceID := c.Param("workspace_id")
+	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid workspace ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
 	products, err := h.common.db.ListActiveProducts(c.Request.Context(), parsedWorkspaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve active products"})
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve active products", err)
 		return
 	}
 
-	response := make([]ProductResponse, len(products))
+	responseList := make([]ProductResponse, len(products))
 	for i, product := range products {
-		response[i] = toProductResponse(product)
+		responseList[i] = toProductResponse(product)
 	}
 
-	c.JSON(http.StatusOK, response)
+	response := ListProductsResponse{
+		Object:  "list",
+		Data:    responseList,
+		HasMore: false,
+		Total:   int64(len(products)),
+	}
+
+	sendSuccess(c, http.StatusOK, response)
 }
 
 // CreateProduct godoc
-// @Summary Create a product
+// @Summary Create product
 // @Description Creates a new product
 // @Tags products
 // @Accept json
@@ -307,24 +315,20 @@ func (h *ProductHandler) ListActiveProducts(c *gin.Context) {
 // @Param product body CreateProductRequest true "Product creation data"
 // @Success 201 {object} ProductResponse
 // @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /products [post]
 func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	var req CreateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
-	parsedWorkspaceID, err := uuid.Parse(c.GetHeader("X-Workspace-ID"))
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid workspace ID format"})
-		return
-	}
-
-	metadata, err := json.Marshal(req.Metadata)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid metadata format"})
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
@@ -335,46 +339,51 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		ProductType:     db.ProductType(req.ProductType),
 		IntervalType:    db.NullIntervalType{IntervalType: db.IntervalType(req.IntervalType), Valid: req.IntervalType != ""},
 		TermLength:      pgtype.Int4{Int32: req.TermLength, Valid: req.TermLength != 0},
-		PriceInPennies:  int32(req.PriceInPennies),
+		PriceInPennies:  req.PriceInPennies,
 		ImageUrl:        pgtype.Text{String: req.ImageURL, Valid: req.ImageURL != ""},
 		Url:             pgtype.Text{String: req.URL, Valid: req.URL != ""},
 		MerchantPaidGas: req.MerchantPaidGas,
 		Active:          req.Active,
-		Metadata:        metadata,
+		Metadata:        req.Metadata,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create product"})
+		sendError(c, http.StatusInternalServerError, "Failed to create product", err)
 		return
 	}
 
-	for _, productToken := range req.ProductTokens {
-		networkID, err := uuid.Parse(productToken.NetworkID)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid workspace ID format"})
-			return
-		}
-		tokenID, err := uuid.Parse(productToken.TokenID)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid token ID format"})
-			return
-		}
-		_, err = h.common.db.CreateProductToken(c.Request.Context(), db.CreateProductTokenParams{
-			ProductID: product.ID,
-			NetworkID: networkID,
-			TokenID:   tokenID,
-			Active:    productToken.Active,
-		})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create product token"})
-			return
+	// Create product tokens if provided
+	if len(req.ProductTokens) > 0 {
+		for _, pt := range req.ProductTokens {
+			networkID, err := uuid.Parse(pt.NetworkID)
+			if err != nil {
+				sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
+				return
+			}
+
+			tokenID, err := uuid.Parse(pt.TokenID)
+			if err != nil {
+				sendError(c, http.StatusBadRequest, "Invalid token ID format", err)
+				return
+			}
+
+			_, err = h.common.db.CreateProductToken(c.Request.Context(), db.CreateProductTokenParams{
+				ProductID: product.ID,
+				NetworkID: networkID,
+				TokenID:   tokenID,
+				Active:    pt.Active,
+			})
+			if err != nil {
+				sendError(c, http.StatusInternalServerError, "Failed to create product token", err)
+				return
+			}
 		}
 	}
 
-	c.JSON(http.StatusCreated, toProductResponse(product))
+	sendSuccess(c, http.StatusCreated, toProductResponse(product))
 }
 
 // UpdateProduct godoc
-// @Summary Update a product
+// @Summary Update product
 // @Description Updates an existing product
 // @Tags products
 // @Accept json
@@ -384,40 +393,77 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 // @Success 200 {object} ProductResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /products/{product_id} [put]
 func (h *ProductHandler) UpdateProduct(c *gin.Context) {
-	id := c.Param("product_id")
-	parsedUUID, err := uuid.Parse(id)
+	productId := c.Param("product_id")
+	parsedUUID, err := uuid.Parse(productId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
 		return
 	}
 
 	var req UpdateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
 	params, err := h.updateProductParams(parsedUUID, req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		sendError(c, http.StatusBadRequest, "Invalid update parameters", err)
 		return
 	}
 
 	product, err := h.common.db.UpdateProduct(c.Request.Context(), params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update product"})
+		handleDBError(c, err, "Failed to update product")
 		return
 	}
 
-	c.JSON(http.StatusOK, toProductResponse(product))
+	// Update product tokens if provided
+	if len(req.ProductTokens) > 0 {
+		// First, delete all existing product tokens
+		err = h.common.db.DeleteProductTokensByProduct(c.Request.Context(), product.ID)
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, "Failed to delete existing product tokens", err)
+			return
+		}
+
+		// Then create new ones
+		for _, pt := range req.ProductTokens {
+			networkID, err := uuid.Parse(pt.NetworkID)
+			if err != nil {
+				sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
+				return
+			}
+
+			tokenID, err := uuid.Parse(pt.TokenID)
+			if err != nil {
+				sendError(c, http.StatusBadRequest, "Invalid token ID format", err)
+				return
+			}
+
+			_, err = h.common.db.CreateProductToken(c.Request.Context(), db.CreateProductTokenParams{
+				ProductID: product.ID,
+				NetworkID: networkID,
+				TokenID:   tokenID,
+				Active:    pt.Active,
+			})
+			if err != nil {
+				sendError(c, http.StatusInternalServerError, "Failed to create product token", err)
+				return
+			}
+		}
+	}
+
+	sendSuccess(c, http.StatusOK, toProductResponse(product))
 }
 
 // DeleteProduct godoc
-// @Summary Delete a product
-// @Description Soft deletes a product
+// @Summary Delete product
+// @Description Deletes a product
 // @Tags products
 // @Accept json
 // @Produce json
@@ -431,23 +477,17 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 	productId := c.Param("product_id")
 	parsedUUID, err := uuid.Parse(productId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid product ID format"})
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
 		return
 	}
 
 	err = h.common.db.DeleteProduct(c.Request.Context(), parsedUUID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Product not found"})
+		handleDBError(c, err, "Failed to delete product")
 		return
 	}
 
-	err = h.common.db.DeleteProductTokensByProduct(c.Request.Context(), parsedUUID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to delete product tokens"})
-		return
-	}
-
-	c.Status(http.StatusNoContent)
+	sendSuccess(c, http.StatusNoContent, nil)
 }
 
 // Helper function to convert database model to API response

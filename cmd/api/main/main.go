@@ -5,9 +5,9 @@ package main
 
 import (
 	"context"
-	"log"
 
 	_ "cyphera-api/docs" // This will be generated
+	"cyphera-api/internal/logger"
 	"cyphera-api/internal/server"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -15,6 +15,7 @@ import (
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // @title           Cyphera API
@@ -40,6 +41,9 @@ import (
 var ginLambda *ginadapter.GinLambda
 
 func init() {
+	// Initialize logger
+	logger.InitLogger()
+
 	// Initialize your Gin router
 	r := gin.Default()
 
@@ -53,13 +57,16 @@ func init() {
 }
 
 func Handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-
-	spew.Dump(req)
 	// Add debug logging
-	log.Printf("Received request with path: %s", req.Path)
+	logger.Debug("Received Lambda request",
+		zap.String("path", req.Path),
+		zap.Any("request", spew.Sdump(req)),
+	)
+
 	return ginLambda.ProxyWithContext(ctx, req)
 }
 
 func main() {
+	defer logger.Sync()
 	lambda.Start(Handler)
 }
