@@ -181,7 +181,6 @@ func (h *AccountHandler) getAccountDetails(c *gin.Context) (*AccountAccessRespon
 	if err != nil {
 		return nil, fmt.Errorf("user not found")
 	}
-
 	// get workspace by account id
 	workspaces, err := h.common.db.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
 	if err != nil {
@@ -426,30 +425,6 @@ func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAc
 	}, nil
 }
 
-// getExistingAccountDetails retrieves account details for an existing user
-func (h *AccountHandler) getExistingAccountDetails(ctx *gin.Context, user db.User) (*FullAccountResponse, error) {
-	account, err := h.common.db.GetAccountByID(ctx.Request.Context(), user.AccountID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve account")
-	}
-
-	workspaces, err := h.common.db.ListWorkspacesByAccountID(ctx.Request.Context(), account.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve workspaces")
-	}
-
-	workspaceResponses := make([]WorkspaceResponse, len(workspaces))
-	for i, workspace := range workspaces {
-		workspaceResponses[i] = toWorkspaceResponse(workspace)
-	}
-
-	return &FullAccountResponse{
-		AccountResponse: toAccountResponse(account),
-		User:            toUserResponse(user),
-		Workspaces:      workspaceResponses,
-	}, nil
-}
-
 // SignInAccount godoc
 // @Summary Register or sign in to an account
 // @Description Creates a new account with user and workspace, or returns existing account details
@@ -477,7 +452,7 @@ func (h *AccountHandler) SignInAccount(c *gin.Context) {
 	}
 
 	// Check if user already exists
-	_, err = h.common.db.GetUserByAuth0ID(c.Request.Context(), ownerAuth0Id)
+	user, err := h.common.db.GetUserByAuth0ID(c.Request.Context(), ownerAuth0Id)
 	if err != nil {
 		if err != pgx.ErrNoRows {
 			sendError(c, http.StatusInternalServerError, "Failed to check existing user", err)
@@ -496,12 +471,22 @@ func (h *AccountHandler) SignInAccount(c *gin.Context) {
 		sendSuccess(c, http.StatusCreated, response)
 	} else {
 		// User exists, get existing account details
-		access, err := h.getAccountDetails(c)
+		account, err := h.common.db.GetAccount(c.Request.Context(), user.AccountID)
 		if err != nil {
 			sendError(c, http.StatusInternalServerError, err.Error(), err)
 			return
 		}
-		sendSuccess(c, http.StatusOK, toFullAccountResponse(access))
+		workspaces, err := h.common.db.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, err.Error(), err)
+			return
+		}
+
+		sendSuccess(c, http.StatusOK, toFullAccountResponse(&AccountAccessResponse{
+			Account:   account,
+			User:      user,
+			Workspace: workspaces,
+		}))
 	}
 }
 
