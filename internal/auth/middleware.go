@@ -45,7 +45,6 @@ type TokenClaims struct {
 // It checks if the key exists, is not expired, and retrieves associated workspace and account
 func validateAPIKey(c *gin.Context, queries *db.Queries, apiKey string) (db.Workspace, db.Account, db.ApiKey, error) {
 	// Validate API key
-	fmt.Println("apiKey what is it", apiKey)
 	key, err := queries.GetAPIKeyByKey(c.Request.Context(), apiKey)
 	if err != nil {
 		return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid API key")
