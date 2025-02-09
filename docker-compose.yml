@@ -1,25 +1,22 @@
 services:
-  # cyphera-api:
-  #   build: .
-  #   container_name: cyphera-api
-  #   ports:
-  #     - "8000:8000"
-  #   environment:
-  #     - NODE_ENV=development
-  #     - POSTGRES_USER=${POSTGRES_USER}
-  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-  #     - POSTGRES_DB=${POSTGRES_DB}
-  #     - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-  #     - ACTALINK_API_KEY=${ACTALINK_API_KEY}
-  #     - PORT=8000
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   volumes:
-  #     - ./:/usr/src/app
-  #     - /usr/src/app/node_modules
-  #   networks:
-  #     - cyphera-network
+  cyphera-api:
+    build: .
+    container_name: cyphera-api
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://apiuser:apipassword@postgres:5432/cyphera
+      - ACTALINK_API_KEY=${ACTALINK_API_KEY}
+      - PORT=8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./:/usr/src/app
+      - /usr/src/app/node_modules
+    networks:
+      - cyphera-network
 
   postgres:
     container_name: cyphera-db
