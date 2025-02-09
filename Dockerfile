@@ -29,9 +29,9 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN go build -o main ./cmd/api
+RUN go build -o cyphera-api ./cmd/api/local
 
 # Expose port 8000
 EXPOSE 8000
 
-CMD ["./main"]
+CMD ["./cyphera-api"]
