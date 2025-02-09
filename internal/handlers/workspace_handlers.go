@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -315,31 +316,50 @@ func (h *WorkspaceHandler) HardDeleteWorkspace(c *gin.Context) {
 	sendSuccess(c, http.StatusNoContent, nil)
 }
 
-// parsePaginationParams is a helper function to parse limit and offset from query parameters
-func parsePaginationParams(c *gin.Context) (limit int32, offset int32, err error) {
-	const maxLimit int32 = 100
-	limit = 10 // default limit
-
-	if limitStr := c.Query("limit"); limitStr != "" {
-		parsedLimit, err := strconv.ParseInt(limitStr, 10, 32)
-		if err != nil {
-			return 0, 0, fmt.Errorf("invalid limit parameter")
-		}
-		if parsedLimit > int64(maxLimit) {
-			limit = maxLimit
-		} else if parsedLimit > 0 {
-			limit = int32(parsedLimit)
-		}
+// safeParseInt32 safely parses a string to int32, checking for overflow
+func safeParseInt32(s string) (int32, error) {
+	// Parse as int64 first to check for overflow
+	val, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0, err
 	}
 
-	if offsetStr := c.Query("offset"); offsetStr != "" {
-		parsedOffset, err := strconv.ParseInt(offsetStr, 10, 32)
-		if err != nil {
-			return 0, 0, fmt.Errorf("invalid offset parameter")
-		}
-		if parsedOffset > 0 {
-			offset = int32(parsedOffset)
-		}
+	// Check if value fits in int32
+	if val > math.MaxInt32 || val < math.MinInt32 {
+		return 0, fmt.Errorf("value %d overflows int32", val)
+	}
+
+	return int32(val), nil
+}
+
+// parsePaginationParams parses and validates pagination parameters
+func parsePaginationParams(c *gin.Context) (limit int32, offset int32, err error) {
+	const maxLimit int32 = 100
+	const defaultLimit int32 = 10
+	const defaultOffset int32 = 0
+
+	limitStr := c.DefaultQuery("limit", strconv.Itoa(int(defaultLimit)))
+	offsetStr := c.DefaultQuery("offset", strconv.Itoa(int(defaultOffset)))
+
+	// Parse limit
+	limit, err = safeParseInt32(limitStr)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid limit: %w", err)
+	}
+	if limit <= 0 {
+		limit = defaultLimit
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	// Parse offset
+	offset, err = safeParseInt32(offsetStr)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid offset: %w", err)
+	}
+	if offset < 0 {
+		offset = defaultOffset
 	}
 
 	return limit, offset, nil
@@ -383,8 +403,8 @@ func (h *WorkspaceHandler) ListWorkspaceCustomers(c *gin.Context) {
 
 	customers, err := h.common.db.ListWorkspaceCustomersWithPagination(c.Request.Context(), db.ListWorkspaceCustomersWithPaginationParams{
 		ID:     parsedUUID,
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		Limit:  limit,
+		Offset: offset,
 	})
 	if err != nil {
 		handleDBError(c, err, "Failed to retrieve customers")
@@ -396,10 +416,16 @@ func (h *WorkspaceHandler) ListWorkspaceCustomers(c *gin.Context) {
 		response[i] = toCustomerResponse(customer)
 	}
 
+	// Calculate hasMore safely without integer overflow risk
+	var hasMore bool
+	if total > 0 {
+		hasMore = (int64(offset) + int64(limit)) < total
+	}
+
 	listCustomersResponse := ListCustomersResponse{
 		Object:  "list",
 		Data:    response,
-		HasMore: (offset + limit) < int32(total),
+		HasMore: hasMore,
 		Total:   total,
 	}
 

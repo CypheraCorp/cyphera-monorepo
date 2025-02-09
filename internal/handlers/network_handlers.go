@@ -3,7 +3,6 @@ package handlers
 import (
 	"cyphera-api/internal/db"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -100,7 +99,7 @@ func (h *NetworkHandler) GetNetwork(c *gin.Context) {
 // @Tags networks
 // @Accept json
 // @Produce json
-// @Param chain_id path int true "Chain ID"
+// @Param chain_id path string true "Chain ID"
 // @Success 200 {object} NetworkResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
@@ -108,13 +107,13 @@ func (h *NetworkHandler) GetNetwork(c *gin.Context) {
 // @Router /networks/chain/{chain_id} [get]
 func (h *NetworkHandler) GetNetworkByChainID(c *gin.Context) {
 	chainIDStr := c.Param("chain_id")
-	chainID, err := strconv.ParseInt(chainIDStr, 10, 32)
+	chainID, err := safeParseInt32(chainIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid chain ID format", err)
 		return
 	}
 
-	network, err := h.common.db.GetNetworkByChainID(c.Request.Context(), int32(chainID))
+	network, err := h.common.db.GetNetworkByChainID(c.Request.Context(), chainID)
 	if err != nil {
 		handleDBError(c, err, "Network not found")
 		return
