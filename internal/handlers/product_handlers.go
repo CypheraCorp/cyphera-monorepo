@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
 	"encoding/json"
 	"fmt"
@@ -224,49 +225,60 @@ type PublicProductTokenResponse struct {
 	TokenImageURL  string `json:"token_image_url"`
 }
 
-// updateProductParams creates the update parameters for a product
-func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequest) (db.UpdateProductParams, error) {
-	params := db.UpdateProductParams{
-		ID: id,
+// validateProductType validates the product type and returns a db.ProductType if valid
+func validateProductType(productType string) (db.ProductType, error) {
+	if productType == "" {
+		return "", nil
+	}
+	if productType != constants.ProductTypeRecurring && productType != constants.ProductTypeOneOff {
+		return "", fmt.Errorf("invalid product type. Must be '%s' or '%s'", constants.ProductTypeRecurring, constants.ProductTypeOneOff)
+	}
+	return db.ProductType(productType), nil
+}
+
+// validateIntervalType validates the interval type and returns a db.NullIntervalType if valid
+func validateIntervalType(intervalType string) (db.NullIntervalType, error) {
+	if intervalType == "" {
+		return db.NullIntervalType{}, nil
 	}
 
+	validIntervalTypes := map[string]bool{
+		constants.IntervalType5Minutes: true,
+		constants.IntervalTypeDaily:    true,
+		constants.IntervalTypeWeekly:   true,
+		constants.IntervalTypeMonthly:  true,
+		constants.IntervalTypeYearly:   true,
+	}
+
+	if !validIntervalTypes[intervalType] {
+		return db.NullIntervalType{}, fmt.Errorf("invalid interval type")
+	}
+
+	return db.NullIntervalType{
+		IntervalType: db.IntervalType(intervalType),
+		Valid:        true,
+	}, nil
+}
+
+// validateWalletID validates and parses the wallet ID
+func validateWalletID(walletID string) (uuid.UUID, error) {
+	if walletID == "" {
+		return uuid.Nil, nil
+	}
+	parsed, err := uuid.Parse(walletID)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid wallet ID format: %w", err)
+	}
+	return parsed, nil
+}
+
+// updateTextFields updates text-based fields in the product parameters
+func updateTextFields(params *db.UpdateProductParams, req UpdateProductRequest) {
 	if req.Name != "" {
 		params.Name = req.Name
 	}
-	if req.WalletID != "" {
-		walletID, err := uuid.Parse(req.WalletID)
-		if err != nil {
-			return params, fmt.Errorf("invalid wallet ID format: %w", err)
-		}
-		params.WalletID = walletID
-	}
 	if req.Description != "" {
 		params.Description = pgtype.Text{String: req.Description, Valid: true}
-	}
-	if req.ProductType != "" {
-		if req.ProductType != "recurring" && req.ProductType != "one_off" {
-			return params, fmt.Errorf("invalid product type. Must be 'recurring' or 'one_off'")
-		}
-		params.ProductType = db.ProductType(req.ProductType)
-	}
-	if req.IntervalType != "" {
-		validIntervalTypes := map[string]bool{
-			"5minutes": true,
-			"Daily":    true,
-			"Weekly":   true,
-			"Monthly":  true,
-			"Yearly":   true,
-		}
-		if !validIntervalTypes[req.IntervalType] {
-			return params, fmt.Errorf("invalid interval type")
-		}
-		params.IntervalType = db.NullIntervalType{IntervalType: db.IntervalType(req.IntervalType), Valid: true}
-	}
-	if req.TermLength != nil {
-		params.TermLength = pgtype.Int4{Int32: *req.TermLength, Valid: true}
-	}
-	if req.PriceInPennies != nil {
-		params.PriceInPennies = *req.PriceInPennies
 	}
 	if req.ImageURL != "" {
 		params.ImageUrl = pgtype.Text{String: req.ImageURL, Valid: true}
@@ -274,12 +286,69 @@ func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequ
 	if req.URL != "" {
 		params.Url = pgtype.Text{String: req.URL, Valid: true}
 	}
+}
+
+// updateNumericFields updates numeric fields in the product parameters
+func updateNumericFields(params *db.UpdateProductParams, req UpdateProductRequest) {
+	if req.TermLength != nil {
+		params.TermLength = pgtype.Int4{Int32: *req.TermLength, Valid: true}
+	}
+	if req.PriceInPennies != nil {
+		params.PriceInPennies = *req.PriceInPennies
+	}
+}
+
+// updateBooleanFields updates boolean fields in the product parameters
+func updateBooleanFields(params *db.UpdateProductParams, req UpdateProductRequest) {
 	if req.MerchantPaidGas != nil {
 		params.MerchantPaidGas = *req.MerchantPaidGas
 	}
 	if req.Active != nil {
 		params.Active = *req.Active
 	}
+}
+
+// updateProductParams updates the product parameters based on the request
+func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequest) (db.UpdateProductParams, error) {
+	params := db.UpdateProductParams{ID: id}
+
+	// Update text fields
+	updateTextFields(&params, req)
+
+	// Update wallet ID
+	if req.WalletID != "" {
+		walletID, err := validateWalletID(req.WalletID)
+		if err != nil {
+			return params, err
+		}
+		params.WalletID = walletID
+	}
+
+	// Update product type
+	if req.ProductType != "" {
+		productType, err := validateProductType(req.ProductType)
+		if err != nil {
+			return params, err
+		}
+		params.ProductType = productType
+	}
+
+	// Update interval type
+	if req.IntervalType != "" {
+		intervalType, err := validateIntervalType(req.IntervalType)
+		if err != nil {
+			return params, err
+		}
+		params.IntervalType = intervalType
+	}
+
+	// Update numeric fields
+	updateNumericFields(&params, req)
+
+	// Update boolean fields
+	updateBooleanFields(&params, req)
+
+	// Update metadata
 	if req.Metadata != nil {
 		metadata, err := json.Marshal(req.Metadata)
 		if err != nil {
@@ -319,6 +388,51 @@ func validatePaginationParams(c *gin.Context) (limit int32, offset int32, err er
 	}
 
 	return limit, offset, nil
+}
+
+// validateProductUpdate validates all update parameters at once
+func (h *ProductHandler) validateProductUpdate(c *gin.Context, req UpdateProductRequest, existingProduct db.Product) error {
+	// Validate product type if provided
+	if req.ProductType != "" {
+		if _, err := validateProductType(req.ProductType); err != nil {
+			return err
+		}
+	}
+
+	// Validate interval type if provided
+	if req.IntervalType != "" {
+		if _, err := validateIntervalType(req.IntervalType); err != nil {
+			return err
+		}
+	}
+
+	// Validate term length if provided
+	if req.TermLength != nil {
+		if err := validateTermLength(string(existingProduct.ProductType), *req.TermLength); err != nil {
+			return err
+		}
+	}
+
+	// Validate price if provided
+	if req.PriceInPennies != nil {
+		if err := validatePriceInPennies(*req.PriceInPennies); err != nil {
+			return err
+		}
+	}
+
+	// Validate wallet if provided
+	if req.WalletID != "" {
+		parsedWalletID, err := uuid.Parse(req.WalletID)
+		if err != nil {
+			return fmt.Errorf("invalid wallet ID format: %w", err)
+		}
+
+		if err := h.validateWallet(c, parsedWalletID, existingProduct.WorkspaceID); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // ListProducts godoc
@@ -384,10 +498,16 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		responseList[i] = productResponse
 	}
 
+	// Calculate hasMore safely without integer overflow risk
+	var hasMore bool
+	if total > 0 {
+		hasMore = (int64(offset) + int64(limit)) < total
+	}
+
 	listProductsResponse := ListProductsResponse{
 		Object:  "list",
 		Data:    responseList,
-		HasMore: (offset + limit) < int32(total),
+		HasMore: hasMore,
 		Total:   total,
 	}
 
@@ -434,6 +554,67 @@ func (h *ProductHandler) ListActiveProducts(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, response)
 }
 
+// validateTermLength validates the term length for recurring products
+func validateTermLength(productType string, termLength int32) error {
+	if productType == constants.ProductTypeRecurring && termLength <= 0 {
+		return fmt.Errorf("term length must be greater than 0 for recurring products")
+	}
+	return nil
+}
+
+// validateWallet validates the wallet exists and belongs to the workspace's account
+func (h *ProductHandler) validateWallet(ctx *gin.Context, walletID uuid.UUID, workspaceID uuid.UUID) error {
+	wallet, err := h.common.db.GetWalletByID(ctx.Request.Context(), walletID)
+	if err != nil {
+		return fmt.Errorf("failed to get wallet: %w", err)
+	}
+
+	workspace, err := h.common.db.GetWorkspace(ctx.Request.Context(), workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get workspace: %w", err)
+	}
+
+	if wallet.AccountID != workspace.AccountID {
+		return fmt.Errorf("wallet does not belong to account")
+	}
+
+	return nil
+}
+
+// createProductTokens creates the associated product tokens for a product
+func (h *ProductHandler) createProductTokens(c *gin.Context, productID uuid.UUID, tokens []CreateProductTokenRequest) error {
+	for _, pt := range tokens {
+		networkID, err := uuid.Parse(pt.NetworkID)
+		if err != nil {
+			return fmt.Errorf("invalid network ID format: %w", err)
+		}
+
+		tokenID, err := uuid.Parse(pt.TokenID)
+		if err != nil {
+			return fmt.Errorf("invalid token ID format: %w", err)
+		}
+
+		_, err = h.common.db.CreateProductToken(c.Request.Context(), db.CreateProductTokenParams{
+			ProductID: productID,
+			NetworkID: networkID,
+			TokenID:   tokenID,
+			Active:    pt.Active,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create product token: %w", err)
+		}
+	}
+	return nil
+}
+
+// validatePriceInPennies validates that the price value is within int32 bounds
+func validatePriceInPennies(price int32) error {
+	if price < 0 {
+		return fmt.Errorf("price_in_pennies cannot be negative")
+	}
+	return nil
+}
+
 // CreateProduct godoc
 // @Summary Create product
 // @Description Creates a new product
@@ -453,39 +634,33 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
+	// Validate price
+	if err := validatePriceInPennies(req.PriceInPennies); err != nil {
+		sendError(c, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
 	// Validate product type
-	if req.ProductType != "recurring" && req.ProductType != "one_off" {
-		sendError(c, http.StatusBadRequest, "Invalid product type. Must be 'recurring' or 'one_off'", nil)
+	productType, err := validateProductType(req.ProductType)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	// Validate interval type based on product type
-	if req.ProductType == "recurring" {
-		validIntervalTypes := map[string]bool{
-			"5minutes": true,
-			"Daily":    true,
-			"Weekly":   true,
-			"Monthly":  true,
-			"Yearly":   true,
-		}
-		if !validIntervalTypes[req.IntervalType] {
-			sendError(c, http.StatusBadRequest, "Invalid interval type for recurring product", nil)
-			return
-		}
-	} else if req.IntervalType != "" {
-		sendError(c, http.StatusBadRequest, "Interval type must be empty for one_off products", nil)
+	// Validate interval type
+	intervalType, err := validateIntervalType(req.IntervalType)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	// Validate term length based on product type
-	if req.ProductType == "recurring" && req.TermLength <= 0 {
-		sendError(c, http.StatusBadRequest, "Term length must be greater than 0 for recurring products", nil)
-		return
-	} else if req.ProductType == "one_off" && req.TermLength != 0 {
-		sendError(c, http.StatusBadRequest, "Term length must be empty for one_off products", nil)
+	// Validate term length
+	if err := validateTermLength(req.ProductType, req.TermLength); err != nil {
+		sendError(c, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
+	// Parse and validate workspace ID
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
@@ -493,39 +668,27 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
+	// Parse and validate wallet ID
 	parsedWalletID, err := uuid.Parse(req.WalletID)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid wallet ID format", err)
 		return
 	}
 
-	// Verify wallet belongs to workspace
-	wallet, err := h.common.db.GetWalletByID(c.Request.Context(), parsedWalletID)
-	if err != nil {
-		handleDBError(c, err, "Wallet not found")
+	// Validate wallet belongs to workspace's account
+	if err := h.validateWallet(c, parsedWalletID, parsedWorkspaceID); err != nil {
+		sendError(c, http.StatusForbidden, err.Error(), nil)
 		return
 	}
 
-	// Get account ID from workspace
-	workspace, err := h.common.db.GetWorkspace(c.Request.Context(), parsedWorkspaceID)
-	if err != nil {
-		handleDBError(c, err, "Workspace not found")
-		return
-	}
-
-	// Verify wallet belongs to account
-	if wallet.AccountID != workspace.AccountID {
-		sendError(c, http.StatusForbidden, "Wallet does not belong to account", nil)
-		return
-	}
-
+	// Create the product
 	product, err := h.common.db.CreateProduct(c.Request.Context(), db.CreateProductParams{
 		WorkspaceID:     parsedWorkspaceID,
 		WalletID:        parsedWalletID,
 		Name:            req.Name,
 		Description:     pgtype.Text{String: req.Description, Valid: req.Description != ""},
-		ProductType:     db.ProductType(req.ProductType),
-		IntervalType:    db.NullIntervalType{IntervalType: db.IntervalType(req.IntervalType), Valid: req.IntervalType != ""},
+		ProductType:     productType,
+		IntervalType:    intervalType,
 		TermLength:      pgtype.Int4{Int32: req.TermLength, Valid: req.TermLength != 0},
 		PriceInPennies:  req.PriceInPennies,
 		ImageUrl:        pgtype.Text{String: req.ImageURL, Valid: req.ImageURL != ""},
@@ -541,29 +704,9 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 
 	// Create product tokens if provided
 	if len(req.ProductTokens) > 0 {
-		for _, pt := range req.ProductTokens {
-			networkID, err := uuid.Parse(pt.NetworkID)
-			if err != nil {
-				sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
-				return
-			}
-
-			tokenID, err := uuid.Parse(pt.TokenID)
-			if err != nil {
-				sendError(c, http.StatusBadRequest, "Invalid token ID format", err)
-				return
-			}
-
-			_, err = h.common.db.CreateProductToken(c.Request.Context(), db.CreateProductTokenParams{
-				ProductID: product.ID,
-				NetworkID: networkID,
-				TokenID:   tokenID,
-				Active:    pt.Active,
-			})
-			if err != nil {
-				sendError(c, http.StatusInternalServerError, "Failed to create product token", err)
-				return
-			}
+		if err := h.createProductTokens(c, product.ID, req.ProductTokens); err != nil {
+			sendError(c, http.StatusBadRequest, err.Error(), nil)
+			return
 		}
 	}
 
@@ -585,6 +728,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /products/{product_id} [put]
 func (h *ProductHandler) UpdateProduct(c *gin.Context) {
+	// Parse product ID
 	productId := c.Param("product_id")
 	parsedUUID, err := uuid.Parse(productId)
 	if err != nil {
@@ -592,6 +736,7 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
+	// Parse request body
 	var req UpdateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid request body", err)
@@ -612,44 +757,20 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
+	// Validate all update parameters
+	if err := h.validateProductUpdate(c, req, existingProduct); err != nil {
+		sendError(c, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	// Create update parameters
 	params, err := h.updateProductParams(parsedUUID, req)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid update parameters", err)
 		return
 	}
 
-	// If wallet ID is being updated, verify it belongs to the same account
-	if req.WalletID != "" {
-		parsedWalletID, err := uuid.Parse(req.WalletID)
-		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid wallet ID format", err)
-			return
-		}
-
-		// Verify wallet belongs to workspace
-		wallet, err := h.common.db.GetWalletByID(c.Request.Context(), parsedWalletID)
-		if err != nil {
-			handleDBError(c, err, "Wallet not found")
-			return
-		}
-
-		// Get account ID from workspace
-		workspace, err := h.common.db.GetWorkspace(c.Request.Context(), existingProduct.WorkspaceID)
-		if err != nil {
-			handleDBError(c, err, "Workspace not found")
-			return
-		}
-
-		// Verify wallet belongs to account
-		if wallet.AccountID != workspace.AccountID {
-			sendError(c, http.StatusForbidden, "Wallet does not belong to account", nil)
-			return
-		}
-	} else {
-		sendError(c, http.StatusBadRequest, "Wallet ID is required", nil)
-		return
-	}
-
+	// Update the product
 	product, err := h.common.db.UpdateProduct(c.Request.Context(), params)
 	if err != nil {
 		handleDBError(c, err, "Failed to update product")
@@ -665,30 +786,10 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 			return
 		}
 
-		// Then create new ones
-		for _, pt := range req.ProductTokens {
-			networkID, err := uuid.Parse(pt.NetworkID)
-			if err != nil {
-				sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
-				return
-			}
-
-			tokenID, err := uuid.Parse(pt.TokenID)
-			if err != nil {
-				sendError(c, http.StatusBadRequest, "Invalid token ID format", err)
-				return
-			}
-
-			_, err = h.common.db.CreateProductToken(c.Request.Context(), db.CreateProductTokenParams{
-				ProductID: product.ID,
-				NetworkID: networkID,
-				TokenID:   tokenID,
-				Active:    pt.Active,
-			})
-			if err != nil {
-				sendError(c, http.StatusInternalServerError, "Failed to create product token", err)
-				return
-			}
+		// Create new product tokens
+		if err := h.createProductTokens(c, product.ID, req.ProductTokens); err != nil {
+			sendError(c, http.StatusBadRequest, err.Error(), nil)
+			return
 		}
 	}
 

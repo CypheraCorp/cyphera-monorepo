@@ -2,5 +2,11 @@
   "dependencies": {
     "ethers": "^6.13.5",
     "siwe": "^3.0.0"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  },
+  "scripts": {
+    "prepare": "husky install"
   }
 }

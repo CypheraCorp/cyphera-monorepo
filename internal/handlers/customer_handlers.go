@@ -311,6 +311,17 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	sendSuccess(c, http.StatusCreated, toCustomerResponse(customer))
 }
 
+// validateCustomerParams validates customer parameters
+func validateCustomerParams(req *UpdateCustomerRequest) error {
+	if req.BalanceInPennies != nil && *req.BalanceInPennies < 0 {
+		return fmt.Errorf("balance_in_pennies cannot be negative")
+	}
+	if req.NextInvoiceSequence != nil && *req.NextInvoiceSequence < 0 {
+		return fmt.Errorf("next_invoice_sequence cannot be negative")
+	}
+	return nil
+}
+
 // UpdateCustomer godoc
 // @Summary Update customer
 // @Description Updates an existing customer
@@ -322,7 +333,6 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 // @Success 200 {object} CustomerResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /customers/{customer_id} [put]
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
@@ -336,6 +346,12 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	var req UpdateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	// Validate integer parameters
+	if err := validateCustomerParams(&req); err != nil {
+		sendError(c, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 

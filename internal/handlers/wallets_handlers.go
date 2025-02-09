@@ -5,7 +5,6 @@ import (
 	"cyphera-api/internal/logger"
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -247,46 +246,49 @@ func (h *WalletHandler) GetWalletByAddress(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /wallets [get]
 func (h *WalletHandler) ListWallets(c *gin.Context) {
-	accountID, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	accountID := c.GetHeader("X-Account-ID")
+	parsedAccountID, err := uuid.Parse(accountID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid account ID format", err)
 		return
 	}
 
-	wallets, err := h.common.db.ListWalletsByAccountID(c.Request.Context(), accountID)
+	wallets, err := h.common.db.ListWalletsByAccountID(c.Request.Context(), parsedAccountID)
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to list wallets", err)
+		handleDBError(c, err, "Failed to retrieve wallets")
 		return
 	}
 
-	// Convert to response format
-	response := WalletListResponse{
-		Object: "list",
-		Data:   make([]WalletResponse, len(wallets)),
-	}
+	response := make([]WalletResponse, len(wallets))
 	for i, wallet := range wallets {
-		response.Data[i] = toWalletResponse(wallet)
+		response[i] = toWalletResponse(wallet)
 	}
 
-	sendSuccess(c, http.StatusOK, response)
+	listResponse := WalletListResponse{
+		Object: "list",
+		Data:   response,
+	}
+
+	sendSuccess(c, http.StatusOK, listResponse)
 }
 
 // ListWalletsByNetworkType godoc
 // @Summary List wallets by network type
-// @Description List all wallets for the authenticated account filtered by network type
+// @Description List all wallets for a specific network type
 // @Tags wallets
 // @Accept json
 // @Produce json
-// @Param network_type path string true "Network type"
+// @Param network_type path string true "Network Type"
 // @Success 200 {object} WalletListResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /wallets/network/{network_type} [get]
 func (h *WalletHandler) ListWalletsByNetworkType(c *gin.Context) {
-	accountID, err := uuid.Parse(c.GetString("account_id"))
+	accountID := c.GetHeader("X-Account-ID")
+	parsedAccountID, err := uuid.Parse(accountID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid account ID format", err)
 		return
 	}
 
@@ -297,24 +299,25 @@ func (h *WalletHandler) ListWalletsByNetworkType(c *gin.Context) {
 	}
 
 	wallets, err := h.common.db.ListWalletsByNetworkType(c.Request.Context(), db.ListWalletsByNetworkTypeParams{
-		AccountID:   accountID,
+		AccountID:   parsedAccountID,
 		NetworkType: db.NetworkType(networkType),
 	})
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to list wallets", err)
+		handleDBError(c, err, "Failed to retrieve wallets")
 		return
 	}
 
-	// Convert to response format
-	response := WalletListResponse{
-		Object: "list",
-		Data:   make([]WalletResponse, len(wallets)),
-	}
+	response := make([]WalletResponse, len(wallets))
 	for i, wallet := range wallets {
-		response.Data[i] = toWalletResponse(wallet)
+		response[i] = toWalletResponse(wallet)
 	}
 
-	sendSuccess(c, http.StatusOK, response)
+	listResponse := WalletListResponse{
+		Object: "list",
+		Data:   response,
+	}
+
+	sendSuccess(c, http.StatusOK, listResponse)
 }
 
 // SearchWallets godoc
@@ -344,17 +347,26 @@ func (h *WalletHandler) SearchWallets(c *gin.Context) {
 		return
 	}
 
-	// Parse pagination parameters
-	limit := 10
-	offset := 0
+	// Parse pagination parameters with safe conversion
+	var limit, offset int32 = 10, 0 // default values
 	if limitStr := c.Query("limit"); limitStr != "" {
-		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
-			limit = parsedLimit
+		limit, err = safeParseInt32(limitStr)
+		if err != nil {
+			sendError(c, http.StatusBadRequest, "Invalid limit parameter", err)
+			return
+		}
+		if limit <= 0 {
+			limit = 10
 		}
 	}
 	if offsetStr := c.Query("offset"); offsetStr != "" {
-		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
-			offset = parsedOffset
+		offset, err = safeParseInt32(offsetStr)
+		if err != nil {
+			sendError(c, http.StatusBadRequest, "Invalid offset parameter", err)
+			return
+		}
+		if offset < 0 {
+			offset = 0
 		}
 	}
 
@@ -364,8 +376,8 @@ func (h *WalletHandler) SearchWallets(c *gin.Context) {
 	wallets, err := h.common.db.SearchWallets(c.Request.Context(), db.SearchWalletsParams{
 		AccountID:     accountID,
 		WalletAddress: searchPattern,
-		Limit:         int32(limit),
-		Offset:        int32(offset),
+		Limit:         limit,
+		Offset:        offset,
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to search wallets", err)
@@ -613,17 +625,22 @@ func (h *WalletHandler) GetRecentlyUsedWallets(c *gin.Context) {
 		return
 	}
 
-	// Parse limit parameter
-	limit := 5 // default limit
+	// Parse limit parameter with safe conversion
+	var limit int32 = 5 // default limit
 	if limitStr := c.Query("limit"); limitStr != "" {
-		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
-			limit = parsedLimit
+		limit, err = safeParseInt32(limitStr)
+		if err != nil {
+			sendError(c, http.StatusBadRequest, "Invalid limit parameter", err)
+			return
+		}
+		if limit <= 0 {
+			limit = 5
 		}
 	}
 
 	wallets, err := h.common.db.GetRecentlyUsedWallets(c.Request.Context(), db.GetRecentlyUsedWalletsParams{
 		AccountID: accountID,
-		Limit:     int32(limit),
+		Limit:     limit,
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to get recently used wallets", err)
