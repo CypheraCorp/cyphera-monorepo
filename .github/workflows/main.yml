@@ -148,6 +148,11 @@ jobs:
         ACTALINK_API_KEY: ${{ secrets.ACTALINK_API_KEY }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
       run: |
+        # Create domain if it doesn't exist
+        serverless create-domain --stage ${{ env.STAGE }} --verbose || true
+        # Wait a bit for domain to be ready
+        sleep 30
+        # Deploy the service
         serverless deploy --stage ${{ env.STAGE }} --verbose
 
     - name: Log deployment info

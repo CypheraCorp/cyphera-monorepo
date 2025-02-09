@@ -9,7 +9,7 @@ provider:
   name: aws
   runtime: provided.al2
   region: us-east-1
-  stage: $default
+  stage: ${opt:stage, 'dev'}
   httpApi:
     payload: '1.0'
     cors: true
@@ -28,10 +28,10 @@ provider:
 
 custom:
   customDomain:
-    domainName: api.cypherapay.com
-    certificateArn: arn:aws:acm:us-east-1:699475955358:certificate/2aab5f4d-bc62-42de-83b2-74d61ef8d0c2
+    domainName: ${self:provider.stage}.api.cypherapay.com
+    certificateArn: ${ssm:/cyphera/wildcard-api-cert-arn}
     basePath: ''
-    stage: $default
+    stage: ${self:provider.stage}
     createRoute53Record: false
     endpointType: regional
     securityPolicy: TLS_1_2
