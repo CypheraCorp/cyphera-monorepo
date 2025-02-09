@@ -9,6 +9,12 @@ services:
       - DATABASE_URL=postgresql://apiuser:apipassword@postgres:5432/cyphera
       - ACTALINK_API_KEY=${ACTALINK_API_KEY}
       - PORT=8000
+      - GIN_MODE=debug
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000
+      - CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS,PATCH
+      - CORS_ALLOWED_HEADERS=Content-Type,Authorization,X-API-Key,X-Workspace-ID,X-Account-ID
+      - CORS_EXPOSED_HEADERS=Content-Length,Content-Type
+      - CORS_ALLOW_CREDENTIALS=true
     depends_on:
       postgres:
         condition: service_healthy

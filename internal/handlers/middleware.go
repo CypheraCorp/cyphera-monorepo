@@ -5,6 +5,7 @@ import (
 	"cyphera-api/internal/logger"
 	"encoding/json"
 	"io"
+	"log"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -43,7 +44,24 @@ func formatJSONBody(body []byte, contentType string) interface{} {
 
 // LogRequestBody middleware logs the request and response body
 func LogRequestBody() gin.HandlerFunc {
+	// Ensure logger is initialized
+	if logger.Log == nil {
+		logger.InitLogger()
+		if logger.Log == nil {
+			log.Println("Warning: Failed to initialize logger in middleware")
+			return func(c *gin.Context) {
+				c.Next()
+			}
+		}
+	}
+
 	return func(c *gin.Context) {
+		// Skip logging for certain paths
+		if c.Request.URL.Path == "/health" {
+			c.Next()
+			return
+		}
+
 		// Read the Request Body content
 		var bodyBytes []byte
 		if c.Request.Body != nil {
@@ -93,7 +111,9 @@ func LogRequestBody() gin.HandlerFunc {
 		}
 
 		// Log the request
-		logger.Debug("Incoming request", fields...)
+		if logger.Log != nil {
+			logger.Debug("Incoming request", fields...)
+		}
 
 		// Create a custom response writer to capture the response body
 		responseBody := &bytes.Buffer{}
@@ -107,15 +127,17 @@ func LogRequestBody() gin.HandlerFunc {
 		c.Next()
 
 		// Log the response
-		responseFields := []zap.Field{
-			zap.Int("status", c.Writer.Status()),
-		}
+		if logger.Log != nil {
+			responseFields := []zap.Field{
+				zap.Int("status", c.Writer.Status()),
+			}
 
-		if responseBody.Len() > 0 {
-			responseFields = append(responseFields, zap.Any("response_body",
-				formatJSONBody(responseBody.Bytes(), c.Writer.Header().Get("Content-Type"))))
-		}
+			if responseBody.Len() > 0 {
+				responseFields = append(responseFields, zap.Any("response_body",
+					formatJSONBody(responseBody.Bytes(), c.Writer.Header().Get("Content-Type"))))
+			}
 
-		logger.Debug("Response sent", responseFields...)
+			logger.Debug("Response sent", responseFields...)
+		}
 	}
 }

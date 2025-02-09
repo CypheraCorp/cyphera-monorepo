@@ -4,6 +4,7 @@
 package main
 
 import (
+	"cyphera-api/internal/logger"
 	"cyphera-api/internal/server"
 	"log"
 
@@ -11,6 +12,9 @@ import (
 )
 
 func main() {
+	// Initialize logger first
+	logger.InitLogger()
+
 	r := gin.Default()
 	server.InitializeHandlers()
 	server.InitializeRoutes(r)

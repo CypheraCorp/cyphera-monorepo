@@ -6,11 +6,14 @@ import (
 	"cyphera-api/internal/auth"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
+	"cyphera-api/internal/logger"
 	"cyphera-api/internal/pkg/actalink"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	swaggerFiles "github.com/swaggo/files"
@@ -79,6 +82,20 @@ func InitializeHandlers() {
 }
 
 func InitializeRoutes(router *gin.Engine) {
+	// Initialize logger first
+	logger.InitLogger()
+
+	// Configure CORS
+	corsConfig := cors.DefaultConfig()
+	allowedOrigins := strings.Split(os.Getenv("CORS_ALLOWED_ORIGINS"), ",")
+	corsConfig.AllowOrigins = allowedOrigins
+	corsConfig.AllowMethods = strings.Split(os.Getenv("CORS_ALLOWED_METHODS"), ",")
+	corsConfig.AllowHeaders = strings.Split(os.Getenv("CORS_ALLOWED_HEADERS"), ",")
+	corsConfig.ExposeHeaders = strings.Split(os.Getenv("CORS_EXPOSED_HEADERS"), ",")
+	corsConfig.AllowCredentials = os.Getenv("CORS_ALLOW_CREDENTIALS") == "true"
+
+	router.Use(cors.New(corsConfig))
+
 	// Add Swagger endpoint
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
