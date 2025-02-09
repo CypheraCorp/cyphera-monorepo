@@ -85,16 +85,8 @@ func InitializeRoutes(router *gin.Engine) {
 	// Initialize logger first
 	logger.InitLogger()
 
-	// Configure CORS
-	corsConfig := cors.DefaultConfig()
-	allowedOrigins := strings.Split(os.Getenv("CORS_ALLOWED_ORIGINS"), ",")
-	corsConfig.AllowOrigins = allowedOrigins
-	corsConfig.AllowMethods = strings.Split(os.Getenv("CORS_ALLOWED_METHODS"), ",")
-	corsConfig.AllowHeaders = strings.Split(os.Getenv("CORS_ALLOWED_HEADERS"), ",")
-	corsConfig.ExposeHeaders = strings.Split(os.Getenv("CORS_EXPOSED_HEADERS"), ",")
-	corsConfig.AllowCredentials = os.Getenv("CORS_ALLOW_CREDENTIALS") == "true"
-
-	router.Use(cors.New(corsConfig))
+	// Configure and apply CORS middleware
+	router.Use(configureCORS())
 
 	// Add Swagger endpoint
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -310,4 +302,62 @@ func InitializeRoutes(router *gin.Engine) {
 			}
 		}
 	}
+}
+
+// configureCORS returns a configured CORS middleware
+func configureCORS() gin.HandlerFunc {
+	corsConfig := cors.DefaultConfig()
+
+	// Get allowed origins from environment variable
+	originsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if originsEnv == "" {
+		// Default to localhost if not set
+		corsConfig.AllowOrigins = []string{"http://localhost:3000"}
+	} else {
+		// Split and trim the origins
+		origins := strings.Split(originsEnv, ",")
+		for i, origin := range origins {
+			origins[i] = strings.TrimSpace(origin)
+		}
+		corsConfig.AllowOrigins = origins
+	}
+
+	// Get allowed methods from environment variable
+	methodsEnv := os.Getenv("CORS_ALLOWED_METHODS")
+	if methodsEnv == "" {
+		corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+	} else {
+		methods := strings.Split(methodsEnv, ",")
+		for i, method := range methods {
+			methods[i] = strings.TrimSpace(method)
+		}
+		corsConfig.AllowMethods = methods
+	}
+
+	// Get allowed headers from environment variable
+	headersEnv := os.Getenv("CORS_ALLOWED_HEADERS")
+	if headersEnv == "" {
+		corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-API-Key", "X-Workspace-ID", "X-Account-ID"}
+	} else {
+		headers := strings.Split(headersEnv, ",")
+		for i, header := range headers {
+			headers[i] = strings.TrimSpace(header)
+		}
+		corsConfig.AllowHeaders = headers
+	}
+
+	// Get exposed headers from environment variable
+	exposedHeadersEnv := os.Getenv("CORS_EXPOSED_HEADERS")
+	if exposedHeadersEnv != "" {
+		exposedHeaders := strings.Split(exposedHeadersEnv, ",")
+		for i, header := range exposedHeaders {
+			exposedHeaders[i] = strings.TrimSpace(header)
+		}
+		corsConfig.ExposeHeaders = exposedHeaders
+	}
+
+	// Set credentials allowed
+	corsConfig.AllowCredentials = os.Getenv("CORS_ALLOW_CREDENTIALS") == "true"
+
+	return cors.New(corsConfig)
 }

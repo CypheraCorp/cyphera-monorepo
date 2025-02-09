@@ -2,7 +2,7 @@ root = "."
 tmp_dir = "bin"
 
 [build]
-  cmd = "go build -o ./bin/main ./cmd/local/main.go"
+  cmd = "go build -o ./bin/main ./cmd/api/local/main.go"
   bin = "./scripts/local.sh"
   delay = 500 # in milliseconds
   exclude_dir = ["assets", "tmp", "bin", "vendor", "node_modules"]
