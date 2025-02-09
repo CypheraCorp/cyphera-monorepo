@@ -1,23 +1,9 @@
-FROM node:18-alpine
-
-WORKDIR /usr/src/app
-
-COPY package*.json ./
-
-RUN npm install
-
-COPY . .
-
-EXPOSE 3000
-
-CMD ["npm", "start"] 
-
 FROM golang:1.23-alpine
 
 WORKDIR /app
 
-# Install git for private dependencies (if needed)
-RUN apk add --no-cache git
+# Install git and build dependencies
+RUN apk add --no-cache git build-base
 
 # Copy go mod and sum files
 COPY go.mod go.sum ./
@@ -28,10 +14,14 @@ RUN go mod download
 # Copy the source code
 COPY . .
 
+# Set environment variables
+ENV GIN_MODE=debug
+
 # Build the application
 RUN go build -o cyphera-api ./cmd/api/local
 
 # Expose port 8000
 EXPOSE 8000
 
+# Run the application
 CMD ["./cyphera-api"]
