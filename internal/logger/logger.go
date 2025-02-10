@@ -23,8 +23,11 @@ func InitLogger() {
 
 	var config zap.Config
 	if env == "release" {
-		// Production config
+		// Production config with debug enabled
 		config = zap.NewProductionConfig()
+		config.Level = zap.NewAtomicLevelAt(zap.DebugLevel) // Enable debug logging in production
+		config.Development = false                          // Keep production encoding
+		config.Sampling = nil                               // Disable sampling to ensure all logs are captured
 		config.EncoderConfig.TimeKey = "timestamp"
 		config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	} else {

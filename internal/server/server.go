@@ -98,10 +98,8 @@ func InitializeRoutes(router *gin.Engine) {
 		})
 	})
 
-	// if we are not in production, log the request body
-	if os.Getenv("GIN_MODE") != "release" {
-		router.Use(handlers.LogRequestBody())
-	}
+	// Always enable request body logging
+	router.Use(handlers.LogRequestBody())
 
 	// API v1 routes
 	v1 := router.Group("/api/v1")
