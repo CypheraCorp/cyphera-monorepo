@@ -80,19 +80,19 @@ RETURNING id, workspace_id, wallet_id, name, description, product_type, interval
 `
 
 type CreateProductParams struct {
-	WorkspaceID     uuid.UUID        `json:"workspace_id"`
-	WalletID        uuid.UUID        `json:"wallet_id"`
-	Name            string           `json:"name"`
-	Description     pgtype.Text      `json:"description"`
-	ProductType     ProductType      `json:"product_type"`
-	IntervalType    NullIntervalType `json:"interval_type"`
-	TermLength      pgtype.Int4      `json:"term_length"`
-	PriceInPennies  int32            `json:"price_in_pennies"`
-	ImageUrl        pgtype.Text      `json:"image_url"`
-	Url             pgtype.Text      `json:"url"`
-	MerchantPaidGas bool             `json:"merchant_paid_gas"`
-	Active          bool             `json:"active"`
-	Metadata        []byte           `json:"metadata"`
+	WorkspaceID     uuid.UUID    `json:"workspace_id"`
+	WalletID        uuid.UUID    `json:"wallet_id"`
+	Name            string       `json:"name"`
+	Description     pgtype.Text  `json:"description"`
+	ProductType     ProductType  `json:"product_type"`
+	IntervalType    IntervalType `json:"interval_type"`
+	TermLength      pgtype.Int4  `json:"term_length"`
+	PriceInPennies  int32        `json:"price_in_pennies"`
+	ImageUrl        pgtype.Text  `json:"image_url"`
+	Url             pgtype.Text  `json:"url"`
+	MerchantPaidGas bool         `json:"merchant_paid_gas"`
+	Active          bool         `json:"active"`
+	Metadata        []byte       `json:"metadata"`
 }
 
 func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error) {
@@ -369,19 +369,19 @@ RETURNING id, workspace_id, wallet_id, name, description, product_type, interval
 `
 
 type UpdateProductParams struct {
-	ID              uuid.UUID        `json:"id"`
-	Name            string           `json:"name"`
-	WalletID        uuid.UUID        `json:"wallet_id"`
-	Description     pgtype.Text      `json:"description"`
-	ProductType     ProductType      `json:"product_type"`
-	IntervalType    NullIntervalType `json:"interval_type"`
-	TermLength      pgtype.Int4      `json:"term_length"`
-	PriceInPennies  int32            `json:"price_in_pennies"`
-	ImageUrl        pgtype.Text      `json:"image_url"`
-	Url             pgtype.Text      `json:"url"`
-	MerchantPaidGas bool             `json:"merchant_paid_gas"`
-	Active          bool             `json:"active"`
-	Metadata        []byte           `json:"metadata"`
+	ID              uuid.UUID    `json:"id"`
+	Name            string       `json:"name"`
+	WalletID        uuid.UUID    `json:"wallet_id"`
+	Description     pgtype.Text  `json:"description"`
+	ProductType     ProductType  `json:"product_type"`
+	IntervalType    IntervalType `json:"interval_type"`
+	TermLength      pgtype.Int4  `json:"term_length"`
+	PriceInPennies  int32        `json:"price_in_pennies"`
+	ImageUrl        pgtype.Text  `json:"image_url"`
+	Url             pgtype.Text  `json:"url"`
+	MerchantPaidGas bool         `json:"merchant_paid_gas"`
+	Active          bool         `json:"active"`
+	Metadata        []byte       `json:"metadata"`
 }
 
 func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error) {

@@ -136,7 +136,7 @@ func (q *Queries) GetAccountByID(ctx context.Context, id uuid.UUID) (Account, er
 
 const getAccountUsers = `-- name: GetAccountUsers :many
 SELECT 
-    u.id, u.auth0_id, u.email, u.account_id, u.role, u.is_account_owner, u.first_name, u.last_name, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
+    u.id, u.supabase_id, u.email, u.account_id, u.role, u.is_account_owner, u.first_name, u.last_name, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
     u.role,
     u.is_account_owner,
     u.created_at as joined_at
@@ -148,7 +148,7 @@ ORDER BY u.is_account_owner DESC, u.created_at DESC
 
 type GetAccountUsersRow struct {
 	ID               uuid.UUID          `json:"id"`
-	Auth0ID          string             `json:"auth0_id"`
+	SupabaseID       string             `json:"supabase_id"`
 	Email            string             `json:"email"`
 	AccountID        uuid.UUID          `json:"account_id"`
 	Role             UserRole           `json:"role"`
@@ -184,7 +184,7 @@ func (q *Queries) GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]G
 		var i GetAccountUsersRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.Auth0ID,
+			&i.SupabaseID,
 			&i.Email,
 			&i.AccountID,
 			&i.Role,

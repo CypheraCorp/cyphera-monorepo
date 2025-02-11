@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS wallets (
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    auth0_id VARCHAR(255) NOT NULL UNIQUE,
+    supabase_id VARCHAR(255) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
     account_id UUID NOT NULL REFERENCES accounts(id),
     role user_role NOT NULL,
@@ -238,7 +238,7 @@ CREATE INDEX idx_customers_workspace_id ON customers(workspace_id);
 CREATE INDEX idx_api_keys_workspace_id ON api_keys(workspace_id);
 
 CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_auth0_id ON users(auth0_id);
+CREATE INDEX idx_users_supabase_id ON users(supabase_id);
 CREATE INDEX idx_users_account_id ON users(account_id);
 
 CREATE INDEX idx_wallets_account_id ON wallets(account_id);
@@ -335,11 +335,11 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
-INSERT INTO users (auth0_id, email, first_name, last_name, display_name, account_id, role, is_account_owner)
+INSERT INTO users (supabase_id, email, first_name, last_name, display_name, account_id, role, is_account_owner)
 VALUES 
-    ('auth0|admin', 'admin@cyphera.com', 'Admin', 'User', 'Admin User',
+    ('supabase|admin', 'admin@cyphera.com', 'Admin', 'User', 'Admin User',
      (SELECT id FROM accounts WHERE name = 'Admin Account'), 'admin', true),
-    ('auth0|merchant', 'merchant@example.com', 'Test', 'Merchant', 'Test Merchant',
+    ('supabase|merchant', 'merchant@example.com', 'Test', 'Merchant', 'Test Merchant',
      (SELECT id FROM accounts WHERE name = 'Test Account'), 'admin', true)
 ON CONFLICT DO NOTHING;
 

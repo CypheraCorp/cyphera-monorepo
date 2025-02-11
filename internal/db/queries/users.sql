@@ -1,6 +1,6 @@
 -- name: CreateUser :one
 INSERT INTO users (
-    auth0_id,
+    supabase_id,
     email,
     account_id,
     role,
@@ -22,9 +22,9 @@ INSERT INTO users (
 SELECT * FROM users
 WHERE id = $1 AND deleted_at IS NULL;
 
--- name: GetUserByAuth0ID :one
+-- name: GetUserBySupabaseID :one
 SELECT * FROM users
-WHERE auth0_id = $1 AND deleted_at IS NULL;
+WHERE supabase_id = $1 AND deleted_at IS NULL;
 
 -- name: GetUserByEmail :one
 SELECT * FROM users
@@ -33,18 +33,18 @@ WHERE email = $1 AND deleted_at IS NULL;
 -- name: UpdateUser :one
 UPDATE users
 SET
-    email = COALESCE($2, email),
-    first_name = COALESCE($3, first_name),
-    last_name = COALESCE($4, last_name),
-    display_name = COALESCE($5, display_name),
-    picture_url = COALESCE($6, picture_url),
-    phone = COALESCE($7, phone),
-    timezone = COALESCE($8, timezone),
-    locale = COALESCE($9, locale),
-    email_verified = COALESCE($10, email_verified),
-    two_factor_enabled = COALESCE($11, two_factor_enabled),
-    status = COALESCE($12, status),
-    metadata = COALESCE($13, metadata),
+    email = COALESCE($1, email),
+    first_name = COALESCE($2, first_name),
+    last_name = COALESCE($3, last_name),
+    display_name = COALESCE($4, display_name),
+    picture_url = COALESCE($5, picture_url),
+    phone = COALESCE($6, phone),
+    timezone = COALESCE($7, timezone),
+    locale = COALESCE($8, locale),
+    email_verified = COALESCE($9, email_verified),
+    two_factor_enabled = COALESCE($10, two_factor_enabled),
+    status = COALESCE($11, status),
+    metadata = COALESCE($12, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
@@ -80,4 +80,8 @@ FROM users u
 JOIN accounts a ON u.account_id = a.id
 WHERE u.id = $1 
 AND u.deleted_at IS NULL 
-AND a.deleted_at IS NULL; 
+AND a.deleted_at IS NULL;
+
+-- name: ListUsers :many
+SELECT * FROM users
+ORDER BY created_at; 

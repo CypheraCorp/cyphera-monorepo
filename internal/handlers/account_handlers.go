@@ -3,8 +3,6 @@ package handlers
 import (
 	"cyphera-api/internal/db"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -12,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/pkg/errors"
 )
 
 // Domain-specific handlers
@@ -160,31 +159,31 @@ func (h *AccountHandler) getAccountDetails(c *gin.Context) (*AccountAccessRespon
 	accountID := c.GetString("accountID")
 	parsedAccountID, err := uuid.Parse(accountID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid account ID format")
+		return nil, errors.Wrap(err, "invalid account ID format")
 	}
 
 	// Get the account
 	account, err := h.common.db.GetAccount(c.Request.Context(), parsedAccountID)
 	if err != nil {
-		return nil, fmt.Errorf("account not found")
+		return nil, errors.Wrap(err, "account not found")
 	}
 
 	// Get and parse user ID from context
 	userID := c.GetString("userID")
 	parsedUserID, err := uuid.Parse(userID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user ID format")
+		return nil, errors.Wrap(err, "invalid user ID format")
 	}
 
 	// Get the user
 	user, err := h.common.db.GetUserByID(c.Request.Context(), parsedUserID)
 	if err != nil {
-		return nil, fmt.Errorf("user not found")
+		return nil, errors.Wrap(err, "user not found")
 	}
 	// get workspace by account id
 	workspaces, err := h.common.db.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve workspace")
+		return nil, errors.Wrap(err, "failed to retrieve workspace")
 	}
 
 	return &AccountAccessResponse{
@@ -357,30 +356,29 @@ func (h *AccountHandler) CreateAccount(c *gin.Context) {
 func (h *AccountHandler) validateSignInRequest(req CreateAccountRequest) (string, string, []byte, error) {
 	metadata, err := json.Marshal(req.Metadata)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("invalid metadata format")
+		return "", "", nil, errors.Wrap(err, "invalid metadata format")
 	}
 
 	metaDataMap := make(map[string]interface{})
 	err = json.Unmarshal(metadata, &metaDataMap)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("failed to unmarshal metadata")
+		return "", "", nil, errors.Wrap(err, "failed to unmarshal metadata")
 	}
 
-	ownerAuth0Id, ok := metaDataMap["ownerAuth0Id"].(string)
-	if !ok || ownerAuth0Id == "" {
-		return "", "", nil, fmt.Errorf("owner Auth0 ID is required")
+	// Check for Supabase metadata format
+	if supabaseId, ok := metaDataMap["ownerSupabaseId"].(string); ok {
+		email, ok := metaDataMap["email"].(string)
+		if !ok || email == "" {
+			return "", "", nil, errors.New("email is required")
+		}
+		return supabaseId, email, metadata, nil
 	}
 
-	email, ok := metaDataMap["email"].(string)
-	if !ok || email == "" {
-		return "", "", nil, fmt.Errorf("email is required")
-	}
-
-	return ownerAuth0Id, email, metadata, nil
+	return "", "", nil, errors.New("ownerSupabaseId is required")
 }
 
 // createNewAccountWithUser creates a new account with associated user and workspace
-func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAccountRequest, ownerAuth0Id string, email string, metadata []byte) (*FullAccountResponse, error) {
+func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAccountRequest, supabaseId string, email string, metadata []byte) (*FullAccountResponse, error) {
 	// Create account
 	account, err := h.common.db.CreateAccount(ctx.Request.Context(), db.CreateAccountParams{
 		Name:               req.Name,
@@ -394,19 +392,19 @@ func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAc
 		Metadata:           metadata,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create account")
+		return nil, errors.Wrap(err, "failed to create account")
 	}
 
 	// Create user
 	user, err := h.common.db.CreateUser(ctx.Request.Context(), db.CreateUserParams{
-		Auth0ID:        ownerAuth0Id,
+		SupabaseID:     supabaseId,
 		Email:          email,
 		AccountID:      account.ID,
 		Role:           db.UserRoleAdmin,
 		IsAccountOwner: pgtype.Bool{Bool: true, Valid: true},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create user")
+		return nil, errors.Wrap(err, "failed to createNewAccountWithUser")
 	}
 
 	// Create workspace
@@ -415,7 +413,7 @@ func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAc
 		AccountID: account.ID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create workspace")
+		return nil, errors.Wrap(err, "failed to create workspace")
 	}
 
 	return &FullAccountResponse{
@@ -445,14 +443,14 @@ func (h *AccountHandler) SignInAccount(c *gin.Context) {
 		return
 	}
 
-	ownerAuth0Id, email, metadata, err := h.validateSignInRequest(req)
+	supabaseId, email, metadata, err := h.validateSignInRequest(req)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
 		return
 	}
 
-	// Check if user already exists
-	user, err := h.common.db.GetUserByAuth0ID(c.Request.Context(), ownerAuth0Id)
+	// Check if user already exists by Supabase ID
+	user, err := h.common.db.GetUserBySupabaseID(c.Request.Context(), supabaseId)
 	if err != nil {
 		if err != pgx.ErrNoRows {
 			sendError(c, http.StatusInternalServerError, "Failed to check existing user", err)
@@ -463,7 +461,7 @@ func (h *AccountHandler) SignInAccount(c *gin.Context) {
 	var response *FullAccountResponse
 	if errors.Is(err, pgx.ErrNoRows) {
 		// User doesn't exist, create new account and user
-		response, err = h.createNewAccountWithUser(c, req, ownerAuth0Id, email, metadata)
+		response, err = h.createNewAccountWithUser(c, req, supabaseId, email, metadata)
 		if err != nil {
 			sendError(c, http.StatusInternalServerError, err.Error(), err)
 			return
@@ -650,12 +648,12 @@ func toFullAccountResponse(acc *AccountAccessResponse) FullAccountResponse {
 func (h *AccountHandler) CheckAccountAccess(c *gin.Context) (*AccountAccessResponse, error) {
 	accountDetails, err := h.getAccountDetails(c)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to get account details")
 	}
 
 	// Check if user has access to this account (user.AccountID should match the account.ID)
 	if accountDetails.User.AccountID != accountDetails.Account.ID {
-		return nil, fmt.Errorf("user does not have access to this account")
+		return nil, errors.New("user does not have access to this account")
 	}
 
 	return accountDetails, nil

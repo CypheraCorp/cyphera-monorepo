@@ -25,7 +25,7 @@ func NewUserHandler(common *CommonServices) *UserHandler {
 type UserResponse struct {
 	ID               string                 `json:"id"`
 	Object           string                 `json:"object"`
-	Auth0ID          string                 `json:"auth0_id"`
+	SupabaseID       string                 `json:"supabase_id"`
 	Email            string                 `json:"email"`
 	FirstName        string                 `json:"first_name,omitempty"`
 	LastName         string                 `json:"last_name,omitempty"`
@@ -52,7 +52,7 @@ type UserAccountResponse struct {
 
 // CreateUserRequest represents the request body for creating a user
 type CreateUserRequest struct {
-	Auth0ID        string                 `json:"auth0_id" binding:"required"`
+	SupabaseID     string                 `json:"supabase_id" binding:"required"`
 	Email          string                 `json:"email" binding:"required,email"`
 	AccountID      uuid.UUID              `json:"account_id" binding:"required"`
 	Role           string                 `json:"role" binding:"required,oneof=admin support developer"`
@@ -172,15 +172,30 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
+	metadata, err := json.Marshal(req.Metadata)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
+		return
+	}
+
 	user, err := h.common.db.CreateUser(c.Request.Context(), db.CreateUserParams{
-		Auth0ID:        req.Auth0ID,
+		SupabaseID:     req.SupabaseID,
 		Email:          req.Email,
 		AccountID:      parsedAccountID,
 		Role:           db.UserRole(req.Role),
 		IsAccountOwner: pgtype.Bool{Bool: req.IsAccountOwner, Valid: true},
+		FirstName:      pgtype.Text{String: req.FirstName, Valid: req.FirstName != ""},
+		LastName:       pgtype.Text{String: req.LastName, Valid: req.LastName != ""},
+		DisplayName:    pgtype.Text{String: req.DisplayName, Valid: req.DisplayName != ""},
+		PictureUrl:     pgtype.Text{String: req.PictureURL, Valid: req.PictureURL != ""},
+		Phone:          pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
+		Timezone:       pgtype.Text{String: req.Timezone, Valid: req.Timezone != ""},
+		Locale:         pgtype.Text{String: req.Locale, Valid: req.Locale != ""},
+		EmailVerified:  pgtype.Bool{Bool: req.EmailVerified, Valid: true},
+		Metadata:       metadata,
 	})
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to create user", err)
+		sendError(c, http.StatusInternalServerError, "Failed to CreateUser", err)
 		return
 	}
 
@@ -189,7 +204,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 
 // UpdateUser godoc
 // @Summary Update user
-// @Description Updates an existing user
+// @Description Updates a user's information
 // @Tags users
 // @Accept json
 // @Produce json
@@ -198,7 +213,6 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 // @Success 200 {object} UserResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users/{user_id} [put]
 func (h *UserHandler) UpdateUser(c *gin.Context) {
@@ -215,9 +229,41 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
+	metadata, err := json.Marshal(req.Metadata)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
+		return
+	}
+
+	var emailVerified, twoFactorEnabled pgtype.Bool
+	if req.EmailVerified != nil {
+		emailVerified = pgtype.Bool{Bool: *req.EmailVerified, Valid: true}
+	}
+	if req.TwoFactorEnabled != nil {
+		twoFactorEnabled = pgtype.Bool{Bool: *req.TwoFactorEnabled, Valid: true}
+	}
+
+	var status db.NullUserStatus
+	if req.Status != "" {
+		status = db.NullUserStatus{
+			UserStatus: db.UserStatus(req.Status),
+			Valid:      true,
+		}
+	}
+
 	user, err := h.common.db.UpdateUser(c.Request.Context(), db.UpdateUserParams{
-		ID:    parsedUUID,
-		Email: req.Email,
+		Email:            parsedUUID.String(), // First parameter is used for both ID and email in the query
+		FirstName:        pgtype.Text{String: req.FirstName, Valid: req.FirstName != ""},
+		LastName:         pgtype.Text{String: req.LastName, Valid: req.LastName != ""},
+		DisplayName:      pgtype.Text{String: req.DisplayName, Valid: req.DisplayName != ""},
+		PictureUrl:       pgtype.Text{String: req.PictureURL, Valid: req.PictureURL != ""},
+		Phone:            pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
+		Timezone:         pgtype.Text{String: req.Timezone, Valid: req.Timezone != ""},
+		Locale:           pgtype.Text{String: req.Locale, Valid: req.Locale != ""},
+		EmailVerified:    emailVerified,
+		TwoFactorEnabled: twoFactorEnabled,
+		Status:           status,
+		Metadata:         metadata,
 	})
 	if err != nil {
 		handleDBError(c, err, "Failed to update user")
@@ -287,26 +333,26 @@ func (h *UserHandler) GetUserAccount(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, response)
 }
 
-// GetUserByAuth0ID godoc
-// @Summary Get user by Auth0 ID
-// @Description Gets a user by their Auth0 ID
+// GetUserBySupabaseID godoc
+// @Summary Get user by Supabase ID
+// @Description Gets a user by their Supabase ID
 // @Tags users
 // @Accept json
 // @Produce json
-// @Param auth0_id query string true "Auth0 ID"
+// @Param supabase_id query string true "Supabase ID"
 // @Success 200 {object} UserResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /users/auth0 [get]
-func (h *UserHandler) GetUserByAuth0ID(c *gin.Context) {
-	auth0ID := c.Query("auth0_id")
-	if auth0ID == "" {
-		sendError(c, http.StatusBadRequest, "Auth0 ID is required", nil)
+// @Router /users/supabase [get]
+func (h *UserHandler) GetUserBySupabaseID(c *gin.Context) {
+	supabaseID := c.Query("supabase_id")
+	if supabaseID == "" {
+		sendError(c, http.StatusBadRequest, "Supabase ID is required", nil)
 		return
 	}
 
-	user, err := h.common.db.GetUserByAuth0ID(c.Request.Context(), auth0ID)
+	user, err := h.common.db.GetUserBySupabaseID(c.Request.Context(), supabaseID)
 	if err != nil {
 		handleDBError(c, err, "User not found")
 		return
@@ -323,10 +369,15 @@ func toUserResponse(u db.User) UserResponse {
 		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
 	}
 
+	var status string
+	if u.Status.Valid {
+		status = string(u.Status.UserStatus)
+	}
+
 	return UserResponse{
 		ID:               u.ID.String(),
 		Object:           "user",
-		Auth0ID:          u.Auth0ID,
+		SupabaseID:       u.SupabaseID,
 		Email:            u.Email,
 		FirstName:        u.FirstName.String,
 		LastName:         u.LastName.String,
@@ -337,7 +388,7 @@ func toUserResponse(u db.User) UserResponse {
 		Locale:           u.Locale.String,
 		EmailVerified:    u.EmailVerified.Bool,
 		TwoFactorEnabled: u.TwoFactorEnabled.Bool,
-		Status:           string(u.Status.UserStatus),
+		Status:           status,
 		Metadata:         metadata,
 		CreatedAt:        u.CreatedAt.Time.Unix(),
 		UpdatedAt:        u.UpdatedAt.Time.Unix(),
@@ -349,7 +400,7 @@ func toUserAccountResponse(u db.GetUserAccountRow) UserAccountResponse {
 	userResponse := UserResponse{
 		ID:               u.ID.String(),
 		Object:           "user",
-		Auth0ID:          u.Auth0ID,
+		SupabaseID:       u.SupabaseID,
 		Email:            u.Email,
 		FirstName:        u.FirstName.String,
 		LastName:         u.LastName.String,
