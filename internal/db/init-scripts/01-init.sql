@@ -401,15 +401,13 @@ ON CONFLICT DO NOTHING;
 -- Insert some test networks
 INSERT INTO networks (name, type, chain_id, active)
 VALUES 
-    ('Ethereum', 'mainnet', 1, true),
     ('Polygon', 'mainnet', 137, true)
 ON CONFLICT DO NOTHING;
 
 -- Insert some test tokens
 INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token)
 VALUES 
-    ((SELECT id FROM networks WHERE chain_id = 137 AND deleted_at IS NULL), 'MATIC', 'MATIC', '0x0000000000000000000000000000000000000000', true),
-    ((SELECT id FROM networks WHERE chain_id = 1 AND deleted_at IS NULL), 'USDC', 'USDC', '0x2791bca1f2de4661ed88a30c99a7a9449aa84174', false)
+    ((SELECT id FROM networks WHERE chain_id = 137 AND deleted_at IS NULL), 'USDC', 'USDC', '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', false)
 ON CONFLICT DO NOTHING;
 
 -- Insert test products
