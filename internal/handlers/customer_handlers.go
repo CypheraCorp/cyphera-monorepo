@@ -408,9 +408,13 @@ func toCustomerResponse(c db.Customer) CustomerResponse {
 	}
 
 	var taxIDs map[string]interface{}
-	if err := json.Unmarshal(c.TaxIds, &taxIDs); err != nil {
-		log.Printf("Error unmarshaling customer tax IDs: %v", err)
-		taxIDs = make(map[string]interface{}) // Use empty map if unmarshal fails
+	if len(c.TaxIds) > 0 {
+		if err := json.Unmarshal(c.TaxIds, &taxIDs); err != nil {
+			log.Printf("Error unmarshaling customer tax IDs: %v", err)
+			taxIDs = make(map[string]interface{}) // Use empty map if unmarshal fails
+		}
+	} else {
+		taxIDs = make(map[string]interface{}) // Initialize empty map for nil or empty tax IDs
 	}
 
 	defaultSourceID := ""

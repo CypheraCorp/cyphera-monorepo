@@ -386,7 +386,7 @@ type Product struct {
 	Name            string             `json:"name"`
 	Description     pgtype.Text        `json:"description"`
 	ProductType     ProductType        `json:"product_type"`
-	IntervalType    NullIntervalType   `json:"interval_type"`
+	IntervalType    IntervalType       `json:"interval_type"`
 	TermLength      pgtype.Int4        `json:"term_length"`
 	PriceInPennies  int32              `json:"price_in_pennies"`
 	ImageUrl        pgtype.Text        `json:"image_url"`
@@ -425,7 +425,7 @@ type Token struct {
 
 type User struct {
 	ID               uuid.UUID          `json:"id"`
-	Auth0ID          string             `json:"auth0_id"`
+	SupabaseID       string             `json:"supabase_id"`
 	Email            string             `json:"email"`
 	AccountID        uuid.UUID          `json:"account_id"`
 	Role             UserRole           `json:"role"`

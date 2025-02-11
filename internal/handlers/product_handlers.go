@@ -5,6 +5,7 @@ import (
 	"cyphera-api/internal/db"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -189,7 +190,7 @@ func toPublicProductResponse(workspace db.Workspace, product db.Product, product
 		Name:            product.Name,
 		Description:     product.Description.String,
 		ProductType:     string(product.ProductType),
-		IntervalType:    string(product.IntervalType.IntervalType),
+		IntervalType:    string(product.IntervalType),
 		TermLength:      product.TermLength.Int32,
 		PriceInPennies:  product.PriceInPennies,
 		ImageURL:        product.ImageUrl.String,
@@ -236,10 +237,10 @@ func validateProductType(productType string) (db.ProductType, error) {
 	return db.ProductType(productType), nil
 }
 
-// validateIntervalType validates the interval type and returns a db.NullIntervalType if valid
-func validateIntervalType(intervalType string) (db.NullIntervalType, error) {
+// validateIntervalType validates the interval type and returns a db.IntervalType if valid
+func validateIntervalType(intervalType string) (db.IntervalType, error) {
 	if intervalType == "" {
-		return db.NullIntervalType{}, nil
+		return "", nil
 	}
 
 	validIntervalTypes := map[string]bool{
@@ -251,13 +252,10 @@ func validateIntervalType(intervalType string) (db.NullIntervalType, error) {
 	}
 
 	if !validIntervalTypes[intervalType] {
-		return db.NullIntervalType{}, fmt.Errorf("invalid interval type")
+		return "", fmt.Errorf("invalid interval type")
 	}
 
-	return db.NullIntervalType{
-		IntervalType: db.IntervalType(intervalType),
-		Valid:        true,
-	}, nil
+	return db.IntervalType(intervalType), nil
 }
 
 // validateWalletID validates and parses the wallet ID
@@ -308,23 +306,16 @@ func updateBooleanFields(params *db.UpdateProductParams, req UpdateProductReques
 	}
 }
 
-// updateProductParams updates the product parameters based on the request
+// updateProductParams creates the update parameters for a product
 func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequest) (db.UpdateProductParams, error) {
-	params := db.UpdateProductParams{ID: id}
-
-	// Update text fields
-	updateTextFields(&params, req)
-
-	// Update wallet ID
-	if req.WalletID != "" {
-		walletID, err := validateWalletID(req.WalletID)
-		if err != nil {
-			return params, err
-		}
-		params.WalletID = walletID
+	params := db.UpdateProductParams{
+		ID: id,
 	}
 
-	// Update product type
+	// Update basic text fields
+	updateTextFields(&params, req)
+
+	// Update product type if provided
 	if req.ProductType != "" {
 		productType, err := validateProductType(req.ProductType)
 		if err != nil {
@@ -333,7 +324,7 @@ func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequ
 		params.ProductType = productType
 	}
 
-	// Update interval type
+	// Update interval type if provided
 	if req.IntervalType != "" {
 		intervalType, err := validateIntervalType(req.IntervalType)
 		if err != nil {
@@ -348,15 +339,19 @@ func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequ
 	// Update boolean fields
 	updateBooleanFields(&params, req)
 
-	// Update metadata
+	// Update metadata if provided
 	if req.Metadata != nil {
-		metadata, err := json.Marshal(req.Metadata)
-		if err != nil {
-			return params, fmt.Errorf("invalid metadata format: %w", err)
-		}
-		params.Metadata = metadata
+		params.Metadata = req.Metadata
 	}
 
+	// update wallet id if provided
+	if req.WalletID != "" {
+		parsedWalletID, err := uuid.Parse(req.WalletID)
+		if err != nil {
+			return params, fmt.Errorf("invalid wallet ID format: %w", err)
+		}
+		params.WalletID = parsedWalletID
+	}
 	return params, nil
 }
 
@@ -634,9 +629,10 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
-	// Validate price
-	if err := validatePriceInPennies(req.PriceInPennies); err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), nil)
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
@@ -654,34 +650,32 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
+	// Validate wallet ID
+	parsedWalletID, err := validateWalletID(req.WalletID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
 	// Validate term length
 	if err := validateTermLength(req.ProductType, req.TermLength); err != nil {
 		sendError(c, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	// Parse and validate workspace ID
-	workspaceID := c.GetHeader("X-Workspace-ID")
-	parsedWorkspaceID, err := uuid.Parse(workspaceID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+	// Validate price
+	if err := validatePriceInPennies(req.PriceInPennies); err != nil {
+		sendError(c, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	// Parse and validate wallet ID
-	parsedWalletID, err := uuid.Parse(req.WalletID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid wallet ID format", err)
-		return
-	}
-
-	// Validate wallet belongs to workspace's account
+	// Validate wallet belongs to workspace
 	if err := h.validateWallet(c, parsedWalletID, parsedWorkspaceID); err != nil {
-		sendError(c, http.StatusForbidden, err.Error(), nil)
+		sendError(c, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	// Create the product
+	// Create product
 	product, err := h.common.db.CreateProduct(c.Request.Context(), db.CreateProductParams{
 		WorkspaceID:     parsedWorkspaceID,
 		WalletID:        parsedWalletID,
@@ -705,7 +699,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	// Create product tokens if provided
 	if len(req.ProductTokens) > 0 {
 		if err := h.createProductTokens(c, product.ID, req.ProductTokens); err != nil {
-			sendError(c, http.StatusBadRequest, err.Error(), nil)
+			sendError(c, http.StatusInternalServerError, "Failed to create product tokens", err)
 			return
 		}
 	}
@@ -827,6 +821,12 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 
 // Helper function to convert database model to API response
 func toProductResponse(p db.Product) ProductResponse {
+	var metadata map[string]interface{}
+	if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
+		log.Printf("Error unmarshaling product metadata: %v", err)
+		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
+	}
+
 	return ProductResponse{
 		ID:              p.ID.String(),
 		Object:          "product",
@@ -835,7 +835,7 @@ func toProductResponse(p db.Product) ProductResponse {
 		Name:            p.Name,
 		Description:     p.Description.String,
 		ProductType:     string(p.ProductType),
-		IntervalType:    string(p.IntervalType.IntervalType),
+		IntervalType:    string(p.IntervalType),
 		TermLength:      p.TermLength.Int32,
 		PriceInPennies:  p.PriceInPennies,
 		ImageURL:        p.ImageUrl.String,

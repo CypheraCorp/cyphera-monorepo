@@ -98,8 +98,10 @@ func InitializeRoutes(router *gin.Engine) {
 		})
 	})
 
-	// Always enable request body logging
-	router.Use(handlers.LogRequestBody())
+	// if we are not in production, log the request body
+	if os.Getenv("GIN_MODE") != "release" {
+		router.Use(handlers.LogRequestBody())
+	}
 
 	// API v1 routes
 	v1 := router.Group("/api/v1")
@@ -169,7 +171,7 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				users.GET("/me", userHandler.GetCurrentUser)
 				users.PUT("/me", userHandler.UpdateUser)
-				users.GET("/auth0", userHandler.GetUserByAuth0ID)
+				users.GET("/supabase", userHandler.GetUserBySupabaseID)
 			}
 
 			// Customers

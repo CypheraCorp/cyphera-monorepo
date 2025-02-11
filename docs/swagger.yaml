@@ -415,8 +415,6 @@ definitions:
     properties:
       account_id:
         type: string
-      auth0_id:
-        type: string
       display_name:
         type: string
       email:
@@ -444,13 +442,15 @@ definitions:
         - support
         - developer
         type: string
+      supabase_id:
+        type: string
       timezone:
         type: string
     required:
     - account_id
-    - auth0_id
     - email
     - role
+    - supabase_id
     type: object
   handlers.CreateWalletRequest:
     properties:
@@ -1063,8 +1063,6 @@ definitions:
     properties:
       account_name:
         type: string
-      auth0_id:
-        type: string
       created_at:
         type: integer
       display_name:
@@ -1096,6 +1094,8 @@ definitions:
         type: string
       status:
         type: string
+      supabase_id:
+        type: string
       timezone:
         type: string
       two_factor_enabled:
@@ -1121,8 +1121,6 @@ definitions:
     type: object
   handlers.UserResponse:
     properties:
-      auth0_id:
-        type: string
       created_at:
         type: integer
       display_name:
@@ -1149,6 +1147,8 @@ definitions:
       picture_url:
         type: string
       status:
+        type: string
+      supabase_id:
         type: string
       timezone:
         type: string
@@ -1954,10 +1954,6 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Update customer
@@ -2194,7 +2190,7 @@ paths:
         in: path
         name: chain_id
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
@@ -2845,6 +2841,37 @@ paths:
       summary: List active products
       tags:
       - products
+  /products/public/{product_id}:
+    get:
+      consumes:
+      - application/json
+      description: Get public product details by product ID
+      parameters:
+      - description: Product ID
+        in: path
+        name: product_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get public product by ID
+      tags:
+      - products
   /subscribers:
     get:
       consumes:
@@ -3412,7 +3439,7 @@ paths:
     put:
       consumes:
       - application/json
-      description: Updates an existing user
+      description: Updates a user's information
       parameters:
       - description: User ID
         in: path
@@ -3438,10 +3465,6 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
         "404":
           description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
@@ -3484,37 +3507,6 @@ paths:
       summary: Get user's account
       tags:
       - users
-  /users/auth0:
-    get:
-      consumes:
-      - application/json
-      description: Gets a user by their Auth0 ID
-      parameters:
-      - description: Auth0 ID
-        in: query
-        name: auth0_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.UserResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get user by Auth0 ID
-      tags:
-      - users
   /users/me:
     get:
       consumes:
@@ -3534,6 +3526,37 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get current user
+      tags:
+      - users
+  /users/supabase:
+    get:
+      consumes:
+      - application/json
+      description: Gets a user by their Supabase ID
+      parameters:
+      - description: Supabase ID
+        in: query
+        name: supabase_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get user by Supabase ID
       tags:
       - users
   /wallets:
@@ -3784,10 +3807,9 @@ paths:
     get:
       consumes:
       - application/json
-      description: List all wallets for the authenticated account filtered by network
-        type
+      description: List all wallets for a specific network type
       parameters:
-      - description: Network type
+      - description: Network Type
         in: path
         name: network_type
         required: true

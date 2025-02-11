@@ -1080,12 +1080,6 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
                     }
                 }
             },
@@ -1345,7 +1339,7 @@ const docTemplate = `{
                 "summary": "Get network by chain ID",
                 "parameters": [
                     {
-                        "type": "integer",
+                        "type": "string",
                         "description": "Chain ID",
                         "name": "chain_id",
                         "in": "path",
@@ -1806,6 +1800,55 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/products/public/{product_id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get public product details by product ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "products"
+                ],
+                "summary": "Get public product by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "product_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ProductResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -3292,55 +3335,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/users/auth0": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Gets a user by their Auth0 ID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Get user by Auth0 ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Auth0 ID",
-                        "name": "auth0_id",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UserResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/users/me": {
             "get": {
                 "security": [
@@ -3368,6 +3362,55 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/supabase": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Gets a user by their Supabase ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Get user by Supabase ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Supabase ID",
+                        "name": "supabase_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -3429,7 +3472,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Updates an existing user",
+                "description": "Updates a user's information",
                 "consumes": [
                     "application/json"
                 ],
@@ -3473,12 +3516,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -3777,7 +3814,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List all wallets for the authenticated account filtered by network type",
+                "description": "List all wallets for a specific network type",
                 "consumes": [
                     "application/json"
                 ],
@@ -3791,7 +3828,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Network type",
+                        "description": "Network Type",
                         "name": "network_type",
                         "in": "path",
                         "required": true
@@ -5087,15 +5124,12 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "account_id",
-                "auth0_id",
                 "email",
-                "role"
+                "role",
+                "supabase_id"
             ],
             "properties": {
                 "account_id": {
-                    "type": "string"
-                },
-                "auth0_id": {
                     "type": "string"
                 },
                 "display_name": {
@@ -5136,6 +5170,9 @@ const docTemplate = `{
                         "support",
                         "developer"
                     ]
+                },
+                "supabase_id": {
+                    "type": "string"
                 },
                 "timezone": {
                     "type": "string"
@@ -6068,9 +6105,6 @@ const docTemplate = `{
                 "account_name": {
                     "type": "string"
                 },
-                "auth0_id": {
-                    "type": "string"
-                },
                 "created_at": {
                     "type": "integer"
                 },
@@ -6117,6 +6151,9 @@ const docTemplate = `{
                 "status": {
                     "type": "string"
                 },
+                "supabase_id": {
+                    "type": "string"
+                },
                 "timezone": {
                     "type": "string"
                 },
@@ -6156,9 +6193,6 @@ const docTemplate = `{
         "handlers.UserResponse": {
             "type": "object",
             "properties": {
-                "auth0_id": {
-                    "type": "string"
-                },
                 "created_at": {
                     "type": "integer"
                 },
@@ -6197,6 +6231,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
+                    "type": "string"
+                },
+                "supabase_id": {
                     "type": "string"
                 },
                 "timezone": {
