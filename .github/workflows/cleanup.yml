@@ -9,7 +9,7 @@ permissions:
   actions: write
 
 jobs:
-  build:
+  cleanup:
     runs-on: ubuntu-latest
     steps:
       - name: Delete workflow runs
