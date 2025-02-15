@@ -100,7 +100,7 @@ func InitializeRoutes(router *gin.Engine) {
 
 	// if we are not in production, log the request body
 	if os.Getenv("GIN_MODE") != "release" {
-		router.Use(handlers.LogRequestBody())
+		router.Use(handlers.LogRequest())
 	}
 
 	// API v1 routes
@@ -280,8 +280,8 @@ func InitializeRoutes(router *gin.Engine) {
 
 				// Account
 				actalink.GET("/isuseravailable", actalinkHandler.CheckUserAvailability)
-				actalink.POST("/accounts/register", actalinkHandler.RegisterActalinkUser)
-				actalink.POST("/accounts/login", actalinkHandler.LoginActalinkUser)
+				actalink.POST("/register", actalinkHandler.RegisterActalinkUser)
+				actalink.POST("/login", actalinkHandler.LoginActalinkUser)
 
 				// Subscription
 				actalink.POST("/subscriptions", actalinkHandler.CreateSubscription)
