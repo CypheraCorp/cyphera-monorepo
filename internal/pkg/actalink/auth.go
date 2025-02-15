@@ -10,14 +10,17 @@ func (c *ActaLinkClient) CheckUserAvailability(address string) (*UserAvailabilit
 	params := url.Values{}
 	params.Add("address", address)
 
-	body, statusCode, err := c.doRequest("GET", "/api/ct/isuseravailable", nil, params)
+	resp, statusCode, err := c.doRequest("GET", "/api/ct/isuseravailable", nil, params)
 	if err != nil {
 		return nil, statusCode, err
 	}
 
-	return &UserAvailabilityResponse{
-		Message: string(body),
-	}, statusCode, nil
+	var respBody UserAvailabilityResponse
+	if err := json.Unmarshal(resp, &respBody); err != nil {
+		return nil, statusCode, err
+	}
+
+	return &respBody, statusCode, nil
 }
 
 func (c *ActaLinkClient) RegisterOrLoginUser(request UserLoginRegisterRequest, suffix string) (*RegisterOrLoginUserResponse, *int, error) {
@@ -26,7 +29,7 @@ func (c *ActaLinkClient) RegisterOrLoginUser(request UserLoginRegisterRequest, s
 		return nil, nil, err
 	}
 
-	body, statusCode, err := c.doRequest("POST", fmt.Sprintf("/api/ct/%s", suffix), jsonBody, nil)
+	body, cookie, statusCode, err := c.doRequestWithCookies("POST", fmt.Sprintf("/api/ct/%s", suffix), jsonBody, nil)
 	if err != nil {
 		return nil, statusCode, err
 	}
@@ -35,6 +38,8 @@ func (c *ActaLinkClient) RegisterOrLoginUser(request UserLoginRegisterRequest, s
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, nil, err
 	}
+
+	resp.Cookie = cookie
 
 	return &resp, statusCode, nil
 }

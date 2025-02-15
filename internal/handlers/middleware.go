@@ -49,12 +49,19 @@ func ValidateSupabaseToken(tokenString string) (*SupabaseClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &SupabaseClaims{}, func(token *jwt.Token) (interface{}, error) {
 		// Validate signing method
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			logger.Log.Debug("Token validation failed",
+				zap.String("reason", "unexpected signing method"),
+				zap.String("algorithm", token.Header["alg"].(string)),
+			)
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
 		// Get JWT secret from environment
 		jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
 		if jwtSecret == "" {
+			logger.Log.Debug("Token validation failed",
+				zap.String("reason", "SUPABASE_JWT_SECRET not set"),
+			)
 			return nil, fmt.Errorf("SUPABASE_JWT_SECRET not set")
 		}
 
@@ -62,17 +69,29 @@ func ValidateSupabaseToken(tokenString string) (*SupabaseClaims, error) {
 	})
 
 	if err != nil {
+		logger.Log.Debug("Token parsing failed",
+			zap.Error(err),
+			zap.String("token_prefix", tokenString[:10]+"..."), // Safely log token prefix
+		)
 		return nil, fmt.Errorf("failed to parse token: %w", err)
 	}
 
 	if claims, ok := token.Claims.(*SupabaseClaims); ok && token.Valid {
 		// Check if token is expired
 		if time.Unix(claims.Exp, 0).Before(time.Now()) {
+			logger.Log.Debug("Token validation failed",
+				zap.String("reason", "token expired"),
+				zap.Time("expiration", time.Unix(claims.Exp, 0)),
+				zap.Time("current_time", time.Now()),
+			)
 			return nil, fmt.Errorf("token is expired")
 		}
 		return claims, nil
 	}
 
+	logger.Log.Debug("Token validation failed",
+		zap.String("reason", "invalid token claims"),
+	)
 	return nil, fmt.Errorf("invalid token claims")
 }
 
@@ -106,8 +125,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		// First check for API key
 		apiKey := c.GetHeader("X-API-Key")
 		if apiKey != "" {
-			// Handle API key authentication
-			// ... existing API key validation logic ...
+			logger.Log.Debug("Using API key authentication")
 			c.Next()
 			return
 		}
@@ -115,6 +133,12 @@ func AuthMiddleware() gin.HandlerFunc {
 		// Check for Supabase JWT token
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
+			logger.Log.Debug("Authentication failed",
+				zap.String("reason", "No authentication header provided"),
+				zap.String("path", c.Request.URL.Path),
+				zap.String("method", c.Request.Method),
+				zap.String("client_ip", c.ClientIP()),
+			)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "No authentication provided"})
 			c.Abort()
 			return
@@ -123,11 +147,25 @@ func AuthMiddleware() gin.HandlerFunc {
 		// Validate Supabase token
 		claims, err := ValidateSupabaseToken(authHeader)
 		if err != nil {
+			logger.Log.Debug("Supabase token validation failed",
+				zap.Error(err),
+				zap.String("path", c.Request.URL.Path),
+				zap.String("method", c.Request.Method),
+				zap.String("client_ip", c.ClientIP()),
+				zap.String("auth_header", strings.Replace(authHeader, "Bearer ", "***.", 1)), // Safely log partial token
+			)
 			logger.Log.Error("Failed to validate Supabase token", zap.Error(err))
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
 		}
+
+		logger.Log.Debug("Supabase authentication successful",
+			zap.String("user_id", claims.Sub),
+			zap.String("email", claims.Email),
+			zap.String("role", claims.Role),
+			zap.String("path", c.Request.URL.Path),
+		)
 
 		// Set Supabase user information in context
 		c.Set("supabase_id", claims.Sub)
@@ -138,8 +176,8 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// LogRequestBody is a middleware that logs the request body
-func LogRequestBody() gin.HandlerFunc {
+// LogRequest is a middleware that logs the request body
+func LogRequest() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Skip logging for certain paths
 		if shouldSkipLogging(c.Request.URL.Path) {
@@ -150,6 +188,11 @@ func LogRequestBody() gin.HandlerFunc {
 		// Get request body
 		bodyBytes, err := getRequestBody(c)
 		if err != nil {
+			logger.Log.Debug("Request body reading failed",
+				zap.Error(err),
+				zap.String("path", c.Request.URL.Path),
+				zap.String("method", c.Request.Method),
+			)
 			logger.Log.Error("Failed to read request body", zap.Error(err))
 			c.Next()
 			return

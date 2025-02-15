@@ -3,6 +3,7 @@ package auth
 import (
 	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
+	"cyphera-api/internal/logger"
 	"errors"
 	"fmt"
 	"log"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
 )
 
 var (
@@ -38,6 +40,9 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 		if apiKey != "" {
 			workspace, account, key, err := validateAPIKey(c, queries, apiKey)
 			if err != nil {
+				logger.Log.Debug("API key validation failed",
+					zap.Error(err),
+				)
 				c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 				c.Abort()
 				return
@@ -56,6 +61,7 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 		// If no API key, check for JWT token
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
+			logger.Log.Debug("No authentication provided")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "No authentication provided"})
 			c.Abort()
 			return
@@ -63,6 +69,9 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 
 		user, account, err := validateJWTToken(c, queries, authHeader)
 		if err != nil {
+			logger.Log.Debug("JWT token validation failed",
+				zap.Error(err),
+			)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			c.Abort()
 			return
@@ -71,12 +80,16 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 		// Get workspaces for the account
 		workspaces, err := queries.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
 		if err != nil {
+			logger.Log.Debug("Failed to retrieve workspaces",
+				zap.Error(err),
+			)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve workspaces"})
 			c.Abort()
 			return
 		}
 
 		if len(workspaces) == 0 {
+			logger.Log.Debug("No workspaces found for account")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No workspaces found for account"})
 			c.Abort()
 			return
@@ -193,6 +206,7 @@ func RequireRoles(roles ...string) gin.HandlerFunc {
 		// For API key auth, check access level
 		if authType == constants.AuthTypeAPIKey {
 			if apiKeyLevel != constants.AccessLevelAdmin {
+				logger.Log.Debug("Insufficient API key access level")
 				c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient API key access level"})
 				c.Abort()
 				return
@@ -203,6 +217,7 @@ func RequireRoles(roles ...string) gin.HandlerFunc {
 
 		// For admin-only operations, check account type
 		if roles[0] == constants.RoleAdmin && accountType != constants.AccountTypeAdmin {
+			logger.Log.Debug("Admin access required")
 			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
 			c.Abort()
 			return

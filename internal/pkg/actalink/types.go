@@ -56,6 +56,7 @@ type UserAvailabilityResponse struct {
 
 type RegisterOrLoginUserResponse struct {
 	Message string `json:"message"`
+	Cookie  string `json:"cookie"`
 }
 
 // ErrorResponse represents the error response from the API

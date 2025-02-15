@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"cyphera-api/internal/logger"
 	"cyphera-api/internal/pkg/actalink"
 	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // Consts
@@ -63,6 +65,9 @@ func handleStatusCode(statusCode *int, defaultCode int) int {
 func (h *ActalinkHandler) GetNonce(c *gin.Context) {
 	nonceResp, statusCode, err := h.common.actalink.GetNonce()
 	if err != nil {
+		logger.Log.Debug("Failed to get nonce",
+			zap.Error(err),
+		)
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to get nonce: %v", err)})
 		return
 	}
@@ -85,17 +90,21 @@ func (h *ActalinkHandler) GetNonce(c *gin.Context) {
 func (h *ActalinkHandler) CheckUserAvailability(c *gin.Context) {
 	address := c.Query("address")
 	if address == "" {
+		logger.Log.Debug("Address parameter is required")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Address parameter is required"})
 		return
 	}
 
-	availResp, statusCode, err := h.common.actalink.CheckUserAvailability(address)
+	resp, statusCode, err := h.common.actalink.CheckUserAvailability(address)
 	if err != nil {
+		logger.Log.Debug("Failed to check user availability",
+			zap.Error(err),
+		)
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to check user availability: %v", err)})
 		return
 	}
 
-	exists := availResp.Message == UserExists
+	exists := resp.Message == UserExists
 	c.JSON(http.StatusOK, UserAvailabilityResponse{
 		Exists: exists,
 	})
@@ -116,12 +125,18 @@ func (h *ActalinkHandler) CheckUserAvailability(c *gin.Context) {
 func (h *ActalinkHandler) RegisterActalinkUser(c *gin.Context) {
 	var req UserLoginRegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Log.Debug("Invalid request body",
+			zap.Error(err),
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request body: %v", err)})
 		return
 	}
 
 	registerResp, statusCode, err := h.common.actalink.RegisterOrLoginUser(req, "register")
 	if err != nil {
+		logger.Log.Debug("Failed to register user",
+			zap.Error(err),
+		)
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to register user: %v", err)})
 		return
 	}
@@ -144,6 +159,9 @@ func (h *ActalinkHandler) RegisterActalinkUser(c *gin.Context) {
 func (h *ActalinkHandler) LoginActalinkUser(c *gin.Context) {
 	var req UserLoginRegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Log.Debug("Invalid request body",
+			zap.Error(err),
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request body: %v", err)})
 		return
 	}
@@ -170,6 +188,9 @@ func (h *ActalinkHandler) LoginActalinkUser(c *gin.Context) {
 func (h *ActalinkHandler) GetNetworks(c *gin.Context) {
 	networks, statusCode, err := h.common.actalink.GetNetworks()
 	if err != nil {
+		logger.Log.Debug("Failed to fetch networks",
+			zap.Error(err),
+		)
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch networks: %v", err)})
 		return
 	}
@@ -194,24 +215,30 @@ func (h *ActalinkHandler) GetNetworks(c *gin.Context) {
 func (h *ActalinkHandler) GetOperations(c *gin.Context) {
 	swAddress := c.Query("swaddress")
 	if swAddress == "" {
+		logger.Log.Debug("Smart Wallet Address is required")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Smart Wallet Address is required"})
 		return
 	}
 
 	subId := c.Query("subscriptionId")
 	if subId == "" {
+		logger.Log.Debug("Subscription ID is required")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Subscription ID is required"})
 		return
 	}
 
 	status := c.Query("status")
 	if status == "" {
+		logger.Log.Debug("Status is required")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Status is required"})
 		return
 	}
 
 	operations, statusCode, err := h.common.actalink.GetOperations(swAddress, subId, status)
 	if err != nil {
+		logger.Log.Debug("Failed to fetch operations",
+			zap.Error(err),
+		)
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch operations: %v", err)})
 		return
 	}
@@ -233,6 +260,9 @@ func (h *ActalinkHandler) GetOperations(c *gin.Context) {
 func (h *ActalinkHandler) GetAllSubscriptions(c *gin.Context) {
 	subscriptions, statusCode, err := h.common.actalink.GetAllSubscriptions()
 	if err != nil {
+		logger.Log.Debug("Failed to fetch subscriptions",
+			zap.Error(err),
+		)
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch subscriptions: %v", err)})
 		return
 	}
@@ -255,12 +285,18 @@ func (h *ActalinkHandler) GetAllSubscriptions(c *gin.Context) {
 func (h *ActalinkHandler) CreateSubscription(c *gin.Context) {
 	var req SubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Log.Debug("Invalid request body",
+			zap.Error(err),
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request body: %v", err)})
 		return
 	}
 
 	resp, statusCode, err := h.common.actalink.CreateSubscription(req)
 	if err != nil {
+		logger.Log.Debug("Failed to create subscription",
+			zap.Error(err),
+		)
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to create subscription: %v", err)})
 		return
 	}
@@ -283,12 +319,18 @@ func (h *ActalinkHandler) CreateSubscription(c *gin.Context) {
 func (h *ActalinkHandler) DeleteSubscription(c *gin.Context) {
 	var req DeleteSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Log.Debug("Invalid request body",
+			zap.Error(err),
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid request body: %v", err)})
 		return
 	}
 
 	resp, statusCode, err := h.common.actalink.DeleteSubscription(req)
 	if err != nil {
+		logger.Log.Debug("Failed to delete subscription",
+			zap.Error(err),
+		)
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to delete subscription: %v", err)})
 		return
 	}
@@ -311,12 +353,16 @@ func (h *ActalinkHandler) DeleteSubscription(c *gin.Context) {
 func (h *ActalinkHandler) GetSubscribers(c *gin.Context) {
 	subId := c.Query("subscriptionId")
 	if subId == "" {
+		logger.Log.Debug("Subscription ID is required")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Subscription ID is required"})
 		return
 	}
 
 	subscribers, statusCode, err := h.common.actalink.GetSubscribers(subId)
 	if err != nil {
+		logger.Log.Debug("Failed to fetch subscribers",
+			zap.Error(err),
+		)
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch subscribers: %v", err)})
 		return
 	}
@@ -338,6 +384,9 @@ func (h *ActalinkHandler) GetSubscribers(c *gin.Context) {
 func (h *ActalinkHandler) GetTokens(c *gin.Context) {
 	tokens, statusCode, err := h.common.actalink.GetTokens()
 	if err != nil {
+		logger.Log.Debug("Failed to fetch tokens",
+			zap.Error(err),
+		)
 		c.JSON(handleStatusCode(statusCode, http.StatusInternalServerError), gin.H{"error": fmt.Sprintf("Failed to fetch tokens: %v", err)})
 		return
 	}
