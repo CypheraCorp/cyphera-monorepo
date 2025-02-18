@@ -63,6 +63,7 @@ type Querier interface {
 	GetActiveAPIKeysCount(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	GetActiveProductTokensByNetwork(ctx context.Context, arg GetActiveProductTokensByNetworkParams) ([]GetActiveProductTokensByNetworkRow, error)
 	GetActiveProductTokensByProduct(ctx context.Context, productID uuid.UUID) ([]GetActiveProductTokensByProductRow, error)
+	GetActiveProductsByWalletID(ctx context.Context, walletID uuid.UUID) ([]Product, error)
 	GetAllAPIKeys(ctx context.Context) ([]ApiKey, error)
 	GetAllAccounts(ctx context.Context) ([]Account, error)
 	GetAllCustomers(ctx context.Context) ([]Customer, error)

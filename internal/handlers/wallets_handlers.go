@@ -543,6 +543,18 @@ func (h *WalletHandler) DeleteWallet(c *gin.Context) {
 		return
 	}
 
+	// Cannot delete a wallet if there is a published product using it
+	products, err := h.common.db.GetActiveProductsByWalletID(c.Request.Context(), parsedUUID)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to get product", err)
+		return
+	}
+
+	if len(products) > 0 {
+		sendError(c, http.StatusBadRequest, "Cannot delete wallet with published product", nil)
+		return
+	}
+
 	// Get current wallet to verify ownership
 	currentWallet, err := h.common.db.GetWalletByID(c.Request.Context(), parsedUUID)
 	if err != nil {

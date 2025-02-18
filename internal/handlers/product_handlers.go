@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/pkg/actalink"
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -293,53 +295,47 @@ func validateWalletID(walletID string) (uuid.UUID, error) {
 	return parsed, nil
 }
 
-// updateTextFields updates text-based fields in the product parameters
-func updateTextFields(params *db.UpdateProductParams, req UpdateProductRequest) {
-	if req.Name != "" {
-		params.Name = req.Name
-	}
-	if req.Description != "" {
-		params.Description = pgtype.Text{String: req.Description, Valid: true}
-	}
-	if req.ImageURL != "" {
-		params.ImageUrl = pgtype.Text{String: req.ImageURL, Valid: true}
-	}
-	if req.URL != "" {
-		params.Url = pgtype.Text{String: req.URL, Valid: true}
-	}
-}
-
-// updateNumericFields updates numeric fields in the product parameters
-func updateNumericFields(params *db.UpdateProductParams, req UpdateProductRequest) {
-	if req.TermLength != nil {
-		params.TermLength = pgtype.Int4{Int32: *req.TermLength, Valid: true}
-	}
-	if req.PriceInPennies != nil {
-		params.PriceInPennies = *req.PriceInPennies
-	}
-}
-
-// updateBooleanFields updates boolean fields in the product parameters
-func updateBooleanFields(params *db.UpdateProductParams, req UpdateProductRequest) {
-	if req.MerchantPaidGas != nil {
-		params.MerchantPaidGas = *req.MerchantPaidGas
-	}
-	if req.Active != nil {
-		params.Active = *req.Active
-	}
-}
-
-// updateProductParams creates the update parameters for a product
-func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequest) (db.UpdateProductParams, error) {
+// updateProductParams creates the update parameters for a product, setting all fields with either new or existing values
+func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequest, existingProduct db.Product) (db.UpdateProductParams, error) {
 	params := db.UpdateProductParams{
 		ID: id,
+		// Always set all fields, either with new values (if changed) or existing values
+		Name:            existingProduct.Name,
+		Description:     existingProduct.Description,
+		ImageUrl:        existingProduct.ImageUrl,
+		Url:             existingProduct.Url,
+		ProductType:     existingProduct.ProductType,
+		IntervalType:    existingProduct.IntervalType,
+		TermLength:      existingProduct.TermLength,
+		PriceInPennies:  existingProduct.PriceInPennies,
+		MerchantPaidGas: existingProduct.MerchantPaidGas,
+		Active:          existingProduct.Active,
+		Metadata:        existingProduct.Metadata,
+		WalletID:        existingProduct.WalletID,
 	}
 
-	// Update basic text fields
-	updateTextFields(&params, req)
+	// Update name if provided and different
+	if req.Name != "" && req.Name != existingProduct.Name {
+		params.Name = req.Name
+	}
 
-	// Update product type if provided
-	if req.ProductType != "" {
+	// Update description if provided and different
+	if req.Description != "" && req.Description != existingProduct.Description.String {
+		params.Description = pgtype.Text{String: req.Description, Valid: true}
+	}
+
+	// Update image URL if provided and different
+	if req.ImageURL != "" && req.ImageURL != existingProduct.ImageUrl.String {
+		params.ImageUrl = pgtype.Text{String: req.ImageURL, Valid: true}
+	}
+
+	// Update URL if provided and different
+	if req.URL != "" && req.URL != existingProduct.Url.String {
+		params.Url = pgtype.Text{String: req.URL, Valid: true}
+	}
+
+	// Update product type if provided and different
+	if req.ProductType != "" && string(existingProduct.ProductType) != req.ProductType {
 		productType, err := validateProductType(req.ProductType)
 		if err != nil {
 			return params, err
@@ -347,8 +343,8 @@ func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequ
 		params.ProductType = productType
 	}
 
-	// Update interval type if provided
-	if req.IntervalType != "" {
+	// Update interval type if provided and different
+	if req.IntervalType != "" && string(existingProduct.IntervalType) != req.IntervalType {
 		intervalType, err := validateIntervalType(req.IntervalType)
 		if err != nil {
 			return params, err
@@ -356,25 +352,40 @@ func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequ
 		params.IntervalType = intervalType
 	}
 
-	// Update numeric fields
-	updateNumericFields(&params, req)
+	// Update term length if provided and different
+	if req.TermLength != nil && *req.TermLength != existingProduct.TermLength.Int32 {
+		params.TermLength = pgtype.Int4{Int32: *req.TermLength, Valid: true}
+	}
 
-	// Update boolean fields
-	updateBooleanFields(&params, req)
+	// Update price if provided and different
+	if req.PriceInPennies != nil && *req.PriceInPennies != existingProduct.PriceInPennies {
+		params.PriceInPennies = *req.PriceInPennies
+	}
 
-	// Update metadata if provided
-	if req.Metadata != nil {
+	// Update merchant paid gas if provided and different
+	if req.MerchantPaidGas != nil && *req.MerchantPaidGas != existingProduct.MerchantPaidGas {
+		params.MerchantPaidGas = *req.MerchantPaidGas
+	}
+
+	// Update active status if provided and different
+	if req.Active != nil && *req.Active != existingProduct.Active {
+		params.Active = *req.Active
+	}
+
+	// Update metadata if provided and different
+	if req.Metadata != nil && !bytes.Equal(req.Metadata, existingProduct.Metadata) {
 		params.Metadata = req.Metadata
 	}
 
-	// update wallet id if provided
-	if req.WalletID != "" {
+	// Update wallet ID if provided and different
+	if req.WalletID != "" && req.WalletID != existingProduct.WalletID.String() {
 		parsedWalletID, err := uuid.Parse(req.WalletID)
 		if err != nil {
 			return params, fmt.Errorf("invalid wallet ID format: %w", err)
 		}
 		params.WalletID = parsedWalletID
 	}
+
 	return params, nil
 }
 
@@ -410,6 +421,32 @@ func validatePaginationParams(c *gin.Context) (limit int32, offset int32, err er
 
 // validateProductUpdate validates all update parameters at once
 func (h *ProductHandler) validateProductUpdate(c *gin.Context, req UpdateProductRequest, existingProduct db.Product) error {
+	// Validate name if provided
+	if req.Name != "" {
+		if len(req.Name) > 255 {
+			return fmt.Errorf("name must be less than 255 characters")
+		}
+	}
+
+	// Validate wallet if provided
+	if req.WalletID != "" {
+		parsedWalletID, err := uuid.Parse(req.WalletID)
+		if err != nil {
+			return fmt.Errorf("invalid wallet ID format: %w", err)
+		}
+
+		if err := h.validateWallet(c, parsedWalletID, existingProduct.WorkspaceID); err != nil {
+			return err
+		}
+	}
+
+	// Validate description if provided
+	if req.Description != "" {
+		if len(req.Description) > 1000 {
+			return fmt.Errorf("description must be less than 1000 characters")
+		}
+	}
+
 	// Validate product type if provided
 	if req.ProductType != "" {
 		if _, err := validateProductType(req.ProductType); err != nil {
@@ -438,15 +475,24 @@ func (h *ProductHandler) validateProductUpdate(c *gin.Context, req UpdateProduct
 		}
 	}
 
-	// Validate wallet if provided
-	if req.WalletID != "" {
-		parsedWalletID, err := uuid.Parse(req.WalletID)
-		if err != nil {
-			return fmt.Errorf("invalid wallet ID format: %w", err)
+	// Validate image URL if provided
+	if req.ImageURL != "" {
+		if _, err := url.ParseRequestURI(req.ImageURL); err != nil {
+			return fmt.Errorf("invalid image URL format: %w", err)
 		}
+	}
 
-		if err := h.validateWallet(c, parsedWalletID, existingProduct.WorkspaceID); err != nil {
-			return err
+	// Validate URL if provided
+	if req.URL != "" {
+		if _, err := url.ParseRequestURI(req.URL); err != nil {
+			return fmt.Errorf("invalid URL format: %w", err)
+		}
+	}
+
+	// Validate metadata if provided
+	if req.Metadata != nil {
+		if !json.Valid(req.Metadata) {
+			return fmt.Errorf("invalid metadata JSON format")
 		}
 	}
 
@@ -825,10 +871,26 @@ func (h *ProductHandler) PublishProduct(c *gin.Context) {
 
 	price := float64(product.PriceInPennies) / 100.0
 
-	// dictionary mapping the token address to their network chainid
-	chainIdToTokenAddress := make(map[uuid.UUID][]string)
+	// dictionary mapping the token address to their network chainid and product token id
+	type NetworkTokenInfo struct {
+		TokenAddresses []string
+		ProductTokenID uuid.UUID
+	}
+
+	// dictionary mapping the network chainid to the token addresses and product token id
+	networkInfo := make(map[uuid.UUID]NetworkTokenInfo)
 	for _, token := range productTokens {
-		chainIdToTokenAddress[token.NetworkID] = append(chainIdToTokenAddress[token.NetworkID], token.ContractAddress)
+		if info, exists := networkInfo[token.NetworkID]; exists {
+			// Append to existing token addresses for this network
+			info.TokenAddresses = append(info.TokenAddresses, token.ContractAddress)
+			networkInfo[token.NetworkID] = info
+		} else {
+			// Create new entry for this network
+			networkInfo[token.NetworkID] = NetworkTokenInfo{
+				TokenAddresses: []string{token.ContractAddress},
+				ProductTokenID: token.ID,
+			}
+		}
 	}
 
 	wallet, err := h.common.db.GetWalletByID(c.Request.Context(), product.WalletID)
@@ -838,7 +900,7 @@ func (h *ProductHandler) PublishProduct(c *gin.Context) {
 	}
 
 	createdSubscriptionProducts := []PublishProductResponse{}
-	for networkChainID, tokenAddresses := range chainIdToTokenAddress {
+	for networkChainID, info := range networkInfo {
 		// get the network chain id network id
 		network, err := h.common.db.GetNetwork(c.Request.Context(), networkChainID)
 		if err != nil {
@@ -848,7 +910,7 @@ func (h *ProductHandler) PublishProduct(c *gin.Context) {
 		// create the subscription
 		subscriptionRequest := actalink.SubscriptionRequest{
 			Title:  fmt.Sprintf("%s_Subscription_Plan", product.ID),
-			Tokens: tokenAddresses,
+			Tokens: info.TokenAddresses,
 			Plans: []actalink.Plan{
 				{
 					Name:      product.Name,
@@ -876,13 +938,13 @@ func (h *ProductHandler) PublishProduct(c *gin.Context) {
 			ActalinkPaymentLinkId:  resp.PaymentLinkId,
 			ActalinkSubscriptionId: resp.SubscriptionId,
 			CypheraProductId:       product.ID.String(),
-			CypheraProductTokenId:  networkChainID.String(),
+			CypheraProductTokenId:  info.ProductTokenID.String(),
 		})
 
 		// create the actalink product
 		_, err = h.common.db.CreateActalinkProduct(c.Request.Context(), db.CreateActalinkProductParams{
 			ProductID:              product.ID,
-			ProductTokenID:         networkChainID,
+			ProductTokenID:         info.ProductTokenID,
 			ActalinkPaymentLinkID:  resp.PaymentLinkId,
 			ActalinkSubscriptionID: resp.SubscriptionId,
 		})
@@ -945,7 +1007,7 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	}
 
 	// Create update parameters
-	params, err := h.updateProductParams(parsedUUID, req)
+	params, err := h.updateProductParams(parsedUUID, req, existingProduct)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid update parameters", err)
 		return
