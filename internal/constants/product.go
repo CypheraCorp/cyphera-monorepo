@@ -8,9 +8,9 @@ const (
 
 // Product Interval Types
 const (
-	IntervalType5Minutes = "5minutes"
-	IntervalTypeDaily    = "Daily"
-	IntervalTypeWeekly   = "Weekly"
-	IntervalTypeMonthly  = "Monthly"
-	IntervalTypeYearly   = "Yearly"
+	IntervalType5Minutes = "5mins"
+	IntervalTypeDaily    = "daily"
+	IntervalTypeWeekly   = "week"
+	IntervalTypeMonthly  = "month"
+	IntervalTypeYearly   = "year"
 )

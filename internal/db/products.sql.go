@@ -179,6 +179,49 @@ func (q *Queries) DeleteProduct(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const getActiveProductsByWalletID = `-- name: GetActiveProductsByWalletID :many
+SELECT id, workspace_id, wallet_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at FROM products
+WHERE wallet_id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) GetActiveProductsByWalletID(ctx context.Context, walletID uuid.UUID) ([]Product, error) {
+	rows, err := q.db.Query(ctx, getActiveProductsByWalletID, walletID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Product{}
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.WalletID,
+			&i.Name,
+			&i.Description,
+			&i.ProductType,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceInPennies,
+			&i.ImageUrl,
+			&i.Url,
+			&i.MerchantPaidGas,
+			&i.Active,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getProduct = `-- name: GetProduct :one
 SELECT id, workspace_id, wallet_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at FROM products
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1
