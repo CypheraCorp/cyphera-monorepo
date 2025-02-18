@@ -5,7 +5,7 @@ import (
 )
 
 func (c *ActaLinkClient) GetTokens() (*GetTokensResponse, *int, error) {
-	body, statusCode, err := c.doRequest("GET", "/api/ct/tokens", nil, nil)
+	body, statusCode, err := c.doRequest("GET", "/api/ct/tokens", nil, nil, nil)
 	if err != nil {
 		return nil, statusCode, err
 	}

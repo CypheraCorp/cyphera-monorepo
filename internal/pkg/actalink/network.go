@@ -5,7 +5,7 @@ import (
 )
 
 func (c *ActaLinkClient) GetNetworks() (*GetNetworksResponse, *int, error) {
-	body, statusCode, err := c.doRequest("GET", "/api/ct/networks", nil, nil)
+	body, statusCode, err := c.doRequest("GET", "/api/ct/networks", nil, nil, nil)
 	if err != nil {
 		return nil, statusCode, err
 	}

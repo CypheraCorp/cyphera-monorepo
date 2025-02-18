@@ -27,7 +27,9 @@ type GetSubscriptionsResponse struct {
 }
 
 type CreateSubscriptionResponse struct {
-	Message string `json:"message"`
+	Message        string `json:"message"`
+	PaymentLinkId  string `json:"paymentLinkId"`
+	SubscriptionId string `json:"subscriptionId"`
 }
 
 type DeleteSubscriptionResponse struct {
@@ -97,19 +99,15 @@ type Subscriber struct {
 }
 
 type Plan struct {
-	Id             string  `json:"id,omitempty"`
-	SubscriptionId string  `json:"subscriptionId,omitempty"`
-	Name           string  `json:"name"`
-	Frequency      string  `json:"frequency"`
-	Volume         int     `json:"volume"`
-	Price          float64 `json:"price"`
+	Name      string  `json:"name"`
+	Frequency string  `json:"frequency"`
+	Volume    int     `json:"volume"`
+	Price     float64 `json:"price"`
 }
 
 type Receiver struct {
-	ReceiverId     string `json:"receiverId,omitempty"`
-	Address        string `json:"address"`
-	NetworkId      int    `json:"networkId"`
-	SubscriptionId string `json:"subscriptionId,omitempty"`
+	Address   string `json:"address"`
+	NetworkId int    `json:"networkId"`
 }
 
 type PaymentLink struct {

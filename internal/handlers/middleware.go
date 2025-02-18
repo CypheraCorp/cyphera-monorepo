@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"cyphera-api/internal/logger"
 	"fmt"
 	"io"
@@ -10,6 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"
@@ -18,12 +22,12 @@ import (
 // RequestLog represents a structured log entry for an HTTP request
 type RequestLog struct {
 	Method     string    `json:"method"`
-	Path       string    `json:"path"`
-	Query      string    `json:"query"`
-	UserAgent  string    `json:"user_agent"`
+	Path       string    `json:"path,omitempty"`
+	Query      string    `json:"query,omitempty"`
+	UserAgent  string    `json:"user_agent,omitempty"`
 	ClientIP   string    `json:"client_ip"`
-	RequestID  string    `json:"request_id"`
-	AccountID  string    `json:"account_id"`
+	RequestID  string    `json:"request_id,omitempty"`
+	AccountID  string    `json:"account_id,omitempty"`
 	SupabaseID string    `json:"supabase_id,omitempty"`
 	Body       string    `json:"body"`
 	Timestamp  time.Time `json:"timestamp"`
@@ -38,6 +42,17 @@ type SupabaseClaims struct {
 	Exp         int64  `json:"exp"`
 	SupabaseRef string `json:"reference_id"`
 	jwt.RegisteredClaims
+}
+
+// SiweMessage represents a Sign-In with Ethereum message
+type SiweMessage struct {
+	Domain    string `json:"domain"`
+	Address   string `json:"address"`
+	Statement string `json:"statement"`
+	URI       string `json:"uri"`
+	Version   string `json:"version"`
+	ChainID   int64  `json:"chainId"`
+	Nonce     string `json:"nonce"`
 }
 
 // ValidateSupabaseToken validates the Supabase JWT token
@@ -119,6 +134,29 @@ func getRequestBody(c *gin.Context) ([]byte, error) {
 	return bodyBytes, nil
 }
 
+// getWalletAddress derives the Ethereum address from a private key
+func getWalletAddress(privateKeyHex string) (string, error) {
+	// Remove 0x prefix if present
+	privateKeyHex = strings.TrimPrefix(privateKeyHex, "0x")
+
+	// Parse the private key
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	if err != nil {
+		return "", fmt.Errorf("invalid private key: %w", err)
+	}
+
+	// Get public key
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return "", fmt.Errorf("error casting public key to ECDSA")
+	}
+
+	// Get address
+	address := crypto.PubkeyToAddress(*publicKeyECDSA)
+	return address.Hex(), nil
+}
+
 // AuthMiddleware handles authentication for both Supabase JWT and API keys
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -198,6 +236,9 @@ func LogRequest() gin.HandlerFunc {
 			return
 		}
 
+		// convert bodyBytes to readable json with "/" replaced with "\/"
+		bodyString := strings.ReplaceAll(string(bodyBytes), "/", "\\/")
+
 		// Create request log entry
 		requestLog := RequestLog{
 			Method:     c.Request.Method,
@@ -208,7 +249,7 @@ func LogRequest() gin.HandlerFunc {
 			RequestID:  c.GetString("request_id"),
 			AccountID:  c.GetString("account_id"),
 			SupabaseID: c.GetString("supabase_id"), // Add Supabase ID to logs
-			Body:       string(bodyBytes),
+			Body:       bodyString,
 			Timestamp:  time.Now().UTC(),
 		}
 
@@ -222,10 +263,118 @@ func LogRequest() gin.HandlerFunc {
 			zap.String("request_id", requestLog.RequestID),
 			zap.String("account_id", requestLog.AccountID),
 			zap.String("supabase_id", requestLog.SupabaseID),
-			zap.String("body", requestLog.Body),
+			zap.Any("body", requestLog.Body),
 			zap.Time("timestamp", requestLog.Timestamp),
 		)
 
 		c.Next()
 	}
+}
+
+// GenerateAndSignMessage creates and signs a SIWE message with the given private key
+func GenerateAndSignMessage(privateKeyHex string, message *SiweMessage) (msgString string, signature string, err error) {
+	if message == nil {
+		return "", "", fmt.Errorf("message is nil")
+	}
+
+	requiredFields := map[string]string{
+		"nonce":     message.Nonce,
+		"address":   message.Address,
+		"domain":    message.Domain,
+		"statement": message.Statement,
+		"uri":       message.URI,
+	}
+
+	for field, value := range requiredFields {
+		if value == "" {
+			return "", "", fmt.Errorf("%s is empty", field)
+		}
+	}
+
+	logger.Log.Debug("Generating and signing SIWE message",
+		zap.String("nonce", message.Nonce),
+	)
+
+	// Remove 0x prefix if present
+	privateKeyHex = strings.TrimPrefix(privateKeyHex, "0x")
+
+	// Parse the private key
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	if err != nil {
+		logger.Log.Debug("Failed to parse private key",
+			zap.Error(err),
+		)
+		return "", "", fmt.Errorf("invalid private key: %w", err)
+	}
+
+	// Prepare message string in SIWE format
+	messageString := fmt.Sprintf("%s wants you to sign in with your Ethereum account:\n%s\n\n%s\n\nURI: %s\nVersion: %s\nChain ID: %d\nNonce: %s\nIssued At: %s",
+		message.Domain,
+		message.Address,
+		message.Statement,
+		message.URI,
+		message.Version,
+		message.ChainID,
+		message.Nonce,
+		time.Now().UTC().Format(time.RFC3339),
+	)
+
+	// Create Ethereum specific message hash
+	messageHash := accounts.TextHash([]byte(messageString))
+
+	// Sign the hash
+	sig, err := crypto.Sign(messageHash, privateKey)
+	if err != nil {
+		logger.Log.Debug("Failed to sign message",
+			zap.Error(err),
+		)
+		return "", "", fmt.Errorf("failed to sign message: %w", err)
+	}
+
+	// Adjust V value in signature (Ethereum's specific requirement)
+	sig[crypto.RecoveryIDOffset] += 27
+
+	// Convert signature to hex using go-ethereum's hexutil
+	signature = hexutil.Encode(sig)
+
+	err = VerifySignature(message.Address, signature, messageString)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to verify signature: %w", err)
+	}
+
+	logger.Log.Debug("Successfully generated and signed message",
+		zap.String("message", messageString),
+		zap.String("signature_prefix", signature[:10]+"..."),
+	)
+
+	return messageString, signature, nil
+}
+
+// VerifySignature verifies an Ethereum signed message
+func VerifySignature(fromAddress, signatureHex, message string) error {
+	// Decode the hex signature
+	signature, err := hexutil.Decode(signatureHex)
+	if err != nil {
+		return fmt.Errorf("failed to decode signature: %w", err)
+	}
+
+	// Transform V value back from 27/28 to 0/1
+	signature[crypto.RecoveryIDOffset] -= 27
+
+	// Create message hash
+	messageHash := accounts.TextHash([]byte(message))
+
+	// Recover public key from signature
+	pubKey, err := crypto.SigToPub(messageHash, signature)
+	if err != nil {
+		return fmt.Errorf("failed to recover public key: %w", err)
+	}
+
+	// Verify the address matches
+	recoveredAddr := crypto.PubkeyToAddress(*pubKey).Hex()
+	if !strings.EqualFold(recoveredAddr, fromAddress) {
+		return fmt.Errorf("signature is not from the expected address")
+	}
+
+	return nil
 }

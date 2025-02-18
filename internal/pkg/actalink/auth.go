@@ -4,13 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 func (c *ActaLinkClient) CheckUserAvailability(address string) (*UserAvailabilityResponse, *int, error) {
 	params := url.Values{}
 	params.Add("address", address)
 
-	resp, statusCode, err := c.doRequest("GET", "/api/ct/isuseravailable", nil, params)
+	resp, statusCode, err := c.doRequest("GET", "/api/ct/isuseravailable", nil, params, nil)
 	if err != nil {
 		return nil, statusCode, err
 	}
@@ -24,6 +26,8 @@ func (c *ActaLinkClient) CheckUserAvailability(address string) (*UserAvailabilit
 }
 
 func (c *ActaLinkClient) RegisterOrLoginUser(request UserLoginRegisterRequest, suffix string) (*RegisterOrLoginUserResponse, *int, error) {
+
+	spew.Dump(request)
 	jsonBody, err := json.Marshal(request)
 	if err != nil {
 		return nil, nil, err

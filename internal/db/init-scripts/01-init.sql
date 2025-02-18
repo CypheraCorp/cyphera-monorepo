@@ -17,7 +17,7 @@ CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended', 'pending');
 CREATE TYPE product_type AS ENUM ('recurring', 'one_off');
 
 -- Create interval type enum
-CREATE TYPE interval_type AS ENUM ('5minutes', 'Daily', 'Weekly', 'Monthly', 'Yearly');
+CREATE TYPE interval_type AS ENUM ('5mins', 'daily', 'week', 'month', 'year');
 
 -- Create network type enum
 CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkadot');
@@ -208,6 +208,32 @@ CREATE TABLE products_tokens (
     deleted_at TIMESTAMP WITH TIME ZONE,
     UNIQUE(product_id, network_id, token_id)
 );
+
+-- Create Actalink Product table
+CREATE TABLE actalink_products (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID NOT NULL REFERENCES products(id),
+    product_token_id UUID NOT NULL REFERENCES products_tokens(id),
+    actalink_payment_link_id TEXT NOT NULL,
+    actalink_subscription_id TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    UNIQUE(product_id, product_token_id)
+);
+
+-- Create indexes for actalink_products table
+CREATE INDEX idx_actalink_products_product_id ON actalink_products(product_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_actalink_products_product_token_id ON actalink_products(product_token_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_actalink_products_payment_link_id ON actalink_products(actalink_payment_link_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_actalink_products_subscription_id ON actalink_products(actalink_subscription_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_actalink_products_created_at ON actalink_products(created_at);
+
+-- Add updated_at trigger for actalink_products
+CREATE TRIGGER set_actalink_products_updated_at
+    BEFORE UPDATE ON actalink_products
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
 
 -- Create trigger function to validate token network relationship
 CREATE OR REPLACE FUNCTION validate_token_network()
@@ -407,7 +433,7 @@ ON CONFLICT DO NOTHING;
 -- Insert some test tokens
 INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token)
 VALUES 
-    ((SELECT id FROM networks WHERE chain_id = 137 AND deleted_at IS NULL), 'USDC', 'USDC', '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', false)
+    ((SELECT id FROM networks WHERE chain_id = 137 AND deleted_at IS NULL), 'USDC', 'USDC', '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359', false)
 ON CONFLICT DO NOTHING;
 
 -- Insert test products
@@ -432,7 +458,7 @@ INSERT INTO products (
         'Basic Subscription',
         'Monthly subscription plan with basic features, ends in 12 months',
         'recurring',
-        'Monthly',
+        'month',
         12,
         1000,
         'https://example.com/basic.png',
@@ -447,8 +473,8 @@ INSERT INTO products (
         'Annual Pro Plan',
         'Annual subscription with all features, ends in 3 years',
         'recurring',
-        'Yearly',
-        3,
+        'year',
+        2,
         10000,
         'https://example.com/pro.png',
         'https://example.com/pro',
@@ -465,7 +491,7 @@ INSERT INTO products_tokens (
     token_id,
     active
 ) 
--- Enable MATIC and USDC on Polygon for Basic Subscription
+-- Enable USDC on Polygon for Basic Subscription
 SELECT 
     p.id as product_id,
     t.network_id,
@@ -475,11 +501,11 @@ FROM products p
 CROSS JOIN tokens t
 WHERE p.name = 'Basic Subscription'
 AND t.network_id = (SELECT id FROM networks WHERE chain_id = 137)
-AND t.symbol IN ('MATIC', 'USDC')
+AND t.symbol IN ('USDC')
 
 UNION ALL
 
--- Enable only MATIC on Mumbai for Basic Subscription
+-- Enable only USDC on Polygon for Annual Pro Plan
 SELECT 
     p.id as product_id,
     t.network_id,
@@ -488,8 +514,8 @@ SELECT
 FROM products p
 CROSS JOIN tokens t
 WHERE p.name = 'Annual Pro Plan'
-AND t.network_id = (SELECT id FROM networks WHERE chain_id = 80001)
-AND t.symbol = 'MATIC'
+AND t.network_id = (SELECT id FROM networks WHERE chain_id = 137)
+AND t.symbol = 'USDC'
 
 UNION ALL
 

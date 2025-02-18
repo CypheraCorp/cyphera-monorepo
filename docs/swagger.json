@@ -2005,6 +2005,44 @@
                 }
             }
         },
+        "/products/{product_id}/deploycontract": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Product ID",
+                        "name": "product_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "list"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/products/{product_id}/networks/{network_id}/tokens": {
             "get": {
                 "security": [
@@ -2654,7 +2692,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.SubscriptionRequest"
+                            "$ref": "#/definitions/actalink.SubscriptionRequest"
                         }
                     }
                 ],
@@ -2662,7 +2700,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.CreateSubscriptionResponse"
+                            "$ref": "#/definitions/actalink.CreateSubscriptionResponse"
                         }
                     },
                     "400": {
@@ -4498,6 +4536,20 @@
         }
     },
     "definitions": {
+        "actalink.CreateSubscriptionResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "paymentLinkId": {
+                    "type": "string"
+                },
+                "subscriptionId": {
+                    "type": "string"
+                }
+            }
+        },
         "actalink.Network": {
             "type": "object",
             "properties": {
@@ -4581,17 +4633,11 @@
                 "frequency": {
                     "type": "string"
                 },
-                "id": {
-                    "type": "string"
-                },
                 "name": {
                     "type": "string"
                 },
                 "price": {
                     "type": "number"
-                },
-                "subscriptionId": {
-                    "type": "string"
                 },
                 "volume": {
                     "type": "integer"
@@ -4606,12 +4652,6 @@
                 },
                 "networkId": {
                     "type": "integer"
-                },
-                "receiverId": {
-                    "type": "string"
-                },
-                "subscriptionId": {
-                    "type": "string"
                 }
             }
         },
@@ -4705,6 +4745,38 @@
                 },
                 "userId": {
                     "type": "string"
+                }
+            }
+        },
+        "actalink.SubscriptionRequest": {
+            "type": "object",
+            "properties": {
+                "linktree": {
+                    "type": "string"
+                },
+                "plans": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/actalink.Plan"
+                    }
+                },
+                "receivers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/actalink.Receiver"
+                    }
+                },
+                "title": {
+                    "type": "string"
+                },
+                "tokens": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "trialDays": {
+                    "type": "integer"
                 }
             }
         },
@@ -5073,14 +5145,6 @@
                     "type": "string"
                 },
                 "token_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.CreateSubscriptionResponse": {
-            "type": "object",
-            "properties": {
-                "message": {
                     "type": "string"
                 }
             }
@@ -5711,40 +5775,11 @@
         "handlers.RegisterOrLoginUserResponse": {
             "type": "object",
             "properties": {
+                "cookie": {
+                    "type": "string"
+                },
                 "message": {
                     "type": "string"
-                }
-            }
-        },
-        "handlers.SubscriptionRequest": {
-            "type": "object",
-            "properties": {
-                "linktree": {
-                    "type": "string"
-                },
-                "plans": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/actalink.Plan"
-                    }
-                },
-                "receivers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/actalink.Receiver"
-                    }
-                },
-                "title": {
-                    "type": "string"
-                },
-                "tokens": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "trialDays": {
-                    "type": "integer"
                 }
             }
         },
