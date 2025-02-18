@@ -3,6 +3,7 @@ package actalink
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -12,35 +13,48 @@ import (
 )
 
 type ActaLinkClient struct {
-	apiKey string
+	apiKey                  string
+	CypheraWalletPrivateKey string
 }
 
-func NewActaLinkClient(apiKey string) *ActaLinkClient {
+func NewActaLinkClient(apiKey string, cypheraWalletPrivateKey string) *ActaLinkClient {
 	return &ActaLinkClient{
-		apiKey: apiKey,
+		apiKey:                  apiKey,
+		CypheraWalletPrivateKey: cypheraWalletPrivateKey,
 	}
 }
 
 // doRequest handles the common HTTP request/response logic used across all ActaLink API calls
-func (c *ActaLinkClient) doRequest(method, endpoint string, body []byte, queryParams url.Values) ([]byte, *int, error) {
+func (c *ActaLinkClient) doRequest(method, endpoint string, body []byte, queryParams url.Values, headers map[string]string) ([]byte, *int, error) {
 	client := &http.Client{}
 
-	req, err := http.NewRequest(method, "https://api.billing.acta.link"+endpoint, bytes.NewBuffer(body))
+	fullURL := "https://api.billing.acta.link" + endpoint
+	fmt.Printf("Making request: %s %s\n", method, fullURL)
+
+	req, err := http.NewRequest(method, fullURL, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	if queryParams != nil {
 		req.URL.RawQuery = queryParams.Encode()
 	}
 
+	// Set default headers
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", c.apiKey)
-	if len(body) > 0 {
-		req.Header.Set("Content-Type", "application/json")
+
+	// Set custom headers after default headers
+	for key, value := range headers {
+		req.Header.Set(key, value)
 	}
+
+	fmt.Printf("Final Request Headers: %+v\n", req.Header)
+	fmt.Printf("Request Body: %s\n", string(body))
 
 	resp, err := client.Do(req)
 	if err != nil {
+		fmt.Printf("Error from Do(): %v\n", err)
 		return nil, nil, err
 	}
 	defer resp.Body.Close()
@@ -50,12 +64,20 @@ func (c *ActaLinkClient) doRequest(method, endpoint string, body []byte, queryPa
 		return nil, nil, err
 	}
 
+	fmt.Printf("Response Status: %s\n", resp.Status)
+	fmt.Printf("Response Headers: %+v\n", resp.Header)
+	fmt.Printf("Response Body: %s\n", string(respBody))
+
+	// Handle non-200 status codes
 	if resp.StatusCode != http.StatusOK {
+		statusCode := resp.StatusCode
+		// Try to parse error response
 		var errResp ErrorResponse
 		if err := json.Unmarshal(respBody, &errResp); err != nil {
-			return nil, &resp.StatusCode, errors.New("unknown error occurred")
+			// If we can't parse the error, return the raw response
+			return respBody, &statusCode, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(respBody))
 		}
-		return nil, &resp.StatusCode, errors.Wrap(errors.New(errResp.Error), "actalink api error")
+		return nil, &statusCode, fmt.Errorf("request failed: %s", errResp.Error)
 	}
 
 	return respBody, &resp.StatusCode, nil
@@ -85,9 +107,6 @@ func (c *ActaLinkClient) doRequestWithCookies(method, endpoint string, body []by
 	}
 	defer resp.Body.Close()
 
-	spew.Dump(resp.Header)
-	spew.Dump(resp.Cookies())
-
 	cookies := resp.Cookies()
 	actalinkCookie := ""
 	for _, cookie := range cookies {
@@ -105,14 +124,12 @@ func (c *ActaLinkClient) doRequestWithCookies(method, endpoint string, body []by
 		return nil, "", nil, err
 	}
 
-	spew.Dump(respBody)
-	spew.Dump(resp.StatusCode)
-
 	if resp.StatusCode != http.StatusOK {
 		var errResp ErrorResponse
 		if err := json.Unmarshal(respBody, &errResp); err != nil {
 			return nil, "", &resp.StatusCode, errors.New("unknown error occurred")
 		}
+		spew.Dump(errResp)
 		return nil, "", &resp.StatusCode, errors.Wrap(errors.New(errResp.Error), "actalink api error")
 	}
 

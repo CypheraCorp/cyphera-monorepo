@@ -6,7 +6,7 @@ type GetNonceResponse struct {
 
 // GetNonce fetches a nonce from the Acta.link API
 func (c *ActaLinkClient) GetNonce() (*GetNonceResponse, *int, error) {
-	body, statusCode, err := c.doRequest("GET", "/api/ct/nonce", nil, nil)
+	body, statusCode, err := c.doRequest("GET", "/api/ct/nonce", nil, nil, nil)
 	if err != nil {
 		return nil, statusCode, err
 	}

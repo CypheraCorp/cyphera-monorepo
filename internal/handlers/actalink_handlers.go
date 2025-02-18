@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -25,7 +26,6 @@ func NewActalinkHandler(common *CommonServices) *ActalinkHandler {
 
 // Request Types
 type UserLoginRegisterRequest = actalink.UserLoginRegisterRequest
-type SubscriptionRequest = actalink.SubscriptionRequest
 type DeleteSubscriptionRequest = actalink.DeleteSubscriptionRequest
 
 // Response Types
@@ -42,6 +42,26 @@ type OperationsResponse = actalink.OperationsResponse
 
 type UserAvailabilityResponse struct {
 	Exists bool `json:"exists"`
+}
+type SubscriptionRequest struct {
+	Title     string          `json:"title"`
+	Token     string          `json:"token"`
+	Plan      PlanRequest     `json:"plan"`
+	Receiver  ReceiverRequest `json:"receiver"`
+	Linktree  *string         `json:"linktree,omitempty"`
+	TrialDays *int            `json:"trialDays,omitempty"`
+}
+
+type PlanRequest struct {
+	Name      string  `json:"name"`
+	Frequency string  `json:"frequency"`
+	Volume    int     `json:"volume"`
+	Price     float64 `json:"price"`
+}
+
+type ReceiverRequest struct {
+	Address   string `json:"address"`
+	NetworkId int    `json:"networkId"`
 }
 
 func handleStatusCode(statusCode *int, defaultCode int) int {
@@ -276,13 +296,14 @@ func (h *ActalinkHandler) GetAllSubscriptions(c *gin.Context) {
 // @Tags         Actalink
 // @Accept       json
 // @Produce      json
-// @Param        subscription  body  SubscriptionRequest  true  "Subscription details"
-// @Success      200  {object}  CreateSubscriptionResponse
+// @Param        subscription  body  actalink.SubscriptionRequest  true  "Subscription details"
+// @Success      200  {object}  actalink.CreateSubscriptionResponse
 // @Failure      400  {object}  ErrorResponse      "Bad request"
 // @Failure      403  {object}  ErrorResponse      "Forbidden"
 // @Failure      500  {object}  ErrorResponse      "Internal server error"
 // @Router       /subscriptions [post]
 func (h *ActalinkHandler) CreateSubscription(c *gin.Context) {
+	spew.Dump("gets here")
 	var req SubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.Log.Debug("Invalid request body",
@@ -292,7 +313,34 @@ func (h *ActalinkHandler) CreateSubscription(c *gin.Context) {
 		return
 	}
 
-	resp, statusCode, err := h.common.actalink.CreateSubscription(req)
+	// get cookie from header
+	cookie := c.GetHeader("Cookie")
+	if cookie == "" {
+		logger.Log.Debug("Cookie is required")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cookie is required"})
+		return
+	}
+
+	actalinkReq := actalink.SubscriptionRequest{
+		Title:  req.Title,
+		Tokens: []string{req.Token},
+		Plans: []actalink.Plan{
+			{
+				Name:      req.Plan.Name,
+				Frequency: req.Plan.Frequency,
+				Volume:    req.Plan.Volume,
+				Price:     req.Plan.Price,
+			},
+		},
+		Receivers: []actalink.Receiver{
+			{
+				Address:   req.Receiver.Address,
+				NetworkId: req.Receiver.NetworkId,
+			},
+		},
+	}
+
+	resp, statusCode, err := h.common.actalink.CreateSubscription(actalinkReq, cookie)
 	if err != nil {
 		logger.Log.Debug("Failed to create subscription",
 			zap.Error(err),

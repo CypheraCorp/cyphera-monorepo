@@ -3,6 +3,7 @@ package handlers
 import (
 	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
+	"cyphera-api/internal/pkg/actalink"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -91,6 +92,15 @@ type ListProductsResponse struct {
 	Total   int64             `json:"total"`
 }
 
+// PublishProductResponse represents the response for publishing a product
+type PublishProductResponse struct {
+	Message                string `json:"message"`
+	CypheraProductId       string `json:"cyphera_product_id"`
+	CypheraProductTokenId  string `json:"cyphera_product_token_id"`
+	ActalinkPaymentLinkId  string `json:"actalink_payment_link_id"`
+	ActalinkSubscriptionId string `json:"actalink_subscription_id"`
+}
+
 // GetProduct godoc
 // @Summary Get product by ID
 // @Description Get product details by product ID
@@ -164,7 +174,19 @@ func (h *ProductHandler) GetPublicProductByID(c *gin.Context) {
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, toPublicProductResponse(workspace, product, productTokens, wallet))
+	response := toPublicProductResponse(workspace, product, productTokens, wallet)
+
+	// get the token Contract Address for each product_token variant
+	for i, productToken := range response.ProductTokens {
+		token, err := h.common.db.GetToken(c.Request.Context(), uuid.MustParse(productToken.TokenID))
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, "Failed to retrieve token", err)
+			return
+		}
+		response.ProductTokens[i].TokenAddress = token.ContractAddress
+	}
+
+	sendSuccess(c, http.StatusOK, response)
 }
 
 func toPublicProductResponse(workspace db.Workspace, product db.Product, productTokens []db.GetActiveProductTokensByProductRow, wallet db.Wallet) PublicProductResponse {
@@ -221,6 +243,7 @@ type PublicProductTokenResponse struct {
 	NetworkName    string `json:"network_name"`
 	NetworkChainID string `json:"network_chain_id"`
 	TokenID        string `json:"token_id"`
+	TokenAddress   string `json:"token_address"`
 	TokenName      string `json:"token_name"`
 	TokenSymbol    string `json:"token_symbol"`
 	TokenImageURL  string `json:"token_image_url"`
@@ -705,6 +728,170 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	}
 
 	sendSuccess(c, http.StatusCreated, toProductResponse(product))
+}
+
+// @Param product_id path string true "Product ID"
+// @Success 200 {list} PublishProductResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /products/{product_id}/deploycontract [post]
+func (h *ProductHandler) PublishProduct(c *gin.Context) {
+	productId := c.Param("product_id")
+	parsedProductID, err := uuid.Parse(productId)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
+		return
+	}
+
+	product, err := h.common.db.GetProduct(c.Request.Context(), parsedProductID)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to get product", err)
+		return
+	}
+
+	productTokens, err := h.common.db.GetActiveProductTokensByProduct(c.Request.Context(), product.ID)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to get product tokens", err)
+		return
+	}
+
+	if len(productTokens) == 0 {
+		sendError(c, http.StatusBadRequest, "No active product tokens found", nil)
+		return
+	}
+
+	// using the actalink api, log in the cyphera user
+	// Then publish the product to the blockchain
+	nonce, statusCode, err := h.common.actalink.GetNonce()
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, fmt.Sprintf("Failed to get nonce status code: %d", statusCode), err)
+		return
+	}
+
+	// Get the cyphera wallet address from the private key
+	cypheraWalletAddress, err := getWalletAddress(h.common.actalink.CypheraWalletPrivateKey)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to get cyphera wallet address", err)
+		return
+	}
+
+	// check if the user exists
+	userExists, statusCode, err := h.common.actalink.CheckUserAvailability(cypheraWalletAddress)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, fmt.Sprintf("Failed to check user exists status code: %d", statusCode), err)
+		return
+	}
+	exists := userExists.Message == UserExists
+
+	msgString, signature, err := GenerateAndSignMessage(h.common.actalink.CypheraWalletPrivateKey, &SiweMessage{
+		Domain:    "billing.acta.link",
+		Address:   cypheraWalletAddress,
+		Statement: "Sign in with Ethereum to Acta.Link System",
+		URI:       "https://billing.acta.link",
+		Version:   "1",
+		ChainID:   1,
+		Nonce:     nonce.Nonce,
+	})
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to generate message and signature", err)
+		return
+	}
+
+	userLoginRegisterRequest := actalink.UserLoginRegisterRequest{
+		Address:   cypheraWalletAddress,
+		Message:   msgString,
+		Signature: signature,
+		Nonce:     nonce.Nonce,
+	}
+
+	suffix := "login"
+	if !exists {
+		suffix = "register"
+	}
+	// register or login the user
+	response, statusCode, err := h.common.actalink.RegisterOrLoginUser(userLoginRegisterRequest, suffix)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, fmt.Sprintf("Failed to %s user status code: %v", suffix, statusCode), err)
+		return
+	}
+
+	// get cookie from the response
+	cookie := response.Cookie
+	if cookie == "" {
+		sendError(c, http.StatusInternalServerError, "No cookie received from ActaLink", nil)
+		return
+	}
+
+	price := float64(product.PriceInPennies) / 100.0
+
+	// dictionary mapping the token address to their network chainid
+	chainIdToTokenAddress := make(map[uuid.UUID][]string)
+	for _, token := range productTokens {
+		chainIdToTokenAddress[token.NetworkID] = append(chainIdToTokenAddress[token.NetworkID], token.ContractAddress)
+	}
+
+	wallet, err := h.common.db.GetWalletByID(c.Request.Context(), product.WalletID)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to get wallet", err)
+		return
+	}
+
+	createdSubscriptionProducts := []PublishProductResponse{}
+	for networkChainID, tokenAddresses := range chainIdToTokenAddress {
+		// get the network chain id network id
+		network, err := h.common.db.GetNetwork(c.Request.Context(), networkChainID)
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, "Failed to get network", err)
+			return
+		}
+		// create the subscription
+		subscriptionRequest := actalink.SubscriptionRequest{
+			Title:  fmt.Sprintf("%s_Subscription_Plan", product.ID),
+			Tokens: tokenAddresses,
+			Plans: []actalink.Plan{
+				{
+					Name:      product.Name,
+					Frequency: string(product.IntervalType),
+					Volume:    int(product.TermLength.Int32),
+					Price:     price,
+				},
+			},
+			Receivers: []actalink.Receiver{
+				{
+					Address:   wallet.WalletAddress,
+					NetworkId: int(network.ChainID),
+				},
+			},
+		}
+
+		resp, statusCode, err := h.common.actalink.CreateSubscription(subscriptionRequest, cookie)
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, fmt.Sprintf("Failed to create subscription: %d", statusCode), err)
+			return
+		}
+
+		createdSubscriptionProducts = append(createdSubscriptionProducts, PublishProductResponse{
+			Message:                "Subscription created successfully",
+			ActalinkPaymentLinkId:  resp.PaymentLinkId,
+			ActalinkSubscriptionId: resp.SubscriptionId,
+			CypheraProductId:       product.ID.String(),
+			CypheraProductTokenId:  networkChainID.String(),
+		})
+
+		// create the actalink product
+		_, err = h.common.db.CreateActalinkProduct(c.Request.Context(), db.CreateActalinkProductParams{
+			ProductID:              product.ID,
+			ProductTokenID:         networkChainID,
+			ActalinkPaymentLinkID:  resp.PaymentLinkId,
+			ActalinkSubscriptionID: resp.SubscriptionId,
+		})
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, "Failed to create actalink product", err)
+			return
+		}
+	}
+	sendSuccess(c, http.StatusOK, createdSubscriptionProducts)
 }
 
 // UpdateProduct godoc

@@ -11,7 +11,7 @@ func (c *ActaLinkClient) GetOperations(swAddress, subscriptionId, status string)
 	params.Add("subscriptionId", subscriptionId)
 	params.Add("status", status)
 
-	body, statusCode, err := c.doRequest("GET", "/api/operations", nil, params)
+	body, statusCode, err := c.doRequest("GET", "/api/ct/operations", nil, params, nil)
 	if err != nil {
 		return nil, statusCode, err
 	}

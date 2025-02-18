@@ -1,5 +1,14 @@
 basePath: /api/v1
 definitions:
+  actalink.CreateSubscriptionResponse:
+    properties:
+      message:
+        type: string
+      paymentLinkId:
+        type: string
+      subscriptionId:
+        type: string
+    type: object
   actalink.Network:
     properties:
       chain_id:
@@ -54,14 +63,10 @@ definitions:
     properties:
       frequency:
         type: string
-      id:
-        type: string
       name:
         type: string
       price:
         type: number
-      subscriptionId:
-        type: string
       volume:
         type: integer
     type: object
@@ -71,10 +76,6 @@ definitions:
         type: string
       networkId:
         type: integer
-      receiverId:
-        type: string
-      subscriptionId:
-        type: string
     type: object
   actalink.Subscriber:
     properties:
@@ -136,6 +137,27 @@ definitions:
         type: integer
       userId:
         type: string
+    type: object
+  actalink.SubscriptionRequest:
+    properties:
+      linktree:
+        type: string
+      plans:
+        items:
+          $ref: '#/definitions/actalink.Plan'
+        type: array
+      receivers:
+        items:
+          $ref: '#/definitions/actalink.Receiver'
+        type: array
+      title:
+        type: string
+      tokens:
+        items:
+          type: string
+        type: array
+      trialDays:
+        type: integer
     type: object
   actalink.Token:
     properties:
@@ -385,11 +407,6 @@ definitions:
     - network_id
     - product_id
     - token_id
-    type: object
-  handlers.CreateSubscriptionResponse:
-    properties:
-      message:
-        type: string
     type: object
   handlers.CreateTokenRequest:
     properties:
@@ -805,29 +822,10 @@ definitions:
     type: object
   handlers.RegisterOrLoginUserResponse:
     properties:
+      cookie:
+        type: string
       message:
         type: string
-    type: object
-  handlers.SubscriptionRequest:
-    properties:
-      linktree:
-        type: string
-      plans:
-        items:
-          $ref: '#/definitions/actalink.Plan'
-        type: array
-      receivers:
-        items:
-          $ref: '#/definitions/actalink.Receiver'
-        type: array
-      title:
-        type: string
-      tokens:
-        items:
-          type: string
-        type: array
-      trialDays:
-        type: integer
     type: object
   handlers.TokenResponse:
     properties:
@@ -2468,6 +2466,29 @@ paths:
       summary: Update product
       tags:
       - products
+  /products/{product_id}/deploycontract:
+    post:
+      parameters:
+      - description: Product ID
+        in: path
+        name: product_id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: list
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
   /products/{product_id}/networks/{network_id}/tokens:
     get:
       consumes:
@@ -2974,14 +2995,14 @@ paths:
         name: subscription
         required: true
         schema:
-          $ref: '#/definitions/handlers.SubscriptionRequest'
+          $ref: '#/definitions/actalink.SubscriptionRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.CreateSubscriptionResponse'
+            $ref: '#/definitions/actalink.CreateSubscriptionResponse'
         "400":
           description: Bad request
           schema:

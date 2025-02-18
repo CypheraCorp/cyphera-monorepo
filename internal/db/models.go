@@ -100,11 +100,11 @@ func (ns NullApiKeyLevel) Value() (driver.Value, error) {
 type IntervalType string
 
 const (
-	IntervalType5minutes IntervalType = "5minutes"
-	IntervalTypeDaily    IntervalType = "Daily"
-	IntervalTypeWeekly   IntervalType = "Weekly"
-	IntervalTypeMonthly  IntervalType = "Monthly"
-	IntervalTypeYearly   IntervalType = "Yearly"
+	IntervalType5mins IntervalType = "5mins"
+	IntervalTypeDaily IntervalType = "daily"
+	IntervalTypeWeek  IntervalType = "week"
+	IntervalTypeMonth IntervalType = "month"
+	IntervalTypeYear  IntervalType = "year"
 )
 
 func (e *IntervalType) Scan(src interface{}) error {
@@ -330,6 +330,17 @@ type Account struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type ActalinkProduct struct {
+	ID                     uuid.UUID          `json:"id"`
+	ProductID              uuid.UUID          `json:"product_id"`
+	ProductTokenID         uuid.UUID          `json:"product_token_id"`
+	ActalinkPaymentLinkID  string             `json:"actalink_payment_link_id"`
+	ActalinkSubscriptionID string             `json:"actalink_subscription_id"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt              pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type ApiKey struct {

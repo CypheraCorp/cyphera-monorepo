@@ -7,7 +7,7 @@ import (
 )
 
 func (c *ActaLinkClient) GetAllSubscriptions() (*GetSubscriptionsResponse, *int, error) {
-	body, statusCode, err := c.doRequest("GET", "/api/subscription", nil, nil)
+	body, statusCode, err := c.doRequest("GET", "/api/ct/subscriptions", nil, nil, nil)
 	if err != nil {
 		return nil, statusCode, err
 	}
@@ -20,20 +20,29 @@ func (c *ActaLinkClient) GetAllSubscriptions() (*GetSubscriptionsResponse, *int,
 	return &subscriptions, statusCode, nil
 }
 
-func (c *ActaLinkClient) CreateSubscription(req SubscriptionRequest) (*CreateSubscriptionResponse, *int, error) {
+func (c *ActaLinkClient) CreateSubscription(req SubscriptionRequest, cookie string) (*CreateSubscriptionResponse, *int, error) {
 	jsonBody, err := json.Marshal(req)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	_, statusCode, err := c.doRequest("POST", "/api/newsubscription", jsonBody, nil)
+	headers := map[string]string{
+		"X-Api-Key":    c.apiKey,
+		"Content-Type": "application/json",
+		"Cookie":       fmt.Sprintf("acta-session=%s", cookie),
+	}
+
+	body, statusCode, err := c.doRequest("POST", "/api/ct/newsubscription", jsonBody, nil, headers)
 	if err != nil {
 		return nil, statusCode, err
 	}
 
-	return &CreateSubscriptionResponse{
-		Message: "Subscription(s) created successfully",
-	}, statusCode, nil
+	var createSubscriptionResponse CreateSubscriptionResponse
+	if err := json.Unmarshal(body, &createSubscriptionResponse); err != nil {
+		return nil, statusCode, err
+	}
+
+	return &createSubscriptionResponse, statusCode, nil
 }
 
 func (c *ActaLinkClient) DeleteSubscription(req DeleteSubscriptionRequest) (DeleteSubscriptionResponse, *int, error) {
@@ -42,7 +51,7 @@ func (c *ActaLinkClient) DeleteSubscription(req DeleteSubscriptionRequest) (Dele
 		return DeleteSubscriptionResponse{}, nil, err
 	}
 
-	_, statusCode, err := c.doRequest("POST", "/api/ct/subscription/delete", jsonBody, nil)
+	_, statusCode, err := c.doRequest("POST", "/api/ct/subscription/delete", jsonBody, nil, nil)
 	if err != nil {
 		return DeleteSubscriptionResponse{}, statusCode, err
 	}
@@ -56,7 +65,7 @@ func (c *ActaLinkClient) GetSubscribers(subscriptionId string) (*GetSubscribersR
 	params := url.Values{}
 	params.Add("subscriptionId", subscriptionId)
 
-	body, statusCode, err := c.doRequest("GET", "/api/ct/subscribers", nil, params)
+	body, statusCode, err := c.doRequest("GET", "/api/ct/subscribers", nil, params, nil)
 	if err != nil {
 		return nil, statusCode, err
 	}

@@ -59,8 +59,13 @@ func InitializeHandlers() {
 		log.Fatal("ACTALINK_API_KEY environment variable is required")
 	}
 
+	cypheraWalletPrivateKey := os.Getenv("CYPHERA_WALLET_PRIVATE_KEY")
+	if cypheraWalletPrivateKey == "" {
+		log.Fatal("CYPHERA_WALLET_PRIVATE_KEY environment variable is required")
+	}
+
 	// common services initialization
-	actalinkClient := actalink.NewActaLinkClient(apiKey)
+	actalinkClient := actalink.NewActaLinkClient(apiKey, cypheraWalletPrivateKey)
 
 	commonServices := handlers.NewCommonServices(
 		dbQueries,
@@ -219,6 +224,7 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				products.GET("", productHandler.ListProducts)
 				products.POST("", productHandler.CreateProduct)
+				products.POST("/:product_id/publish", productHandler.PublishProduct)
 				products.GET("/:product_id", productHandler.GetProduct)
 				products.PUT("/:product_id", productHandler.UpdateProduct)
 				products.DELETE("/:product_id", productHandler.DeleteProduct)
