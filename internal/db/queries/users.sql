@@ -7,6 +7,12 @@ INSERT INTO users (
     is_account_owner,
     first_name,
     last_name,
+    address_line_1,
+    address_line_2,
+    city,
+    state_region,
+    postal_code,
+    country,
     display_name,
     picture_url,
     phone,
@@ -15,7 +21,7 @@ INSERT INTO users (
     email_verified,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
 ) RETURNING *;
 
 -- name: GetUserByID :one
@@ -36,15 +42,21 @@ SET
     email = COALESCE($1, email),
     first_name = COALESCE($2, first_name),
     last_name = COALESCE($3, last_name),
-    display_name = COALESCE($4, display_name),
-    picture_url = COALESCE($5, picture_url),
-    phone = COALESCE($6, phone),
-    timezone = COALESCE($7, timezone),
-    locale = COALESCE($8, locale),
-    email_verified = COALESCE($9, email_verified),
-    two_factor_enabled = COALESCE($10, two_factor_enabled),
-    status = COALESCE($11, status),
-    metadata = COALESCE($12, metadata),
+    address_line_1 = COALESCE($4, address_line_1),
+    address_line_2 = COALESCE($5, address_line_2),
+    city = COALESCE($6, city),
+    state_region = COALESCE($7, state_region),
+    postal_code = COALESCE($8, postal_code),
+    country = COALESCE($9, country),
+    display_name = COALESCE($10, display_name),
+    picture_url = COALESCE($11, picture_url),
+    phone = COALESCE($12, phone),
+    timezone = COALESCE($13, timezone),
+    locale = COALESCE($14, locale),
+    email_verified = COALESCE($15, email_verified),
+    two_factor_enabled = COALESCE($16, two_factor_enabled),
+    status = COALESCE($17, status),
+    metadata = COALESCE($18, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;

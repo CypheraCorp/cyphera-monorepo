@@ -320,6 +320,7 @@ type Account struct {
 	ID                 uuid.UUID          `json:"id"`
 	Name               string             `json:"name"`
 	AccountType        AccountType        `json:"account_type"`
+	OwnerID            uuid.UUID          `json:"owner_id"`
 	BusinessName       pgtype.Text        `json:"business_name"`
 	BusinessType       pgtype.Text        `json:"business_type"`
 	WebsiteUrl         pgtype.Text        `json:"website_url"`
@@ -443,6 +444,12 @@ type User struct {
 	IsAccountOwner   pgtype.Bool        `json:"is_account_owner"`
 	FirstName        pgtype.Text        `json:"first_name"`
 	LastName         pgtype.Text        `json:"last_name"`
+	AddressLine1     pgtype.Text        `json:"address_line_1"`
+	AddressLine2     pgtype.Text        `json:"address_line_2"`
+	City             pgtype.Text        `json:"city"`
+	StateRegion      pgtype.Text        `json:"state_region"`
+	PostalCode       pgtype.Text        `json:"postal_code"`
+	Country          pgtype.Text        `json:"country"`
 	DisplayName      pgtype.Text        `json:"display_name"`
 	PictureUrl       pgtype.Text        `json:"picture_url"`
 	Phone            pgtype.Text        `json:"phone"`
