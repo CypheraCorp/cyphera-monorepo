@@ -100,7 +100,7 @@ func (q *Queries) DeleteWorkspace(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAccountByWorkspaceID = `-- name: GetAccountByWorkspaceID :one
-SELECT a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at FROM accounts a
+SELECT a.id, a.name, a.account_type, a.owner_id, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at FROM accounts a
 JOIN workspaces w ON w.account_id = a.id
 WHERE w.id = $1 
 AND w.deleted_at IS NULL 
@@ -115,6 +115,7 @@ func (q *Queries) GetAccountByWorkspaceID(ctx context.Context, id uuid.UUID) (Ac
 		&i.ID,
 		&i.Name,
 		&i.AccountType,
+		&i.OwnerID,
 		&i.BusinessName,
 		&i.BusinessType,
 		&i.WebsiteUrl,

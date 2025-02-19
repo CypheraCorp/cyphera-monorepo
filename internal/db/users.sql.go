@@ -21,6 +21,12 @@ INSERT INTO users (
     is_account_owner,
     first_name,
     last_name,
+    address_line_1,
+    address_line_2,
+    city,
+    state_region,
+    postal_code,
+    country,
     display_name,
     picture_url,
     phone,
@@ -29,8 +35,8 @@ INSERT INTO users (
     email_verified,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
-) RETURNING id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+) RETURNING id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
 `
 
 type CreateUserParams struct {
@@ -41,6 +47,12 @@ type CreateUserParams struct {
 	IsAccountOwner pgtype.Bool `json:"is_account_owner"`
 	FirstName      pgtype.Text `json:"first_name"`
 	LastName       pgtype.Text `json:"last_name"`
+	AddressLine1   pgtype.Text `json:"address_line_1"`
+	AddressLine2   pgtype.Text `json:"address_line_2"`
+	City           pgtype.Text `json:"city"`
+	StateRegion    pgtype.Text `json:"state_region"`
+	PostalCode     pgtype.Text `json:"postal_code"`
+	Country        pgtype.Text `json:"country"`
 	DisplayName    pgtype.Text `json:"display_name"`
 	PictureUrl     pgtype.Text `json:"picture_url"`
 	Phone          pgtype.Text `json:"phone"`
@@ -59,6 +71,12 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.IsAccountOwner,
 		arg.FirstName,
 		arg.LastName,
+		arg.AddressLine1,
+		arg.AddressLine2,
+		arg.City,
+		arg.StateRegion,
+		arg.PostalCode,
+		arg.Country,
 		arg.DisplayName,
 		arg.PictureUrl,
 		arg.Phone,
@@ -77,6 +95,12 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.StateRegion,
+		&i.PostalCode,
+		&i.Country,
 		&i.DisplayName,
 		&i.PictureUrl,
 		&i.Phone,
@@ -106,7 +130,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAccountOwner = `-- name: GetAccountOwner :one
-SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
 WHERE account_id = $1 AND is_account_owner = true AND deleted_at IS NULL
 `
 
@@ -122,6 +146,12 @@ func (q *Queries) GetAccountOwner(ctx context.Context, accountID uuid.UUID) (Use
 		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.StateRegion,
+		&i.PostalCode,
+		&i.Country,
 		&i.DisplayName,
 		&i.PictureUrl,
 		&i.Phone,
@@ -141,7 +171,7 @@ func (q *Queries) GetAccountOwner(ctx context.Context, accountID uuid.UUID) (Use
 
 const getUserAccount = `-- name: GetUserAccount :one
 SELECT 
-    u.id, u.supabase_id, u.email, u.account_id, u.role, u.is_account_owner, u.first_name, u.last_name, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
+    u.id, u.supabase_id, u.email, u.account_id, u.role, u.is_account_owner, u.first_name, u.last_name, u.address_line_1, u.address_line_2, u.city, u.state_region, u.postal_code, u.country, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
     a.name as account_name
 FROM users u
 JOIN accounts a ON u.account_id = a.id
@@ -159,6 +189,12 @@ type GetUserAccountRow struct {
 	IsAccountOwner   pgtype.Bool        `json:"is_account_owner"`
 	FirstName        pgtype.Text        `json:"first_name"`
 	LastName         pgtype.Text        `json:"last_name"`
+	AddressLine1     pgtype.Text        `json:"address_line_1"`
+	AddressLine2     pgtype.Text        `json:"address_line_2"`
+	City             pgtype.Text        `json:"city"`
+	StateRegion      pgtype.Text        `json:"state_region"`
+	PostalCode       pgtype.Text        `json:"postal_code"`
+	Country          pgtype.Text        `json:"country"`
 	DisplayName      pgtype.Text        `json:"display_name"`
 	PictureUrl       pgtype.Text        `json:"picture_url"`
 	Phone            pgtype.Text        `json:"phone"`
@@ -187,6 +223,12 @@ func (q *Queries) GetUserAccount(ctx context.Context, id uuid.UUID) (GetUserAcco
 		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.StateRegion,
+		&i.PostalCode,
+		&i.Country,
 		&i.DisplayName,
 		&i.PictureUrl,
 		&i.Phone,
@@ -206,7 +248,7 @@ func (q *Queries) GetUserAccount(ctx context.Context, id uuid.UUID) (GetUserAcco
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
 WHERE email = $1 AND deleted_at IS NULL
 `
 
@@ -222,6 +264,12 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.StateRegion,
+		&i.PostalCode,
+		&i.Country,
 		&i.DisplayName,
 		&i.PictureUrl,
 		&i.Phone,
@@ -240,7 +288,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -256,6 +304,12 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.StateRegion,
+		&i.PostalCode,
+		&i.Country,
 		&i.DisplayName,
 		&i.PictureUrl,
 		&i.Phone,
@@ -274,7 +328,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 }
 
 const getUserBySupabaseID = `-- name: GetUserBySupabaseID :one
-SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
 WHERE supabase_id = $1 AND deleted_at IS NULL
 `
 
@@ -290,6 +344,12 @@ func (q *Queries) GetUserBySupabaseID(ctx context.Context, supabaseID string) (U
 		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.StateRegion,
+		&i.PostalCode,
+		&i.Country,
 		&i.DisplayName,
 		&i.PictureUrl,
 		&i.Phone,
@@ -308,7 +368,7 @@ func (q *Queries) GetUserBySupabaseID(ctx context.Context, supabaseID string) (U
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
 ORDER BY created_at
 `
 
@@ -330,6 +390,12 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.IsAccountOwner,
 			&i.FirstName,
 			&i.LastName,
+			&i.AddressLine1,
+			&i.AddressLine2,
+			&i.City,
+			&i.StateRegion,
+			&i.PostalCode,
+			&i.Country,
 			&i.DisplayName,
 			&i.PictureUrl,
 			&i.Phone,
@@ -355,7 +421,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 }
 
 const listUsersByAccount = `-- name: ListUsersByAccount :many
-SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
 WHERE account_id = $1 AND deleted_at IS NULL
 ORDER BY is_account_owner DESC, created_at DESC
 `
@@ -378,6 +444,12 @@ func (q *Queries) ListUsersByAccount(ctx context.Context, accountID uuid.UUID) (
 			&i.IsAccountOwner,
 			&i.FirstName,
 			&i.LastName,
+			&i.AddressLine1,
+			&i.AddressLine2,
+			&i.City,
+			&i.StateRegion,
+			&i.PostalCode,
+			&i.Country,
 			&i.DisplayName,
 			&i.PictureUrl,
 			&i.Phone,
@@ -408,24 +480,36 @@ SET
     email = COALESCE($1, email),
     first_name = COALESCE($2, first_name),
     last_name = COALESCE($3, last_name),
-    display_name = COALESCE($4, display_name),
-    picture_url = COALESCE($5, picture_url),
-    phone = COALESCE($6, phone),
-    timezone = COALESCE($7, timezone),
-    locale = COALESCE($8, locale),
-    email_verified = COALESCE($9, email_verified),
-    two_factor_enabled = COALESCE($10, two_factor_enabled),
-    status = COALESCE($11, status),
-    metadata = COALESCE($12, metadata),
+    address_line_1 = COALESCE($4, address_line_1),
+    address_line_2 = COALESCE($5, address_line_2),
+    city = COALESCE($6, city),
+    state_region = COALESCE($7, state_region),
+    postal_code = COALESCE($8, postal_code),
+    country = COALESCE($9, country),
+    display_name = COALESCE($10, display_name),
+    picture_url = COALESCE($11, picture_url),
+    phone = COALESCE($12, phone),
+    timezone = COALESCE($13, timezone),
+    locale = COALESCE($14, locale),
+    email_verified = COALESCE($15, email_verified),
+    two_factor_enabled = COALESCE($16, two_factor_enabled),
+    status = COALESCE($17, status),
+    metadata = COALESCE($18, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
+RETURNING id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateUserParams struct {
 	Email            string         `json:"email"`
 	FirstName        pgtype.Text    `json:"first_name"`
 	LastName         pgtype.Text    `json:"last_name"`
+	AddressLine1     pgtype.Text    `json:"address_line_1"`
+	AddressLine2     pgtype.Text    `json:"address_line_2"`
+	City             pgtype.Text    `json:"city"`
+	StateRegion      pgtype.Text    `json:"state_region"`
+	PostalCode       pgtype.Text    `json:"postal_code"`
+	Country          pgtype.Text    `json:"country"`
 	DisplayName      pgtype.Text    `json:"display_name"`
 	PictureUrl       pgtype.Text    `json:"picture_url"`
 	Phone            pgtype.Text    `json:"phone"`
@@ -442,6 +526,12 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		arg.Email,
 		arg.FirstName,
 		arg.LastName,
+		arg.AddressLine1,
+		arg.AddressLine2,
+		arg.City,
+		arg.StateRegion,
+		arg.PostalCode,
+		arg.Country,
 		arg.DisplayName,
 		arg.PictureUrl,
 		arg.Phone,
@@ -462,6 +552,12 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.StateRegion,
+		&i.PostalCode,
+		&i.Country,
 		&i.DisplayName,
 		&i.PictureUrl,
 		&i.Phone,
@@ -486,7 +582,7 @@ SET
     is_account_owner = $3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
+RETURNING id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateUserRoleParams struct {
@@ -507,6 +603,12 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.IsAccountOwner,
 		&i.FirstName,
 		&i.LastName,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.StateRegion,
+		&i.PostalCode,
+		&i.Country,
 		&i.DisplayName,
 		&i.PictureUrl,
 		&i.Phone,

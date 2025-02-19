@@ -29,6 +29,12 @@ type UserResponse struct {
 	Email            string                 `json:"email"`
 	FirstName        string                 `json:"first_name,omitempty"`
 	LastName         string                 `json:"last_name,omitempty"`
+	AddressLine1     string                 `json:"address_line_1,omitempty"`
+	AddressLine2     string                 `json:"address_line_2,omitempty"`
+	City             string                 `json:"city,omitempty"`
+	StateRegion      string                 `json:"state_region,omitempty"`
+	PostalCode       string                 `json:"postal_code,omitempty"`
+	Country          string                 `json:"country,omitempty"`
 	DisplayName      string                 `json:"display_name,omitempty"`
 	PictureURL       string                 `json:"picture_url,omitempty"`
 	Phone            string                 `json:"phone,omitempty"`
@@ -59,6 +65,12 @@ type CreateUserRequest struct {
 	IsAccountOwner bool                   `json:"is_account_owner"`
 	FirstName      string                 `json:"first_name,omitempty"`
 	LastName       string                 `json:"last_name,omitempty"`
+	AddressLine1   string                 `json:"address_line_1,omitempty"`
+	AddressLine2   string                 `json:"address_line_2,omitempty"`
+	City           string                 `json:"city,omitempty"`
+	StateRegion    string                 `json:"state_region,omitempty"`
+	PostalCode     string                 `json:"postal_code,omitempty"`
+	Country        string                 `json:"country,omitempty"`
 	DisplayName    string                 `json:"display_name,omitempty"`
 	PictureURL     string                 `json:"picture_url,omitempty"`
 	Phone          string                 `json:"phone,omitempty"`
@@ -73,6 +85,12 @@ type UpdateUserRequest struct {
 	Email            string                 `json:"email,omitempty"`
 	FirstName        string                 `json:"first_name,omitempty"`
 	LastName         string                 `json:"last_name,omitempty"`
+	AddressLine1     string                 `json:"address_line_1,omitempty"`
+	AddressLine2     string                 `json:"address_line_2,omitempty"`
+	City             string                 `json:"city,omitempty"`
+	StateRegion      string                 `json:"state_region,omitempty"`
+	PostalCode       string                 `json:"postal_code,omitempty"`
+	Country          string                 `json:"country,omitempty"`
 	DisplayName      string                 `json:"display_name,omitempty"`
 	PictureURL       string                 `json:"picture_url,omitempty"`
 	Phone            string                 `json:"phone,omitempty"`
@@ -186,6 +204,12 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		IsAccountOwner: pgtype.Bool{Bool: req.IsAccountOwner, Valid: true},
 		FirstName:      pgtype.Text{String: req.FirstName, Valid: req.FirstName != ""},
 		LastName:       pgtype.Text{String: req.LastName, Valid: req.LastName != ""},
+		AddressLine1:   pgtype.Text{String: req.AddressLine1, Valid: req.AddressLine1 != ""},
+		AddressLine2:   pgtype.Text{String: req.AddressLine2, Valid: req.AddressLine2 != ""},
+		City:           pgtype.Text{String: req.City, Valid: req.City != ""},
+		StateRegion:    pgtype.Text{String: req.StateRegion, Valid: req.StateRegion != ""},
+		PostalCode:     pgtype.Text{String: req.PostalCode, Valid: req.PostalCode != ""},
+		Country:        pgtype.Text{String: req.Country, Valid: req.Country != ""},
 		DisplayName:    pgtype.Text{String: req.DisplayName, Valid: req.DisplayName != ""},
 		PictureUrl:     pgtype.Text{String: req.PictureURL, Valid: req.PictureURL != ""},
 		Phone:          pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
@@ -255,6 +279,12 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		Email:            parsedUUID.String(), // First parameter is used for both ID and email in the query
 		FirstName:        pgtype.Text{String: req.FirstName, Valid: req.FirstName != ""},
 		LastName:         pgtype.Text{String: req.LastName, Valid: req.LastName != ""},
+		AddressLine1:     pgtype.Text{String: req.AddressLine1, Valid: req.AddressLine1 != ""},
+		AddressLine2:     pgtype.Text{String: req.AddressLine2, Valid: req.AddressLine2 != ""},
+		City:             pgtype.Text{String: req.City, Valid: req.City != ""},
+		StateRegion:      pgtype.Text{String: req.StateRegion, Valid: req.StateRegion != ""},
+		PostalCode:       pgtype.Text{String: req.PostalCode, Valid: req.PostalCode != ""},
+		Country:          pgtype.Text{String: req.Country, Valid: req.Country != ""},
 		DisplayName:      pgtype.Text{String: req.DisplayName, Valid: req.DisplayName != ""},
 		PictureUrl:       pgtype.Text{String: req.PictureURL, Valid: req.PictureURL != ""},
 		Phone:            pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
@@ -381,6 +411,12 @@ func toUserResponse(u db.User) UserResponse {
 		Email:            u.Email,
 		FirstName:        u.FirstName.String,
 		LastName:         u.LastName.String,
+		AddressLine1:     u.AddressLine1.String,
+		AddressLine2:     u.AddressLine2.String,
+		City:             u.City.String,
+		StateRegion:      u.StateRegion.String,
+		PostalCode:       u.PostalCode.String,
+		Country:          u.Country.String,
 		DisplayName:      u.DisplayName.String,
 		PictureURL:       u.PictureUrl.String,
 		Phone:            u.Phone.String,
@@ -404,6 +440,12 @@ func toUserAccountResponse(u db.GetUserAccountRow) UserAccountResponse {
 		Email:            u.Email,
 		FirstName:        u.FirstName.String,
 		LastName:         u.LastName.String,
+		AddressLine1:     u.AddressLine1.String,
+		AddressLine2:     u.AddressLine2.String,
+		City:             u.City.String,
+		StateRegion:      u.StateRegion.String,
+		PostalCode:       u.PostalCode.String,
+		Country:          u.Country.String,
 		DisplayName:      u.DisplayName.String,
 		PictureURL:       u.PictureUrl.String,
 		Phone:            u.Phone.String,

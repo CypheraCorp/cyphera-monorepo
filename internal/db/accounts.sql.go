@@ -25,7 +25,7 @@ INSERT INTO accounts (
     metadata
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9
-) RETURNING id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at
+) RETURNING id, name, account_type, owner_id, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at
 `
 
 type CreateAccountParams struct {
@@ -57,6 +57,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.ID,
 		&i.Name,
 		&i.AccountType,
+		&i.OwnerID,
 		&i.BusinessName,
 		&i.BusinessType,
 		&i.WebsiteUrl,
@@ -83,7 +84,7 @@ func (q *Queries) DeleteAccount(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
+SELECT id, name, account_type, owner_id, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -94,6 +95,7 @@ func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
 		&i.ID,
 		&i.Name,
 		&i.AccountType,
+		&i.OwnerID,
 		&i.BusinessName,
 		&i.BusinessType,
 		&i.WebsiteUrl,
@@ -109,7 +111,7 @@ func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
 }
 
 const getAccountByID = `-- name: GetAccountByID :one
-SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
+SELECT id, name, account_type, owner_id, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -120,6 +122,7 @@ func (q *Queries) GetAccountByID(ctx context.Context, id uuid.UUID) (Account, er
 		&i.ID,
 		&i.Name,
 		&i.AccountType,
+		&i.OwnerID,
 		&i.BusinessName,
 		&i.BusinessType,
 		&i.WebsiteUrl,
@@ -136,7 +139,7 @@ func (q *Queries) GetAccountByID(ctx context.Context, id uuid.UUID) (Account, er
 
 const getAccountUsers = `-- name: GetAccountUsers :many
 SELECT 
-    u.id, u.supabase_id, u.email, u.account_id, u.role, u.is_account_owner, u.first_name, u.last_name, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
+    u.id, u.supabase_id, u.email, u.account_id, u.role, u.is_account_owner, u.first_name, u.last_name, u.address_line_1, u.address_line_2, u.city, u.state_region, u.postal_code, u.country, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
     u.role,
     u.is_account_owner,
     u.created_at as joined_at
@@ -155,6 +158,12 @@ type GetAccountUsersRow struct {
 	IsAccountOwner   pgtype.Bool        `json:"is_account_owner"`
 	FirstName        pgtype.Text        `json:"first_name"`
 	LastName         pgtype.Text        `json:"last_name"`
+	AddressLine1     pgtype.Text        `json:"address_line_1"`
+	AddressLine2     pgtype.Text        `json:"address_line_2"`
+	City             pgtype.Text        `json:"city"`
+	StateRegion      pgtype.Text        `json:"state_region"`
+	PostalCode       pgtype.Text        `json:"postal_code"`
+	Country          pgtype.Text        `json:"country"`
 	DisplayName      pgtype.Text        `json:"display_name"`
 	PictureUrl       pgtype.Text        `json:"picture_url"`
 	Phone            pgtype.Text        `json:"phone"`
@@ -191,6 +200,12 @@ func (q *Queries) GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]G
 			&i.IsAccountOwner,
 			&i.FirstName,
 			&i.LastName,
+			&i.AddressLine1,
+			&i.AddressLine2,
+			&i.City,
+			&i.StateRegion,
+			&i.PostalCode,
+			&i.Country,
 			&i.DisplayName,
 			&i.PictureUrl,
 			&i.Phone,
@@ -219,7 +234,7 @@ func (q *Queries) GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]G
 }
 
 const getAllAccounts = `-- name: GetAllAccounts :many
-SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
+SELECT id, name, account_type, owner_id, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
 ORDER BY created_at DESC
 `
 
@@ -236,6 +251,7 @@ func (q *Queries) GetAllAccounts(ctx context.Context) ([]Account, error) {
 			&i.ID,
 			&i.Name,
 			&i.AccountType,
+			&i.OwnerID,
 			&i.BusinessName,
 			&i.BusinessType,
 			&i.WebsiteUrl,
@@ -268,7 +284,7 @@ func (q *Queries) HardDeleteAccount(ctx context.Context, id uuid.UUID) error {
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
+SELECT id, name, account_type, owner_id, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -286,6 +302,7 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 			&i.ID,
 			&i.Name,
 			&i.AccountType,
+			&i.OwnerID,
 			&i.BusinessName,
 			&i.BusinessType,
 			&i.WebsiteUrl,
@@ -308,7 +325,7 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 }
 
 const listAccountsByType = `-- name: ListAccountsByType :many
-SELECT id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
+SELECT id, name, account_type, owner_id, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at FROM accounts
 WHERE account_type = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -326,6 +343,7 @@ func (q *Queries) ListAccountsByType(ctx context.Context, accountType AccountTyp
 			&i.ID,
 			&i.Name,
 			&i.AccountType,
+			&i.OwnerID,
 			&i.BusinessName,
 			&i.BusinessType,
 			&i.WebsiteUrl,
@@ -348,7 +366,7 @@ func (q *Queries) ListAccountsByType(ctx context.Context, accountType AccountTyp
 }
 
 const listAccountsByUser = `-- name: ListAccountsByUser :many
-SELECT a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at
+SELECT a.id, a.name, a.account_type, a.owner_id, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at
 FROM accounts a
 JOIN users u ON a.id = u.account_id
 WHERE u.id = $1 
@@ -370,6 +388,7 @@ func (q *Queries) ListAccountsByUser(ctx context.Context, id uuid.UUID) ([]Accou
 			&i.ID,
 			&i.Name,
 			&i.AccountType,
+			&i.OwnerID,
 			&i.BusinessName,
 			&i.BusinessType,
 			&i.WebsiteUrl,
@@ -392,7 +411,7 @@ func (q *Queries) ListAccountsByUser(ctx context.Context, id uuid.UUID) ([]Accou
 }
 
 const searchAccounts = `-- name: SearchAccounts :many
-SELECT DISTINCT a.id, a.name, a.account_type, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at 
+SELECT DISTINCT a.id, a.name, a.account_type, a.owner_id, a.business_name, a.business_type, a.website_url, a.support_email, a.support_phone, a.metadata, a.finished_onboarding, a.created_at, a.updated_at, a.deleted_at 
 FROM accounts a
 LEFT JOIN users u ON a.id = u.account_id
 WHERE 
@@ -427,6 +446,7 @@ func (q *Queries) SearchAccounts(ctx context.Context, arg SearchAccountsParams) 
 			&i.ID,
 			&i.Name,
 			&i.AccountType,
+			&i.OwnerID,
 			&i.BusinessName,
 			&i.BusinessType,
 			&i.WebsiteUrl,
@@ -462,7 +482,7 @@ SET
     metadata = COALESCE($10, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, name, account_type, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at
+RETURNING id, name, account_type, owner_id, business_name, business_type, website_url, support_email, support_phone, metadata, finished_onboarding, created_at, updated_at, deleted_at
 `
 
 type UpdateAccountParams struct {
@@ -496,6 +516,7 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (A
 		&i.ID,
 		&i.Name,
 		&i.AccountType,
+		&i.OwnerID,
 		&i.BusinessName,
 		&i.BusinessType,
 		&i.WebsiteUrl,
