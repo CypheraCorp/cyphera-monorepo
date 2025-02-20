@@ -80,6 +80,19 @@ type AccountAccessResponse struct {
 	Workspace []db.Workspace
 }
 
+// OnboardAccountRequest represents the request body for onboarding an account
+type OnboardAccountRequest struct {
+	AddressLine1  string `json:"address_line_1"`
+	AddressLine2  string `json:"address_line_2"`
+	City          string `json:"city"`
+	State         string `json:"state"`
+	PostalCode    string `json:"postal_code"`
+	Country       string `json:"country"`
+	FirstName     string `json:"first_name"`
+	LastName      string `json:"last_name"`
+	WalletAddress string `json:"wallet_address"`
+}
+
 // ListAccounts godoc
 // @Summary List accounts
 // @Description Returns a list of accounts. Only accessible by admins.
@@ -486,6 +499,82 @@ func (h *AccountHandler) SignInAccount(c *gin.Context) {
 			Workspace: workspaces,
 		}))
 	}
+}
+
+// OnboardAccount godoc
+// @Summary Onboard an account
+// @Description Onboards an account by setting the finished_onboarding flag to true
+// @Tags accounts
+// @Accept json
+// @Produce json
+// @Param account_id path string true "Account ID"
+// @Success 200 {object} AccountResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /accounts/onboard [post]
+func (h *AccountHandler) OnboardAccount(c *gin.Context) {
+	// Check account access
+	access, err := h.CheckAccountAccess(c)
+	if HandleAccountAccessError(c, err) {
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	var req OnboardAccountRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	// Start with base params containing only the ID
+	accountParams := db.UpdateAccountParams{
+		ID:                 access.Account.ID,
+		Name:               access.Account.Name,
+		AccountType:        access.Account.AccountType,
+		BusinessName:       access.Account.BusinessName,
+		BusinessType:       access.Account.BusinessType,
+		WebsiteUrl:         access.Account.WebsiteUrl,
+		SupportEmail:       access.Account.SupportEmail,
+		SupportPhone:       access.Account.SupportPhone,
+		FinishedOnboarding: pgtype.Bool{Bool: true, Valid: true},
+		Metadata:           access.Account.Metadata,
+		OwnerID:            pgtype.UUID{Bytes: access.User.ID, Valid: true},
+	}
+
+	_, err = h.common.db.UpdateAccount(c.Request.Context(), accountParams)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to onboard account", err)
+		return
+	}
+
+	userParams := db.UpdateUserParams{
+		ID:               access.User.ID,
+		Email:            access.User.Email,
+		FirstName:        pgtype.Text{String: req.FirstName, Valid: req.FirstName != ""},
+		LastName:         pgtype.Text{String: req.LastName, Valid: req.LastName != ""},
+		AddressLine1:     pgtype.Text{String: req.AddressLine1, Valid: req.AddressLine1 != ""},
+		AddressLine2:     pgtype.Text{String: req.AddressLine2, Valid: req.AddressLine2 != ""},
+		City:             pgtype.Text{String: req.City, Valid: req.City != ""},
+		StateRegion:      pgtype.Text{String: req.State, Valid: req.State != ""},
+		PostalCode:       pgtype.Text{String: req.PostalCode, Valid: req.PostalCode != ""},
+		Country:          pgtype.Text{String: req.Country, Valid: req.Country != ""},
+		DisplayName:      access.User.DisplayName,
+		PictureUrl:       access.User.PictureUrl,
+		Phone:            access.User.Phone,
+		Timezone:         access.User.Timezone,
+		Locale:           access.User.Locale,
+		EmailVerified:    pgtype.Bool{Bool: true, Valid: true},
+		TwoFactorEnabled: access.User.TwoFactorEnabled,
+		Status:           access.User.Status,
+	}
+
+	_, err = h.common.db.UpdateUser(c.Request.Context(), userParams)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to onboard account", err)
+		return
+	}
+
+	sendSuccess(c, http.StatusOK, gin.H{"message": "Account onboarded successfully"})
 }
 
 // HandleAccountAccessError is a helper function to handle account access errors consistently

@@ -432,6 +432,14 @@ definitions:
     properties:
       account_id:
         type: string
+      address_line_1:
+        type: string
+      address_line_2:
+        type: string
+      city:
+        type: string
+      country:
+        type: string
       display_name:
         type: string
       email:
@@ -453,11 +461,15 @@ definitions:
         type: string
       picture_url:
         type: string
+      postal_code:
+        type: string
       role:
         enum:
         - admin
         - support
         - developer
+        type: string
+      state_region:
         type: string
       supabase_id:
         type: string
@@ -992,6 +1004,14 @@ definitions:
     type: object
   handlers.UpdateUserRequest:
     properties:
+      address_line_1:
+        type: string
+      address_line_2:
+        type: string
+      city:
+        type: string
+      country:
+        type: string
       display_name:
         type: string
       email:
@@ -1010,6 +1030,10 @@ definitions:
       phone:
         type: string
       picture_url:
+        type: string
+      postal_code:
+        type: string
+      state_region:
         type: string
       status:
         type: string
@@ -1061,6 +1085,14 @@ definitions:
     properties:
       account_name:
         type: string
+      address_line_1:
+        type: string
+      address_line_2:
+        type: string
+      city:
+        type: string
+      country:
+        type: string
       created_at:
         type: integer
       display_name:
@@ -1088,7 +1120,11 @@ definitions:
         type: string
       picture_url:
         type: string
+      postal_code:
+        type: string
       role:
+        type: string
+      state_region:
         type: string
       status:
         type: string
@@ -1119,6 +1155,14 @@ definitions:
     type: object
   handlers.UserResponse:
     properties:
+      address_line_1:
+        type: string
+      address_line_2:
+        type: string
+      city:
+        type: string
+      country:
+        type: string
       created_at:
         type: integer
       display_name:
@@ -1143,6 +1187,10 @@ definitions:
       phone:
         type: string
       picture_url:
+        type: string
+      postal_code:
+        type: string
+      state_region:
         type: string
       status:
         type: string
@@ -1440,6 +1488,36 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get current account
+      tags:
+      - accounts
+  /accounts/onboard:
+    post:
+      consumes:
+      - application/json
+      description: Onboards an account by setting the finished_onboarding flag to
+        true
+      parameters:
+      - description: Account ID
+        in: path
+        name: account_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AccountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Onboard an account
       tags:
       - accounts
   /accounts/signin:

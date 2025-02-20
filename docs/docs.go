@@ -273,6 +273,50 @@ const docTemplate = `{
                 }
             }
         },
+        "/accounts/onboard": {
+            "post": {
+                "description": "Onboards an account by setting the finished_onboarding flag to true",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Onboard an account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "account_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AccountResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/accounts/signin": {
             "post": {
                 "security": [
@@ -5196,6 +5240,18 @@ const docTemplate = `{
                 "account_id": {
                     "type": "string"
                 },
+                "address_line_1": {
+                    "type": "string"
+                },
+                "address_line_2": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
                 "display_name": {
                     "type": "string"
                 },
@@ -5227,6 +5283,9 @@ const docTemplate = `{
                 "picture_url": {
                     "type": "string"
                 },
+                "postal_code": {
+                    "type": "string"
+                },
                 "role": {
                     "type": "string",
                     "enum": [
@@ -5234,6 +5293,9 @@ const docTemplate = `{
                         "support",
                         "developer"
                     ]
+                },
+                "state_region": {
+                    "type": "string"
                 },
                 "supabase_id": {
                     "type": "string"
@@ -6037,6 +6099,18 @@ const docTemplate = `{
         "handlers.UpdateUserRequest": {
             "type": "object",
             "properties": {
+                "address_line_1": {
+                    "type": "string"
+                },
+                "address_line_2": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
                 "display_name": {
                     "type": "string"
                 },
@@ -6063,6 +6137,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "picture_url": {
+                    "type": "string"
+                },
+                "postal_code": {
+                    "type": "string"
+                },
+                "state_region": {
                     "type": "string"
                 },
                 "status": {
@@ -6140,6 +6220,18 @@ const docTemplate = `{
                 "account_name": {
                     "type": "string"
                 },
+                "address_line_1": {
+                    "type": "string"
+                },
+                "address_line_2": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "integer"
                 },
@@ -6180,7 +6272,13 @@ const docTemplate = `{
                 "picture_url": {
                     "type": "string"
                 },
+                "postal_code": {
+                    "type": "string"
+                },
                 "role": {
+                    "type": "string"
+                },
+                "state_region": {
                     "type": "string"
                 },
                 "status": {
@@ -6228,6 +6326,18 @@ const docTemplate = `{
         "handlers.UserResponse": {
             "type": "object",
             "properties": {
+                "address_line_1": {
+                    "type": "string"
+                },
+                "address_line_2": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "integer"
                 },
@@ -6263,6 +6373,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "picture_url": {
+                    "type": "string"
+                },
+                "postal_code": {
+                    "type": "string"
+                },
+                "state_region": {
                     "type": "string"
                 },
                 "status": {

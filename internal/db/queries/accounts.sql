@@ -15,6 +15,7 @@ ORDER BY created_at DESC;
 INSERT INTO accounts (
     name,
     account_type,
+    owner_id,
     business_name,
     business_type,
     website_url,
@@ -23,7 +24,7 @@ INSERT INTO accounts (
     finished_onboarding,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 ) RETURNING *;
 
 -- name: GetAccountByID :one
@@ -35,13 +36,14 @@ UPDATE accounts
 SET
     name = COALESCE($2, name),
     account_type = COALESCE($3, account_type),
-    business_name = COALESCE($4, business_name),
-    business_type = COALESCE($5, business_type),
-    website_url = COALESCE($6, website_url),
-    support_email = COALESCE($7, support_email),
-    support_phone = COALESCE($8, support_phone),
-    finished_onboarding = COALESCE($9, finished_onboarding),
-    metadata = COALESCE($10, metadata),
+    owner_id = COALESCE($4, owner_id),
+    business_name = COALESCE($5, business_name),
+    business_type = COALESCE($6, business_type),
+    website_url = COALESCE($7, website_url),
+    support_email = COALESCE($8, support_email),
+    support_phone = COALESCE($9, support_phone),
+    finished_onboarding = COALESCE($10, finished_onboarding),
+    metadata = COALESCE($11, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
