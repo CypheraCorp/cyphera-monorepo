@@ -164,6 +164,7 @@ func InitializeRoutes(router *gin.Engine) {
 			// Current Account routes
 			accounts := protected.Group("/accounts")
 			{
+				accounts.POST("/me/onboard", accountHandler.OnboardAccount)
 				accounts.GET("/me/details", accountHandler.GetCurrentAccountDetails)
 				accounts.PUT("/me", accountHandler.UpdateCurrentAccount)
 

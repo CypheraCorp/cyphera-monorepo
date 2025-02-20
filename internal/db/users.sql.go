@@ -477,30 +477,31 @@ func (q *Queries) ListUsersByAccount(ctx context.Context, accountID uuid.UUID) (
 const updateUser = `-- name: UpdateUser :one
 UPDATE users
 SET
-    email = COALESCE($1, email),
-    first_name = COALESCE($2, first_name),
-    last_name = COALESCE($3, last_name),
-    address_line_1 = COALESCE($4, address_line_1),
-    address_line_2 = COALESCE($5, address_line_2),
-    city = COALESCE($6, city),
-    state_region = COALESCE($7, state_region),
-    postal_code = COALESCE($8, postal_code),
-    country = COALESCE($9, country),
-    display_name = COALESCE($10, display_name),
-    picture_url = COALESCE($11, picture_url),
-    phone = COALESCE($12, phone),
-    timezone = COALESCE($13, timezone),
-    locale = COALESCE($14, locale),
-    email_verified = COALESCE($15, email_verified),
-    two_factor_enabled = COALESCE($16, two_factor_enabled),
-    status = COALESCE($17, status),
-    metadata = COALESCE($18, metadata),
+    email = COALESCE($2, email),
+    first_name = COALESCE($3, first_name),
+    last_name = COALESCE($4, last_name),
+    address_line_1 = COALESCE($5, address_line_1),
+    address_line_2 = COALESCE($6, address_line_2),
+    city = COALESCE($7, city),
+    state_region = COALESCE($8, state_region),
+    postal_code = COALESCE($9, postal_code),
+    country = COALESCE($10, country),
+    display_name = COALESCE($11, display_name),
+    picture_url = COALESCE($12, picture_url),
+    phone = COALESCE($13, phone),
+    timezone = COALESCE($14, timezone),
+    locale = COALESCE($15, locale),
+    email_verified = COALESCE($16, email_verified),
+    two_factor_enabled = COALESCE($17, two_factor_enabled),
+    status = COALESCE($18, status),
+    metadata = COALESCE($19, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateUserParams struct {
+	ID               uuid.UUID      `json:"id"`
 	Email            string         `json:"email"`
 	FirstName        pgtype.Text    `json:"first_name"`
 	LastName         pgtype.Text    `json:"last_name"`
@@ -523,6 +524,7 @@ type UpdateUserParams struct {
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, updateUser,
+		arg.ID,
 		arg.Email,
 		arg.FirstName,
 		arg.LastName,

@@ -320,7 +320,7 @@ type Account struct {
 	ID                 uuid.UUID          `json:"id"`
 	Name               string             `json:"name"`
 	AccountType        AccountType        `json:"account_type"`
-	OwnerID            uuid.UUID          `json:"owner_id"`
+	OwnerID            pgtype.UUID        `json:"owner_id"`
 	BusinessName       pgtype.Text        `json:"business_name"`
 	BusinessType       pgtype.Text        `json:"business_type"`
 	WebsiteUrl         pgtype.Text        `json:"website_url"`

@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     account_type account_type NOT NULL,
-    owner_id UUID NOT NULL REFERENCES users(id),
+    owner_id UUID,
     business_name VARCHAR(255),
     business_type VARCHAR(255),
     website_url TEXT,
@@ -538,7 +538,6 @@ WHERE p.name = 'Annual Pro Plan'
 AND t.network_id = (SELECT id FROM networks WHERE chain_id = 137)
 AND t.symbol = 'USDC'
 ON CONFLICT DO NOTHING;
-
 -- Create function for updating updated_at timestamp
 CREATE OR REPLACE FUNCTION trigger_set_updated_at()
 RETURNS TRIGGER AS $$
@@ -599,3 +598,4 @@ CREATE TRIGGER set_products_tokens_updated_at
     BEFORE UPDATE ON products_tokens
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
+
