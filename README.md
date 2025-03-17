@@ -10,7 +10,6 @@ This project uses environment variables for configuration. To set up:
    ```
 
 2. Edit `.env` and update the values:
-   - `ACTALINK_API_KEY`: Your API key for Actalink (required)
 
 ## Running the Project
 

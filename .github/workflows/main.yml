@@ -51,7 +51,6 @@ jobs:
         DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
         AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
         AUTH0_AUDIENCE: ${{ secrets.AUTH0_AUDIENCE }}
-        ACTALINK_API_KEY: ${{ secrets.ACTALINK_API_KEY }}
       run: go test -v ./...
 
   lint:
@@ -145,7 +144,6 @@ jobs:
         STAGE: ${{ env.STAGE }}
         AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
         AUTH0_AUDIENCE: ${{ secrets.AUTH0_AUDIENCE }}
-        ACTALINK_API_KEY: ${{ secrets.ACTALINK_API_KEY }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
       run: |
         # Create domain if it doesn't exist
@@ -160,7 +158,6 @@ jobs:
         STAGE: ${{ env.STAGE }}
         AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
         AUTH0_AUDIENCE: ${{ secrets.AUTH0_AUDIENCE }}
-        ACTALINK_API_KEY: ${{ secrets.ACTALINK_API_KEY }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
       run: |
         echo "Deployed to AWS Lambda"

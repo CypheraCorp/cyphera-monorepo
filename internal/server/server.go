@@ -7,15 +7,15 @@ import (
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
 	"cyphera-api/internal/logger"
-	"cyphera-api/internal/pkg/actalink"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -32,9 +32,6 @@ var (
 	productHandler   *handlers.ProductHandler
 	walletHandler    *handlers.WalletHandler
 
-	// Actalink
-	actalinkHandler *handlers.ActalinkHandler
-
 	// Database
 	dbQueries *db.Queries
 )
@@ -46,30 +43,34 @@ func InitializeHandlers() {
 		log.Fatal("DATABASE_URL environment variable is required")
 	}
 
-	conn, err := pgx.Connect(context.Background(), dbURL)
+	// Create a connection pool using pgxpool
+	poolConfig, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {
-		log.Fatalf("Unable to connect to database: %v\n", err)
+		log.Fatalf("Unable to parse database connection string: %v\n", err)
 	}
 
-	// Create queries instance
-	dbQueries = db.New(conn)
+	// Configure the connection pool
+	poolConfig.MaxConns = 20
+	poolConfig.MinConns = 5
+	poolConfig.MaxConnLifetime = time.Hour
+	poolConfig.MaxConnIdleTime = time.Minute * 30
 
-	apiKey := os.Getenv("ACTALINK_API_KEY")
-	if apiKey == "" {
-		log.Fatal("ACTALINK_API_KEY environment variable is required")
+	// Create the connection pool
+	connPool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
+	if err != nil {
+		log.Fatalf("Unable to create connection pool: %v\n", err)
 	}
+
+	// Create queries instance with the connection pool
+	dbQueries = db.New(connPool)
 
 	cypheraWalletPrivateKey := os.Getenv("CYPHERA_WALLET_PRIVATE_KEY")
 	if cypheraWalletPrivateKey == "" {
 		log.Fatal("CYPHERA_WALLET_PRIVATE_KEY environment variable is required")
 	}
 
-	// common services initialization
-	actalinkClient := actalink.NewActaLinkClient(apiKey, cypheraWalletPrivateKey)
-
 	commonServices := handlers.NewCommonServices(
 		dbQueries,
-		actalinkClient,
 	)
 
 	// API Handler initialization
@@ -82,8 +83,6 @@ func InitializeHandlers() {
 	tokenHandler = handlers.NewTokenHandler(commonServices)
 	productHandler = handlers.NewProductHandler(commonServices)
 	walletHandler = handlers.NewWalletHandler(commonServices)
-	// Actalink Handler initialization
-	actalinkHandler = handlers.NewActalinkHandler(commonServices)
 }
 
 func InitializeRoutes(router *gin.Engine) {
@@ -277,35 +276,6 @@ func InitializeRoutes(router *gin.Engine) {
 				wallets.GET("/ens", walletHandler.GetWalletsByENS)
 				wallets.GET("/search", walletHandler.SearchWallets)
 				wallets.GET("/network/:network_type", walletHandler.ListWalletsByNetworkType)
-			}
-
-			// ActaLink routes
-			actalink := protected.Group("/actalink")
-			{
-				// Nonce
-				actalink.GET("/nonce", actalinkHandler.GetNonce)
-
-				// Account
-				actalink.GET("/isuseravailable", actalinkHandler.CheckUserAvailability)
-				actalink.POST("/register", actalinkHandler.RegisterActalinkUser)
-				actalink.POST("/login", actalinkHandler.LoginActalinkUser)
-
-				// Subscription
-				actalink.POST("/subscriptions", actalinkHandler.CreateSubscription)
-				actalink.DELETE("/subscriptions", actalinkHandler.DeleteSubscription)
-				actalink.GET("/subscriptions", actalinkHandler.GetAllSubscriptions)
-
-				// Subscribers
-				actalink.GET("/subscribers", actalinkHandler.GetSubscribers)
-
-				// Operations
-				actalink.GET("/operations", actalinkHandler.GetOperations)
-
-				// Tokens
-				actalink.GET("/tokens", actalinkHandler.GetTokens)
-
-				// Networks
-				actalink.GET("/networks", actalinkHandler.GetNetworks)
 			}
 		}
 	}

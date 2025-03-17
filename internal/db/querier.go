@@ -20,8 +20,6 @@ type Querier interface {
 	CountWorkspaceCustomers(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
-	// Create a new actalink product
-	CreateActalinkProduct(ctx context.Context, arg CreateActalinkProductParams) (ActalinkProduct, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
 	CreateNetwork(ctx context.Context, arg CreateNetworkParams) (Network, error)
 	CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error)
@@ -54,12 +52,6 @@ type Querier interface {
 	GetAccountByWorkspaceID(ctx context.Context, id uuid.UUID) (Account, error)
 	GetAccountOwner(ctx context.Context, accountID uuid.UUID) (User, error)
 	GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]GetAccountUsersRow, error)
-	// Get a single actalink product by ID
-	GetActalinkProduct(ctx context.Context, id uuid.UUID) (ActalinkProduct, error)
-	// Get a single actalink product by product_token_id (unique due to table constraint)
-	GetActalinkProductByProductTokenID(ctx context.Context, productTokenID uuid.UUID) (ActalinkProduct, error)
-	// Get all actalink products for a given product_id
-	GetActalinkProductsByProductID(ctx context.Context, productID uuid.UUID) ([]ActalinkProduct, error)
 	GetActiveAPIKeysCount(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	GetActiveProductTokensByNetwork(ctx context.Context, arg GetActiveProductTokensByNetworkParams) ([]GetActiveProductTokensByNetworkRow, error)
 	GetActiveProductTokensByProduct(ctx context.Context, productID uuid.UUID) ([]GetActiveProductTokensByProductRow, error)
@@ -101,8 +93,6 @@ type Querier interface {
 	ListAccounts(ctx context.Context) ([]Account, error)
 	ListAccountsByType(ctx context.Context, accountType AccountType) ([]Account, error)
 	ListAccountsByUser(ctx context.Context, id uuid.UUID) ([]Account, error)
-	// List all actalink products with optional pagination
-	ListActalinkProducts(ctx context.Context, arg ListActalinkProductsParams) ([]ActalinkProduct, error)
 	ListActiveNetworks(ctx context.Context) ([]Network, error)
 	ListActiveProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	ListActiveTokensByNetwork(ctx context.Context, networkID uuid.UUID) ([]Token, error)

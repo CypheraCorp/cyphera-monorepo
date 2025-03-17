@@ -16,7 +16,6 @@ provider:
     metrics: true
   environment:
     DATABASE_URL: ${env:DATABASE_URL}
-    ACTALINK_API_KEY: ${env:ACTALINK_API_KEY}
     AUTH0_DOMAIN: ${env:AUTH0_DOMAIN}
     AUTH0_AUDIENCE: ${env:AUTH0_AUDIENCE}
   vpc:

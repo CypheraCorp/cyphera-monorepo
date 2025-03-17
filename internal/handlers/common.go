@@ -3,7 +3,6 @@ package handlers
 import (
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/logger"
-	"cyphera-api/internal/pkg/actalink"
 	"errors"
 	"net/http"
 
@@ -14,8 +13,7 @@ import (
 
 // CommonServices holds common dependencies used across handlers
 type CommonServices struct {
-	db       *db.Queries
-	actalink *actalink.ActaLinkClient
+	db *db.Queries
 	// other shared dependencies
 }
 
@@ -30,10 +28,9 @@ type SuccessResponse struct {
 }
 
 // NewCommonServices creates a new instance of CommonServices
-func NewCommonServices(db *db.Queries, actalink *actalink.ActaLinkClient) *CommonServices {
+func NewCommonServices(db *db.Queries) *CommonServices {
 	return &CommonServices{
-		db:       db,
-		actalink: actalink,
+		db: db,
 	}
 }
 

@@ -216,32 +216,6 @@ CREATE TABLE products_tokens (
     UNIQUE(product_id, network_id, token_id)
 );
 
--- Create Actalink Product table
-CREATE TABLE actalink_products (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    product_id UUID NOT NULL REFERENCES products(id),
-    product_token_id UUID NOT NULL REFERENCES products_tokens(id),
-    actalink_payment_link_id TEXT NOT NULL,
-    actalink_subscription_id TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE,
-    UNIQUE(product_id, product_token_id)
-);
-
--- Create indexes for actalink_products table
-CREATE INDEX idx_actalink_products_product_id ON actalink_products(product_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_actalink_products_product_token_id ON actalink_products(product_token_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_actalink_products_payment_link_id ON actalink_products(actalink_payment_link_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_actalink_products_subscription_id ON actalink_products(actalink_subscription_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_actalink_products_created_at ON actalink_products(created_at);
-
--- Add updated_at trigger for actalink_products
-CREATE TRIGGER set_actalink_products_updated_at
-    BEFORE UPDATE ON actalink_products
-    FOR EACH ROW
-    EXECUTE FUNCTION trigger_set_updated_at();
-
 -- Create trigger function to validate token network relationship
 CREATE OR REPLACE FUNCTION validate_token_network()
 RETURNS TRIGGER AS $$
@@ -434,13 +408,13 @@ ON CONFLICT DO NOTHING;
 -- Insert some test networks
 INSERT INTO networks (name, type, chain_id, active)
 VALUES 
-    ('Polygon', 'mainnet', 137, true)
+    ('Ethereum Sepolia', 'sepolia', 11155111, true)
 ON CONFLICT DO NOTHING;
 
 -- Insert some test tokens
 INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token)
 VALUES 
-    ((SELECT id FROM networks WHERE chain_id = 137 AND deleted_at IS NULL), 'USDC', 'USDC', '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359', false)
+    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'ETH', 'ETH', '0x0000000000000000000000000000000000000000', false)
 ON CONFLICT DO NOTHING;
 
 -- Insert test products
@@ -498,7 +472,7 @@ INSERT INTO products_tokens (
     token_id,
     active
 ) 
--- Enable USDC on Polygon for Basic Subscription
+-- Enable ETH on Ethereum Sepolia for Basic Subscription
 SELECT 
     p.id as product_id,
     t.network_id,
@@ -507,12 +481,12 @@ SELECT
 FROM products p
 CROSS JOIN tokens t
 WHERE p.name = 'Basic Subscription'
-AND t.network_id = (SELECT id FROM networks WHERE chain_id = 137)
-AND t.symbol IN ('USDC')
+AND t.network_id = (SELECT id FROM networks WHERE chain_id = 11155111)
+AND t.symbol IN ('ETH')
 
 UNION ALL
 
--- Enable only USDC on Polygon for Annual Pro Plan
+-- Enable only ETH on Ethereum Sepolia for Annual Pro Plan
 SELECT 
     p.id as product_id,
     t.network_id,
@@ -521,12 +495,12 @@ SELECT
 FROM products p
 CROSS JOIN tokens t
 WHERE p.name = 'Annual Pro Plan'
-AND t.network_id = (SELECT id FROM networks WHERE chain_id = 137)
-AND t.symbol = 'USDC'
+AND t.network_id = (SELECT id FROM networks WHERE chain_id = 11155111)
+AND t.symbol = 'ETH'
 
 UNION ALL
 
--- Enable only USDC on Polygon for Annual Pro Plan
+-- Enable only ETH on Ethereum Sepolia for Annual Pro Plan
 SELECT 
     p.id as product_id,
     t.network_id,
@@ -535,8 +509,8 @@ SELECT
 FROM products p
 CROSS JOIN tokens t
 WHERE p.name = 'Annual Pro Plan'
-AND t.network_id = (SELECT id FROM networks WHERE chain_id = 137)
-AND t.symbol = 'USDC'
+AND t.network_id = (SELECT id FROM networks WHERE chain_id = 11155111)
+AND t.symbol = 'ETH'
 ON CONFLICT DO NOTHING;
 -- Create function for updating updated_at timestamp
 CREATE OR REPLACE FUNCTION trigger_set_updated_at()
