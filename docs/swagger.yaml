@@ -1,208 +1,5 @@
 basePath: /api/v1
 definitions:
-  actalink.CreateSubscriptionResponse:
-    properties:
-      message:
-        type: string
-      paymentLinkId:
-        type: string
-      subscriptionId:
-        type: string
-    type: object
-  actalink.Network:
-    properties:
-      chain_id:
-        type: integer
-      currency:
-        type: string
-      name:
-        type: string
-      type:
-        type: string
-    type: object
-  actalink.Operation:
-    properties:
-      entryPoint:
-        type: string
-      executionTime:
-        type: integer
-      paymentType:
-        type: string
-      paymentTypeParams:
-        $ref: '#/definitions/actalink.PaymentTypeParams'
-      status:
-        type: string
-      transactionHash:
-        type: string
-      userOp:
-        $ref: '#/definitions/actalink.UserOperation'
-      userOpHash:
-        type: string
-    type: object
-  actalink.PaymentLink:
-    properties:
-      createdAt:
-        type: string
-      id:
-        type: string
-      subscriptionId:
-        type: string
-      title:
-        type: string
-      validTill:
-        type: string
-    type: object
-  actalink.PaymentTypeParams:
-    properties:
-      paylinkUrl:
-        type: string
-      subscriptionId:
-        type: string
-    type: object
-  actalink.Plan:
-    properties:
-      frequency:
-        type: string
-      name:
-        type: string
-      price:
-        type: number
-      volume:
-        type: integer
-    type: object
-  actalink.Receiver:
-    properties:
-      address:
-        type: string
-      networkId:
-        type: integer
-    type: object
-  actalink.Subscriber:
-    properties:
-      eoaaddress:
-        type: string
-      plan:
-        $ref: '#/definitions/actalink.Plan'
-      planId:
-        type: string
-      status:
-        type: string
-      subscribedAt:
-        type: string
-      subscriptionId:
-        type: string
-      swaddress:
-        type: string
-    type: object
-  actalink.SubscribersData:
-    properties:
-      subscribers:
-        items:
-          $ref: '#/definitions/actalink.Subscriber'
-        type: array
-      subscriptionId:
-        type: string
-      title:
-        type: string
-      userid:
-        type: string
-    type: object
-  actalink.Subscription:
-    properties:
-      createdAt:
-        type: string
-      id:
-        type: string
-      linktree:
-        type: string
-      paymentlink:
-        $ref: '#/definitions/actalink.PaymentLink'
-      plans:
-        items:
-          $ref: '#/definitions/actalink.Plan'
-        type: array
-      receivers:
-        items:
-          $ref: '#/definitions/actalink.Receiver'
-        type: array
-      status:
-        type: string
-      title:
-        type: string
-      tokens:
-        items:
-          $ref: '#/definitions/actalink.Token'
-        type: array
-      trialDays:
-        type: integer
-      userId:
-        type: string
-    type: object
-  actalink.SubscriptionRequest:
-    properties:
-      linktree:
-        type: string
-      plans:
-        items:
-          $ref: '#/definitions/actalink.Plan'
-        type: array
-      receivers:
-        items:
-          $ref: '#/definitions/actalink.Receiver'
-        type: array
-      title:
-        type: string
-      tokens:
-        items:
-          type: string
-        type: array
-      trialDays:
-        type: integer
-    type: object
-  actalink.Token:
-    properties:
-      address:
-        type: string
-      chainId:
-        type: integer
-      coingeckoId:
-        type: string
-      decimals:
-        type: integer
-      id:
-        type: integer
-      logoURI:
-        type: string
-      name:
-        type: string
-      symbol:
-        type: string
-    type: object
-  actalink.UserOperation:
-    properties:
-      callData:
-        type: string
-      callGasLimit:
-        type: string
-      initCode:
-        type: string
-      maxFeePerGas:
-        type: string
-      maxPriorityFeePerGas:
-        type: string
-      nonce:
-        type: string
-      paymasterAndData:
-        type: string
-      preVerificationGas:
-        type: string
-      sender:
-        type: string
-      signature:
-        type: string
-      verificationGasLimit:
-        type: string
-    type: object
   handlers.APIKeyResponse:
     properties:
       access_level:
@@ -577,13 +374,6 @@ definitions:
       workspace_name:
         type: string
     type: object
-  handlers.DeleteSubscriptionRequest:
-    properties:
-      subscriptionId:
-        type: string
-    required:
-    - subscriptionId
-    type: object
   handlers.ErrorResponse:
     properties:
       error:
@@ -598,37 +388,6 @@ definitions:
       workspaces:
         items:
           $ref: '#/definitions/handlers.WorkspaceResponse'
-        type: array
-    type: object
-  handlers.GetNetworksResponse:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/actalink.Network'
-        type: array
-    type: object
-  handlers.GetNonceResponse:
-    properties:
-      nonce:
-        type: string
-    type: object
-  handlers.GetSubscribersResponse:
-    properties:
-      data:
-        $ref: '#/definitions/actalink.SubscribersData'
-    type: object
-  handlers.GetSubscriptionsResponse:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/actalink.Subscription'
-        type: array
-    type: object
-  handlers.GetTokensResponse:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/actalink.Token'
         type: array
     type: object
   handlers.HealthResponse:
@@ -753,13 +512,6 @@ definitions:
       updated_at:
         type: integer
     type: object
-  handlers.OperationsResponse:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/actalink.Operation'
-        type: array
-    type: object
   handlers.ProductResponse:
     properties:
       active:
@@ -831,13 +583,6 @@ definitions:
         type: string
       updated_at:
         type: integer
-    type: object
-  handlers.RegisterOrLoginUserResponse:
-    properties:
-      cookie:
-        type: string
-      message:
-        type: string
     type: object
   handlers.TokenResponse:
     properties:
@@ -1136,22 +881,6 @@ definitions:
         type: boolean
       updated_at:
         type: integer
-    type: object
-  handlers.UserAvailabilityResponse:
-    properties:
-      exists:
-        type: boolean
-    type: object
-  handlers.UserLoginRegisterRequest:
-    properties:
-      address:
-        type: string
-      message:
-        type: string
-      nonce:
-        type: string
-      signature:
-        type: string
     type: object
   handlers.UserResponse:
     properties:
@@ -2050,40 +1779,6 @@ paths:
       summary: Health check
       tags:
       - health
-  /isuseravailable:
-    get:
-      consumes:
-      - application/json
-      description: Verifies if a username is available for registration
-      parameters:
-      - description: Address
-        example: '"0x1234567890abcdef"'
-        in: query
-        name: address
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.UserAvailabilityResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      summary: Check username availability
-      tags:
-      - Actalink
   /networks:
     get:
       consumes:
@@ -2308,78 +2003,6 @@ paths:
       summary: List networks with tokens
       tags:
       - networks
-  /nonce:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves a nonce for wallet-based authentication
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Returns nonce
-          schema:
-            $ref: '#/definitions/handlers.GetNonceResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      summary: Get authentication nonce
-      tags:
-      - Actalink
-  /operations:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves all operations for authenticated user
-      parameters:
-      - description: Smart Wallet Address
-        example: '"0x1234567890abcdef"'
-        in: query
-        name: swaddress
-        required: true
-        type: string
-      - description: Subscription ID
-        example: '"1234567890"'
-        in: query
-        name: subscriptionId
-        required: true
-        type: string
-      - description: Status
-        in: query
-        name: status
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.OperationsResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      summary: List operations
-      tags:
-      - Actalink
   /products:
     get:
       consumes:
@@ -2971,131 +2594,6 @@ paths:
       summary: Get public product by ID
       tags:
       - products
-  /subscribers:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves all subscribers for authenticated user
-      parameters:
-      - description: Subscription ID
-        example: '"1234567890"'
-        in: query
-        name: subscriptionId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.GetSubscribersResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      summary: List subscribers
-      tags:
-      - Actalink
-  /subscriptions:
-    delete:
-      consumes:
-      - application/json
-      description: Deletes a subscription plan
-      parameters:
-      - description: Subscription details
-        in: body
-        name: subscription
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.DeleteSubscriptionRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      summary: Delete a subscription
-      tags:
-      - Actalink
-    get:
-      consumes:
-      - application/json
-      description: Retrieves all available subscription plans
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.GetSubscriptionsResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      summary: List all subscriptions
-      tags:
-      - Actalink
-    post:
-      consumes:
-      - application/json
-      description: Creates a new subscription plan
-      parameters:
-      - description: Subscription details
-        in: body
-        name: subscription
-        required: true
-        schema:
-          $ref: '#/definitions/actalink.SubscriptionRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/actalink.CreateSubscriptionResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      summary: Create a new subscription
-      tags:
-      - Actalink
   /tokens:
     get:
       consumes:
@@ -3376,74 +2874,6 @@ paths:
       summary: Get gas token for network
       tags:
       - tokens
-  /user/login:
-    post:
-      consumes:
-      - application/json
-      description: Authenticates user using wallet signature and returns JWT token
-      parameters:
-      - description: User login payload
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UserLoginRegisterRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.RegisterOrLoginUserResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      summary: Authenticate user
-      tags:
-      - Actalink
-  /user/register:
-    post:
-      consumes:
-      - application/json
-      description: Creates a new user workspace with wallet authentication
-      parameters:
-      - description: User registration payload
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UserLoginRegisterRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.RegisterOrLoginUserResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      summary: Register new user
-      tags:
-      - Actalink
   /users:
     post:
       consumes:
