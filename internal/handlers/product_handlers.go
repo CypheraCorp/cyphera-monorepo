@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -100,6 +101,29 @@ type PublishProductResponse struct {
 	CypheraProductTokenId string `json:"cyphera_product_token_id"`
 }
 
+// CaveatStruct represents a single caveat in a delegation
+type CaveatStruct struct {
+	// TODO: add caveat fields
+	// Define the fields for CaveatStruct based on your needs
+}
+
+// DelegationStruct represents the delegation data structure
+type DelegationStruct struct {
+	Delegate  string         `json:"delegate"`  // Hex string from viem
+	Delegator string         `json:"delegator"` // Hex string from viem
+	Authority string         `json:"authority"` // Hex string from viem
+	Caveats   []CaveatStruct `json:"caveats"`
+	Salt      string         `json:"salt"`      // bigint represented as string
+	Signature string         `json:"signature"` // Hex string from viem
+}
+
+// SubscribeRequest represents the request body for subscribing to a product
+type SubscribeRequest struct {
+	SubscriberAddress string           `json:"subscriber_address"`
+	ProductTokenID    string           `json:"product_token_id"`
+	Delegation        DelegationStruct `json:"delegation"`
+}
+
 // GetProduct godoc
 // @Summary Get product by ID
 // @Description Get product details by product ID
@@ -186,6 +210,74 @@ func (h *ProductHandler) GetPublicProductByID(c *gin.Context) {
 	}
 
 	sendSuccess(c, http.StatusOK, response)
+}
+
+// SubscribeToProduct godoc
+// @Summary Subscribe to a product
+// @Description Subscribe a user to a product using their smart account address and delegation
+// @Tags products
+// @Accept json
+// @Produce json
+// @Param product_id path string true "Product ID"
+// @Param body body SubscribeRequest true "Subscription details"
+// @Success 200 {object} SuccessResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /admin/public/products/{product_id}/subscribe [post]
+func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
+	productId := c.Param("product_id")
+	parsedUUID, err := uuid.Parse(productId)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
+		return
+	}
+
+	// Parse request body
+	var body SubscribeRequest
+	if err := c.ShouldBindJSON(&body); err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	spew.Dump(body)
+
+	// Validate the request
+	if body.SubscriberAddress == "" {
+		sendError(c, http.StatusBadRequest, "Subscriber address is required", nil)
+		return
+	}
+
+	// Verify the product exists
+	product, err := h.common.db.GetProduct(c.Request.Context(), parsedUUID)
+	if err != nil {
+		handleDBError(c, err, "Product not found")
+		return
+	}
+
+	// TODO: stub the product token for now
+	productToken := map[string]interface{}{
+		"token_id": "0x123",
+	}
+
+	// productToken, err := h.common.db.GetProductToken(c.Request.Context(), uuid.MustParse(body.ProductTokenID))
+	// if err != nil {
+	// 	handleDBError(c, err, "Product token not found")
+	// 	return
+	// }
+
+	// TODO: Add integration with Actalink or blockchain services to register the subscription
+	// This would typically involve:
+	// 1. Storing the delegation information
+	// 2. Processing any payment requirements
+	// 3. Generating/updating contract data on the blockchain
+
+	// For now, just acknowledge receipt of the subscription request
+	sendSuccess(c, http.StatusOK, SuccessResponse{
+		Message: fmt.Sprintf("Successfully processed subscription request for product %s (%s) from address %s with product token %s",
+			product.Name, productId, body.SubscriberAddress, productToken["token_id"]),
+	})
 }
 
 func toPublicProductResponse(workspace db.Workspace, product db.Product, productTokens []db.GetActiveProductTokensByProductRow, wallet db.Wallet) PublicProductResponse {
