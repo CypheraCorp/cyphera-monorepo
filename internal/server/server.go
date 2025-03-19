@@ -122,6 +122,7 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				// public routes
 				admin.GET("/public/products/:product_id", productHandler.GetPublicProductByID)
+				admin.POST("/public/products/:product_id/subscribe", productHandler.SubscribeToProduct)
 
 				// Account management
 				admin.GET("/accounts", accountHandler.ListAccounts)
