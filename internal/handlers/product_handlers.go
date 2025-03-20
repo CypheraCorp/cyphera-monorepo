@@ -256,27 +256,24 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 		return
 	}
 
-	// TODO: stub the product token for now
-	productToken := map[string]interface{}{
-		"token_id": "0x123",
+	productToken, err := h.common.db.GetProductToken(c.Request.Context(), uuid.MustParse(body.ProductTokenID))
+	if err != nil {
+		handleDBError(c, err, "Product token not found")
+		return
 	}
 
-	// productToken, err := h.common.db.GetProductToken(c.Request.Context(), uuid.MustParse(body.ProductTokenID))
-	// if err != nil {
-	// 	handleDBError(c, err, "Product token not found")
-	// 	return
-	// }
-
-	// TODO: Add integration with Actalink or blockchain services to register the subscription
-	// This would typically involve:
-	// 1. Storing the delegation information
-	// 2. Processing any payment requirements
-	// 3. Generating/updating contract data on the blockchain
+	// TODO: now that the subscription request has been processed, we need to store the delegation information as well as the subscription data
+	// for the delegation, we need to store the delegate, delegator, authority, salt, signature, and caveats.
+	// for the subscription, we need to store the customer's wallet, the product token key, and the delegation key
+	// the subscription will also store information like the status, last redemption date, next redemption date, and the number of redemptions, total redemptions, and the total value redeemed
+	// once all of this data is stored we need to execute the initial redemption of the delegation
+	// once the redemption is redeemed we will need to store the redemtion/transaction information as well and link the subscription id.
+	// once we execute the redemption and store the data, we will have a process/cron job that will handle the subsequent redemptions
 
 	// For now, just acknowledge receipt of the subscription request
 	sendSuccess(c, http.StatusOK, SuccessResponse{
 		Message: fmt.Sprintf("Successfully processed subscription request for product %s (%s) from address %s with product token %s",
-			product.Name, productId, body.SubscriberAddress, productToken["token_id"]),
+			product.Name, productId, body.SubscriberAddress, productToken.ID),
 	})
 }
 

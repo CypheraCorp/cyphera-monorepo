@@ -408,13 +408,13 @@ ON CONFLICT DO NOTHING;
 -- Insert some test networks
 INSERT INTO networks (name, type, chain_id, active)
 VALUES 
-    ('Ethereum Sepolia', 'sepolia', 11155111, true)
+    ('Ethereum Sepolia', 'Sepolia', 11155111, true)
 ON CONFLICT DO NOTHING;
 
 -- Insert some test tokens
 INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token)
 VALUES 
-    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'ETH', 'ETH', '0x0000000000000000000000000000000000000000', false)
+    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'USD Coin', 'USDC', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', false)
 ON CONFLICT DO NOTHING;
 
 -- Insert test products
