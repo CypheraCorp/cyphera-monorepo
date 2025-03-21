@@ -22,15 +22,16 @@ import (
 
 // Handler Definitions
 var (
-	accountHandler   *handlers.AccountHandler
-	workspaceHandler *handlers.WorkspaceHandler
-	customerHandler  *handlers.CustomerHandler
-	apiKeyHandler    *handlers.APIKeyHandler
-	userHandler      *handlers.UserHandler
-	networkHandler   *handlers.NetworkHandler
-	tokenHandler     *handlers.TokenHandler
-	productHandler   *handlers.ProductHandler
-	walletHandler    *handlers.WalletHandler
+	accountHandler    *handlers.AccountHandler
+	workspaceHandler  *handlers.WorkspaceHandler
+	customerHandler   *handlers.CustomerHandler
+	apiKeyHandler     *handlers.APIKeyHandler
+	userHandler       *handlers.UserHandler
+	networkHandler    *handlers.NetworkHandler
+	tokenHandler      *handlers.TokenHandler
+	productHandler    *handlers.ProductHandler
+	walletHandler     *handlers.WalletHandler
+	delegationHandler *handlers.DelegationHandler
 
 	// Database
 	dbQueries *db.Queries
@@ -83,6 +84,7 @@ func InitializeHandlers() {
 	tokenHandler = handlers.NewTokenHandler(commonServices)
 	productHandler = handlers.NewProductHandler(commonServices)
 	walletHandler = handlers.NewWalletHandler(commonServices)
+	delegationHandler = handlers.NewDelegationHandler(commonServices)
 }
 
 func InitializeRoutes(router *gin.Engine) {

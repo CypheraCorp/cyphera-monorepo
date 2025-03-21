@@ -7,6 +7,11 @@
     "husky": "^9.1.7"
   },
   "scripts": {
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "test:go": "chmod +x ./cmd/delegation-integration-test/test.sh && ./cmd/delegation-integration-test/test.sh",
+    "test:node": "cd delegation-server && npm test",
+    "test:integration": "cd delegation-server && MOCK_MODE=true npm run start:mock & sleep 5 && cd cmd/delegation-integration-test && go run . -verbose",
+    "test": "npm run test:node && npm run test:go",
+    "test:all": "npm run test && npm run test:integration"
   }
 }

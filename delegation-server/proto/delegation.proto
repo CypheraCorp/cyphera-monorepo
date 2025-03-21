@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package delegation;
+
+option go_package = "cyphera-api/internal/proto";
+
+service DelegationService {
+  // Redeems a delegation
+  rpc RedeemDelegation (RedeemDelegationRequest) returns (RedeemDelegationResponse);
+}
+
+// Request message containing delegation data to be redeemed
+message RedeemDelegationRequest {
+  // The delegation data as bytes
+  bytes delegationData = 1;
+}
+
+// Response containing the result of the delegation redemption
+message RedeemDelegationResponse {
+  // Transaction hash of the redemption transaction
+  string transactionHash = 1;
+  
+  // Whether the operation was successful
+  bool success = 2;
+  
+  // Error message if the operation failed
+  string errorMessage = 3;
+} 
