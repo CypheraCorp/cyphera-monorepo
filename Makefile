@@ -76,4 +76,16 @@ deploy:
 clean:
 	$(GO) clean
 	rm -f bin/$(BINARY_NAME)
-	rm -f bootstrap function.zip 
+	rm -f bootstrap function.zip
+
+# Generate gRPC code
+gen-grpc:
+	protoc --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		internal/proto/delegation.proto
+
+# Install required Go modules for gRPC
+install-grpc-deps:
+	go get google.golang.org/grpc
+	go get google.golang.org/protobuf/cmd/protoc-gen-go
+	go get google.golang.org/grpc/cmd/protoc-gen-go-grpc 

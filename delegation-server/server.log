@@ -1,0 +1,21 @@
+
+> delegation-server@1.0.0 start:mock
+> MOCK_MODE=true ts-node src/index.ts
+
+[2025-03-21T05:35:10.231Z] INFO: Running in MOCK MODE - using mock blockchain service
+[2025-03-21T05:35:10.290Z] INFO: gRPC server started on 0.0.0.0:50051
+[2025-03-21T05:35:10.290Z] INFO: Ready to receive delegation redemption requests
+(node:48657) DeprecationWarning: Calling start() is no longer necessary. It can be safely omitted.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[2025-03-21T05:35:12.980Z] INFO: Received delegation redemption request
+[2025-03-21T05:35:12.980Z] DEBUG: Received delegation data of size: 353 bytes
+[2025-03-21T05:35:12.981Z] INFO: [MOCK] Redeeming delegation...
+[2025-03-21T05:35:12.981Z] DEBUG: [MOCK] Delegation details: {
+  delegate: '0x0987654321098765432109876543210987654321',
+  delegator: '0x1234567890123456789012345678901234567890',
+  expiry: '1742538912'
+}
+[2025-03-21T05:35:13.983Z] INFO: [MOCK] Transaction confirmed: 0x58e88026a94e27355ac9d294ac74fdead0069adae0c131ac31e07bbb0cb990aa
+[2025-03-21T05:35:13.984Z] INFO: Delegation redeemed successfully in 1.00s, transaction hash: 0x58e88026a94e27355ac9d294ac74fdead0069adae0c131ac31e07bbb0cb990aa
+[2025-03-21T05:35:13.995Z] INFO: Shutting down gRPC server gracefully...
+[2025-03-21T05:35:13.995Z] INFO: Server shut down successfully
