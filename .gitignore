@@ -45,3 +45,8 @@ node_modules/
 package-lock.json
 .yarnrc
 cookies.txt
+
+
+# Delegation server
+delegation-server/coverage/*
+delegation-server/server.log
