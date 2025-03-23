@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "cyphera-api/docs" // This will be generated
 	"cyphera-api/internal/auth"
+	"cyphera-api/internal/client"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
 	"cyphera-api/internal/logger"
@@ -22,16 +23,16 @@ import (
 
 // Handler Definitions
 var (
-	accountHandler    *handlers.AccountHandler
-	workspaceHandler  *handlers.WorkspaceHandler
-	customerHandler   *handlers.CustomerHandler
-	apiKeyHandler     *handlers.APIKeyHandler
-	userHandler       *handlers.UserHandler
-	networkHandler    *handlers.NetworkHandler
-	tokenHandler      *handlers.TokenHandler
-	productHandler    *handlers.ProductHandler
-	walletHandler     *handlers.WalletHandler
-	delegationHandler *handlers.DelegationHandler
+	accountHandler   *handlers.AccountHandler
+	workspaceHandler *handlers.WorkspaceHandler
+	customerHandler  *handlers.CustomerHandler
+	apiKeyHandler    *handlers.APIKeyHandler
+	userHandler      *handlers.UserHandler
+	networkHandler   *handlers.NetworkHandler
+	tokenHandler     *handlers.TokenHandler
+	productHandler   *handlers.ProductHandler
+	walletHandler    *handlers.WalletHandler
+	delegationClient *client.DelegationClient
 
 	// Database
 	dbQueries *db.Queries
@@ -70,6 +71,12 @@ func InitializeHandlers() {
 		log.Fatal("CYPHERA_WALLET_PRIVATE_KEY environment variable is required")
 	}
 
+	// Initialize the delegation client
+	delegationClient, err = client.NewDelegationClient()
+	if err != nil {
+		log.Fatalf("Unable to create delegation client: %v\n", err)
+	}
+
 	commonServices := handlers.NewCommonServices(
 		dbQueries,
 	)
@@ -82,9 +89,8 @@ func InitializeHandlers() {
 	userHandler = handlers.NewUserHandler(commonServices)
 	networkHandler = handlers.NewNetworkHandler(commonServices)
 	tokenHandler = handlers.NewTokenHandler(commonServices)
-	productHandler = handlers.NewProductHandler(commonServices)
+	productHandler = handlers.NewProductHandler(commonServices, delegationClient)
 	walletHandler = handlers.NewWalletHandler(commonServices)
-	delegationHandler = handlers.NewDelegationHandler(commonServices)
 }
 
 func InitializeRoutes(router *gin.Engine) {

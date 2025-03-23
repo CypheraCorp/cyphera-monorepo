@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"cyphera-api/internal/client"
 	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
 	"encoding/json"
@@ -22,12 +23,16 @@ type SwaggerMetadata map[string]interface{}
 
 // ProductHandler handles product-related operations
 type ProductHandler struct {
-	common *CommonServices
+	common           *CommonServices
+	delegationClient *client.DelegationClient
 }
 
 // NewProductHandler creates a new ProductHandler instance
-func NewProductHandler(common *CommonServices) *ProductHandler {
-	return &ProductHandler{common: common}
+func NewProductHandler(common *CommonServices, delegationClient *client.DelegationClient) *ProductHandler {
+	return &ProductHandler{
+		common:           common,
+		delegationClient: delegationClient,
+	}
 }
 
 // ProductResponse represents the standardized API response for product operations
@@ -262,6 +267,25 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 		return
 	}
 
+	// Store the delegation data
+	// TODO: Store the delegation in the database as part of the subscription data
+
+	// Redeem the delegation immediately
+	delegationJSON, err := json.Marshal(body.Delegation)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to serialize delegation", err)
+		return
+	}
+
+	txHash, err := h.delegationClient.RedeemDelegationDirectly(c.Request.Context(), delegationJSON)
+	if err != nil {
+		log.Printf("Warning: Failed to redeem delegation: %v", err)
+		// Continue processing - we'll handle redemption later via a job
+	} else {
+		log.Printf("Successfully redeemed delegation with transaction hash: %s", txHash)
+		// TODO: Store the transaction hash in the subscription record
+	}
+
 	// TODO: now that the subscription request has been processed, we need to store the delegation information as well as the subscription data
 	// for the delegation, we need to store the delegate, delegator, authority, salt, signature, and caveats.
 	// for the subscription, we need to store the customer's wallet, the product token key, and the delegation key
@@ -270,7 +294,6 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 	// once the redemption is redeemed we will need to store the redemtion/transaction information as well and link the subscription id.
 	// once we execute the redemption and store the data, we will have a process/cron job that will handle the subsequent redemptions
 
-	// For now, just acknowledge receipt of the subscription request
 	sendSuccess(c, http.StatusOK, SuccessResponse{
 		Message: fmt.Sprintf("Successfully processed subscription request for product %s (%s) from address %s with product token %s",
 			product.Name, productId, body.SubscriberAddress, productToken.ID),
