@@ -58,8 +58,11 @@ class DelegationServiceImpl {
       // Submit the redemption to the blockchain
       const txHash = await this.blockchainService.redeemDelegation(delegationData)
       
-      // Return the transaction hash
-      callback(null, { txHash })
+      // Return the transaction hash with success flag
+      callback(null, { 
+        txHash: txHash,
+        success: true
+      })
     } catch (error) {
       logger.error('Error processing redemption:', error)
       callback({

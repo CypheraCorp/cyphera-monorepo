@@ -113,8 +113,11 @@ func (c *DelegationClient) RedeemDelegation(ctx context.Context, delegationData 
 	}
 
 	// Check if the service reported success
-	if !resp.Success {
-		return "", fmt.Errorf("delegation redemption failed: %s", resp.ErrorMessage)
+	if resp.Success == false {
+		if resp.ErrorMessage != "" {
+			return "", fmt.Errorf("delegation redemption failed: %s", resp.ErrorMessage)
+		}
+		return "", fmt.Errorf("delegation redemption failed: unknown error")
 	}
 
 	// Return transaction hash
