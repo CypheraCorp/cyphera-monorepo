@@ -1,199 +1,228 @@
-# Delegation Redemption gRPC Server
+# MetaMask Delegation Redemption gRPC Server
 
-A Node.js server providing a gRPC interface for redeeming MetaMask delegations and executing blockchain transactions.
+A Node.js gRPC server that provides delegation redemption services for the Cyphera API. This server enables blockchain transactions through MetaMask's delegation framework without requiring users to sign individual transactions.
+
+## Overview
+
+The delegation server is a critical component of the Cyphera platform that:
+
+1. Receives delegation requests from the Go API server
+2. Processes these delegations (in production or mock mode)
+3. Executes blockchain transactions on behalf of users
+4. Returns transaction results back to the API
+
+```
+┌─────────────┐         ┌──────────────┐         ┌────────────────┐         ┌────────────┐
+│             │  HTTP   │              │  gRPC   │                │  RPC    │            │
+│   Client    ├────────►│   Go API     ├────────►│  Delegation    ├────────►│ Blockchain │
+│             │         │              │         │  Server (Node) │         │            │
+└─────────────┘         └──────────────┘         └────────────────┘         └────────────┘
+```
 
 ## Project Structure
 
 ```
-├── src/                  # Source code
-│   ├── config/           # Configuration and environment setup
-│   ├── services/         # Core business logic services
-│   ├── types/            # TypeScript type definitions
-│   ├── utils/            # Utility functions
-│   ├── proto/            # Protocol Buffers definitions
-│   └── index.ts          # Main application entry point
-├── scripts/              # Helper scripts
-│   ├── install.sh        # Installation script
-│   ├── run.sh            # Server startup script
-│   ├── build-and-test.sh # Build and test script
-│   ├── test-grpc.js      # gRPC test script
-│   └── install-grpc-client.sh # Go client code generation script
-├── .env                  # Environment variables (not committed)
-├── .env.example          # Example environment variables
-├── package.json          # Node.js dependencies and scripts
-└── tsconfig.json         # TypeScript configuration
+delegation-server/
+├── src/                      # Source code
+│   ├── config.ts             # Configuration settings and env var loading
+│   ├── index.ts              # Main entry point, starts gRPC server
+│   └── services/             # Core business logic for handling delegations
+├── proto/                    # Protocol buffer definitions
+│   └── delegation.proto      # gRPC service definition
+├── scripts/                  # Utility scripts
+├── test/                     # Test files
+├── .env                      # Environment configuration (not committed)
+├── .env.example              # Example environment variables
+├── package.json              # Dependencies and scripts
+├── tsconfig.json             # TypeScript configuration
+└── README.md                 # This documentation
 ```
 
-## Prerequisites
+## Key Components
 
-- Node.js 18 or higher
-- npm
-- Access to a blockchain RPC endpoint (e.g., Infura)
-- Access to a bundler service (e.g., Pimlico)
-- Private key with ETH for gas fees
-- Access to the private MetaMask package (`@metamask-private/delegator-core-viem`)
+### 1. gRPC Service Implementation (`src/index.ts`)
 
-## Quick Start
+The core service implementation that:
+- Exposes the `redeemDelegation` RPC endpoint
+- Receives delegation data from the Go API
+- Validates and processes the delegation
+- Returns transaction hashes or error responses
 
-1. **Clone the repository**
+### 2. Configuration (`src/config.ts`)
 
-2. **Install dependencies**:
-   ```bash
-   chmod +x scripts/install.sh
-   ./scripts/install.sh
-   ```
+Manages all environment variables and configuration settings:
+- Server address and port configuration
+- Mock mode settings
+- Connection details for blockchain providers
 
-3. **Configure environment variables**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
+### 3. MockBlockchainService
 
-4. **Run the server**:
-   ```bash
-   npm run dev    # Development mode
-   # OR
-   npm start      # Production mode
-   ```
-
-5. **Or use the convenience script**:
-   ```bash
-   chmod +x scripts/run.sh
-   ./scripts/run.sh
-   ```
+In mock mode, this service simulates blockchain interactions:
+- Generates fake transaction hashes
+- Allows testing without actual blockchain calls
+- Useful for local development and testing
 
 ## Environment Variables
 
-Create a `.env` file with the following variables:
+Create a `.env` file with these variables:
 
 ```
-# gRPC Server Configuration
-GRPC_PORT=50051
-GRPC_HOST=0.0.0.0
+# Server Configuration
+GRPC_PORT=50051          # Port for the gRPC server
+GRPC_HOST=0.0.0.0        # Host address to bind
 
-# Blockchain Configuration
-RPC_URL=https://sepolia.infura.io/v3/your-api-key
-BUNDLER_URL=https://api.pimlico.io/v1/sepolia/rpc?apikey=your-api-key
-PAYMASTER_URL=https://api.pimlico.io/v2/sepolia/rpc?apikey=your-api-key
-CHAIN_ID=11155111
+# Mode Configuration
+MOCK_MODE=true           # Set to false for real blockchain transactions
 
-# Private Key (replace with your actual private key)
-PRIVATE_KEY=your-private-key-here
+# Blockchain Configuration (for production)
+RPC_URL=                 # Blockchain RPC endpoint (e.g., Infura)
+CHAIN_ID=11155111        # Chain ID (e.g., 11155111 for Sepolia testnet)
+PRIVATE_KEY=             # Private key for transaction signing
 ```
 
-## Integration with Go Backend
+## Running the Server
 
-To generate the Go client code for your backend:
+### Prerequisites
+
+- Node.js 18 or higher
+- npm
+
+### Installation
 
 ```bash
-chmod +x scripts/install-grpc-client.sh
-./scripts/install-grpc-client.sh
+# Install dependencies
+npm install
+
+# If you have access issues with private packages, configure npm
+echo "@metamask-private:registry=https://npm.pkg.github.com/" > .npmrc
+echo "//npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN" >> .npmrc
 ```
 
-This will create the necessary Go files in `internal/proto/` directory.
+### Running in Development Mode
 
-## Advanced Configuration
-
-### Private Package Access
-
-The server depends on a private MetaMask package. You need access to this package before proceeding.
-
-If you have access to the private package registry, add your npm authentication token to the `.npmrc` file.
-
-### Fallback Mechanism
-
-The server has a dynamic import system that tries to use:
-1. `viem/account-abstraction` (for viem ≥ 2.x)
-2. Falls back to `permissionless/clients/bundler` if not available
-
-## Development
-
-### Building the project
 ```bash
+# Start in mock mode (simulated blockchain interactions)
+npm run start:mock
+
+# Start with actual blockchain interactions
+npm run start
+```
+
+### Running in Production Mode
+
+```bash
+# Build the TypeScript files
 npm run build
+
+# Start the server
+node dist/index.js
 ```
 
-### Linting
+## Integration with Go API
+
+The Go API communicates with this server via gRPC. The main integration points are:
+
+1. **Delegation Client** (`internal/client/delegation_client.go`)
+   - Creates a gRPC connection to this server
+   - Sends delegation data for redemption
+   - Handles responses and errors
+
+2. **Environment Configuration**
+   - `DELEGATION_GRPC_ADDR`: Address of this gRPC server (e.g., `localhost:50051`)
+   - `DELEGATION_LOCAL_MODE`: Set to `true` for local development
+
+3. **Health Checking**
+   - The Go API periodically checks if this server is available
+   - Implements circuit breaking for fault tolerance
+
+## Testing
+
+### Manual Testing
+
 ```bash
-npm run lint
+# Check if server is running
+curl -v http://localhost:50051
+# Expected: Error (normal since this is a gRPC server, not HTTP)
 ```
 
-### Clean build
-```bash
-npm run clean
-```
-
-### Running Tests
-
-For quick testing of the server connectivity without making blockchain calls:
+### Automated Testing
 
 ```bash
-node scripts/test-grpc.js
+# Run unit tests
+npm test
+
+# Run integration tests (requires .env configuration)
+npm run test:integration
 ```
 
-For comprehensive testing including building and running the server:
+### Testing with the Go API
+
+The API includes integration tests that verify communication with this server:
 
 ```bash
-chmod +x scripts/build-and-test.sh
-./scripts/build-and-test.sh
+# From the main project directory
+make test-integration
 ```
+
+## Mock Mode vs. Production Mode
+
+### Mock Mode
+
+In mock mode (set `MOCK_MODE=true` in `.env`):
+- The server generates random transaction hashes
+- No real blockchain interactions occur
+- Suitable for local development and testing
+
+### Production Mode
+
+In production mode (set `MOCK_MODE=false` in `.env`):
+- Actual blockchain interactions through MetaMask's delegation framework
+- Requires valid private keys and RPC endpoints
+- Creates smart accounts and submits user operations to bundlers
 
 ## Troubleshooting
 
-- **Dependency Issues**: Use `./scripts/install.sh --clean` to perform a clean installation
-- **Connection Problems**: Ensure your RPC and bundler endpoints are accessible
-- **Private Key Errors**: Make sure your private key is properly formatted (66 characters including 0x prefix)
-- **Protocol Buffers**: If changing the proto definition, regenerate both TypeScript and Go code
+### Common Issues
 
-## Security Considerations
+1. **Connection Refused**
+   - Ensure the server is running on the configured port
+   - Check if any firewall is blocking connections
 
-- Store your private key securely
-- Use TLS for production gRPC connections
-- Implement proper authentication between services
+2. **Authentication Errors**
+   - Verify access to private npm packages
+   - Check GitHub tokens if using private repositories
 
-## Implementation Details
+3. **Failed Delegations**
+   - Examine server logs for error details
+   - Verify delegation data format from the Go API
 
-### Key Components
+### Logs
 
-1. **gRPC Service Layer** (`src/services/service.ts`)
-   - Handles incoming requests from the Go backend
-   - Validates and processes delegation data
-   - Returns transaction status and hash
+The server outputs logs to help diagnose issues:
+- Standard output for general info and errors
+- Detailed error messages when processing delegations fails
 
-2. **Blockchain Interaction** (`src/services/blockchain.ts`)
-   - Creates and manages MetaMask smart accounts
-   - Redeems delegations using the MetaMask delegation framework
-   - Handles transaction submission and monitoring
+## Technical Details for LLM Context
 
-3. **Configuration Management** (`src/config/config.ts`)
-   - Loads and validates environment variables
-   - Provides structured access to configuration
+For LLMs analyzing this project, here are key implementation details:
 
-4. **Utility Functions** (`src/utils/`)
-   - Logging utilities
-   - Data formatting and conversion
-   - Delegation parsing and validation
+1. **DelegationServiceImpl**: The primary class implementing the gRPC service defined in `delegation.proto`. It accepts delegation data and processes it.
 
-### Data Flow
+2. **Mock Implementation**: In mock mode, it returns fake transaction hashes instead of making real blockchain calls.
 
-1. Go backend calls the `RedeemDelegation` gRPC method
-2. Server receives the serialized delegation data
-3. Delegation is parsed and validated
-4. Server creates a smart account using the provided private key
-5. The delegation is redeemed on-chain via a user operation
-6. Transaction hash is returned to the Go backend
+3. **Error Handling**: Uses gRPC error codes to communicate different failure types:
+   - `INVALID_ARGUMENT` for bad input data
+   - `INTERNAL` for server-side processing errors
 
-### Running Tests
+4. **Data Flow**:
+   - Go API sends serialized delegation data
+   - Server deserializes and validates the data
+   - Server processes delegation (mock or real)
+   - Transaction hash is returned to the Go API
 
-For quick testing of the server connectivity without making blockchain calls:
+5. **Integration Pattern**: Uses a service-to-service gRPC communication pattern with:
+   - Strong typing through Protocol Buffers
+   - Binary efficient data transfer
+   - Proper error propagation
 
-```bash
-node scripts/test-grpc.js
-```
-
-For comprehensive testing including building and running the server:
-
-```bash
-chmod +x scripts/build-and-test.sh
-./scripts/build-and-test.sh
-``` 
+This server is designed to be a stateless microservice that can be horizontally scaled as needed. 
