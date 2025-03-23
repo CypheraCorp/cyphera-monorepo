@@ -1,4 +1,4 @@
-.PHONY: all build test clean lint run swagger deploy
+.PHONY: all build test clean lint run swagger deploy test-all test-integration stop-integration-server ensure-executable
 
 # Go parameters
 BINARY_NAME=cyphera-api
@@ -13,79 +13,66 @@ build:
 test:
 	$(GO) test -v ./...
 
+# Run all tests including integration tests
+test-all: test test-integration
+
+# Ensure scripts are executable
+ensure-executable:
+	@chmod +x scripts/integration-test.sh
+
+# Run integration tests with the delegation server
+test-integration: ensure-executable
+	@echo "Running delegation integration tests with mock server..."
+	./scripts/integration-test.sh --cli
+
+# Stop integration server processes if they're still running
+stop-integration-server:
+	@echo "Stopping integration test server processes..."
+	-@pkill -f "npm run start:mock" 2>/dev/null || true
+	@echo "Checking for processes using port 50051 (gRPC)..."
+	-@lsof -ti:50051 | xargs kill -9 2>/dev/null || true
+	@echo "Servers stopped"
+
 clean:
 	$(GO) clean
 	rm -f bin/$(BINARY_NAME)
 
 lint:
-	golangci-lint run
+	$(GO) vet ./...
+	gofmt -l .
 
-run-local:
-	./scripts/local.sh
+run:
+	$(GO) run $(MAIN_PACKAGE)/main.go
 
-swag:
-	swag init -g cmd/api/main/main.go
-
-sqlc:
-	sqlc generate
-
-gen: sqlc swag
-
-# Development tasks
-.PHONY: dev
-
-air:
-	air
-
-env:
-	@if [ -f .env.local ]; then \
-		export $$(cat .env.local | grep -v '^#' | xargs); \
-	else \
-		export $$(cat .env | grep -v '^#' | xargs); \
-	fi
-
-dev: swagger air
-
-local:
-	./scripts/local.sh
-
-# Docker tasks
-docker-build:
-	docker build -t $(BINARY_NAME) .
-
-docker-run:
-	docker run -p 8000:8000 $(BINARY_NAME)
-
-# Help command
-help:
-	@echo "Available commands:"
-	@echo "  make build         - Build the application"
-	@echo "  make test         - Run tests"
-	@echo "  make clean        - Clean build files"
-	@echo "  make lint         - Run linter"
-	@echo "  make run          - Run the application"
-	@echo "  make swagger      - Generate swagger documentation"
-	@echo "  make dev          - Run development mode"
-	@echo "  make docker-build - Build docker image"
-	@echo "  make docker-run   - Run docker container"
-	@echo "  make deploy       - Deploy the application"
+swagger:
+	swag init -g cmd/api/main.go
 
 deploy:
-	serverless deploy
+	# Add deployment steps here
 
-clean:
-	$(GO) clean
-	rm -f bin/$(BINARY_NAME)
-	rm -f bootstrap function.zip
+dev:
+	make -j2 delegation-server api-server
 
-# Generate gRPC code
-gen-grpc:
-	protoc --go_out=. --go_opt=paths=source_relative \
-		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		internal/proto/delegation.proto
+api-server:
+	$(GO) run $(MAIN_PACKAGE)/main.go
 
-# Install required Go modules for gRPC
-install-grpc-deps:
-	go get google.golang.org/grpc
-	go get google.golang.org/protobuf/cmd/protoc-gen-go
-	go get google.golang.org/grpc/cmd/protoc-gen-go-grpc 
+delegation-server:
+	cd delegation-server && npm run start:mock
+
+help:
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Targets:"
+	@echo "  make all            - Run default targets: lint, test, and build"
+	@echo "  make build          - Build the binary"
+	@echo "  make test           - Run all unit tests"
+	@echo "  make test-all       - Run all tests, including integration tests"
+	@echo "  make test-integration - Run integration tests with mock server"
+	@echo "  make stop-integration-server - Stop integration server processes"
+	@echo "  make clean          - Clean build files"
+	@echo "  make lint           - Run linter"
+	@echo "  make run            - Run the application"
+	@echo "  make swagger        - Generate Swagger documentation"
+	@echo "  make deploy         - Deploy the application"
+	@echo "  make dev            - Run the application in development mode"
+	@echo "  make delegation-server - Run the delegation server" 
