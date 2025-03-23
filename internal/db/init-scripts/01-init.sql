@@ -188,6 +188,24 @@ CREATE TABLE networks (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
+-- Create customer_wallets table
+CREATE TABLE customer_wallets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID NOT NULL REFERENCES customers(id),
+    wallet_address TEXT NOT NULL,
+    network_type network_type NOT NULL,
+    nickname TEXT,
+    ens TEXT,
+    is_primary BOOLEAN DEFAULT false,
+    verified BOOLEAN DEFAULT false,
+    last_used_at TIMESTAMP WITH TIME ZONE,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    UNIQUE(customer_id, wallet_address, network_type)
+);
+
 -- Create tokens table
 CREATE TABLE tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -214,6 +232,98 @@ CREATE TABLE products_tokens (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
     UNIQUE(product_id, network_id, token_id)
+);
+
+-- Create subscription status enum
+CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'suspended');
+
+-- Create subscription event type enum with expanded error types
+CREATE TYPE subscription_event_type AS ENUM (
+    -- Success events
+    'created', 
+    'redeemed', 
+    'renewed', 
+    'canceled', 
+    'expired',
+    
+    -- General failure
+    'failed',
+    
+    -- Specific error types
+    'failed_validation',         -- Input validation errors
+    'failed_customer_creation',  -- Customer creation failed
+    'failed_wallet_creation',    -- Wallet creation failed
+    'failed_delegation_storage', -- Delegation data storage failed
+    'failed_subscription_db',    -- Database error during subscription creation
+    'failed_redemption',         -- Initial redemption failed
+    'failed_transaction',        -- Transaction commit failed
+    'failed_duplicate'           -- Subscription already exists
+);
+
+-- Create delegation data table to store delegation information
+CREATE TABLE delegation_data (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    delegate TEXT NOT NULL,
+    delegator TEXT NOT NULL,
+    authority TEXT NOT NULL,
+    caveats JSONB NOT NULL DEFAULT '[]'::jsonb,
+    salt TEXT NOT NULL,
+    signature TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Create subscriptions table
+CREATE TABLE subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID NOT NULL REFERENCES customers(id),
+    product_id UUID NOT NULL REFERENCES products(id),
+    product_token_id UUID NOT NULL REFERENCES products_tokens(id),
+    delegation_id UUID NOT NULL REFERENCES delegation_data(id),
+    customer_wallet_id UUID REFERENCES customer_wallets(id),
+    status subscription_status NOT NULL DEFAULT 'active',
+    current_period_start TIMESTAMP WITH TIME ZONE NOT NULL,
+    current_period_end TIMESTAMP WITH TIME ZONE NOT NULL,
+    next_redemption_date TIMESTAMP WITH TIME ZONE,
+    total_redemptions INT NOT NULL DEFAULT 0,
+    total_amount_in_cents INT NOT NULL DEFAULT 0,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Create subscription events table
+CREATE TABLE subscription_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id UUID NOT NULL REFERENCES subscriptions(id),
+    event_type subscription_event_type NOT NULL,
+    transaction_hash TEXT,
+    amount_in_cents INT NOT NULL,
+    occurred_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    error_message TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create failed subscription attempts table (no subscription ID required)
+CREATE TABLE failed_subscription_attempts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID REFERENCES customers(id),
+    product_id UUID NOT NULL REFERENCES products(id),
+    product_token_id UUID NOT NULL REFERENCES products_tokens(id),
+    customer_wallet_id UUID REFERENCES customer_wallets(id),
+    wallet_address TEXT NOT NULL,
+    error_type subscription_event_type NOT NULL,
+    error_message TEXT NOT NULL,
+    error_details JSONB DEFAULT '{}'::jsonb,
+    delegation_signature TEXT,
+    occurred_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create trigger function to validate token network relationship
@@ -270,6 +380,37 @@ CREATE INDEX idx_products_tokens_network_id ON products_tokens(network_id);
 CREATE INDEX idx_products_tokens_token_id ON products_tokens(token_id);
 CREATE INDEX idx_products_tokens_active ON products_tokens(active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_tokens_composite ON products_tokens(product_id, network_id, active) WHERE deleted_at IS NULL;
+
+-- Indexes for subscription-related tables
+CREATE INDEX idx_subscriptions_customer_id ON subscriptions(customer_id);
+CREATE INDEX idx_subscriptions_product_id ON subscriptions(product_id);
+CREATE INDEX idx_subscriptions_product_token_id ON subscriptions(product_token_id);
+CREATE INDEX idx_subscriptions_delegation_id ON subscriptions(delegation_id);
+CREATE INDEX idx_subscriptions_customer_wallet_id ON subscriptions(customer_wallet_id);
+CREATE INDEX idx_subscriptions_status ON subscriptions(status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_subscriptions_next_redemption_date ON subscriptions(next_redemption_date) WHERE status = 'active' AND deleted_at IS NULL;
+
+CREATE INDEX idx_subscription_events_subscription_id ON subscription_events(subscription_id);
+CREATE INDEX idx_subscription_events_event_type ON subscription_events(event_type);
+CREATE INDEX idx_subscription_events_transaction_hash ON subscription_events(transaction_hash);
+CREATE INDEX idx_subscription_events_occurred_at ON subscription_events(occurred_at);
+
+CREATE INDEX idx_delegation_data_delegator ON delegation_data(delegator);
+CREATE INDEX idx_delegation_data_delegate ON delegation_data(delegate);
+
+-- Indexes for customer_wallets table
+CREATE INDEX idx_customer_wallets_customer_id ON customer_wallets(customer_id);
+CREATE INDEX idx_customer_wallets_wallet_address ON customer_wallets(wallet_address);
+CREATE INDEX idx_customer_wallets_network_type ON customer_wallets(network_type);
+CREATE INDEX idx_customer_wallets_is_primary ON customer_wallets(is_primary) WHERE deleted_at IS NULL;
+CREATE INDEX idx_customer_wallets_verified ON customer_wallets(verified) WHERE deleted_at IS NULL;
+
+-- Indexes for failed_subscription_attempts table
+CREATE INDEX idx_failed_subscription_attempts_customer_id ON failed_subscription_attempts(customer_id);
+CREATE INDEX idx_failed_subscription_attempts_product_id ON failed_subscription_attempts(product_id);
+CREATE INDEX idx_failed_subscription_attempts_error_type ON failed_subscription_attempts(error_type);
+CREATE INDEX idx_failed_subscription_attempts_wallet_address ON failed_subscription_attempts(wallet_address);
+CREATE INDEX idx_failed_subscription_attempts_occurred_at ON failed_subscription_attempts(occurred_at);
 
 -- Insert test data for development
 INSERT INTO accounts (name, account_type, business_name, business_type)
@@ -402,6 +543,60 @@ VALUES
         'Test Customer Two',
         'Second test customer',
         5000
+    )
+ON CONFLICT DO NOTHING;
+
+-- Insert test customer wallets
+INSERT INTO customer_wallets (
+    customer_id,
+    wallet_address,
+    network_type,
+    nickname,
+    ens,
+    is_primary,
+    verified,
+    metadata
+)
+VALUES 
+    (
+        (SELECT id FROM customers WHERE external_id = 'CUST_001'),
+        '0x123F5B4DBe0e4aCb39c8C2d48E75E5da30A4DCF5',
+        'evm',
+        'ETH Wallet',
+        'customer1.eth',
+        true,
+        true,
+        '{"chain": "ethereum", "tags": ["subscription"]}'::jsonb
+    ),
+    (
+        (SELECT id FROM customers WHERE external_id = 'CUST_001'),
+        '0x456F5B4DBe0e4aCb39c8C2d48E75E5da30A4DCF5',
+        'evm',
+        'Polygon Wallet',
+        null,
+        false,
+        true,
+        '{"chain": "polygon", "tags": ["backup"]}'::jsonb
+    ),
+    (
+        (SELECT id FROM customers WHERE external_id = 'CUST_002'),
+        '0x789F5B4DBe0e4aCb39c8C2d48E75E5da30A4DCF5',
+        'evm',
+        'Main Wallet',
+        null,
+        true,
+        true,
+        '{"chain": "ethereum", "tags": ["primary"]}'::jsonb
+    ),
+    (
+        (SELECT id FROM customers WHERE external_id = 'CUST_002'),
+        '8fYU3gaCuDGK7HLqsMW2nwpBJqecxLmLDBo5Hc3YzKf5',
+        'solana',
+        'Solana Wallet',
+        null,
+        false,
+        true,
+        '{"chain": "solana", "tags": ["gaming"]}'::jsonb
     )
 ON CONFLICT DO NOTHING;
 
@@ -570,6 +765,32 @@ CREATE TRIGGER set_tokens_updated_at
 
 CREATE TRIGGER set_products_tokens_updated_at
     BEFORE UPDATE ON products_tokens
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+-- Add triggers for subscription-related tables
+CREATE TRIGGER set_delegation_data_updated_at
+    BEFORE UPDATE ON delegation_data
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_subscriptions_updated_at
+    BEFORE UPDATE ON subscriptions
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_subscription_events_updated_at
+    BEFORE UPDATE ON subscription_events
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_customer_wallets_updated_at
+    BEFORE UPDATE ON customer_wallets
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_failed_subscription_attempts_updated_at
+    BEFORE UPDATE ON failed_subscription_attempts
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 

@@ -6,6 +6,7 @@ package db
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -229,6 +230,104 @@ func (ns NullProductType) Value() (driver.Value, error) {
 	return string(ns.ProductType), nil
 }
 
+type SubscriptionEventType string
+
+const (
+	SubscriptionEventTypeCreated                 SubscriptionEventType = "created"
+	SubscriptionEventTypeRedeemed                SubscriptionEventType = "redeemed"
+	SubscriptionEventTypeRenewed                 SubscriptionEventType = "renewed"
+	SubscriptionEventTypeCanceled                SubscriptionEventType = "canceled"
+	SubscriptionEventTypeExpired                 SubscriptionEventType = "expired"
+	SubscriptionEventTypeFailed                  SubscriptionEventType = "failed"
+	SubscriptionEventTypeFailedValidation        SubscriptionEventType = "failed_validation"
+	SubscriptionEventTypeFailedCustomerCreation  SubscriptionEventType = "failed_customer_creation"
+	SubscriptionEventTypeFailedWalletCreation    SubscriptionEventType = "failed_wallet_creation"
+	SubscriptionEventTypeFailedDelegationStorage SubscriptionEventType = "failed_delegation_storage"
+	SubscriptionEventTypeFailedSubscriptionDb    SubscriptionEventType = "failed_subscription_db"
+	SubscriptionEventTypeFailedRedemption        SubscriptionEventType = "failed_redemption"
+	SubscriptionEventTypeFailedTransaction       SubscriptionEventType = "failed_transaction"
+	SubscriptionEventTypeFailedDuplicate         SubscriptionEventType = "failed_duplicate"
+)
+
+func (e *SubscriptionEventType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SubscriptionEventType(s)
+	case string:
+		*e = SubscriptionEventType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SubscriptionEventType: %T", src)
+	}
+	return nil
+}
+
+type NullSubscriptionEventType struct {
+	SubscriptionEventType SubscriptionEventType `json:"subscription_event_type"`
+	Valid                 bool                  `json:"valid"` // Valid is true if SubscriptionEventType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSubscriptionEventType) Scan(value interface{}) error {
+	if value == nil {
+		ns.SubscriptionEventType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SubscriptionEventType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSubscriptionEventType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SubscriptionEventType), nil
+}
+
+type SubscriptionStatus string
+
+const (
+	SubscriptionStatusActive    SubscriptionStatus = "active"
+	SubscriptionStatusCanceled  SubscriptionStatus = "canceled"
+	SubscriptionStatusExpired   SubscriptionStatus = "expired"
+	SubscriptionStatusSuspended SubscriptionStatus = "suspended"
+)
+
+func (e *SubscriptionStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SubscriptionStatus(s)
+	case string:
+		*e = SubscriptionStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SubscriptionStatus: %T", src)
+	}
+	return nil
+}
+
+type NullSubscriptionStatus struct {
+	SubscriptionStatus SubscriptionStatus `json:"subscription_status"`
+	Valid              bool               `json:"valid"` // Valid is true if SubscriptionStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSubscriptionStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.SubscriptionStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SubscriptionStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSubscriptionStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SubscriptionStatus), nil
+}
+
 type UserRole string
 
 const (
@@ -369,6 +468,52 @@ type Customer struct {
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 }
 
+type CustomerWallet struct {
+	ID            uuid.UUID          `json:"id"`
+	CustomerID    uuid.UUID          `json:"customer_id"`
+	WalletAddress string             `json:"wallet_address"`
+	NetworkType   NetworkType        `json:"network_type"`
+	Nickname      pgtype.Text        `json:"nickname"`
+	Ens           pgtype.Text        `json:"ens"`
+	IsPrimary     pgtype.Bool        `json:"is_primary"`
+	Verified      pgtype.Bool        `json:"verified"`
+	LastUsedAt    pgtype.Timestamptz `json:"last_used_at"`
+	Metadata      []byte             `json:"metadata"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt     pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type DelegationDatum struct {
+	ID        uuid.UUID          `json:"id"`
+	Delegate  string             `json:"delegate"`
+	Delegator string             `json:"delegator"`
+	Authority string             `json:"authority"`
+	Caveats   json.RawMessage    `json:"caveats"`
+	Salt      string             `json:"salt"`
+	Signature string             `json:"signature"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type FailedSubscriptionAttempt struct {
+	ID                  uuid.UUID             `json:"id"`
+	CustomerID          pgtype.UUID           `json:"customer_id"`
+	ProductID           uuid.UUID             `json:"product_id"`
+	ProductTokenID      uuid.UUID             `json:"product_token_id"`
+	CustomerWalletID    pgtype.UUID           `json:"customer_wallet_id"`
+	WalletAddress       string                `json:"wallet_address"`
+	ErrorType           SubscriptionEventType `json:"error_type"`
+	ErrorMessage        string                `json:"error_message"`
+	ErrorDetails        []byte                `json:"error_details"`
+	DelegationSignature pgtype.Text           `json:"delegation_signature"`
+	OccurredAt          pgtype.Timestamptz    `json:"occurred_at"`
+	Metadata            []byte                `json:"metadata"`
+	CreatedAt           pgtype.Timestamptz    `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz    `json:"updated_at"`
+}
+
 type Network struct {
 	ID        uuid.UUID          `json:"id"`
 	Name      string             `json:"name"`
@@ -409,6 +554,38 @@ type ProductsToken struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type Subscription struct {
+	ID                 uuid.UUID          `json:"id"`
+	CustomerID         uuid.UUID          `json:"customer_id"`
+	ProductID          uuid.UUID          `json:"product_id"`
+	ProductTokenID     uuid.UUID          `json:"product_token_id"`
+	DelegationID       uuid.UUID          `json:"delegation_id"`
+	CustomerWalletID   pgtype.UUID        `json:"customer_wallet_id"`
+	Status             SubscriptionStatus `json:"status"`
+	CurrentPeriodStart pgtype.Timestamptz `json:"current_period_start"`
+	CurrentPeriodEnd   pgtype.Timestamptz `json:"current_period_end"`
+	NextRedemptionDate pgtype.Timestamptz `json:"next_redemption_date"`
+	TotalRedemptions   int32              `json:"total_redemptions"`
+	TotalAmountInCents int32              `json:"total_amount_in_cents"`
+	Metadata           []byte             `json:"metadata"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type SubscriptionEvent struct {
+	ID              uuid.UUID             `json:"id"`
+	SubscriptionID  uuid.UUID             `json:"subscription_id"`
+	EventType       SubscriptionEventType `json:"event_type"`
+	TransactionHash pgtype.Text           `json:"transaction_hash"`
+	AmountInCents   int32                 `json:"amount_in_cents"`
+	OccurredAt      pgtype.Timestamptz    `json:"occurred_at"`
+	ErrorMessage    pgtype.Text           `json:"error_message"`
+	Metadata        []byte                `json:"metadata"`
+	CreatedAt       pgtype.Timestamptz    `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz    `json:"updated_at"`
 }
 
 type Token struct {
