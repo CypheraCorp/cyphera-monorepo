@@ -8,7 +8,6 @@ import (
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
 	"cyphera-api/internal/logger"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -19,20 +18,25 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.uber.org/zap"
 )
 
 // Handler Definitions
 var (
-	accountHandler   *handlers.AccountHandler
-	workspaceHandler *handlers.WorkspaceHandler
-	customerHandler  *handlers.CustomerHandler
-	apiKeyHandler    *handlers.APIKeyHandler
-	userHandler      *handlers.UserHandler
-	networkHandler   *handlers.NetworkHandler
-	tokenHandler     *handlers.TokenHandler
-	productHandler   *handlers.ProductHandler
-	walletHandler    *handlers.WalletHandler
-	delegationClient *client.DelegationClient
+	accountHandler                   *handlers.AccountHandler
+	workspaceHandler                 *handlers.WorkspaceHandler
+	customerHandler                  *handlers.CustomerHandler
+	apiKeyHandler                    *handlers.APIKeyHandler
+	userHandler                      *handlers.UserHandler
+	networkHandler                   *handlers.NetworkHandler
+	tokenHandler                     *handlers.TokenHandler
+	productHandler                   *handlers.ProductHandler
+	walletHandler                    *handlers.WalletHandler
+	subscriptionHandler              *handlers.SubscriptionHandler
+	subscriptionEventHandler         *handlers.SubscriptionEventHandler
+	failedSubscriptionAttemptHandler *handlers.FailedSubscriptionAttemptHandler
+	delegationClient                 *client.DelegationClient
+	redemptionProcessor              *handlers.RedemptionProcessor
 
 	// Database
 	dbQueries *db.Queries
@@ -42,13 +46,13 @@ func InitializeHandlers() {
 	// Get database connection string from environment
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		log.Fatal("DATABASE_URL environment variable is required")
+		logger.Fatal("DATABASE_URL environment variable is required")
 	}
 
 	// Create a connection pool using pgxpool
 	poolConfig, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {
-		log.Fatalf("Unable to parse database connection string: %v\n", err)
+		logger.Fatal("Unable to parse database connection string", zap.Error(err))
 	}
 
 	// Configure the connection pool
@@ -60,7 +64,7 @@ func InitializeHandlers() {
 	// Create the connection pool
 	connPool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
-		log.Fatalf("Unable to create connection pool: %v\n", err)
+		logger.Fatal("Unable to create connection pool", zap.Error(err))
 	}
 
 	// Create queries instance with the connection pool
@@ -68,13 +72,13 @@ func InitializeHandlers() {
 
 	cypheraWalletPrivateKey := os.Getenv("CYPHERA_WALLET_PRIVATE_KEY")
 	if cypheraWalletPrivateKey == "" {
-		log.Fatal("CYPHERA_WALLET_PRIVATE_KEY environment variable is required")
+		logger.Fatal("CYPHERA_WALLET_PRIVATE_KEY environment variable is required")
 	}
 
 	// Initialize the delegation client
 	delegationClient, err = client.NewDelegationClient()
 	if err != nil {
-		log.Fatalf("Unable to create delegation client: %v\n", err)
+		logger.Fatal("Unable to create delegation client", zap.Error(err))
 	}
 
 	commonServices := handlers.NewCommonServices(
@@ -91,6 +95,11 @@ func InitializeHandlers() {
 	tokenHandler = handlers.NewTokenHandler(commonServices)
 	productHandler = handlers.NewProductHandler(commonServices, delegationClient)
 	walletHandler = handlers.NewWalletHandler(commonServices)
+
+	// Initialize subscription handlers
+	subscriptionHandler = handlers.NewSubscriptionHandler(commonServices, delegationClient)
+	subscriptionEventHandler = handlers.NewSubscriptionEventHandler(commonServices)
+	failedSubscriptionAttemptHandler = handlers.NewFailedSubscriptionAttemptHandler(commonServices)
 }
 
 func InitializeRoutes(router *gin.Engine) {
@@ -108,6 +117,21 @@ func InitializeRoutes(router *gin.Engine) {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "ok",
 		})
+	})
+
+	// Initialize and start the redemption processor with 3 workers and a buffer size of 100
+	redemptionProcessor = handlers.NewRedemptionProcessor(dbQueries, delegationClient, 3, 100)
+	redemptionProcessor.Start()
+
+	// Ensure we gracefully stop the redemption processor when the server shuts down
+	router.GET("/shutdown", func(c *gin.Context) {
+		go func() {
+			time.Sleep(1 * time.Second)
+			redemptionProcessor.Stop()
+			logger.Info("Server is shutting down...")
+			os.Exit(0)
+		}()
+		c.JSON(http.StatusOK, gin.H{"message": "Server is shutting down..."})
 	})
 
 	// if we are not in production, log the request body
@@ -130,7 +154,9 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				// public routes
 				admin.GET("/public/products/:product_id", productHandler.GetPublicProductByID)
-				admin.POST("/public/products/:product_id/subscribe", productHandler.SubscribeToProduct)
+
+				// subscribe to a product
+				admin.POST("/products/:product_id/subscribe", productHandler.SubscribeToProduct)
 
 				// Account management
 				admin.GET("/accounts", accountHandler.ListAccounts)
@@ -195,6 +221,9 @@ func InitializeRoutes(router *gin.Engine) {
 			protected.PUT("/customers/:customer_id", customerHandler.UpdateCustomer)
 			protected.DELETE("/customers/:customer_id", customerHandler.DeleteCustomer)
 
+			// Customer subscriptions
+			protected.GET("/customers/:customer_id/subscriptions", subscriptionHandler.ListSubscriptionsByCustomer)
+
 			// API Keys
 			apiKeys := protected.Group("/api-keys")
 			{
@@ -249,6 +278,9 @@ func InitializeRoutes(router *gin.Engine) {
 				products.PUT("/:product_id/networks/:network_id/tokens/:token_id", productHandler.UpdateProductToken)
 				products.DELETE("/:product_id/networks/:network_id/tokens/:token_id", productHandler.DeleteProductToken)
 				products.DELETE("/:product_id/tokens", productHandler.DeleteProductTokensByProduct)
+
+				// Product subscriptions
+				products.GET("/:product_id/subscriptions", subscriptionHandler.ListSubscriptionsByProduct)
 			}
 
 			// Workspaces
@@ -285,6 +317,60 @@ func InitializeRoutes(router *gin.Engine) {
 				wallets.GET("/ens", walletHandler.GetWalletsByENS)
 				wallets.GET("/search", walletHandler.SearchWallets)
 				wallets.GET("/network/:network_type", walletHandler.ListWalletsByNetworkType)
+			}
+
+			// Subscriptions
+			subscriptions := protected.Group("/subscriptions")
+			{
+				subscriptions.GET("", subscriptionHandler.ListSubscriptions)
+				subscriptions.GET("/active", subscriptionHandler.ListActiveSubscriptions)
+				subscriptions.GET("/expired", subscriptionHandler.GetExpiredSubscriptions)
+				subscriptions.POST("", subscriptionHandler.CreateSubscription)
+				subscriptions.GET("/:subscription_id", subscriptionHandler.GetSubscription)
+				subscriptions.GET("/:subscription_id/details", subscriptionHandler.GetSubscriptionWithDetails)
+				subscriptions.PUT("/:subscription_id", subscriptionHandler.UpdateSubscription)
+				subscriptions.PATCH("/:subscription_id/status", subscriptionHandler.UpdateSubscriptionStatus)
+				subscriptions.POST("/:subscription_id/cancel", subscriptionHandler.CancelSubscription)
+				subscriptions.DELETE("/:subscription_id", subscriptionHandler.DeleteSubscription)
+				// Redemption endpoints
+				subscriptions.POST("/:subscription_id/redeem", subscriptionHandler.RedeemSubscription)
+				subscriptions.POST("/redeem-due", subscriptionHandler.RedeemDueSubscriptions)
+				subscriptions.GET("/:subscription_id/redemption-status", subscriptionHandler.GetRedemptionStatus)
+				// Subscription analytics
+				subscriptions.GET("/:subscription_id/total-amount", subscriptionEventHandler.GetTotalAmountBySubscription)
+				subscriptions.GET("/:subscription_id/redemption-count", subscriptionEventHandler.GetSuccessfulRedemptionCount)
+				subscriptions.GET("/:subscription_id/latest-event", subscriptionEventHandler.GetLatestSubscriptionEvent)
+				subscriptions.GET("/:subscription_id/events", subscriptionEventHandler.ListSubscriptionEventsBySubscription)
+			}
+
+			// Subscription events
+			subEvents := protected.Group("/subscription-events")
+			{
+				subEvents.GET("", subscriptionEventHandler.ListSubscriptionEvents)
+				subEvents.POST("", subscriptionEventHandler.CreateSubscriptionEvent)
+				subEvents.GET("/:event_id", subscriptionEventHandler.GetSubscriptionEvent)
+				subEvents.PUT("/:event_id", subscriptionEventHandler.UpdateSubscriptionEvent)
+				subEvents.GET("/transaction/:tx_hash", subscriptionEventHandler.GetSubscriptionEventByTxHash)
+				subEvents.GET("/type/:event_type", subscriptionEventHandler.ListSubscriptionEventsByType)
+				subEvents.GET("/failed", subscriptionEventHandler.ListFailedSubscriptionEvents)
+				subEvents.GET("/recent", subscriptionEventHandler.ListRecentSubscriptionEvents)
+				subEvents.GET("/type/:event_type/recent", subscriptionEventHandler.ListRecentSubscriptionEventsByType)
+			}
+
+			// Failed subscription attempts
+			failedAttempts := protected.Group("/failed-subscription-attempts")
+			{
+				failedAttempts.GET("", failedSubscriptionAttemptHandler.ListFailedSubscriptionAttempts)
+				failedAttempts.GET("/:attempt_id", failedSubscriptionAttemptHandler.GetFailedSubscriptionAttempt)
+				failedAttempts.GET("/customer/:customer_id", failedSubscriptionAttemptHandler.ListFailedSubscriptionAttemptsByCustomer)
+				failedAttempts.GET("/product/:product_id", failedSubscriptionAttemptHandler.ListFailedSubscriptionAttemptsByProduct)
+				failedAttempts.GET("/error-type/:error_type", failedSubscriptionAttemptHandler.ListFailedSubscriptionAttemptsByErrorType)
+			}
+
+			// Delegations
+			delegations := protected.Group("/delegations")
+			{
+				delegations.GET("/:delegation_id/subscriptions", subscriptionHandler.GetSubscriptionsByDelegation)
 			}
 		}
 	}

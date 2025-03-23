@@ -2,13 +2,13 @@
 
 # Go parameters
 BINARY_NAME=cyphera-api
-MAIN_PACKAGE=./cmd/api
+MAIN_PACKAGE=./cmd/api/main
 GO=go
 
 all: lint test build
 
 build:
-	$(GO) build -o bin/$(BINARY_NAME) $(MAIN_PACKAGE)/main
+	$(GO) build -o bin/$(BINARY_NAME) $(MAIN_PACKAGE)
 
 test:
 	$(GO) test -v ./...
@@ -23,7 +23,7 @@ ensure-executable:
 # Run integration tests with the delegation server
 test-integration: ensure-executable
 	@echo "Running delegation integration tests with mock server..."
-	./scripts/integration-test.sh --cli
+	DELEGATION_LOCAL_MODE=true ./scripts/integration-test.sh --cli
 
 # Stop integration server processes if they're still running
 stop-integration-server:
@@ -42,19 +42,20 @@ lint:
 	gofmt -l .
 
 run:
-	$(GO) run $(MAIN_PACKAGE)/main.go
+	$(GO) run $(MAIN_PACKAGE)
 
 swagger:
-	swag init -g cmd/api/main.go
+	swag init -g cmd/api/main/main.go
 
 deploy:
 	# Add deployment steps here
 
 dev:
-	make -j2 delegation-server api-server
+	./scripts/start-dev.sh
 
+# Individual server commands (used directly by the start-dev.sh script)
 api-server:
-	$(GO) run $(MAIN_PACKAGE)/main.go
+	$(GO) run $(MAIN_PACKAGE)
 
 delegation-server:
 	cd delegation-server && npm run start:mock
@@ -74,5 +75,8 @@ help:
 	@echo "  make run            - Run the application"
 	@echo "  make swagger        - Generate Swagger documentation"
 	@echo "  make deploy         - Deploy the application"
-	@echo "  make dev            - Run the application in development mode"
+	@echo "  make dev            - Run the application in development mode (loads .env)"
 	@echo "  make delegation-server - Run the delegation server" 
+	@echo "  make gen            - Generate SQLC code"
+gen:
+	sqlc generate

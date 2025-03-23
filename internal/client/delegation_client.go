@@ -47,8 +47,29 @@ func NewDelegationClient() (*DelegationClient, error) {
 		grpcServerAddr = "localhost:50051"
 	}
 
-	// Connect to the gRPC server
-	conn, err := grpc.Dial(grpcServerAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Check if we're in local development mode
+	// Set DELEGATION_LOCAL_MODE=true for dev/test environments
+	useLocalMode := os.Getenv("DELEGATION_LOCAL_MODE") == "true"
+
+	var conn *grpc.ClientConn
+	var err error
+
+	if useLocalMode {
+		// Use passthrough mode for local development/testing
+		// This bypasses DNS resolution and connects directly
+		conn, err = grpc.NewClient(
+			fmt.Sprintf("passthrough:///%s", grpcServerAddr),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)
+	} else {
+		// Use default DNS resolution for production
+		// This allows for service discovery and load balancing
+		conn, err = grpc.NewClient(
+			grpcServerAddr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to delegation gRPC server: %w", err)
 	}
@@ -137,6 +158,52 @@ func (c *DelegationClient) GetDelegationForSubscription(ctx context.Context, sub
 		Salt:      "0x123456789",
 		Signature: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
 	}, nil
+}
+
+// HealthCheck checks if the delegation server is available
+// by making a minimal gRPC request
+//
+// Parameters:
+//   - ctx: Context for the request
+//
+// Returns:
+//   - nil if the server is available
+//   - Error if the server is unavailable
+func (c *DelegationClient) HealthCheck(ctx context.Context) error {
+	// Create a short timeout context for health check
+	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	// Create a minimal request (will be rejected by server but that's fine for checking connection)
+	req := &proto.RedeemDelegationRequest{
+		DelegationData: []byte{},
+	}
+
+	// Try to call the service
+	_, err := c.client.RedeemDelegation(timeoutCtx, req)
+	if err != nil {
+		// We expect an error here since we're sending empty data
+		// But we want to distinguish between connection errors and validation errors
+
+		// Extract the error details
+		st, _ := status.FromError(err)
+
+		// Check if the error is a connection error or a validation error
+		// Status codes like Unavailable (14) indicate connection issues
+		// while codes like InvalidArgument (3) indicate validation issues
+		if st.Code() == 14 { // Unavailable
+			return fmt.Errorf("delegation server unavailable: %s", st.Message())
+		}
+
+		// If we got an error with a different code, it means we connected
+		// to the server but it rejected our request, which is expected
+		// This indicates the server is alive
+		return nil
+	}
+
+	// If we somehow got a successful response for our empty request,
+	// the server is definitely available
+	return nil
 }
 
 // Close closes the gRPC connection. This should be called when the client
