@@ -961,15 +961,15 @@ func CalculateNextRedemption(product db.Product, now time.Time) time.Time {
 // @Tags subscriptions
 // @Accept json
 // @Produce json
-// @Param id path string true "Subscription ID"
+// @Param subscription_id path string true "Subscription ID"
 // @Success 200 {object} GetRedemptionStatusResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
-// @Router /v1/subscriptions/{id}/redemption-status [get]
+// @Router /subscriptions/{subscription_id}/redemption-status [get]
 func (h *SubscriptionHandler) GetRedemptionStatus(c *gin.Context) {
 	ctx := c.Request.Context()
-	subscriptionID := c.Param("id")
+	subscriptionID := c.Param("subscription_id")
 
 	// Validate subscription ID
 	if subscriptionID == "" {
