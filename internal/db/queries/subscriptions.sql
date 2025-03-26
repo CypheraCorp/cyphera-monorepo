@@ -121,6 +121,14 @@ SET
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
 
+-- name: CompleteSubscription :one
+UPDATE subscriptions
+SET 
+    status = 'completed',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING *;
+
 -- name: UpdateSubscriptionStatus :one
 UPDATE subscriptions
 SET 
@@ -150,4 +158,11 @@ WHERE
     current_period_end < CURRENT_TIMESTAMP
     AND status = 'active'
     AND deleted_at IS NULL
-ORDER BY current_period_end ASC; 
+ORDER BY current_period_end ASC;
+
+-- name: LockSubscriptionForProcessing :one
+SELECT *
+FROM subscriptions
+WHERE id = $1 AND status = 'active' AND deleted_at IS NULL
+FOR UPDATE NOWAIT
+LIMIT 1; 

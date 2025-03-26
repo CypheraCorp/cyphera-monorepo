@@ -17,6 +17,7 @@ type Querier interface {
 	ActivateProductToken(ctx context.Context, id uuid.UUID) (ProductsToken, error)
 	ActivateToken(ctx context.Context, id uuid.UUID) (Token, error)
 	CancelSubscription(ctx context.Context, id uuid.UUID) (Subscription, error)
+	CompleteSubscription(ctx context.Context, id uuid.UUID) (Subscription, error)
 	CountActiveSubscriptions(ctx context.Context) (int64, error)
 	CountCustomerWallets(ctx context.Context, customerID uuid.UUID) (int64, error)
 	CountCustomers(ctx context.Context, workspaceID uuid.UUID) (int64, error)
@@ -183,6 +184,7 @@ type Querier interface {
 	ListWorkspaceCustomersWithPagination(ctx context.Context, arg ListWorkspaceCustomersWithPaginationParams) ([]Customer, error)
 	ListWorkspaces(ctx context.Context) ([]Workspace, error)
 	ListWorkspacesByAccountID(ctx context.Context, accountID uuid.UUID) ([]Workspace, error)
+	LockSubscriptionForProcessing(ctx context.Context, id uuid.UUID) (Subscription, error)
 	// Set a specific customer wallet as primary
 	MarkCustomerWalletAsPrimary(ctx context.Context, id uuid.UUID) (CustomerWallet, error)
 	SearchAccounts(ctx context.Context, arg SearchAccountsParams) ([]Account, error)

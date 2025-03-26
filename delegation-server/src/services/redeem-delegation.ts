@@ -196,16 +196,6 @@ export const redeemDelegation = async (
       }
     ]
 
-    // TODO: remove Define the execution that will be performed on behalf of the delegator
-    // In this case, we're sending a small amount of ETH to the merchant
-    // const executions: ExecutionStruct[] = [
-    //   {
-    //     target: merchantAddress as Address,
-    //     value: parseEther("0.001"),
-    //     callData: "0x",
-    //   },
-    // ]
-
     // Format the delegation for the framework
     const delegationForFramework = delegation as any
     const delegationChain = [delegationForFramework]

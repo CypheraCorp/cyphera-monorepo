@@ -339,9 +339,8 @@ func InitializeRoutes(router *gin.Engine) {
 				subscriptions.POST("/:subscription_id/cancel", subscriptionHandler.CancelSubscription)
 				subscriptions.DELETE("/:subscription_id", subscriptionHandler.DeleteSubscription)
 				// Redemption endpoints
-				subscriptions.POST("/:subscription_id/redeem", subscriptionHandler.RedeemSubscription)
-				subscriptions.POST("/redeem-due", subscriptionHandler.RedeemDueSubscriptions)
-				subscriptions.GET("/:subscription_id/redemption-status", subscriptionHandler.GetRedemptionStatus)
+				subscriptions.POST("/redeem-due", subscriptionHandler.RedeemDueSubscriptionsHTTP)
+				subscriptions.POST("/process-due", subscriptionHandler.ProcessDueSubscriptionsHTTP)
 				// Subscription analytics
 				subscriptions.GET("/:subscription_id/total-amount", subscriptionEventHandler.GetTotalAmountBySubscription)
 				subscriptions.GET("/:subscription_id/redemption-count", subscriptionEventHandler.GetSuccessfulRedemptionCount)
