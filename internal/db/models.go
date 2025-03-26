@@ -238,6 +238,7 @@ const (
 	SubscriptionEventTypeRenewed                 SubscriptionEventType = "renewed"
 	SubscriptionEventTypeCanceled                SubscriptionEventType = "canceled"
 	SubscriptionEventTypeExpired                 SubscriptionEventType = "expired"
+	SubscriptionEventTypeCompleted               SubscriptionEventType = "completed"
 	SubscriptionEventTypeFailed                  SubscriptionEventType = "failed"
 	SubscriptionEventTypeFailedValidation        SubscriptionEventType = "failed_validation"
 	SubscriptionEventTypeFailedCustomerCreation  SubscriptionEventType = "failed_customer_creation"
@@ -292,6 +293,7 @@ const (
 	SubscriptionStatusExpired   SubscriptionStatus = "expired"
 	SubscriptionStatusSuspended SubscriptionStatus = "suspended"
 	SubscriptionStatusFailed    SubscriptionStatus = "failed"
+	SubscriptionStatusCompleted SubscriptionStatus = "completed"
 )
 
 func (e *SubscriptionStatus) Scan(src interface{}) error {

@@ -10,7 +10,6 @@ import (
 
 	"cyphera-api/internal/proto"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
@@ -223,21 +222,6 @@ func (c *DelegationClient) RedeemDelegationDirectly(ctx context.Context, delegat
 
 	log.Printf("Delegation successfully redeemed, tx hash: %s", txHash)
 	return txHash, nil
-}
-
-// GetDelegationForSubscription retrieves delegation data for a subscription
-// TODO: Replace this with actual database query implementation when integrating with a database
-func (c *DelegationClient) GetDelegationForSubscription(ctx context.Context, subscriptionID uuid.UUID) (*DelegationData, error) {
-	// Mock implementation - replace with real database query
-	// This would be implemented in your database queries file
-	return &DelegationData{
-		Delegate:  "0x1234567890123456789012345678901234567890",
-		Delegator: "0x0987654321098765432109876543210987654321",
-		Authority: "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789",
-		Caveats:   json.RawMessage("[]"),
-		Salt:      "0x123456789",
-		Signature: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-	}, nil
 }
 
 // HealthCheck checks if the delegation server is available

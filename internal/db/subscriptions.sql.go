@@ -45,6 +45,39 @@ func (q *Queries) CancelSubscription(ctx context.Context, id uuid.UUID) (Subscri
 	return i, err
 }
 
+const completeSubscription = `-- name: CompleteSubscription :one
+UPDATE subscriptions
+SET 
+    status = 'completed',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, customer_id, product_id, product_token_id, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, created_at, updated_at, deleted_at
+`
+
+func (q *Queries) CompleteSubscription(ctx context.Context, id uuid.UUID) (Subscription, error) {
+	row := q.db.QueryRow(ctx, completeSubscription, id)
+	var i Subscription
+	err := row.Scan(
+		&i.ID,
+		&i.CustomerID,
+		&i.ProductID,
+		&i.ProductTokenID,
+		&i.DelegationID,
+		&i.CustomerWalletID,
+		&i.Status,
+		&i.CurrentPeriodStart,
+		&i.CurrentPeriodEnd,
+		&i.NextRedemptionDate,
+		&i.TotalRedemptions,
+		&i.TotalAmountInCents,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const countActiveSubscriptions = `-- name: CountActiveSubscriptions :one
 SELECT COUNT(*) FROM subscriptions
 WHERE status = 'active' AND deleted_at IS NULL
@@ -674,6 +707,38 @@ func (q *Queries) ListSubscriptionsWithPagination(ctx context.Context, arg ListS
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockSubscriptionForProcessing = `-- name: LockSubscriptionForProcessing :one
+SELECT id, customer_id, product_id, product_token_id, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, created_at, updated_at, deleted_at
+FROM subscriptions
+WHERE id = $1 AND status = 'active' AND deleted_at IS NULL
+FOR UPDATE NOWAIT
+LIMIT 1
+`
+
+func (q *Queries) LockSubscriptionForProcessing(ctx context.Context, id uuid.UUID) (Subscription, error) {
+	row := q.db.QueryRow(ctx, lockSubscriptionForProcessing, id)
+	var i Subscription
+	err := row.Scan(
+		&i.ID,
+		&i.CustomerID,
+		&i.ProductID,
+		&i.ProductTokenID,
+		&i.DelegationID,
+		&i.CustomerWalletID,
+		&i.Status,
+		&i.CurrentPeriodStart,
+		&i.CurrentPeriodEnd,
+		&i.NextRedemptionDate,
+		&i.TotalRedemptions,
+		&i.TotalAmountInCents,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
 }
 
 const updateSubscription = `-- name: UpdateSubscription :one
