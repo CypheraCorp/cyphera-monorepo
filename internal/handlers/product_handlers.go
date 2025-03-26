@@ -274,11 +274,33 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 		return
 	}
 
+	// retrieve the merchant's wallet details
+	merchantWallet, err := h.common.db.GetWalletByID(ctx, product.WalletID)
+	if err != nil {
+		handleDBError(c, err, "Merchant wallet not found")
+		return
+	}
+
 	// Get product token details to verify it exists and is associated with the product
 	productToken, err := h.common.db.GetProductToken(ctx, parsedProductTokenID)
 	if err != nil {
 		handleDBError(c, err, "Product token not found")
 		return
+	}
+
+	// get the token details
+	token, err := h.common.db.GetToken(ctx, productToken.TokenID)
+	if err != nil {
+		handleDBError(c, err, "Token not found")
+		return
+	}
+	// convert price in pennies to float
+	price := float64(product.PriceInPennies) / 100.0
+
+	executionObject := client.ExecutionObject{
+		MerchantAddress:      merchantWallet.WalletAddress,
+		TokenContractAddress: token.ContractAddress,
+		Price:                strconv.FormatFloat(price, 'f', -1, 64),
 	}
 
 	// Verify product token is associated with product
@@ -409,18 +431,56 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 	}
 
 	// Execute initial redemption (outside transaction to avoid long-running transactions)
-	updatedSubscription, err := h.performInitialRedemption(ctx, customer, customerWallet, subscription, product, productToken, request.Delegation)
+	updatedSubscription, err := h.performInitialRedemption(ctx, customer, customerWallet, subscription, product, productToken, request.Delegation, executionObject)
 	if err != nil {
-		// We don't fail here, since the subscription is created successfully
-		// The redemption can be retried later
-		logger.Error("Initial redemption failed, but subscription was created",
+		// we fail here the subscription is created and marked as failed
+		// Additionally mark with deleted_at to indicate it was never successfully active
+		logger.Error("Initial redemption failed, subscription marked as failed and soft-deleted",
 			zap.Error(err),
 			zap.String("subscription_id", subscription.ID.String()),
 			zap.String("customer_id", customer.ID.String()),
 			zap.String("product_id", product.ID.String()))
 
-		// We'll still return the created subscription
-		sendSuccess(c, http.StatusCreated, subscription)
+		// Update the subscription status to 'failed'
+		_, updateErr := h.common.db.UpdateSubscriptionStatus(ctx, db.UpdateSubscriptionStatusParams{
+			ID:     subscription.ID,
+			Status: db.SubscriptionStatusFailed,
+		})
+
+		if updateErr != nil {
+			logger.Error("Failed to update subscription status after redemption failure",
+				zap.Error(updateErr),
+				zap.String("subscription_id", subscription.ID.String()))
+		}
+
+		// Soft delete the subscription while keeping it in the database
+		// This marks it as deleted but preserves the record for troubleshooting
+		deleteErr := h.common.db.DeleteSubscription(ctx, subscription.ID)
+		if deleteErr != nil {
+			logger.Error("Failed to soft-delete subscription after redemption failure",
+				zap.Error(deleteErr),
+				zap.String("subscription_id", subscription.ID.String()))
+		}
+
+		// Create a subscription event with the failed_redemption data
+		errorMsg := fmt.Sprintf("Initial redemption failed: %v", err)
+		_, eventErr := h.common.db.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+			SubscriptionID:  subscription.ID,
+			EventType:       db.SubscriptionEventTypeFailedRedemption,
+			TransactionHash: pgtype.Text{String: "", Valid: false},
+			AmountInCents:   product.PriceInPennies,
+			ErrorMessage:    pgtype.Text{String: errorMsg, Valid: true},
+			OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
+			Metadata:        json.RawMessage(`{}`),
+		})
+
+		if eventErr != nil {
+			logger.Error("Failed to create subscription event after redemption failure",
+				zap.Error(eventErr),
+				zap.String("subscription_id", subscription.ID.String()))
+		}
+
+		sendError(c, http.StatusInternalServerError, "Initial redemption failed, subscription marked as failed and soft-deleted", err)
 		return
 	}
 
@@ -437,6 +497,11 @@ func (h *ProductHandler) validateSubscriptionRequest(request SubscribeRequest, p
 	// Basic validation of product token ID format
 	if _, err := uuid.Parse(request.ProductTokenID); err != nil {
 		return fmt.Errorf("invalid product token ID format")
+	}
+
+	// check if delegate address matches cyphera wallet address
+	if request.Delegation.Delegate != h.common.GetCypheraSmartWalletAddress() {
+		return fmt.Errorf("delegate address does not match cyphera smart wallet address, %s != %s", request.Delegation.Delegate, h.common.GetCypheraSmartWalletAddress())
 	}
 
 	// Validate delegation data
@@ -750,6 +815,7 @@ func (h *ProductHandler) performInitialRedemption(
 	product db.Product,
 	productToken db.GetProductTokenRow,
 	delegation DelegationStruct,
+	executionObject client.ExecutionObject,
 ) (db.Subscription, error) {
 	logger.Info("Performing initial redemption",
 		zap.String("subscription_id", subscription.ID.String()),
@@ -774,47 +840,8 @@ func (h *ProductHandler) performInitialRedemption(
 	}
 
 	// Attempt to redeem the delegation
-	txHash, err := h.delegationClient.RedeemDelegation(ctx, delegationBytes)
+	txHash, err := h.delegationClient.RedeemDelegation(ctx, delegationBytes, executionObject)
 	if err != nil {
-		// Create a redemption failure event
-		errorMsg := pgtype.Text{
-			String: err.Error(),
-			Valid:  true,
-		}
-
-		// Create enriched metadata for failure event
-		metadata := map[string]interface{}{
-			"product_id":        product.ID.String(),
-			"product_name":      product.Name,
-			"product_token_id":  productToken.ID.String(),
-			"token_symbol":      productToken.TokenSymbol,
-			"network_name":      productToken.NetworkName,
-			"wallet_address":    customerWallet.WalletAddress,
-			"customer_id":       customer.ID.String(),
-			"customer_name":     customer.Name.String,
-			"customer_email":    customer.Email.String,
-			"error_details":     err.Error(),
-			"redemption_time":   time.Now().Unix(),
-			"subscription_type": string(product.ProductType),
-		}
-
-		metadataBytes, _ := json.Marshal(metadata)
-
-		failEventParams := db.CreateFailedRedemptionEventParams{
-			SubscriptionID: subscription.ID,
-			AmountInCents:  product.PriceInPennies,
-			ErrorMessage:   errorMsg,
-			Metadata:       metadataBytes,
-		}
-
-		_, eventErr := h.common.db.CreateFailedRedemptionEvent(ctx, failEventParams)
-		if eventErr != nil {
-			logger.Error("Failed to record redemption failure event",
-				zap.Error(eventErr),
-				zap.String("subscription_id", subscription.ID.String()))
-			// Continue despite the event recording error
-		}
-
 		return subscription, fmt.Errorf("delegation redemption failed: %w", err)
 	}
 

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"cyphera-api/internal/client"
@@ -18,7 +19,6 @@ type Delegation struct {
 	Delegator string   `json:"delegator"`
 	Delegate  string   `json:"delegate"`
 	Signature string   `json:"signature"`
-	Expiry    int64    `json:"expiry"`
 	Caveats   []string `json:"caveats"`
 	Salt      string   `json:"salt"`
 	Authority struct {
@@ -30,7 +30,10 @@ type Delegation struct {
 
 // RedeemDelegationRequest contains the data needed to redeem a delegation
 type RedeemDelegationRequest struct {
-	DelegationData string `json:"delegationData"`
+	Signature            []byte `json:"signature"`
+	MerchantAddress      string `json:"merchant_address"`
+	TokenContractAddress string `json:"token_contract_address"`
+	Price                string `json:"price"`
 }
 
 // RedeemDelegationResponse is the response for a delegation redemption
@@ -67,15 +70,28 @@ func (s *DelegationService) RedeemDelegationHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Decode the delegation data
-	delegationData := []byte(req.DelegationData)
-	if len(delegationData) == 0 {
-		http.Error(w, "Delegation data is required", http.StatusBadRequest)
+	// Validate the request
+	if len(req.Signature) == 0 {
+		http.Error(w, "Signature is required", http.StatusBadRequest)
 		return
 	}
 
+	// Convert price string to float64
+	price, err := strconv.ParseFloat(req.Price, 64)
+	if err != nil {
+		http.Error(w, "Invalid price format", http.StatusBadRequest)
+		return
+	}
+
+	// Create execution object
+	executionObject := client.ExecutionObject{
+		MerchantAddress:      req.MerchantAddress,
+		TokenContractAddress: req.TokenContractAddress,
+		Price:                strconv.FormatFloat(price, 'f', -1, 64),
+	}
+
 	// Call the delegation client to redeem the delegation
-	txHash, err := s.delegationClient.RedeemDelegationDirectly(r.Context(), delegationData)
+	txHash, err := s.delegationClient.RedeemDelegation(r.Context(), req.Signature, executionObject)
 	if err != nil {
 		log.Printf("Error redeeming delegation: %v", err)
 		sendJSONResponse(w, RedeemDelegationResponse{
@@ -104,12 +120,14 @@ func sendJSONResponse(w http.ResponseWriter, data interface{}, statusCode int) {
 func main() {
 	// Define and parse command line flags
 	serverMode := flag.Bool("server", false, "Run in server mode with HTTP API")
-	serverPort := flag.String("port", "8080", "HTTP server port (when in server mode)")
+	serverPort := flag.String("port", "8000", "HTTP server port (when in server mode)")
 	delegatorFlag := flag.String("delegator", "0x1234567890123456789012345678901234567890", "Delegator address")
 	delegateFlag := flag.String("delegate", "0x0987654321098765432109876543210987654321", "Delegate address")
 	signatureFlag := flag.String("signature", "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890", "Delegation signature")
-	expiryFlag := flag.Int64("expiry", time.Now().Unix()+3600, "Expiry timestamp (default: 1 hour from now)")
 	saltFlag := flag.String("salt", "0x123456789", "Delegation salt")
+	merchantFlag := flag.String("merchant", "0x1234567890123456789012345678901234567890", "Merchant address")
+	tokenFlag := flag.String("token", "0x1234567890123456789012345678901234567890", "Token contract address")
+	priceFlag := flag.String("price", "1000000", "Price in token decimals")
 	verboseFlag := flag.Bool("verbose", false, "Enable verbose output")
 	flag.Parse()
 
@@ -143,7 +161,6 @@ func main() {
 		Delegator: *delegatorFlag,
 		Delegate:  *delegateFlag,
 		Signature: *signatureFlag,
-		Expiry:    *expiryFlag,
 		Caveats:   []string{},
 		Salt:      *saltFlag,
 		Authority: struct {
@@ -168,7 +185,9 @@ func main() {
 	log.Println("Starting delegation integration test...")
 	log.Printf("Using delegator: %s", delegation.Delegator)
 	log.Printf("Using delegate: %s", delegation.Delegate)
-	log.Printf("Delegation expires at: %d (%s)", delegation.Expiry, time.Unix(delegation.Expiry, 0).Format(time.RFC3339))
+	log.Printf("Using merchant: %s", *merchantFlag)
+	log.Printf("Using token: %s", *tokenFlag)
+	log.Printf("Using price: %s", *priceFlag)
 
 	// Convert the delegation to JSON
 	delegationJSON, err := json.Marshal(delegation)
@@ -180,9 +199,22 @@ func main() {
 		log.Printf("Delegation JSON: %s", string(delegationJSON))
 	}
 
+	// Convert price string to float64
+	price, err := strconv.ParseFloat(*priceFlag, 64)
+	if err != nil {
+		log.Fatalf("Invalid price format: %v", err)
+	}
+
+	// Create execution object
+	executionObject := client.ExecutionObject{
+		MerchantAddress:      *merchantFlag,
+		TokenContractAddress: *tokenFlag,
+		Price:                strconv.FormatFloat(price, 'f', -1, 64),
+	}
+
 	// Call the gRPC service to redeem the delegation
 	log.Println("Sending delegation to gRPC service...")
-	txHash, err := delegationService.delegationClient.RedeemDelegation(ctx, delegationJSON)
+	txHash, err := delegationService.delegationClient.RedeemDelegation(ctx, delegationJSON, executionObject)
 	if err != nil {
 		log.Fatalf("Delegation redemption failed: %v", err)
 	}

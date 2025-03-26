@@ -14,7 +14,6 @@ export const config = {
   blockchain: {
     rpcUrl: process.env.RPC_URL,
     bundlerUrl: process.env.BUNDLER_URL,
-    paymasterUrl: process.env.PAYMASTER_URL,
     chainId: parseInt(process.env.CHAIN_ID || '11155111', 10),
     privateKey: process.env.PRIVATE_KEY
   },

@@ -26,9 +26,11 @@ delegation-server/
 ├── src/                      # Source code
 │   ├── config.ts             # Configuration settings and env var loading
 │   ├── index.ts              # Main entry point, starts gRPC server
+│   ├── proto/                # Protocol buffer definitions and generated code
+│   │   ├── delegation.proto  # gRPC service definition
+│   │   ├── delegation_pb.js  # Generated JavaScript definitions
+│   │   └── delegation_grpc_pb.js # Generated gRPC client/server code
 │   └── services/             # Core business logic for handling delegations
-├── proto/                    # Protocol buffer definitions
-│   └── delegation.proto      # gRPC service definition
 ├── scripts/                  # Utility scripts
 ├── test/                     # Test files
 ├── .env                      # Environment configuration (not committed)
@@ -225,4 +227,21 @@ For LLMs analyzing this project, here are key implementation details:
    - Binary efficient data transfer
    - Proper error propagation
 
-This server is designed to be a stateless microservice that can be horizontally scaled as needed. 
+This server is designed to be a stateless microservice that can be horizontally scaled as needed.
+
+## Protocol Buffers (gRPC)
+
+The service uses Protocol Buffers and gRPC for communication. The protocol definition is maintained in:
+
+- `src/proto/delegation.proto`: Main proto definition file
+
+When updating the proto definition:
+
+1. Modify `src/proto/delegation.proto`
+2. Regenerate the TypeScript/JavaScript files:
+
+```bash
+npx grpc_tools_node_protoc --js_out=import_style=commonjs,binary:./src/proto --grpc_out=grpc_js:./src/proto --ts_out=grpc_js:./src/proto -I ./src/proto src/proto/delegation.proto
+```
+
+This will update the generated files in `src/proto/` directory. 

@@ -53,7 +53,7 @@ const crypto_1 = require("crypto");
 // Configure the test
 const CONFIG = {
     serverAddress: process.env.GRPC_SERVER_ADDRESS || 'localhost:50051',
-    protoPath: (0, path_1.resolve)(__dirname, '../src/proto/delegation.proto'),
+    protoPath: (0, path_1.resolve)(__dirname, '../proto/delegation.proto'),
     timeout: 30000, // 30 seconds
 };
 // Sample delegation data - this should match the format expected by the server

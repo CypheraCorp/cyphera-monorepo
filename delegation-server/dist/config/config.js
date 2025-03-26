@@ -33,7 +33,6 @@ exports.config = {
         rpcUrl: process.env.RPC_URL,
         bundlerUrl: process.env.BUNDLER_URL,
         privateKey: (0, utils_1.formatPrivateKey)(process.env.PRIVATE_KEY),
-        paymasterUrl: process.env.PAYMASTER_URL || '',
         chainId: parseInt(process.env.CHAIN_ID || '11155111') // Default to Sepolia
     }
 };

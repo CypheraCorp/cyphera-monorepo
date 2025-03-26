@@ -58,7 +58,6 @@ The project consists of two main components:
 3. **Edit the `.env` file with your configuration:**
    Required variables include:
    - `DATABASE_URL`: PostgreSQL connection string
-   - `CYPHERA_WALLET_PRIVATE_KEY`: Private key for blockchain operations
    - `DELEGATION_SERVER_URL`: URL for the delegation server
    - `DELEGATION_LOCAL_MODE`: Set to "true" for local development
    - `DELEGATION_GRPC_ADDR`: gRPC address for the delegation server (e.g., "localhost:50051")
@@ -124,7 +123,7 @@ This will:
 Once the servers are running, you can test the API:
 
 ```bash
-curl -X GET 'http://localhost:8080/health'
+curl -X GET 'http://localhost:8000/health'
 ```
 
 ## API Documentation
@@ -132,7 +131,7 @@ curl -X GET 'http://localhost:8080/health'
 Swagger documentation is available when the server is running:
 
 ```
-http://localhost:8080/swagger/index.html
+http://localhost:8000/swagger/index.html
 ```
 
 To update the Swagger documentation:

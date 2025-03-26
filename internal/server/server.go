@@ -70,9 +70,14 @@ func InitializeHandlers() {
 	// Create queries instance with the connection pool
 	dbQueries = db.New(connPool)
 
-	cypheraWalletPrivateKey := os.Getenv("CYPHERA_WALLET_PRIVATE_KEY")
-	if cypheraWalletPrivateKey == "" {
-		logger.Fatal("CYPHERA_WALLET_PRIVATE_KEY environment variable is required")
+	cypheraSmartWalletAddress := os.Getenv("CYPHERA_SMART_WALLET_ADDRESS")
+	if cypheraSmartWalletAddress == "" {
+		logger.Fatal("CYPHERA_SMART_WALLET_ADDRESS environment variable is required")
+	}
+
+	// validate cyphera wallet address
+	if !handlers.IsAddressValid(cypheraSmartWalletAddress) {
+		logger.Fatal("CYPHERA_SMART_WALLET_ADDRESS is not a valid address")
 	}
 
 	// Initialize the delegation client
@@ -83,6 +88,7 @@ func InitializeHandlers() {
 
 	commonServices := handlers.NewCommonServices(
 		dbQueries,
+		cypheraSmartWalletAddress,
 	)
 
 	// API Handler initialization

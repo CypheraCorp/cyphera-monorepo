@@ -20,7 +20,7 @@ import { randomBytes } from 'crypto'
 // Configure the test
 const CONFIG = {
   serverAddress: process.env.GRPC_SERVER_ADDRESS || 'localhost:50051',
-  protoPath: resolve(__dirname, '../src/proto/delegation.proto'),
+  protoPath: resolve(__dirname, '../proto/delegation.proto'),
   timeout: 30000, // 30 seconds
 }
 

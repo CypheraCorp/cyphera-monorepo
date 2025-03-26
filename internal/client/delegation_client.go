@@ -16,6 +16,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// ExecutionObject represents the execution details for a delegation
+type ExecutionObject struct {
+	MerchantAddress      string
+	TokenContractAddress string
+	Price                string
+}
+
 // DelegationData represents the delegation information stored in the database
 type DelegationData struct {
 	Delegate  string          `json:"delegate"`
@@ -83,62 +90,101 @@ func NewDelegationClient() (*DelegationClient, error) {
 	}, nil
 }
 
-// RedeemDelegation sends a delegation to the gRPC service for redemption.
-// This method handles the communication with the delegation service and returns
-// the transaction hash if successful.
-//
-// Parameters:
-//   - ctx: Context for the request, which can include timeout or cancellation
-//   - delegationData: The delegation data to be redeemed, typically as JSON bytes
-//
-// Returns:
-//   - The transaction hash as a string
-//   - Error if the redemption failed or the service returned an error
-func (c *DelegationClient) RedeemDelegation(ctx context.Context, delegationData []byte) (string, error) {
-	// Set a timeout for the gRPC call if not already set in context
-	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+// RedeemDelegation redeems a delegation with the provided signature and execution details
+func (c *DelegationClient) RedeemDelegation(ctx context.Context, signature []byte, executionObject ExecutionObject) (string, error) {
+	// Validate inputs
+	if len(signature) == 0 {
+		return "", fmt.Errorf("signature cannot be empty")
+	}
+
+	if executionObject.MerchantAddress == "" || executionObject.MerchantAddress == "0x0000000000000000000000000000000000000000" {
+		return "", fmt.Errorf("valid merchant address is required")
+	}
+
+	if executionObject.TokenContractAddress == "" || executionObject.TokenContractAddress == "0x0000000000000000000000000000000000000000" {
+		return "", fmt.Errorf("valid token contract address is required")
+	}
+
+	if executionObject.Price == "" || executionObject.Price == "0" {
+		return "", fmt.Errorf("valid price is required")
+	}
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	// Create the redemption request
 	req := &proto.RedeemDelegationRequest{
-		DelegationData: delegationData,
+		Signature:            signature,
+		MerchantAddress:      executionObject.MerchantAddress,
+		TokenContractAddress: executionObject.TokenContractAddress,
+		Price:                executionObject.Price,
 	}
 
-	// Call the gRPC service
-	resp, err := c.client.RedeemDelegation(timeoutCtx, req)
+	// Call the service
+	res, err := c.client.RedeemDelegation(ctx, req)
 	if err != nil {
-		// Extract detailed error information from gRPC status
-		st, _ := status.FromError(err)
-		return "", fmt.Errorf("delegation redemption failed with code %s: %s", st.Code(), st.Message())
-	}
-
-	// Check if the service reported success
-	if resp.Success == false {
-		if resp.ErrorMessage != "" {
-			return "", fmt.Errorf("delegation redemption failed: %s", resp.ErrorMessage)
+		st, ok := status.FromError(err)
+		if ok {
+			return "", fmt.Errorf("failed to redeem delegation: %s", st.Message())
 		}
-		return "", fmt.Errorf("delegation redemption failed: unknown error")
+		return "", fmt.Errorf("failed to redeem delegation: %v", err)
 	}
 
-	// Return transaction hash
-	return resp.TransactionHash, nil
+	// Log the full response for debugging
+	log.Printf("Got response from server: %+v", res)
+
+	// Check if the operation was successful based on the success field
+	if !res.GetSuccess() {
+		errorMsg := res.GetErrorMessage()
+		// The field might be in snake_case in the response if the server is using keepCase: true
+		if errorMsg == "" {
+			// Check if we can extract the error message from another field or property
+			errorMsgBytes, _ := json.Marshal(res)
+			log.Printf("JSON response: %s", string(errorMsgBytes))
+			if errorMsgBytes != nil {
+				var respMap map[string]interface{}
+				if err := json.Unmarshal(errorMsgBytes, &respMap); err == nil {
+					log.Printf("Response map: %+v", respMap)
+					// Try different field name variations
+					if snake, ok := respMap["error_message"].(string); ok && snake != "" {
+						errorMsg = snake
+					} else if camel, ok := respMap["errorMessage"].(string); ok && camel != "" {
+						errorMsg = camel
+					}
+				}
+			}
+		}
+
+		if errorMsg == "" {
+			errorMsg = "unknown error (empty error message from server)"
+		}
+		return "", fmt.Errorf("delegation redemption failed: %s", errorMsg)
+	}
+
+	txHash := res.GetTransactionHash()
+	log.Printf("Transaction hash from server: %s", txHash)
+	if txHash == "" {
+		return "", fmt.Errorf("delegation redemption failed: empty transaction hash returned")
+	}
+
+	return txHash, nil
 }
 
-// RedeemDelegationDirectly sends a redemption request to the gRPC service
-// and returns the transaction hash or an error
-//
-// Parameters:
-//   - ctx: Context for the request
-//   - delegationData: The delegation data as a byte array
-//
-// Returns:
-//   - The transaction hash as a string
-//   - Error if the redemption failed
-func (c *DelegationClient) RedeemDelegationDirectly(ctx context.Context, delegationData []byte) (string, error) {
+// RedeemDelegationDirectly attempts to redeem a delegation by calling the delegation service directly
+func (c *DelegationClient) RedeemDelegationDirectly(ctx context.Context, delegationData []byte, merchantAddress, tokenAddress, price string) (string, error) {
 	log.Printf("Attempting to redeem delegation, data size: %d bytes", len(delegationData))
+	log.Printf("Using merchant address: %s, token address: %s, price: %s", merchantAddress, tokenAddress, price)
+
+	// Create execution object with actual values
+	executionObject := ExecutionObject{
+		MerchantAddress:      merchantAddress,
+		TokenContractAddress: tokenAddress,
+		Price:                price,
+	}
 
 	// Call the client to redeem the delegation
-	txHash, err := c.RedeemDelegation(ctx, delegationData)
+	txHash, err := c.RedeemDelegation(ctx, delegationData, executionObject)
 	if err != nil {
 		log.Printf("Delegation redemption failed: %v", err)
 		return "", fmt.Errorf("delegation redemption failed: %w", err)
@@ -179,7 +225,10 @@ func (c *DelegationClient) HealthCheck(ctx context.Context) error {
 
 	// Create a minimal request (will be rejected by server but that's fine for checking connection)
 	req := &proto.RedeemDelegationRequest{
-		DelegationData: []byte{},
+		Signature:            []byte{},
+		MerchantAddress:      "0x0000000000000000000000000000000000000000",
+		TokenContractAddress: "0x0000000000000000000000000000000000000000",
+		Price:                "0",
 	}
 
 	// Try to call the service

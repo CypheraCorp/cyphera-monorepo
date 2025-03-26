@@ -164,45 +164,6 @@ func (q *Queries) DeleteSubscription(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const getActiveSubscriptionByCustomerAndProduct = `-- name: GetActiveSubscriptionByCustomerAndProduct :one
-SELECT id, customer_id, product_id, product_token_id, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, created_at, updated_at, deleted_at FROM subscriptions
-WHERE 
-    customer_id = $1 
-    AND product_id = $2 
-    AND status = 'active' 
-    AND deleted_at IS NULL
-LIMIT 1
-`
-
-type GetActiveSubscriptionByCustomerAndProductParams struct {
-	CustomerID uuid.UUID `json:"customer_id"`
-	ProductID  uuid.UUID `json:"product_id"`
-}
-
-func (q *Queries) GetActiveSubscriptionByCustomerAndProduct(ctx context.Context, arg GetActiveSubscriptionByCustomerAndProductParams) (Subscription, error) {
-	row := q.db.QueryRow(ctx, getActiveSubscriptionByCustomerAndProduct, arg.CustomerID, arg.ProductID)
-	var i Subscription
-	err := row.Scan(
-		&i.ID,
-		&i.CustomerID,
-		&i.ProductID,
-		&i.ProductTokenID,
-		&i.DelegationID,
-		&i.CustomerWalletID,
-		&i.Status,
-		&i.CurrentPeriodStart,
-		&i.CurrentPeriodEnd,
-		&i.NextRedemptionDate,
-		&i.TotalRedemptions,
-		&i.TotalAmountInCents,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
 const getExpiredSubscriptions = `-- name: GetExpiredSubscriptions :many
 SELECT id, customer_id, product_id, product_token_id, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, created_at, updated_at, deleted_at FROM subscriptions
 WHERE 
@@ -372,55 +333,6 @@ ORDER BY created_at DESC
 
 func (q *Queries) GetSubscriptionsByDelegation(ctx context.Context, delegationID uuid.UUID) ([]Subscription, error) {
 	rows, err := q.db.Query(ctx, getSubscriptionsByDelegation, delegationID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Subscription{}
-	for rows.Next() {
-		var i Subscription
-		if err := rows.Scan(
-			&i.ID,
-			&i.CustomerID,
-			&i.ProductID,
-			&i.ProductTokenID,
-			&i.DelegationID,
-			&i.CustomerWalletID,
-			&i.Status,
-			&i.CurrentPeriodStart,
-			&i.CurrentPeriodEnd,
-			&i.NextRedemptionDate,
-			&i.TotalRedemptions,
-			&i.TotalAmountInCents,
-			&i.Metadata,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getUnprocessedSubscriptions = `-- name: GetUnprocessedSubscriptions :many
-SELECT s.id, s.customer_id, s.product_id, s.product_token_id, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.created_at, s.updated_at, s.deleted_at
-FROM subscriptions s
-LEFT JOIN subscription_events se ON s.id = se.subscription_id AND se.event_type IN ('redemption', 'failed_redemption')
-WHERE s.created_at > now() - interval '24 hours'
-  AND s.status = 'active'
-  AND se.id IS NULL
-ORDER BY s.created_at ASC
-LIMIT 100
-`
-
-// Get subscriptions that have been created recently but don't have any redemption events
-func (q *Queries) GetUnprocessedSubscriptions(ctx context.Context) ([]Subscription, error) {
-	rows, err := q.db.Query(ctx, getUnprocessedSubscriptions)
 	if err != nil {
 		return nil, err
 	}

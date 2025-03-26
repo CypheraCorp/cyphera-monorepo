@@ -6,7 +6,7 @@
  */
 
 import { parseDelegation, validateDelegation } from '../src/utils/delegation-helpers';
-import { DelegationStruct } from '../src/types/delegation';
+import { DelegationStruct } from '@metamask-private/delegator-core-viem';
 import { describe, expect, it } from '@jest/globals';
 
 describe('Delegation Helper Functions', () => {
@@ -62,7 +62,6 @@ describe('Delegation Helper Functions', () => {
         signature: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
         scheme: '0x00',
         invocations: [],
-        expiry: BigInt(0)
       };
       
       expect(validateDelegation(mockDelegation)).toBe(true);
@@ -96,7 +95,6 @@ describe('Delegation Helper Functions', () => {
     });
     
     it('should throw for expired delegation', () => {
-      const yesterday = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
       
       const mockDelegation: any = {
         delegator: '0x1234567890123456789012345678901234567890',
@@ -111,7 +109,6 @@ describe('Delegation Helper Functions', () => {
         signature: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
         scheme: '0x00',
         invocations: [],
-        expiry: BigInt(yesterday)
       };
       
       expect(() => validateDelegation(mockDelegation)).toThrow('Delegation is expired');
