@@ -36,8 +36,9 @@ type DelegationData struct {
 // DelegationClient handles communication with the gRPC delegation service.
 // It provides methods to redeem delegations and manage the gRPC connection.
 type DelegationClient struct {
-	conn   *grpc.ClientConn
-	client proto.DelegationServiceClient
+	conn       *grpc.ClientConn
+	client     proto.DelegationServiceClient
+	rpcTimeout time.Duration // Timeout for RPC calls
 }
 
 // NewDelegationClient creates a new client for the delegation service.
@@ -54,6 +55,17 @@ func NewDelegationClient() (*DelegationClient, error) {
 		grpcServerAddr = "localhost:50051"
 	}
 
+	// Get timeout from environment or use default (3 minutes)
+	timeoutStr := os.Getenv("DELEGATION_RPC_TIMEOUT")
+	timeout := 3 * time.Minute // Default 3 minutes for blockchain operations
+	if timeoutStr != "" {
+		if parsedTimeout, err := time.ParseDuration(timeoutStr); err == nil {
+			timeout = parsedTimeout
+		} else {
+			log.Printf("Warning: Invalid DELEGATION_RPC_TIMEOUT value: %s, using default", timeoutStr)
+		}
+	}
+
 	// Check if we're in local development mode
 	// Set DELEGATION_LOCAL_MODE=true for dev/test environments
 	useLocalMode := os.Getenv("DELEGATION_LOCAL_MODE") == "true"
@@ -61,19 +73,34 @@ func NewDelegationClient() (*DelegationClient, error) {
 	var conn *grpc.ClientConn
 	var err error
 
+	// Configure gRPC dial options for better timeout handling
+	dialOpts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(), // Make connection establishment blocking
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(20*1024*1024), // 20MB
+			grpc.MaxCallSendMsgSize(20*1024*1024), // 20MB
+		),
+	}
+
+	dialCtx, dialCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer dialCancel()
+
 	if useLocalMode {
 		// Use passthrough mode for local development/testing
 		// This bypasses DNS resolution and connects directly
-		conn, err = grpc.NewClient(
+		conn, err = grpc.DialContext(
+			dialCtx,
 			fmt.Sprintf("passthrough:///%s", grpcServerAddr),
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			dialOpts...,
 		)
 	} else {
 		// Use default DNS resolution for production
 		// This allows for service discovery and load balancing
-		conn, err = grpc.NewClient(
+		conn, err = grpc.DialContext(
+			dialCtx,
 			grpcServerAddr,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			dialOpts...,
 		)
 	}
 
@@ -85,8 +112,9 @@ func NewDelegationClient() (*DelegationClient, error) {
 	client := proto.NewDelegationServiceClient(conn)
 
 	return &DelegationClient{
-		conn:   conn,
-		client: client,
+		conn:       conn,
+		client:     client,
+		rpcTimeout: timeout,
 	}, nil
 }
 
@@ -109,8 +137,10 @@ func (c *DelegationClient) RedeemDelegation(ctx context.Context, signature []byt
 		return "", fmt.Errorf("valid price is required")
 	}
 
-	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	// Create a context with the configured timeout (default is now 3 minutes)
+	// Using a longer timeout to accommodate blockchain operations
+	log.Printf("Using timeout of %v for delegation redemption", c.rpcTimeout)
+	ctx, cancel := context.WithTimeout(ctx, c.rpcTimeout)
 	defer cancel()
 
 	// Create the redemption request
@@ -175,6 +205,7 @@ func (c *DelegationClient) RedeemDelegation(ctx context.Context, signature []byt
 func (c *DelegationClient) RedeemDelegationDirectly(ctx context.Context, delegationData []byte, merchantAddress, tokenAddress, price string) (string, error) {
 	log.Printf("Attempting to redeem delegation, data size: %d bytes", len(delegationData))
 	log.Printf("Using merchant address: %s, token address: %s, price: %s", merchantAddress, tokenAddress, price)
+	log.Printf("Using RPC timeout of %v for delegation redemption", c.rpcTimeout)
 
 	// Create execution object with actual values
 	executionObject := ExecutionObject{
@@ -220,7 +251,9 @@ func (c *DelegationClient) GetDelegationForSubscription(ctx context.Context, sub
 //   - Error if the server is unavailable
 func (c *DelegationClient) HealthCheck(ctx context.Context) error {
 	// Create a short timeout context for health check
-	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	// Health checks should be quick, so we use a shorter timeout than for redemptions
+	healthCheckTimeout := 10 * time.Second // 10 seconds for health check
+	timeoutCtx, cancel := context.WithTimeout(ctx, healthCheckTimeout)
 	defer cancel()
 
 	// Create a minimal request (will be rejected by server but that's fine for checking connection)

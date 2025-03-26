@@ -179,8 +179,8 @@ export const redeemDelegation = async (
 
     // Create ERC20 transfer calldata
     const transferCalldata = encodeFunctionData({
-      abi: erc20Abi,
-      functionName: 'transfer',
+      abi: erc20Abi, // ABI for the ERC20 contract
+      functionName: 'transfer', // Name of the function to call
       args: [merchantAddress as Address, parseUnits(price, 6)] // Assuming USDC with 6 decimals
     })
     
@@ -188,23 +188,23 @@ export const redeemDelegation = async (
     // target is the address of the merchant (the recipient of the ERC20 transfer)
     // value is 0 because we are not sending any ETH with the transaction
     // callData is the calldata for the ERC20 transfer
-    // const executions: ExecutionStruct[] = [
-    //   {
-    //     target: merchantAddress as Address,
-    //     value: 0n, // No ETH value for ERC20 transfers
-    //     callData: transferCalldata
-    //   }
-    // ]
+    const executions: ExecutionStruct[] = [
+      {
+        target: tokenContractAddress as Address, // Address of the ERC20 contract
+        value: 0n, // No ETH value for ERC20 transfers
+        callData: transferCalldata // Calldata for the ERC20 transfer
+      }
+    ]
 
     // TODO: remove Define the execution that will be performed on behalf of the delegator
     // In this case, we're sending a small amount of ETH to the merchant
-    const executions: ExecutionStruct[] = [
-      {
-        target: merchantAddress as Address,
-        value: parseEther("0.001"),
-        callData: "0x",
-      },
-    ]
+    // const executions: ExecutionStruct[] = [
+    //   {
+    //     target: merchantAddress as Address,
+    //     value: parseEther("0.001"),
+    //     callData: "0x",
+    //   },
+    // ]
 
     // Format the delegation for the framework
     const delegationForFramework = delegation as any
@@ -230,26 +230,36 @@ export const redeemDelegation = async (
 
     logger.info("Sending UserOperation...")
     
+    // Start timer for overall transaction operation
+    const overallStartTime = Date.now()
+    
     // Properly type our account for the bundler client
     // Note: This assertion is necessary because the MetaMask smart account
     // implementation doesn't exactly match what the bundler expects
+    const sendOpStartTime = Date.now()
     const userOperationHash = await bundlerClient.sendUserOperation({
       account: redeemer as any,
       calls,
       ...feePerGas
     })
+    const sendOpTime = (Date.now() - sendOpStartTime) / 1000
 
-    logger.info("UserOperation hash:", userOperationHash)
+    logger.info(`UserOperation hash (sent in ${sendOpTime.toFixed(2)}s):`, userOperationHash)
     
     // Wait for the user operation to be included in a transaction
     logger.info("Waiting for transaction receipt...")
+    const receiptStartTime = Date.now()
     const receipt = await bundlerClient.waitForUserOperationReceipt({
       hash: userOperationHash,
       timeout: 60_000 // 60 second timeout
     }) as UserOperationReceipt
+    const receiptWaitTime = (Date.now() - receiptStartTime) / 1000
 
     const transactionHash = receipt.receipt.transactionHash
-    logger.info("Transaction confirmed:", transactionHash)
+    
+    // Calculate and log elapsed time
+    const totalElapsedTimeSeconds = (Date.now() - overallStartTime) / 1000
+    logger.info(`Transaction confirmed in ${totalElapsedTimeSeconds.toFixed(2)}s total (${sendOpTime.toFixed(2)}s to send, ${receiptWaitTime.toFixed(2)}s to confirm):`, transactionHash)
     
     return transactionHash
   } catch (error) {
