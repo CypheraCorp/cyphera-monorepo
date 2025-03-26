@@ -1,4 +1,4 @@
-.PHONY: all build test clean lint run swagger deploy test-all test-integration stop-integration-server ensure-executable
+.PHONY: all build test clean lint run swagger deploy test-all test-integration stop-integration-server ensure-executable proto-build-go proto-build-js proto-build-all
 
 # Go parameters
 BINARY_NAME=cyphera-api
@@ -10,6 +10,7 @@ all: lint test build
 build:
 	$(GO) build -o bin/$(BINARY_NAME) $(MAIN_PACKAGE)
 
+// TODO: no unit tests are running in the delegation-server
 test:
 	$(GO) test -v ./...
 
@@ -36,6 +37,8 @@ stop-integration-server:
 clean:
 	$(GO) clean
 	rm -f bin/$(BINARY_NAME)
+	rm -f bin/cyphera-api-dev
+	rm -rf bin/air*
 
 lint:
 	$(GO) vet ./...
@@ -51,14 +54,38 @@ deploy:
 	# Add deployment steps here
 
 dev:
+	@echo "Starting development environment with hot reloading for the API server..."
 	./scripts/start-dev.sh
+
+# Build proto definitions for Go
+proto-build-go:
+	@echo "Generating Go gRPC code from proto definitions..."
+	protoc --go_out=. \
+		--go_opt=paths=source_relative \
+		--go-grpc_out=. \
+		--go-grpc_opt=paths=source_relative \
+		internal/proto/delegation.proto
+	@echo "✅ Go gRPC code successfully generated in internal/proto/"
+
+# Build proto definitions for Node.js delegation server
+proto-build-js:
+	@echo "Generating Node.js gRPC code from proto definitions..."
+	cd delegation-server && npm run proto:build
+	@echo "✅ Node.js gRPC code successfully generated in delegation-server/src/proto/"
+
+# Build all proto definitions
+proto-build-all: proto-build-go proto-build-js
+	@echo "✅ All gRPC code successfully generated"
 
 # Individual server commands (used directly by the start-dev.sh script)
 api-server:
 	$(GO) run $(MAIN_PACKAGE)
 
+api-server-air:
+	air
+
 delegation-server:
-	cd delegation-server && npm run start:mock
+	cd delegation-server && npm run dev
 
 help:
 	@echo "Usage: make [target]"
@@ -76,7 +103,12 @@ help:
 	@echo "  make swagger        - Generate Swagger documentation"
 	@echo "  make deploy         - Deploy the application"
 	@echo "  make dev            - Run the application in development mode (loads .env)"
+	@echo "  make api-server     - Run the API server without live reload"
+	@echo "  make api-server-air - Run the API server with air for live reload"
 	@echo "  make delegation-server - Run the delegation server" 
 	@echo "  make gen            - Generate SQLC code"
+	@echo "  make proto-build-go - Generate Go gRPC code from proto definitions"
+	@echo "  make proto-build-js - Generate Node.js gRPC code from proto definitions"
+	@echo "  make proto-build-all - Generate both Go and Node.js gRPC code"
 gen:
 	sqlc generate

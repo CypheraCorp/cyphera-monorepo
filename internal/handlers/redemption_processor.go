@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -225,6 +226,55 @@ func (rp *RedemptionProcessor) processRedemption(task RedemptionTask) error {
 		return fmt.Errorf("failed to get delegation data: %w", err)
 	}
 
+	// get the product details
+	product, err := rp.dbQueries.GetProduct(ctx, task.ProductID)
+	if err != nil {
+		logger.Error("Failed to get product details",
+			zap.Error(err),
+			zap.String("product_id", task.ProductID.String()),
+		)
+		return fmt.Errorf("failed to get product details: %w", err)
+	}
+
+	// get the merchant's wallet details
+	merchantWallet, err := rp.dbQueries.GetWalletByID(ctx, product.WalletID)
+	if err != nil {
+		logger.Error("Failed to get merchant wallet details",
+			zap.Error(err),
+			zap.String("delegation_id", task.DelegationID.String()),
+		)
+		return fmt.Errorf("failed to get merchant wallet details: %w", err)
+	}
+
+	// get the product token details
+	productToken, err := rp.dbQueries.GetProductToken(ctx, task.ProductTokenID)
+	if err != nil {
+		logger.Error("Failed to get product token details",
+			zap.Error(err),
+			zap.String("product_token_id", task.ProductTokenID.String()),
+		)
+		return fmt.Errorf("failed to get product token details: %w", err)
+	}
+
+	// get the token details
+	token, err := rp.dbQueries.GetToken(ctx, productToken.TokenID)
+	if err != nil {
+		logger.Error("Failed to get token details",
+			zap.Error(err),
+			zap.String("token_id", productToken.TokenID.String()),
+		)
+		return fmt.Errorf("failed to get token details: %w", err)
+	}
+
+	// convert price in pennies to float
+	price := float64(product.PriceInPennies) / 100.0
+
+	executionObject := client.ExecutionObject{
+		MerchantAddress:      merchantWallet.WalletAddress,
+		TokenContractAddress: token.ContractAddress,
+		Price:                strconv.FormatFloat(price, 'f', -1, 64),
+	}
+
 	// Create the delegation JSON with the required fields
 	delegationJSON, err := json.Marshal(map[string]interface{}{
 		"delegate":  delegationData.Delegate,
@@ -249,7 +299,7 @@ func (rp *RedemptionProcessor) processRedemption(task RedemptionTask) error {
 		zap.String("delegation_id", task.DelegationID.String()),
 	)
 
-	txHash, err := rp.delegationClient.RedeemDelegation(ctx, delegationJSON)
+	txHash, err := rp.delegationClient.RedeemDelegation(ctx, delegationJSON, executionObject)
 	if err != nil {
 		logger.Error("Failed to redeem delegation",
 			zap.Error(err),

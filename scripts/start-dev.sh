@@ -5,22 +5,21 @@ set -e
 
 echo "Starting development environment..."
 
-# Check if .env file exists
-if [ ! -f .env ]; then
-  echo "Error: .env file not found. Please create one with the required environment variables."
-  exit 1
-fi
+# Change to the project root directory
+cd "$(dirname "$0")/.."
 
-# Load environment variables from .env
-set -a # automatically export all variables
-source .env
-set +a
+# Check if root .env file exists for the API server
+if [ ! -f .env ]; then
+  echo "Warning: Root .env file not found. The API server may not function correctly."
+else
+  echo "Root .env file found for API server."
+fi
 
 # Function to kill background processes on exit
 cleanup() {
   echo "Stopping servers..."
-  # Kill any processes using ports 8080 (API) and 50051 (delegation)
-  lsof -ti:8080 | xargs kill -9 2>/dev/null || true
+  # Kill any processes using ports 8000 (API) and 50051 (delegation)
+  lsof -ti:8000 | xargs kill -9 2>/dev/null || true
   lsof -ti:50051 | xargs kill -9 2>/dev/null || true
   echo "Servers stopped"
 }
@@ -36,25 +35,78 @@ if lsof -ti:50051 > /dev/null; then
   sleep 1
 fi
 
-# Change to the project root directory
-cd "$(dirname "$0")/.."
-
-# Start the delegation server in the background
+# Start the delegation server in the background with environment variables
 echo "Starting delegation server..."
 cd delegation-server
-npm run start:mock &
+
+# Check if delegation server .env file exists
+if [ ! -f .env ]; then
+  echo "Warning: delegation-server/.env file not found. The delegation server may not function correctly."
+else 
+  echo "Delegation server .env file found."
+fi
+
+# Create a temporary env script to ensure all variables are passed
+cat > run_with_env.sh << 'EOF'
+#!/bin/bash
+# Load variables from delegation-server/.env
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+fi
+# Log environment variables for debugging (with sensitive info redacted)
+echo "Environment variables being used by delegation server:"
+echo "MOCK_MODE=${MOCK_MODE}"
+echo "GRPC_HOST=${GRPC_HOST}"
+echo "GRPC_PORT=${GRPC_PORT}"
+echo "RPC_URL=${RPC_URL}"
+echo "BUNDLER_URL=${BUNDLER_URL}"
+echo "CHAIN_ID=${CHAIN_ID}"
+[ -n "${PRIVATE_KEY}" ] && echo "PRIVATE_KEY=[REDACTED]" || echo "PRIVATE_KEY=not set"
+echo "LOG_LEVEL=${LOG_LEVEL}"
+npm run dev
+EOF
+
+chmod +x run_with_env.sh
+
+# Run with environment variables
+./run_with_env.sh &
+
+# Clean up the temporary script (but not immediately, to ensure it's available for the background process)
+sleep 1
+
 cd ..
 
 # Wait a moment for the delegation server to start
 sleep 2
 
-# Start the API server
-echo "Starting API server..."
-go run ./cmd/api/main/main.go &
+# Start the API server with hot reloading via air
+echo "Starting API server with hot reloading via air..." 
+# Load root .env variables
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+fi
+
+# Check if air is installed
+if ! command -v air &> /dev/null; then
+  echo "Error: 'air' is not installed. Installing it now..."
+  go install github.com/air-verse/air@latest
+  if [ $? -ne 0 ]; then
+    echo "Failed to install air. Falling back to standard Go run."
+    go run ./cmd/api/local/main.go &
+  else
+    air &
+  fi
+else
+  air &
+fi
 
 # Wait for both servers to be ready
 echo "Development environment is running"
-echo "API server: http://localhost:${PORT:-8080}"
+echo "API server: http://localhost:${PORT:-8000} (with hot reloading enabled)"
 echo "Delegation server: gRPC at localhost:${GRPC_PORT:-50051}"
 echo "Press Ctrl+C to stop all servers and exit"
 

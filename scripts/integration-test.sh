@@ -12,7 +12,7 @@ set -e # Exit on any error
 # Parse arguments
 MODE="cli"
 MOCK="true"
-SERVER_PORT="8080"
+SERVER_PORT="8000"
 GRPC_PORT="50051"
 
 print_usage() {
@@ -22,7 +22,7 @@ print_usage() {
   echo "  --cli               Run in CLI mode (default)"
   echo "  --mock              Use mock server (default)"
   echo "  --live              Use live server"
-  echo "  --port PORT         Specify HTTP server port (default: 8080)"
+  echo "  --port PORT         Specify HTTP server port (default: 8000)"
   echo "  --grpc-port PORT    Specify gRPC server port (default: 50051)"
   echo "  --help              Show this help message"
 }
@@ -189,7 +189,6 @@ GRPC_PORT=${GRPC_PORT}
 GRPC_HOST=0.0.0.0
 RPC_URL=https://sepolia.infura.io/v3/your-infura-key
 BUNDLER_URL=https://sepolia.infura.io/v3/your-infura-key
-PAYMASTER_URL=
 CHAIN_ID=11155111
 # This is a dummy private key for testing only, do not use in production
 PRIVATE_KEY=0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef

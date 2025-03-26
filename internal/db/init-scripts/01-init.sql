@@ -235,7 +235,7 @@ CREATE TABLE products_tokens (
 );
 
 -- Create subscription status enum
-CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'suspended');
+CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'suspended', 'failed');
 
 -- Create subscription event type enum with expanded error types
 CREATE TYPE subscription_event_type AS ENUM (

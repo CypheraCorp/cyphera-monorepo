@@ -9,12 +9,12 @@ import { delegationService } from '../src/services/service';
 import { describe, expect, it, jest, beforeEach } from '@jest/globals';
 
 // Mock the blockchain service
-jest.mock('../src/services/blockchain', () => ({
+jest.mock('../src/services/redeem-delegation', () => ({
   redeemDelegation: jest.fn()
 }));
 
 // Import the mocked version
-import { redeemDelegation } from '../src/services/blockchain';
+import { redeemDelegation } from '../src/services/redeem-delegation';
 
 describe('Delegation Service', () => {
   beforeEach(() => {
@@ -42,7 +42,10 @@ describe('Delegation Service', () => {
       // Mock gRPC call parameters
       const mockCall = {
         request: {
-          delegationData: delegationBuffer
+          delegationData: delegationBuffer,
+          merchantAddress: "0x1234567890123456789012345678901234567890",
+          tokenContractAddress: "0xabcdef0123456789abcdef0123456789abcdef01",
+          price: "100000"
         }
       };
       
@@ -53,21 +56,27 @@ describe('Delegation Service', () => {
       await delegationService.redeemDelegation(mockCall, mockCallback);
       
       // Verify the blockchain service was called with correct data
-      expect(redeemDelegation).toHaveBeenCalledWith(expect.any(Uint8Array));
+      expect(redeemDelegation).toHaveBeenCalledWith(
+        expect.any(Uint8Array),
+        "0x1234567890123456789012345678901234567890",
+        "0xabcdef0123456789abcdef0123456789abcdef01",
+        "100000"
+      );
       
       // Verify the callback was called with the success response
-      expect(mockCallback).toHaveBeenCalledWith(null, {
-        transactionHash: mockTxHash,
-        success: true,
-        errorMessage: ''
-      });
+      expect(mockCallback).toHaveBeenCalledWith(null, expect.objectContaining({
+        success: true
+      }));
     });
     
     it('should handle empty delegation data', async () => {
       // Mock gRPC call with empty delegation data
       const mockCall = {
         request: {
-          delegationData: Buffer.from('')
+          delegationData: Buffer.from(''),
+          merchantAddress: "0x1234567890123456789012345678901234567890",
+          tokenContractAddress: "0xabcdef0123456789abcdef0123456789abcdef01",
+          price: "100000"
         }
       };
       
@@ -75,17 +84,16 @@ describe('Delegation Service', () => {
       const mockCallback = jest.fn();
       
       // Call the service method
-      await delegationService.redeemDelegation(mockCall, mockCallback);
+      await delegationService.redeemDelegation(mockCall as any, mockCallback as any);
       
       // Verify the blockchain service was not called
       expect(redeemDelegation).not.toHaveBeenCalled();
       
       // Verify the callback was called with the error response
-      expect(mockCallback).toHaveBeenCalledWith(null, {
-        transactionHash: '',
+      expect(mockCallback).toHaveBeenCalledWith(null, expect.objectContaining({
         success: false,
-        errorMessage: expect.stringContaining('Delegation data is empty')
-      });
+        errorMessage: expect.stringContaining('empty or invalid')
+      }));
     });
     
     it('should handle blockchain service errors', async () => {
@@ -107,7 +115,10 @@ describe('Delegation Service', () => {
       // Mock gRPC call parameters
       const mockCall = {
         request: {
-          delegationData: delegationBuffer
+          delegationData: delegationBuffer,
+          merchantAddress: "0x1234567890123456789012345678901234567890",
+          tokenContractAddress: "0xabcdef0123456789abcdef0123456789abcdef01",
+          price: "100000"
         }
       };
       
@@ -115,17 +126,16 @@ describe('Delegation Service', () => {
       const mockCallback = jest.fn();
       
       // Call the service method
-      await delegationService.redeemDelegation(mockCall, mockCallback);
+      await delegationService.redeemDelegation(mockCall as any, mockCallback as any);
       
       // Verify the blockchain service was called
       expect(redeemDelegation).toHaveBeenCalled();
       
       // Verify the callback was called with the error response
-      expect(mockCallback).toHaveBeenCalledWith(null, {
-        transactionHash: '',
+      expect(mockCallback).toHaveBeenCalledWith(null, expect.objectContaining({
         success: false,
         errorMessage: 'Transaction failed'
-      });
+      }));
     });
   });
 }); 

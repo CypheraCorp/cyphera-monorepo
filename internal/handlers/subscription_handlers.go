@@ -346,7 +346,7 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 	// Parse status
 	var status db.SubscriptionStatus
 	switch request.Status {
-	case "active", "canceled", "expired", "suspended":
+	case "active", "canceled", "expired", "suspended", "failed":
 		status = db.SubscriptionStatus(request.Status)
 	default:
 		sendError(c, http.StatusBadRequest, "Invalid status value", nil)
@@ -505,7 +505,7 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 
 	if request.Status != "" {
 		switch request.Status {
-		case "active", "canceled", "expired", "suspended":
+		case "active", "canceled", "expired", "suspended", "failed":
 			params.Status = db.SubscriptionStatus(request.Status)
 		default:
 			sendError(c, http.StatusBadRequest, "Invalid status value", nil)
@@ -583,7 +583,7 @@ func (h *SubscriptionHandler) UpdateSubscriptionStatus(c *gin.Context) {
 	// Validate status
 	var status db.SubscriptionStatus
 	switch request.Status {
-	case "active", "canceled", "expired", "suspended":
+	case "active", "canceled", "expired", "suspended", "failed":
 		status = db.SubscriptionStatus(request.Status)
 	default:
 		sendError(c, http.StatusBadRequest, "Invalid status value", nil)
@@ -782,8 +782,29 @@ func (h *SubscriptionHandler) processRedemption(ctx context.Context, subscriptio
 		signatureBytes = []byte(delegationData.Signature)
 	}
 
+	// Get merchant wallet information
+	merchantWallet, err := h.common.db.GetWalletByID(ctx, product.WalletID)
+	if err != nil {
+		return response, fmt.Errorf("failed to get merchant wallet: %w", err)
+	}
+
+	// Get token contract address
+	token, err := h.common.db.GetToken(ctx, productToken.TokenID)
+	if err != nil {
+		return response, fmt.Errorf("failed to get token details: %w", err)
+	}
+
+	// Format price in dollars (convert pennies to dollars)
+	price := fmt.Sprintf("%.2f", float64(amountInCents)/100.0)
+
 	// Attempt to redeem the delegation
-	txHash, err := h.delegationClient.RedeemDelegationDirectly(ctx, signatureBytes)
+	txHash, err := h.delegationClient.RedeemDelegationDirectly(
+		ctx,
+		signatureBytes,
+		merchantWallet.WalletAddress,
+		token.ContractAddress,
+		price,
+	)
 	if err != nil {
 		// Record failure event
 		errorMessage := pgtype.Text{
@@ -867,13 +888,14 @@ func (h *SubscriptionHandler) processRedemption(ctx context.Context, subscriptio
 // @Security ApiKeyAuth
 // @Router /subscriptions/redeem-due [post]
 func (h *SubscriptionHandler) RedeemDueSubscriptions(c *gin.Context) {
+	ctx := c.Request.Context()
 	now := pgtype.Timestamptz{
 		Time:  time.Now(),
 		Valid: true,
 	}
 
 	// Get all subscriptions due for renewal
-	subscriptions, err := h.common.db.ListSubscriptionsDueForRenewal(c.Request.Context(), now)
+	subscriptions, err := h.common.db.ListSubscriptionsDueForRenewal(ctx, now)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve subscriptions due for renewal", err)
 		return
@@ -896,35 +918,127 @@ func (h *SubscriptionHandler) RedeemDueSubscriptions(c *gin.Context) {
 	// Process each subscription
 	for _, subscription := range subscriptions {
 		// Get required data for processing
-		product, err := h.common.db.GetProduct(c.Request.Context(), subscription.ProductID)
+		product, err := h.common.db.GetProduct(ctx, subscription.ProductID)
 		if err != nil {
 			log.Printf("Error fetching product for subscription %s: %v", subscription.ID, err)
 			stats.Failed++
 			continue
 		}
 
-		productToken, err := h.common.db.GetProductToken(c.Request.Context(), subscription.ProductTokenID)
+		productToken, err := h.common.db.GetProductToken(ctx, subscription.ProductTokenID)
 		if err != nil {
 			log.Printf("Error fetching product token for subscription %s: %v", subscription.ID, err)
 			stats.Failed++
 			continue
 		}
 
-		delegationData, err := h.common.db.GetDelegationData(c.Request.Context(), subscription.DelegationID)
+		delegationData, err := h.common.db.GetDelegationData(ctx, subscription.DelegationID)
 		if err != nil {
 			log.Printf("Error fetching delegation data for subscription %s: %v", subscription.ID, err)
 			stats.Failed++
 			continue
 		}
 
-		// Process redemption
-		_, err = h.processRedemption(c.Request.Context(), subscription, product, productToken, delegationData)
+		// Get merchant wallet
+		merchantWallet, err := h.common.db.GetWalletByID(ctx, product.WalletID)
+		if err != nil {
+			log.Printf("Error fetching merchant wallet for subscription %s: %v", subscription.ID, err)
+			stats.Failed++
+			continue
+		}
+
+		// Get token details
+		token, err := h.common.db.GetToken(ctx, productToken.TokenID)
+		if err != nil {
+			log.Printf("Error fetching token for subscription %s: %v", subscription.ID, err)
+			stats.Failed++
+			continue
+		}
+
+		// Format price
+		price := fmt.Sprintf("%.2f", float64(product.PriceInPennies)/100.0)
+
+		// Convert signature to bytes
+		var signatureBytes []byte
+		if len(delegationData.Signature) > 0 {
+			signatureBytes = []byte(delegationData.Signature)
+		} else {
+			log.Printf("Empty signature for subscription %s", subscription.ID)
+			stats.Failed++
+			continue
+		}
+
+		// Attempt to redeem the delegation
+		txHash, err := h.delegationClient.RedeemDelegationDirectly(
+			ctx,
+			signatureBytes,
+			merchantWallet.WalletAddress,
+			token.ContractAddress,
+			price,
+		)
 		if err != nil {
 			log.Printf("Failed to redeem subscription %s: %v", subscription.ID, err)
+
+			// Record failure event
+			errorMessage := pgtype.Text{
+				String: err.Error(),
+				Valid:  true,
+			}
+
+			failureParams := db.CreateFailedRedemptionEventParams{
+				SubscriptionID: subscription.ID,
+				AmountInCents:  product.PriceInPennies,
+				ErrorMessage:   errorMessage,
+			}
+
+			_, eventErr := h.common.db.CreateFailedRedemptionEvent(ctx, failureParams)
+			if eventErr != nil {
+				log.Printf("Failed to record redemption failure for subscription %s: %v", subscription.ID, eventErr)
+			}
+
 			stats.Failed++
-		} else {
-			stats.Succeeded++
+			continue
 		}
+
+		// Record successful redemption event
+		txHashPg := pgtype.Text{
+			String: txHash,
+			Valid:  true,
+		}
+
+		eventParams := db.CreateRedemptionEventParams{
+			SubscriptionID:  subscription.ID,
+			TransactionHash: txHashPg,
+			AmountInCents:   product.PriceInPennies,
+		}
+
+		_, eventErr := h.common.db.CreateRedemptionEvent(ctx, eventParams)
+		if eventErr != nil {
+			log.Printf("Error recording redemption event for subscription %s: %v", subscription.ID, eventErr)
+		}
+
+		// Calculate next redemption date
+		nextRedemptionDate := CalculateNextRedemption(product, time.Now())
+
+		// Update subscription with new redemption count and date
+		incrementParams := db.IncrementSubscriptionRedemptionParams{
+			ID:                 subscription.ID,
+			TotalAmountInCents: product.PriceInPennies,
+			NextRedemptionDate: pgtype.Timestamptz{
+				Time:  nextRedemptionDate,
+				Valid: !nextRedemptionDate.IsZero(),
+			},
+		}
+
+		_, err = h.common.db.IncrementSubscriptionRedemption(ctx, incrementParams)
+		if err != nil {
+			log.Printf("Failed to update subscription %s: %v", subscription.ID, err)
+			stats.Failed++
+			continue
+		}
+
+		log.Printf("Successfully redeemed subscription %s with transaction %s", subscription.ID, txHash)
+		stats.Succeeded++
 	}
 
 	// Return stats about the processing

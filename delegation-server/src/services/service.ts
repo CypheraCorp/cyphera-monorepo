@@ -1,32 +1,30 @@
+import { ServerUnaryCall, sendUnaryData } from '@grpc/grpc-js'
 import { logger } from '../utils/utils'
+import config from '../config'
 
 // Conditionally import real or mock blockchain service based on MOCK_MODE
-let redeemDelegation: (delegationData: Uint8Array) => Promise<string>;
+let redeemDelegation: (delegationData: Uint8Array, merchantAddress: string, tokenContractAddress: string, price: string) => Promise<string>;
 
-if (process.env.MOCK_MODE === 'true') {
-  logger.info('Running in MOCK MODE - using mock blockchain service')
-  import('./mock-blockchain').then(module => {
+logger.info('===== SERVICE.TS INITIALIZATION =====');
+logger.info(`MOCK_MODE from environment: "${process.env.MOCK_MODE || 'not set'}"`);
+logger.info(`MOCK_MODE from config: ${config.mockMode}`);
+
+if (config.mockMode) {
+  logger.info('SERVICE.TS: Running in MOCK MODE - using mock blockchain service')
+  import('./mock-redeem-delegation').then(module => {
     redeemDelegation = module.redeemDelegation;
+    logger.info('SERVICE.TS: Successfully loaded MOCK blockchain service')
+  }).catch(error => {
+    logger.error('SERVICE.TS: Failed to load mock blockchain service:', error);
   });
 } else {
-  import('./blockchain').then(module => {
+  logger.info('SERVICE.TS: Running in REAL MODE - using real blockchain service')
+  import('./redeem-delegation').then(module => {
     redeemDelegation = module.redeemDelegation;
+    logger.info('SERVICE.TS: Successfully loaded REAL blockchain service')
+  }).catch(error => {
+    logger.error('SERVICE.TS: Failed to load real blockchain service:', error);
   });
-}
-
-// Define types for gRPC service
-interface RedeemDelegationRequest {
-  request: {
-    delegationData: Buffer;
-  }
-}
-
-interface RedeemDelegationCallback {
-  (error: Error | null, response: {
-    transactionHash: string;
-    success: boolean;
-    errorMessage: string;
-  }): void;
 }
 
 /**
@@ -39,54 +37,67 @@ export const delegationService = {
    * @param call - The gRPC call containing the delegation data
    * @param callback - The gRPC callback to return the result
    */
-  async redeemDelegation(call: RedeemDelegationRequest, callback: RedeemDelegationCallback) {
-    const startTime = Date.now()
-    logger.info("Received delegation redemption request")
-    
+  async redeemDelegation(call: ServerUnaryCall<any, any>, callback: sendUnaryData<any>) {
     try {
-      // Wait for the dynamic import to complete
+      logger.info('Received RedeemDelegation request');
+      
+      // Check if the implementation was loaded
       if (!redeemDelegation) {
-        // Import is still in progress, wait for it to complete
-        if (process.env.MOCK_MODE === 'true') {
-          const module = await import('./mock-blockchain');
-          redeemDelegation = module.redeemDelegation;
-        } else {
-          const module = await import('./blockchain');
-          redeemDelegation = module.redeemDelegation;
-        }
+        logger.error('Blockchain service implementation not loaded yet');
+        callback(null, {
+          transaction_hash: "",
+          transactionHash: "",
+          success: false,
+          error_message: "Service not ready yet, try again later",
+          errorMessage: "Service not ready yet, try again later"
+        });
+        return;
       }
-      
-      // Extract the delegation data from the request
-      const delegationData = call.request.delegationData
-      
-      if (!delegationData || delegationData.length === 0) {
-        throw new Error("Delegation data is empty or invalid")
-      }
-      
-      logger.debug(`Received delegation data of size: ${delegationData.length} bytes`)
-      
-      // Redeem the delegation using the blockchain service
-      const transactionHash = await redeemDelegation(new Uint8Array(delegationData))
-      
-      const elapsedTime = (Date.now() - startTime) / 1000
-      logger.info(`Delegation redeemed successfully in ${elapsedTime.toFixed(2)}s, transaction hash: ${transactionHash}`)
-      
-      // Return success response
+
+      // Extract request parameters
+      const signature = call.request.signature;
+      const merchantAddress = call.request.merchant_address || call.request.merchantAddress;
+      const tokenContractAddress = call.request.token_contract_address || call.request.tokenContractAddress;
+      const price = call.request.price;
+
+      logger.info('Request parameters:', {
+        signatureLength: signature ? signature.length : 0,
+        merchantAddress,
+        tokenContractAddress,
+        price
+      });
+
+      // Call the implementation
+      const transactionHash = await redeemDelegation(
+        signature,
+        merchantAddress,
+        tokenContractAddress,
+        price
+      );
+
+      logger.info(`Redemption successful, transaction hash: ${transactionHash}`);
+
+      // Send success response with both snake_case and camelCase fields for compatibility
       callback(null, {
-        transactionHash,
+        transaction_hash: transactionHash,
+        transactionHash: transactionHash,
         success: true,
-        errorMessage: ''
-      })
+        error_message: "",
+        errorMessage: ""
+      });
     } catch (error) {
-      const elapsedTime = (Date.now() - startTime) / 1000
-      logger.error(`Error redeeming delegation after ${elapsedTime.toFixed(2)}s:`, error)
+      // Handle errors
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('Error in redeemDelegation:', errorMessage);
       
-      // Return error response
+      // Send error response with both snake_case and camelCase fields for compatibility
       callback(null, {
-        transactionHash: '',
+        transaction_hash: "",
+        transactionHash: "",
         success: false,
-        errorMessage: error instanceof Error ? error.message : 'Unknown error'
-      })
+        error_message: errorMessage,
+        errorMessage: errorMessage
+      });
     }
   }
-} 
+};

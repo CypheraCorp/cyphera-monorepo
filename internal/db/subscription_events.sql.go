@@ -186,32 +186,6 @@ func (q *Queries) CreateSubscriptionEvent(ctx context.Context, arg CreateSubscri
 	return i, err
 }
 
-const getLatestRedemptionEvent = `-- name: GetLatestRedemptionEvent :one
-SELECT id, subscription_id, event_type, transaction_hash, amount_in_cents, occurred_at, error_message, metadata, created_at, updated_at FROM subscription_events
-WHERE subscription_id = $1 
-AND (event_type = 'redeemed' OR event_type = 'failed_redemption' OR event_type = 'failed')
-ORDER BY occurred_at DESC
-LIMIT 1
-`
-
-func (q *Queries) GetLatestRedemptionEvent(ctx context.Context, subscriptionID uuid.UUID) (SubscriptionEvent, error) {
-	row := q.db.QueryRow(ctx, getLatestRedemptionEvent, subscriptionID)
-	var i SubscriptionEvent
-	err := row.Scan(
-		&i.ID,
-		&i.SubscriptionID,
-		&i.EventType,
-		&i.TransactionHash,
-		&i.AmountInCents,
-		&i.OccurredAt,
-		&i.ErrorMessage,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const getLatestSubscriptionEvent = `-- name: GetLatestSubscriptionEvent :one
 SELECT id, subscription_id, event_type, transaction_hash, amount_in_cents, occurred_at, error_message, metadata, created_at, updated_at FROM subscription_events
 WHERE subscription_id = $1

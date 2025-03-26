@@ -8,13 +8,36 @@ import { parseDelegation, validateDelegation } from '../utils/delegation-helpers
 
 /**
  * Mock implementation of the redeemDelegation function
- * @param delegationData The serialized delegation data
+ * @param delegationData The serialized delegation data (signature)
+ * @param merchantAddress The address of the merchant
+ * @param tokenContractAddress The address of the token contract
+ * @param price The price of the token
  * @returns A mock transaction hash
  */
 export const redeemDelegation = async (
-  delegationData: Uint8Array
+  delegationData: Uint8Array,
+  merchantAddress: string,
+  tokenContractAddress: string,
+  price: string
 ): Promise<string> => {
   try {
+    // Validate inputs first to avoid undefined errors
+    if (!delegationData || delegationData.length === 0) {
+      throw new Error("Delegation data is required");
+    }
+    
+    if (!merchantAddress) {
+      throw new Error("Merchant address is required");
+    }
+    
+    if (!tokenContractAddress) {
+      throw new Error("Token contract address is required");
+    }
+    
+    if (!price) {
+      throw new Error("Price is required");
+    }
+    
     // Parse and validate the delegation - this is real code that will actually check
     // the delegation format, so our test is still meaningful
     const delegation = parseDelegation(delegationData)
@@ -24,7 +47,9 @@ export const redeemDelegation = async (
     logger.debug("[MOCK] Delegation details:", {
       delegate: delegation.delegate,
       delegator: delegation.delegator,
-      expiry: delegation.expiry?.toString()
+      merchantAddress,
+      tokenContractAddress,
+      price
     })
     
     // Simulate processing time to make the test more realistic

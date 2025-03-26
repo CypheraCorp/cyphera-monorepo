@@ -59,19 +59,26 @@ async function main() {
       grpc.credentials.createInsecure()
     );
     
-    // Create a dummy delegation data (just for testing connectivity)
-    // In a real scenario, this would be a valid delegation structure
-    const mockDelegationData = Buffer.from('This is a test delegation');
+    // Create test data
+    const mockSignature = Buffer.from('This is a test signature');
+    const mockMerchantAddress = '0x1234567890123456789012345678901234567890';
+    const mockTokenContractAddress = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd';
+    const mockPrice = '100000000'; // Example price in token decimals
     
     console.log('Sending test request to server...');
     
     // Call the gRPC method with a timeout
     client.redeemDelegation(
-      { delegationData: mockDelegationData },
+      {
+        signature: mockSignature,
+        merchant_address: mockMerchantAddress,
+        token_contract_address: mockTokenContractAddress,
+        price: mockPrice
+      },
       { deadline: new Date(Date.now() + 5000) }, // 5 second timeout
       (err, response) => {
         if (err) {
-          console.error('Error calling gRPC service:', err.message);
+          console.error('Error calling gRPC service:', err);
           process.exit(1);
         }
         

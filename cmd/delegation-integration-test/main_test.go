@@ -20,76 +20,51 @@ const bufSize = 1024 * 1024
 
 var lis *bufconn.Listener
 
-// mockDelegationService implements a mock gRPC delegation service for testing
+// mockDelegationService implements the DelegationService interface for testing
 type mockDelegationService struct {
 	proto.UnimplementedDelegationServiceServer
 }
 
-// RedeemDelegation implements the DelegationService interface for testing
+// RedeemDelegation implements the DelegationService interface
 func (m *mockDelegationService) RedeemDelegation(ctx context.Context, req *proto.RedeemDelegationRequest) (*proto.RedeemDelegationResponse, error) {
-	// Check if the delegation data is present
-	if len(req.DelegationData) == 0 {
+	// Validate the request
+	if len(req.Signature) == 0 {
 		return &proto.RedeemDelegationResponse{
-			TransactionHash: "",
-			Success:         false,
-			ErrorMessage:    "Delegation data is empty or invalid",
+			Success:      false,
+			ErrorMessage: "empty signature",
 		}, nil
 	}
 
-	// Try to parse the delegation
+	// Parse the delegation
 	var delegation Delegation
-	err := json.Unmarshal(req.DelegationData, &delegation)
+	err := json.Unmarshal(req.Signature, &delegation)
 	if err != nil {
 		return &proto.RedeemDelegationResponse{
-			TransactionHash: "",
-			Success:         false,
-			ErrorMessage:    "Invalid delegation format: " + err.Error(),
+			Success:      false,
+			ErrorMessage: fmt.Sprintf("Failed to parse delegation: %v", err),
 		}, nil
 	}
 
-	// Validate the delegation
-	if delegation.Delegator == "" {
-		return &proto.RedeemDelegationResponse{
-			TransactionHash: "",
-			Success:         false,
-			ErrorMessage:    "Invalid delegation: missing delegator",
-		}, nil
-	}
-
-	// Validate the address format
+	// Validate delegator address
 	if !isValidEthereumAddress(delegation.Delegator) {
 		return &proto.RedeemDelegationResponse{
-			TransactionHash: "",
-			Success:         false,
-			ErrorMessage:    "Invalid delegator address format",
+			Success:      false,
+			ErrorMessage: "Invalid delegator address format: must be a valid Ethereum address (0x + 40 hex chars)",
 		}, nil
 	}
 
+	// Validate delegate address
 	if !isValidEthereumAddress(delegation.Delegate) {
 		return &proto.RedeemDelegationResponse{
-			TransactionHash: "",
-			Success:         false,
-			ErrorMessage:    "Invalid delegate address format",
+			Success:      false,
+			ErrorMessage: "Invalid delegate address format: must be a valid Ethereum address (0x + 40 hex chars)",
 		}, nil
 	}
 
-	// Check if delegation has expired
-	if delegation.Expiry > 0 {
-		currentTime := time.Now().Unix()
-		if delegation.Expiry < currentTime {
-			return &proto.RedeemDelegationResponse{
-				TransactionHash: "",
-				Success:         false,
-				ErrorMessage:    "Delegation is expired (expiry: " + fmt.Sprintf("%d", delegation.Expiry) + ", now: " + fmt.Sprintf("%d", currentTime) + ")",
-			}, nil
-		}
-	}
-
-	// All checks passed, return a mock transaction hash
+	// Mock successful response
 	return &proto.RedeemDelegationResponse{
-		TransactionHash: "0xmocktransactionhash",
 		Success:         true,
-		ErrorMessage:    "",
+		TransactionHash: "0xmocktransactionhash",
 	}, nil
 }
 
@@ -165,7 +140,6 @@ func createSampleDelegation(delegator, delegate string) Delegation {
 		Delegator: delegator,
 		Delegate:  delegate,
 		Signature: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-		Expiry:    time.Now().Unix() + 3600,
 		Caveats:   []string{},
 		Salt:      "0x123456789",
 		Authority: struct {
@@ -186,7 +160,6 @@ func TestCreateDelegation(t *testing.T) {
 		Delegator: "0x1234567890123456789012345678901234567890",
 		Delegate:  "0x0987654321098765432109876543210987654321",
 		Signature: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-		Expiry:    time.Now().Unix() + 3600,
 		Caveats:   []string{},
 		Salt:      "0x123456789",
 		Authority: struct {
@@ -210,7 +183,7 @@ func TestCreateDelegation(t *testing.T) {
 	}
 }
 
-// TestRedeemDelegation tests the delegation redemption with a mock server
+// TestRedeemDelegation tests the successful redemption of a delegation
 func TestRedeemDelegation(t *testing.T) {
 	// Create a gRPC connection to the mock server
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -226,25 +199,12 @@ func TestRedeemDelegation(t *testing.T) {
 	client := proto.NewDelegationServiceClient(conn)
 
 	// Create a test delegation
-	delegation := Delegation{
-		Delegator: "0x1234567890123456789012345678901234567890",
-		Delegate:  "0x0987654321098765432109876543210987654321",
-		Signature: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-		Expiry:    time.Now().Unix() + 3600,
-		Caveats:   []string{},
-		Salt:      "0x123456789",
-		Authority: struct {
-			Scheme    string `json:"scheme"`
-			Signature string `json:"signature"`
-			Signer    string `json:"signer"`
-		}{
-			Scheme:    "0x00",
-			Signature: "0xsig",
-			Signer:    "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789",
-		},
-	}
+	delegation := createSampleDelegation(
+		"0x1234567890123456789012345678901234567890",
+		"0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+	)
 
-	// Convert the delegation to JSON
+	// Marshal the delegation to JSON
 	delegationJSON, err := json.Marshal(delegation)
 	if err != nil {
 		t.Fatalf("Failed to marshal delegation to JSON: %v", err)
@@ -252,7 +212,10 @@ func TestRedeemDelegation(t *testing.T) {
 
 	// Call the gRPC service to redeem the delegation
 	resp, err := client.RedeemDelegation(ctx, &proto.RedeemDelegationRequest{
-		DelegationData: delegationJSON,
+		Signature:            delegationJSON,
+		MerchantAddress:      "0x1234567890123456789012345678901234567890",
+		TokenContractAddress: "0x1234567890123456789012345678901234567890",
+		Price:                "1000000",
 	})
 
 	if err != nil {
@@ -286,7 +249,10 @@ func TestRedeemEmptyDelegation(t *testing.T) {
 
 	// Call the gRPC service with empty delegation data
 	resp, err := client.RedeemDelegation(ctx, &proto.RedeemDelegationRequest{
-		DelegationData: []byte{},
+		Signature:            []byte{},
+		MerchantAddress:      "0x0000000000000000000000000000000000000000",
+		TokenContractAddress: "0x0000000000000000000000000000000000000000",
+		Price:                "0",
 	})
 
 	if err != nil {
@@ -300,64 +266,6 @@ func TestRedeemEmptyDelegation(t *testing.T) {
 
 	if resp.ErrorMessage == "" {
 		t.Error("Expected error message for empty delegation data, but got empty string")
-	}
-}
-
-// TestRedeemExpiredDelegation tests the error handling for expired delegation
-func TestRedeemExpiredDelegation(t *testing.T) {
-	// Start a mock server
-	grpcServer, serverAddr, _, _ := setupMockServer(t)
-	defer grpcServer.GracefulStop()
-
-	// Create a client
-	conn, err := grpc.Dial(serverAddr, grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("Failed to dial server: %v", err)
-	}
-	defer conn.Close()
-
-	client := proto.NewDelegationServiceClient(conn)
-
-	// Create a test delegation with expired timestamp (1 hour in the past)
-	pastTime := time.Now().Add(-1 * time.Hour).Unix()
-	delegation := Delegation{
-		Delegator: "0x1234567890123456789012345678901234567890",
-		Delegate:  "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
-		Signature: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-		Expiry:    pastTime,
-		Salt:      "0x123456789",
-		Caveats:   []string{},
-		Authority: struct {
-			Scheme    string `json:"scheme"`
-			Signature string `json:"signature"`
-			Signer    string `json:"signer"`
-		}{
-			Scheme:    "0x00",
-			Signature: "0xsig",
-			Signer:    "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789",
-		},
-	}
-
-	// Add signature to make it valid
-	delegationJSON, err := json.Marshal(delegation)
-	if err != nil {
-		t.Fatalf("Failed to marshal delegation: %v", err)
-	}
-
-	// Try to redeem the delegation
-	resp, err := client.RedeemDelegation(context.Background(), &proto.RedeemDelegationRequest{
-		DelegationData: delegationJSON,
-	})
-
-	// Redemption should fail because of expired timestamp
-	if err != nil {
-		t.Fatalf("Unexpected error calling RedeemDelegation: %v", err)
-	}
-	if resp.Success {
-		t.Errorf("Expected redemption to fail due to expired timestamp, but it succeeded")
-	}
-	if !strings.Contains(resp.ErrorMessage, "expired") {
-		t.Errorf("Expected error message to contain 'expired', got %s", resp.ErrorMessage)
 	}
 }
 
@@ -381,7 +289,6 @@ func TestRedeemInvalidDelegatorAddress(t *testing.T) {
 		Delegator: "0xinvalid",                                  // Invalid address
 		Delegate:  "0x1234567890123456789012345678901234567890", // Valid address
 		Signature: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-		Expiry:    time.Now().Add(1 * time.Hour).Unix(), // Future expiry
 		Salt:      "0x123456789",
 		Caveats:   []string{},
 		Authority: struct {
@@ -406,7 +313,10 @@ func TestRedeemInvalidDelegatorAddress(t *testing.T) {
 
 	// Try to redeem the delegation
 	resp, err := client.RedeemDelegation(ctx, &proto.RedeemDelegationRequest{
-		DelegationData: delegationJSON,
+		Signature:            delegationJSON,
+		MerchantAddress:      "0x1234567890123456789012345678901234567890",
+		TokenContractAddress: "0x1234567890123456789012345678901234567890",
+		Price:                "1000000",
 	})
 
 	// Redemption should fail because of invalid address
@@ -441,7 +351,6 @@ func TestRedeemInvalidDelegateAddress(t *testing.T) {
 		Delegator: "0x1234567890123456789012345678901234567890", // Valid address
 		Delegate:  "0xinvalid",                                  // Invalid address
 		Signature: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-		Expiry:    time.Now().Add(1 * time.Hour).Unix(), // Future expiry
 		Salt:      "0x123456789",
 		Caveats:   []string{},
 		Authority: struct {
@@ -466,7 +375,10 @@ func TestRedeemInvalidDelegateAddress(t *testing.T) {
 
 	// Try to redeem the delegation
 	resp, err := client.RedeemDelegation(ctx, &proto.RedeemDelegationRequest{
-		DelegationData: delegationJSON,
+		Signature:            delegationJSON,
+		MerchantAddress:      "0x1234567890123456789012345678901234567890",
+		TokenContractAddress: "0x1234567890123456789012345678901234567890",
+		Price:                "1000000",
 	})
 
 	// Redemption should fail because of invalid address
@@ -501,7 +413,6 @@ func TestRedeemNonHexAddress(t *testing.T) {
 		Delegator: "0xGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG", // Non-hex address
 		Delegate:  "0x1234567890123456789012345678901234567890", // Valid address
 		Signature: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-		Expiry:    time.Now().Add(1 * time.Hour).Unix(), // Future expiry
 		Salt:      "0x123456789",
 		Caveats:   []string{},
 		Authority: struct {
@@ -526,7 +437,10 @@ func TestRedeemNonHexAddress(t *testing.T) {
 
 	// Try to redeem the delegation
 	resp, err := client.RedeemDelegation(ctx, &proto.RedeemDelegationRequest{
-		DelegationData: delegationJSON,
+		Signature:            delegationJSON,
+		MerchantAddress:      "0x1234567890123456789012345678901234567890",
+		TokenContractAddress: "0x1234567890123456789012345678901234567890",
+		Price:                "1000000",
 	})
 
 	// Redemption should fail because of invalid address
@@ -594,20 +508,4 @@ func (m *MockDelegationServiceClient) RedeemDelegation(ctx context.Context, in *
 		Success:         true,
 		ErrorMessage:    "",
 	}, nil
-}
-
-func TestRedeemDelegationHandler(t *testing.T) {
-	// Skip this test in CI since we can't easily mock the delegation client internals
-	// In a real environment, this would require dependency injection or a more testable design
-	t.Skip("Skipping HTTP handler test that requires mocking the delegation client internals")
-}
-
-func TestRedeemDelegationHandlerInvalidJSON(t *testing.T) {
-	// Skip this test in CI since we can't easily mock the delegation client internals
-	t.Skip("Skipping HTTP handler test that requires mocking the delegation client internals")
-}
-
-func TestRedeemDelegationHandlerEmptyDelegation(t *testing.T) {
-	// Skip this test in CI since we can't easily mock the delegation client internals
-	t.Skip("Skipping HTTP handler test that requires mocking the delegation client internals")
 }

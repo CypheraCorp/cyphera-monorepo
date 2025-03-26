@@ -1,9 +1,39 @@
 /**
  * Utility functions for handling delegation data
  */
-import { DelegationFramework } from '@metamask-private/delegator-core-viem'
+import { DelegationStruct } from '@metamask-private/delegator-core-viem'
 import { logger } from './utils'
-import { DelegationStruct } from '../types/delegation'
+
+
+/**
+ * Validates that the input is a valid Ethereum address
+ * @param address The address to validate
+ * @returns true if valid, throws error if invalid
+ */
+export function isValidEthereumAddress(address: string): boolean {
+  // Check if address is defined
+  if (!address) {
+    return false
+  }
+  
+  // Check if address starts with 0x
+  if (!address.startsWith('0x')) {
+    return false
+  }
+  
+  // Check if address is 42 characters (0x + 40 hex digits)
+  if (address.length !== 42) {
+    return false
+  }
+  
+  // Check if address contains only hexadecimal characters after 0x
+  const hexPart = address.slice(2)
+  if (!/^[0-9a-fA-F]{40}$/.test(hexPart)) {
+    return false
+  }
+  
+  return true
+}
 
 /**
  * Parse a delegation from either bytes or JSON format
@@ -59,12 +89,14 @@ export function validateDelegation(delegation: DelegationStruct): boolean {
     throw new Error('Invalid delegation: missing signature')
   }
   
-  // Check if delegation is expired
-  if (delegation.expiry && typeof delegation.expiry === 'bigint') {
-    const now = BigInt(Math.floor(Date.now() / 1000))
-    if (delegation.expiry > 0n && delegation.expiry < now) {
-      throw new Error(`Delegation is expired (expiry: ${delegation.expiry}, now: ${now})`)
-    }
+  // Validate delegator address format
+  if (!isValidEthereumAddress(delegation.delegator)) {
+    throw new Error('Invalid delegator address format: must be a valid Ethereum address (0x + 40 hex chars)')
+  }
+  
+  // Validate delegate address format
+  if (!isValidEthereumAddress(delegation.delegate)) {
+    throw new Error('Invalid delegate address format: must be a valid Ethereum address (0x + 40 hex chars)')
   }
   
   return true

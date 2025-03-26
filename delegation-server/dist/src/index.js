@@ -37,62 +37,48 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.startServer = startServer;
-const path_1 = __importDefault(require("path"));
 const grpc = __importStar(require("@grpc/grpc-js"));
+const path = __importStar(require("path"));
 const protoLoader = __importStar(require("@grpc/proto-loader"));
-const config_1 = require("./config/config");
 const service_1 = require("./services/service");
 const utils_1 = require("./utils/utils");
-/**
- * Main entry point for the delegation redemption gRPC server
- */
+const config_1 = __importDefault(require("./config"));
+// Load the protobuf definition
+const PROTO_PATH = path.join(__dirname, 'proto/delegation.proto');
+const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true
+});
+const protoDescriptor = grpc.loadPackageDefinition(packageDefinition);
+const delegationPackage = protoDescriptor.delegation;
+// Create a gRPC server
+const server = new grpc.Server();
+// Register the service
+server.addService(delegationPackage.DelegationService.service, service_1.delegationService);
+// Function to start the server - exported for backward compatibility
 function startServer() {
-    try {
-        // Validate configuration
-        (0, config_1.validateConfig)();
-        // Load the protobuf definition
-        const PROTO_PATH = path_1.default.join(__dirname, 'proto/delegation.proto');
-        const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
-            keepCase: true,
-            longs: String,
-            enums: String,
-            defaults: true,
-            oneofs: true
+    // Bind and start the server
+    server.bindAsync(config_1.default.serverAddress, grpc.ServerCredentials.createInsecure(), (err, port) => {
+        if (err) {
+            utils_1.logger.error(`Failed to bind server: ${err}`);
+            return;
+        }
+        server.start();
+        utils_1.logger.info(`Delegation server running on ${config_1.default.serverAddress}`);
+    });
+    // Handle graceful shutdown
+    process.on('SIGINT', () => {
+        utils_1.logger.info('Received SIGINT. Shutting down gracefully...');
+        server.tryShutdown(() => {
+            utils_1.logger.info('Server shut down successfully');
+            process.exit(0);
         });
-        const protoDescriptor = grpc.loadPackageDefinition(packageDefinition);
-        const delegationPackage = protoDescriptor.delegation;
-        // Create gRPC server
-        const server = new grpc.Server();
-        // Add the delegation service
-        server.addService(delegationPackage.DelegationService.service, service_1.delegationService);
-        // Start the server
-        const serverAddress = `${config_1.config.grpc.host}:${config_1.config.grpc.port}`;
-        server.bindAsync(serverAddress, grpc.ServerCredentials.createInsecure(), (err, port) => {
-            if (err) {
-                utils_1.logger.error('Failed to bind server:', err);
-                process.exit(1);
-            }
-            server.start();
-            utils_1.logger.info(`gRPC server started on ${serverAddress}`);
-            utils_1.logger.info('Ready to receive delegation redemption requests');
-        });
-        // Handle shutdown gracefully
-        const shutdownGracefully = () => {
-            utils_1.logger.info('Shutting down gRPC server gracefully...');
-            server.tryShutdown(() => {
-                utils_1.logger.info('Server shut down successfully');
-                process.exit(0);
-            });
-        };
-        process.on('SIGINT', shutdownGracefully);
-        process.on('SIGTERM', shutdownGracefully);
-    }
-    catch (error) {
-        utils_1.logger.error('Failed to start server:', error);
-        process.exit(1);
-    }
+    });
 }
-// Start the server when this file is executed directly
+// Start the server directly when the file is executed
 if (require.main === module) {
     startServer();
 }

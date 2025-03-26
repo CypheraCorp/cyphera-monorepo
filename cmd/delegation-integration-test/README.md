@@ -34,7 +34,7 @@ The test script handles everything automatically:
 --cli               Run in CLI mode (default)
 --mock              Use mock server (default)
 --live              Use live server
---port PORT         Specify HTTP server port (default: 8080)
+--port PORT         Specify HTTP server port (default: 8000)
 --help              Show this help message
 ```
 
@@ -68,7 +68,7 @@ When running in server mode, you can interact with the HTTP API:
 # Example request to redeem a delegation
 curl -X POST -H "Content-Type: application/json" \
   -d '{"delegationData": "{\"delegate\":\"0x1234...\",\"delegator\":\"0x0987...\",\"authority\":{\"scheme\":\"0x00\",\"signature\":\"0xsig\",\"signer\":\"0x5FF1...\"},\"caveats\":[],\"salt\":\"0x1234...\",\"signature\":\"0xabcd...\"}"}' \
-  http://localhost:8080/api/delegations/redeem
+  http://localhost:8000/api/delegations/redeem
 ```
 
 ### Manual Running
@@ -96,7 +96,7 @@ go build -o cmd/delegation-integration-test/integration-test cmd/delegation-inte
 ```bash
 # From the project root
 go build -o cmd/delegation-integration-test/integration-test cmd/delegation-integration-test/main.go
-./cmd/delegation-integration-test/integration-test -server -port 8080
+./cmd/delegation-integration-test/integration-test -server -port 8000
 ```
 
 ## Command Line Options
@@ -104,10 +104,9 @@ go build -o cmd/delegation-integration-test/integration-test cmd/delegation-inte
 The integration test client supports the following command line flags:
 
 - `-server`: Run in HTTP server mode
-- `-port`: Specify HTTP server port when in server mode (default: "8080")
+- `-port`: Specify HTTP server port when in server mode (default: "8000")
 - `-delegator`: Delegator address (default: "0x1234...")
 - `-delegate`: Delegate address (default: "0x0987...")
 - `-signature`: Delegation signature (default: "0xabcd...")
-- `-expiry`: Expiry timestamp (default: 1 hour from now)
 - `-salt`: Delegation salt (default: "0x123456789")
 - `-verbose`: Enable verbose output (default: false) 
