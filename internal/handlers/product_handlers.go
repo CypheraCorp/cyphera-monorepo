@@ -734,8 +734,8 @@ func (h *ProductHandler) calculateSubscriptionPeriods(product db.Product) (time.
 	}
 
 	if product.ProductType == db.ProductTypeRecurring {
-		periodEnd = calculatePeriodEnd(now, product.IntervalType, int32(termLength))
-		nextRedemption = calculateNextRedemption(now, product.IntervalType)
+		periodEnd = CalculatePeriodEnd(now, product.IntervalType, int32(termLength))
+		nextRedemption = CalculateNextRedemption(product.IntervalType, now)
 	} else { // One-off product
 		// For one-off products, end date is same as start
 		periodEnd = now
@@ -885,7 +885,7 @@ func (h *ProductHandler) performInitialRedemption(
 	// Update subscription with redemption info
 	var nextRedemptionDate pgtype.Timestamptz
 	if product.ProductType == db.ProductTypeRecurring {
-		nextDate := calculateNextRedemption(time.Now(), product.IntervalType)
+		nextDate := CalculateNextRedemption(product.IntervalType, time.Now())
 		nextRedemptionDate = pgtype.Timestamptz{
 			Time:  nextDate,
 			Valid: true,
@@ -1012,6 +1012,7 @@ func validateIntervalType(intervalType string) (db.IntervalType, error) {
 	}
 
 	validIntervalTypes := map[string]bool{
+		constants.IntervalType1Minute:  true,
 		constants.IntervalType5Minutes: true,
 		constants.IntervalTypeDaily:    true,
 		constants.IntervalTypeWeekly:   true,
@@ -1732,42 +1733,6 @@ func marshalCaveats(caveats []CaveatStruct) json.RawMessage {
 		return json.RawMessage("{}")
 	}
 	return bytes
-}
-
-// calculatePeriodEnd determines the period end date based on interval type and length
-func calculatePeriodEnd(start time.Time, intervalType db.IntervalType, termLength int32) time.Time {
-	switch intervalType {
-	case db.IntervalTypeDaily:
-		return start.AddDate(0, 0, int(termLength))
-	case db.IntervalTypeWeek:
-		return start.AddDate(0, 0, int(termLength*7))
-	case db.IntervalTypeMonth:
-		return start.AddDate(0, int(termLength), 0)
-	case "quarterly": // Not in enum, handle separately
-		return start.AddDate(0, int(termLength*3), 0)
-	case db.IntervalTypeYear:
-		return start.AddDate(int(termLength), 0, 0)
-	default:
-		return start // Default to start date if interval type is unknown
-	}
-}
-
-// calculateNextRedemption determines when the next redemption should occur
-func calculateNextRedemption(start time.Time, intervalType db.IntervalType) time.Time {
-	switch intervalType {
-	case db.IntervalTypeDaily:
-		return start.AddDate(0, 0, 1) // Next day
-	case db.IntervalTypeWeek:
-		return start.AddDate(0, 0, 7) // Next week
-	case db.IntervalTypeMonth:
-		return start.AddDate(0, 1, 0) // Next month
-	case "quarterly": // Not in enum, handle separately
-		return start.AddDate(0, 3, 0) // Next quarter
-	case db.IntervalTypeYear:
-		return start.AddDate(1, 0, 0) // Next year
-	default:
-		return start.AddDate(0, 1, 0) // Default to monthly if interval type is unknown
-	}
 }
 
 // determineNetworkType maps network names to their network types

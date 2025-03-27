@@ -17,7 +17,7 @@ CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended', 'pending');
 CREATE TYPE product_type AS ENUM ('recurring', 'one_off');
 
 -- Create interval type enum
-CREATE TYPE interval_type AS ENUM ('5mins', 'daily', 'week', 'month', 'year');
+CREATE TYPE interval_type AS ENUM ('1min', '5mins', 'daily', 'week', 'month', 'year');
 
 -- Create network type enum
 CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkadot');

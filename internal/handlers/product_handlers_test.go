@@ -968,18 +968,20 @@ func (h *TestSubscriptionHandler) SubscribeToProduct(c *gin.Context) {
 	h.db.On("CreateDelegationDatum", ctx, mock.Anything).Return(delegationData, nil)
 
 	// Create subscription
+	now := time.Now()
+	nextRedemption := CalculateNextRedemption(db.IntervalTypeMonth, now)
+	periodEnd := CalculatePeriodEnd(now, db.IntervalTypeMonth, 1)
+
 	subscription := db.Subscription{
 		ID:                 uuid.New(),
 		CustomerID:         customer.ID,
 		ProductID:          product.ID,
 		ProductTokenID:     parsedProductTokenID,
-		Status:             db.SubscriptionStatusActive,
 		DelegationID:       delegationData.ID,
-		CurrentPeriodStart: pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		CurrentPeriodEnd:   pgtype.Timestamptz{Time: time.Now().Add(30 * 24 * time.Hour), Valid: true},
-		NextRedemptionDate: pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour), Valid: true},
-		CreatedAt:          pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		UpdatedAt:          pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		Status:             db.SubscriptionStatusActive,
+		CurrentPeriodStart: pgtype.Timestamptz{Time: now, Valid: true},
+		CurrentPeriodEnd:   pgtype.Timestamptz{Time: periodEnd, Valid: true},
+		NextRedemptionDate: pgtype.Timestamptz{Time: nextRedemption, Valid: true},
 	}
 	h.db.On("CreateSubscription", ctx, mock.Anything).Return(subscription, nil)
 
@@ -1020,6 +1022,10 @@ func TestSubscribeToProduct_Success(t *testing.T) {
 	walletAddress := "0xabcdef1234567890"
 	normalizedAddress := strings.ToLower(walletAddress)
 	delegationID := uuid.New()
+
+	now := time.Now()
+	nextRedemption := CalculateNextRedemption(db.IntervalTypeMonth, now)
+	periodEnd := CalculatePeriodEnd(now, db.IntervalTypeMonth, 1)
 
 	product := db.Product{
 		ID:             productID,
@@ -1070,9 +1076,9 @@ func TestSubscribeToProduct_Success(t *testing.T) {
 		ProductTokenID:     productTokenID,
 		DelegationID:       delegationID,
 		Status:             db.SubscriptionStatusActive,
-		CurrentPeriodStart: pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		CurrentPeriodEnd:   pgtype.Timestamptz{Time: time.Now().Add(30 * 24 * time.Hour), Valid: true},
-		NextRedemptionDate: pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour), Valid: true},
+		CurrentPeriodStart: pgtype.Timestamptz{Time: now, Valid: true},
+		CurrentPeriodEnd:   pgtype.Timestamptz{Time: periodEnd, Valid: true},
+		NextRedemptionDate: pgtype.Timestamptz{Time: nextRedemption, Valid: true},
 	}
 
 	// Setup mocks before the handler is called

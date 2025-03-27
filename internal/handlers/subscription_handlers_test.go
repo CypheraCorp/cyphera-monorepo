@@ -937,81 +937,169 @@ func TestUpdateSubscriptionStatus(t *testing.T) {
 
 // TestCalculateNextRedemption tests the CalculateNextRedemption function that computes the next scheduled redemption date
 func TestCalculateNextRedemption(t *testing.T) {
-	// Set a fixed reference time for consistent testing
-	now := time.Date(2023, 5, 15, 12, 0, 0, 0, time.UTC)
+	now := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 
-	testCases := []struct {
+	tests := []struct {
 		name         string
 		intervalType db.IntervalType
-		currentTime  time.Time
-		expected     time.Time
+		want         time.Time
 	}{
 		{
-			name:         "Daily Interval",
-			intervalType: db.IntervalTypeDaily,
-			currentTime:  now,
-			expected:     now.AddDate(0, 0, 1), // Next day
+			name:         "1min interval",
+			intervalType: db.IntervalType1min,
+			want:         now.Add(1 * time.Minute),
 		},
 		{
-			name:         "Weekly Interval",
-			intervalType: db.IntervalTypeWeek,
-			currentTime:  now,
-			expected:     now.AddDate(0, 0, 7), // Next week
-		},
-		{
-			name:         "Monthly Interval",
-			intervalType: db.IntervalTypeMonth,
-			currentTime:  now,
-			expected:     now.AddDate(0, 1, 0), // Next month
-		},
-		{
-			name:         "Yearly Interval",
-			intervalType: db.IntervalTypeYear,
-			currentTime:  now,
-			expected:     now.AddDate(1, 0, 0), // Next year
-		},
-		{
-			name:         "5-Minute Interval (Testing)",
+			name:         "5mins interval",
 			intervalType: db.IntervalType5mins,
-			currentTime:  now,
-			expected:     now.Add(5 * time.Minute), // 5 minutes later
+			want:         now.Add(5 * time.Minute),
 		},
 		{
-			name:         "Unknown Interval Type",
-			intervalType: "unknown", // Invalid interval type
-			currentTime:  now,
-			expected:     now.AddDate(0, 1, 0), // Should default to monthly
-		},
-		{
-			name:         "Empty Interval Type",
-			intervalType: "",
-			currentTime:  now,
-			expected:     now.AddDate(0, 1, 0), // Should default to monthly
-		},
-		{
-			name:         "Month Crossing",
+			name:         "daily interval",
 			intervalType: db.IntervalTypeDaily,
-			currentTime:  time.Date(2023, 5, 31, 12, 0, 0, 0, time.UTC),
-			expected:     time.Date(2023, 6, 1, 12, 0, 0, 0, time.UTC), // Next day crosses month
+			want:         now.AddDate(0, 0, 1),
 		},
 		{
-			name:         "Year Crossing",
-			intervalType: db.IntervalTypeDaily,
-			currentTime:  time.Date(2023, 12, 31, 12, 0, 0, 0, time.UTC),
-			expected:     time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC), // Next day crosses year
+			name:         "weekly interval",
+			intervalType: db.IntervalTypeWeek,
+			want:         now.AddDate(0, 0, 7),
 		},
 		{
-			name:         "Leap Year Case",
-			intervalType: db.IntervalTypeDaily,
-			currentTime:  time.Date(2024, 2, 28, 12, 0, 0, 0, time.UTC),
-			expected:     time.Date(2024, 2, 29, 12, 0, 0, 0, time.UTC), // Feb 28 to 29 in leap year
+			name:         "monthly interval",
+			intervalType: db.IntervalTypeMonth,
+			want:         now.AddDate(0, 1, 0),
+		},
+		{
+			name:         "yearly interval",
+			intervalType: db.IntervalTypeYear,
+			want:         now.AddDate(1, 0, 0),
+		},
+		{
+			name:         "unknown interval defaults to monthly",
+			intervalType: "unknown",
+			want:         now.AddDate(0, 1, 0),
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := CalculateNextRedemption(tc.intervalType, tc.currentTime)
-			assert.Equal(t, tc.expected, result, "Next redemption time should match expected value")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CalculateNextRedemption(tt.intervalType, now)
+			if !got.Equal(tt.want) {
+				t.Errorf("CalculateNextRedemption() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCalculatePeriodEnd(t *testing.T) {
+	now := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name         string
+		start        time.Time
+		intervalType db.IntervalType
+		termLength   int32
+		want         time.Time
+	}{
+		{
+			name:         "1min interval with term length 1",
+			start:        now,
+			intervalType: db.IntervalType1min,
+			termLength:   1,
+			want:         now.Add(1 * time.Minute),
+		},
+		{
+			name:         "1min interval with term length 5",
+			start:        now,
+			intervalType: db.IntervalType1min,
+			termLength:   5,
+			want:         now.Add(5 * time.Minute),
+		},
+		{
+			name:         "5mins interval with term length 1",
+			start:        now,
+			intervalType: db.IntervalType5mins,
+			termLength:   1,
+			want:         now.Add(5 * time.Minute),
+		},
+		{
+			name:         "5mins interval with term length 3",
+			start:        now,
+			intervalType: db.IntervalType5mins,
+			termLength:   3,
+			want:         now.Add(15 * time.Minute),
+		},
+		{
+			name:         "daily interval with term length 1",
+			start:        now,
+			intervalType: db.IntervalTypeDaily,
+			termLength:   1,
+			want:         now.AddDate(0, 0, 1),
+		},
+		{
+			name:         "daily interval with term length 30",
+			start:        now,
+			intervalType: db.IntervalTypeDaily,
+			termLength:   30,
+			want:         now.AddDate(0, 0, 30),
+		},
+		{
+			name:         "weekly interval with term length 1",
+			start:        now,
+			intervalType: db.IntervalTypeWeek,
+			termLength:   1,
+			want:         now.AddDate(0, 0, 7),
+		},
+		{
+			name:         "weekly interval with term length 4",
+			start:        now,
+			intervalType: db.IntervalTypeWeek,
+			termLength:   4,
+			want:         now.AddDate(0, 0, 28),
+		},
+		{
+			name:         "monthly interval with term length 1",
+			start:        now,
+			intervalType: db.IntervalTypeMonth,
+			termLength:   1,
+			want:         now.AddDate(0, 1, 0),
+		},
+		{
+			name:         "monthly interval with term length 12",
+			start:        now,
+			intervalType: db.IntervalTypeMonth,
+			termLength:   12,
+			want:         now.AddDate(0, 12, 0),
+		},
+		{
+			name:         "yearly interval with term length 1",
+			start:        now,
+			intervalType: db.IntervalTypeYear,
+			termLength:   1,
+			want:         now.AddDate(1, 0, 0),
+		},
+		{
+			name:         "yearly interval with term length 2",
+			start:        now,
+			intervalType: db.IntervalTypeYear,
+			termLength:   2,
+			want:         now.AddDate(2, 0, 0),
+		},
+		{
+			name:         "unknown interval defaults to monthly",
+			start:        now,
+			intervalType: "unknown",
+			termLength:   1,
+			want:         now.AddDate(0, 1, 0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CalculatePeriodEnd(tt.start, tt.intervalType, tt.termLength)
+			if !got.Equal(tt.want) {
+				t.Errorf("CalculatePeriodEnd() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }

@@ -2,12 +2,11 @@
 set -e
 
 # Load environment variables
-if [ -f .env.local ]; then
-    export $(cat .env.local | grep -v '^#' | xargs)
-    echo "Using .env.local"
-else
+if [ -f .env ]; then
     export $(cat .env | grep -v '^#' | xargs)
     echo "Using .env"
+else
+    echo "No .env file found"
 fi
 
 # Build the binary
