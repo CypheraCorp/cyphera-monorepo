@@ -690,9 +690,15 @@ func (h *SubscriptionHandler) GetExpiredSubscriptions(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, subscriptions)
 }
 
-// CalculateNextRedemption computes the next scheduled redemption date based on interval type
+// CalculateNextRedemption computes the next scheduled redemption date based on interval type.
+// This is the central function for all interval calculations in the system.
+// For testing and development purposes, 1min and 5mins intervals are supported.
 func CalculateNextRedemption(intervalType db.IntervalType, currentTime time.Time) time.Time {
 	switch intervalType {
+	case db.IntervalType1min:
+		return currentTime.Add(1 * time.Minute)
+	case db.IntervalType5mins:
+		return currentTime.Add(5 * time.Minute)
 	case db.IntervalTypeDaily:
 		return currentTime.AddDate(0, 0, 1) // Next day
 	case db.IntervalTypeWeek:
@@ -701,10 +707,29 @@ func CalculateNextRedemption(intervalType db.IntervalType, currentTime time.Time
 		return currentTime.AddDate(0, 1, 0) // Next month
 	case db.IntervalTypeYear:
 		return currentTime.AddDate(1, 0, 0) // Next year
-	case db.IntervalType5mins: // For testing purposes
-		return currentTime.Add(5 * time.Minute)
 	default:
 		return currentTime.AddDate(0, 1, 0) // Default to monthly
+	}
+}
+
+// CalculatePeriodEnd determines the end date of a subscription period based on interval type and term length.
+// This function is used when creating or updating subscription periods.
+func CalculatePeriodEnd(start time.Time, intervalType db.IntervalType, termLength int32) time.Time {
+	switch intervalType {
+	case db.IntervalType1min:
+		return start.Add(time.Duration(termLength) * time.Minute)
+	case db.IntervalType5mins:
+		return start.Add(time.Duration(termLength*5) * time.Minute)
+	case db.IntervalTypeDaily:
+		return start.AddDate(0, 0, int(termLength))
+	case db.IntervalTypeWeek:
+		return start.AddDate(0, 0, int(termLength*7))
+	case db.IntervalTypeMonth:
+		return start.AddDate(0, int(termLength), 0)
+	case db.IntervalTypeYear:
+		return start.AddDate(int(termLength), 0, 0)
+	default:
+		return start.AddDate(0, int(termLength), 0) // Default to monthly
 	}
 }
 

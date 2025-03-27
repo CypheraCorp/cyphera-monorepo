@@ -1,4 +1,4 @@
-.PHONY: all build test clean lint run swagger deploy test-all test-integration stop-integration-server ensure-executable proto-build-go proto-build-js proto-build-all
+.PHONY: all build test clean lint run swagger deploy test-all test-integration stop-integration-server ensure-executable proto-build-go proto-build-js proto-build-all subscription-processor
 
 # Go parameters
 BINARY_NAME=cyphera-api
@@ -20,6 +20,7 @@ test-all: test test-integration
 # Ensure scripts are executable
 ensure-executable:
 	@chmod +x scripts/integration-test.sh
+	@chmod +x scripts/start-dev.sh
 
 # Run integration tests with the delegation server
 test-integration: ensure-executable
@@ -53,7 +54,12 @@ swagger:
 deploy:
 	# Add deployment steps here
 
-dev:
+# Run the subscription processor
+subscription-processor:
+	@echo "Starting subscription processor with 1-minute interval..."
+	$(GO) run ./cmd/subscription-processor/main.go --interval=1m
+
+dev: ensure-executable
 	@echo "Starting development environment with hot reloading for the API server..."
 	./scripts/start-dev.sh
 
@@ -106,6 +112,7 @@ help:
 	@echo "  make api-server     - Run the API server without live reload"
 	@echo "  make api-server-air - Run the API server with air for live reload"
 	@echo "  make delegation-server - Run the delegation server" 
+	@echo "  make subscription-processor - Run the subscription processor"
 	@echo "  make gen            - Generate SQLC code"
 	@echo "  make proto-build-go - Generate Go gRPC code from proto definitions"
 	@echo "  make proto-build-js - Generate Node.js gRPC code from proto definitions"

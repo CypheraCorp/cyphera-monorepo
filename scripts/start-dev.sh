@@ -21,6 +21,8 @@ cleanup() {
   # Kill any processes using ports 8000 (API) and 50051 (delegation)
   lsof -ti:8000 | xargs kill -9 2>/dev/null || true
   lsof -ti:50051 | xargs kill -9 2>/dev/null || true
+  # Kill the subscription processor
+  pkill -f "subscription-processor" 2>/dev/null || true
   echo "Servers stopped"
 }
 
@@ -79,6 +81,10 @@ cd ..
 # Wait a moment for the delegation server to start
 sleep 2
 
+# Start the subscription processor in the background
+echo "Starting subscription processor with 1-minute interval..."
+go run ./cmd/subscription-processor/main.go --interval=1m &
+
 # Start the API server with hot reloading via air
 echo "Starting API server with hot reloading via air..." 
 # Load root .env variables
@@ -102,10 +108,11 @@ else
   air &
 fi
 
-# Wait for both servers to be ready
+# Wait for all servers to be ready
 echo "Development environment is running"
 echo "API server: http://localhost:${PORT:-8000} (with hot reloading enabled)"
 echo "Delegation server: gRPC at localhost:${GRPC_PORT:-50051}"
+echo "Subscription processor: Running with 1-minute interval"
 echo "Press Ctrl+C to stop all servers and exit"
 
 # Keep the script running until user interrupts

@@ -171,20 +171,9 @@ if [ "$MOCK" = "true" ]; then
   echo "Starting Node.js gRPC delegation server in mock mode..."
   cd "$DELEGATION_SERVER_DIR"
 
-  # Check if .env file exists, if not create it from .env.example
-  if [ ! -f ".env" ]; then
-    echo "Creating .env file from .env.example..."
-    if [ -f ".env.example" ]; then
-      cp .env.example .env
-    else
-      echo "Error: .env.example not found. Please create a .env file manually."
-      exit 1
-    fi
-  fi
-
-  # Mock configuration for testing
-  echo "Adding mock configuration to .env file..."
-  cat > .env <<EOL
+  # Create .env.test file for testing
+  echo "Creating .env.test file for integration testing..."
+  cat > .env.test <<EOL
 GRPC_PORT=${GRPC_PORT}
 GRPC_HOST=0.0.0.0
 RPC_URL=https://sepolia.infura.io/v3/your-infura-key
@@ -196,25 +185,35 @@ LOG_LEVEL=debug
 MOCK_MODE=true
 EOL
 
+  # Temporarily use .env.test for the integration test
+  if [ -f ".env" ]; then
+    mv .env .env.backup
+  fi
+  cp .env.test .env
+
   # Install dependencies if needed
   if [ ! -d "node_modules" ]; then
-    echo "Installing Node.js dependencies..."
     npm install
   fi
 
-  # Start the server in mock mode (for testing)
-  echo "Starting server..."
-  npm run start:mock > server.log 2>&1 &
+  # Start the server
+  npm run dev &
   SERVER_PID=$!
 
   # Wait for server to start
-  echo "Waiting for server to start up (PID: $SERVER_PID)..."
+  echo "Waiting for gRPC server to start..."
   sleep 5
+
+  # Restore original .env if it existed
+  if [ -f ".env.backup" ]; then
+    mv .env.backup .env
+  else
+    rm .env
+  fi
 
   # Verify server is running
   if ! kill -0 $SERVER_PID 2>/dev/null; then
     echo "Error: Server failed to start"
-    cat server.log
     exit 1
   fi
 

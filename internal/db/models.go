@@ -101,6 +101,7 @@ func (ns NullApiKeyLevel) Value() (driver.Value, error) {
 type IntervalType string
 
 const (
+	IntervalType1min  IntervalType = "1min"
 	IntervalType5mins IntervalType = "5mins"
 	IntervalTypeDaily IntervalType = "daily"
 	IntervalTypeWeek  IntervalType = "week"
