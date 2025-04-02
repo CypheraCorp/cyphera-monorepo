@@ -933,7 +933,7 @@ func (h *TestSubscriptionHandler) SubscribeToProduct(c *gin.Context) {
 			ID:            uuid.New(),
 			CustomerID:    customer.ID,
 			WalletAddress: normalizedAddress,
-			NetworkType:   "evm",
+			NetworkType:   db.NetworkTypeEvm,
 			CreatedAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
 			UpdatedAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		}
@@ -941,14 +941,6 @@ func (h *TestSubscriptionHandler) SubscribeToProduct(c *gin.Context) {
 	} else {
 		// Use existing customer
 		customer = customers[0]
-		customerWallet = db.CustomerWallet{
-			ID:            uuid.New(),
-			CustomerID:    customer.ID,
-			WalletAddress: normalizedAddress,
-			NetworkType:   "evm",
-			CreatedAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
-			UpdatedAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		}
 	}
 
 	// Check for existing subscription
@@ -1054,7 +1046,7 @@ func TestSubscribeToProduct_Success(t *testing.T) {
 		ID:            uuid.New(),
 		CustomerID:    customerID,
 		WalletAddress: normalizedAddress,
-		NetworkType:   "evm",
+		NetworkType:   db.NetworkTypeEvm,
 	}
 
 	delegationData := db.DelegationDatum{
@@ -1096,7 +1088,7 @@ func TestSubscribeToProduct_Success(t *testing.T) {
 	mockDB.On("CreateCustomerWallet", mock.Anything, mock.MatchedBy(func(params db.CreateCustomerWalletParams) bool {
 		return params.CustomerID == customerID &&
 			params.WalletAddress == normalizedAddress &&
-			params.NetworkType == "evm"
+			params.NetworkType == db.NetworkTypeEvm
 	})).Return(customerWallet, nil)
 
 	mockDB.On("ListSubscriptionsByCustomer", mock.Anything, customerID).Return([]db.Subscription{}, nil)

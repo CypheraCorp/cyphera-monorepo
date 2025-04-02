@@ -351,7 +351,7 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 	// Parse status
 	var status db.SubscriptionStatus
 	switch request.Status {
-	case "active", "canceled", "expired", "suspended", "failed":
+	case string(db.SubscriptionStatusActive), string(db.SubscriptionStatusCanceled), string(db.SubscriptionStatusExpired), string(db.SubscriptionStatusSuspended), string(db.SubscriptionStatusFailed):
 		status = db.SubscriptionStatus(request.Status)
 	default:
 		sendError(c, http.StatusBadRequest, "Invalid status value", nil)
@@ -510,7 +510,7 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 
 	if request.Status != "" {
 		switch request.Status {
-		case "active", "canceled", "expired", "suspended", "failed":
+		case string(db.SubscriptionStatusActive), string(db.SubscriptionStatusCanceled), string(db.SubscriptionStatusExpired), string(db.SubscriptionStatusSuspended), string(db.SubscriptionStatusFailed):
 			params.Status = db.SubscriptionStatus(request.Status)
 		default:
 			sendError(c, http.StatusBadRequest, "Invalid status value", nil)
@@ -588,7 +588,7 @@ func (h *SubscriptionHandler) UpdateSubscriptionStatus(c *gin.Context) {
 	// Validate status
 	var status db.SubscriptionStatus
 	switch request.Status {
-	case "active", "canceled", "expired", "suspended", "failed":
+	case string(db.SubscriptionStatusActive), string(db.SubscriptionStatusCanceled), string(db.SubscriptionStatusExpired), string(db.SubscriptionStatusSuspended), string(db.SubscriptionStatusFailed):
 		status = db.SubscriptionStatus(request.Status)
 	default:
 		sendError(c, http.StatusBadRequest, "Invalid status value", nil)
@@ -962,7 +962,6 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 				ID:     subscription.ID,
 				Status: db.SubscriptionStatusCompleted,
 			}
-
 			if _, updateErr := params.queries.UpdateSubscriptionStatus(params.ctx, updateParams); updateErr != nil {
 				log.Printf("Warning: Failed to mark subscription %s as completed: %v",
 					subscription.ID, updateErr)
@@ -1045,7 +1044,6 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 				log.Printf("Marked subscription %s as failed due to failed final payment", subscription.ID)
 			}
 		}
-
 		// Create failure event
 		if params.tx != nil {
 			_, eventErr := params.queries.CreateSubscriptionEvent(params.ctx, db.CreateSubscriptionEventParams{
@@ -1258,7 +1256,9 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 	// Ensure transaction is rolled back on error
 	defer func() {
 		if tx != nil {
-			tx.Rollback(ctx)
+			if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
+				log.Printf("Failed to rollback transaction: %v", err)
+			}
 		}
 	}()
 

@@ -359,7 +359,6 @@ func InitializeRoutes(router *gin.Engine) {
 				subEvents.GET("/type/:event_type", subscriptionEventHandler.ListSubscriptionEventsByType)
 				subEvents.GET("/failed", subscriptionEventHandler.ListFailedSubscriptionEvents)
 				subEvents.GET("/recent", subscriptionEventHandler.ListRecentSubscriptionEvents)
-				subEvents.GET("/type/:event_type/recent", subscriptionEventHandler.ListRecentSubscriptionEventsByType)
 			}
 
 			// Failed subscription attempts

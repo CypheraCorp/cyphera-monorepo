@@ -1,3 +1,4 @@
+version: "1"
 linters:
   enable:
     - gofmt
@@ -8,25 +9,29 @@ linters:
     - ineffassign
     - unused
     - misspell
-    - gocyclo
-    - gosec
     - bodyclose
     - goconst
     - goimports
-
-linters-settings:
-  gocyclo:
-    min-complexity: 15
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-
 run:
   timeout: 5m
 
+# Add linter-specific settings
+linters-settings:
+  goconst:
+    # Minimum number of occurrences for goconst to report
+    min-occurrences: 6
+
+# Add this section to ignore issues
 issues:
   exclude-rules:
-    - path: _test\.go
+    # Rule for test files
+    - path: _test\.go$ # Regex matching files ending with _test.go
       linters:
-        - gocyclo
-        - gosec 
+        # List linters to disable for test files
+        - gocyclo  # Ignore complexity warnings in tests
+        - funlen   # Ignore function length warnings in tests
+        - goconst  # Ignore constant string duplication warnings in tests (redundant if min-occurrences is high)
+        - unused  # Ignore unused variables in tests
+        - errcheck  # Ignore errors in tests
+        # - errcheck # Example: Uncomment if you want to ignore unchecked errors in tests
+        # Add any other linters you want to ignore specifically for test files

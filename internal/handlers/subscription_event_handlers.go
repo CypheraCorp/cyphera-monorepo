@@ -207,7 +207,7 @@ func (h *SubscriptionEventHandler) ListSubscriptionEventsByType(c *gin.Context) 
 	// Validate event type
 	var eventType db.SubscriptionEventType
 	switch eventTypeStr {
-	case "created", "updated", "redeemed", "failed", "canceled":
+	case string(db.SubscriptionEventTypeCreated), string(db.SubscriptionEventTypeRedeemed), string(db.SubscriptionEventTypeFailed), string(db.SubscriptionEventTypeCanceled):
 		eventType = db.SubscriptionEventType(eventTypeStr)
 	default:
 		sendError(c, http.StatusBadRequest, "Invalid event type", nil)
@@ -285,64 +285,6 @@ func (h *SubscriptionEventHandler) ListRecentSubscriptionEvents(c *gin.Context) 
 	sendSuccess(c, http.StatusOK, events)
 }
 
-// ListRecentSubscriptionEventsByType godoc
-// @Summary List recent events by type
-// @Description Get a list of events of a specific type that occurred after a specified time
-// @Tags subscription-events
-// @Accept json
-// @Produce json
-// @Param event_type path string true "Event Type"
-// @Param since query int false "Timestamp (Unix epoch in seconds) to filter from"
-// @Success 200 {array} db.SubscriptionEvent
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /subscription-events/type/{event_type}/recent [get]
-func (h *SubscriptionEventHandler) ListRecentSubscriptionEventsByType(c *gin.Context) {
-	eventTypeStr := c.Param("event_type")
-
-	// Validate event type
-	var eventType db.SubscriptionEventType
-	switch eventTypeStr {
-	case "created", "updated", "redeemed", "failed", "canceled":
-		eventType = db.SubscriptionEventType(eventTypeStr)
-	default:
-		sendError(c, http.StatusBadRequest, "Invalid event type", nil)
-		return
-	}
-
-	sinceStr := c.DefaultQuery("since", "")
-	var since time.Time
-
-	if sinceStr != "" {
-		sinceTimestamp, err := strconv.ParseInt(sinceStr, 10, 64)
-		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid since timestamp", err)
-			return
-		}
-		since = time.Unix(sinceTimestamp, 0)
-	} else {
-		// Default to events in the last 24 hours
-		since = time.Now().Add(-24 * time.Hour)
-	}
-
-	params := db.ListRecentSubscriptionEventsByTypeParams{
-		EventType: eventType,
-		OccurredAt: pgtype.Timestamptz{
-			Time:  since,
-			Valid: true,
-		},
-	}
-
-	events, err := h.common.db.ListRecentSubscriptionEventsByType(c.Request.Context(), params)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve recent events by type", err)
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, events)
-}
-
 // CreateSubscriptionEvent godoc
 // @Summary Create a new subscription event
 // @Description Creates a new subscription event with the provided details
@@ -372,7 +314,7 @@ func (h *SubscriptionEventHandler) CreateSubscriptionEvent(c *gin.Context) {
 	// Validate event type
 	var eventType db.SubscriptionEventType
 	switch request.EventType {
-	case "created", "updated", "redeemed", "failed", "canceled":
+	case string(db.SubscriptionEventTypeCreated), string(db.SubscriptionEventTypeRedeemed), string(db.SubscriptionEventTypeFailed), string(db.SubscriptionEventTypeCanceled):
 		eventType = db.SubscriptionEventType(request.EventType)
 	default:
 		sendError(c, http.StatusBadRequest, "Invalid event type", nil)
@@ -465,7 +407,7 @@ func (h *SubscriptionEventHandler) UpdateSubscriptionEvent(c *gin.Context) {
 	if request.EventType != "" && string(existingEvent.EventType) != request.EventType {
 		// Validate event type
 		switch request.EventType {
-		case "created", "updated", "redeemed", "failed", "canceled":
+		case string(db.SubscriptionEventTypeCreated), string(db.SubscriptionEventTypeRedeemed), string(db.SubscriptionEventTypeFailed), string(db.SubscriptionEventTypeCanceled):
 			params.EventType = db.SubscriptionEventType(request.EventType)
 		default:
 			sendError(c, http.StatusBadRequest, "Invalid event type", nil)

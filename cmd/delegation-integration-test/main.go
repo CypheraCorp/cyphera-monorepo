@@ -147,12 +147,25 @@ func main() {
 		// Register a health check endpoint
 		http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
+			_, err := w.Write([]byte("OK"))
+			if err != nil {
+				log.Printf("Error writing response: %v", err)
+			}
 		})
 
 		// Start the server
 		log.Printf("Server is ready to accept requests at http://localhost:%s/api/delegations/redeem", *serverPort)
-		log.Fatal(http.ListenAndServe(":"+*serverPort, nil))
+		// Create a server with timeouts
+		srv := &http.Server{
+			Addr: ":" + *serverPort,
+			// Good practice: enforce timeouts for servers you create!
+			WriteTimeout: 15 * time.Second,
+			ReadTimeout:  15 * time.Second,
+			IdleTimeout:  60 * time.Second,
+			Handler:      nil, // Pass nil to use the default ServeMux
+		}
+
+		log.Fatal(srv.ListenAndServe())
 		return
 	}
 
