@@ -47,6 +47,8 @@ jobs:
       run: go mod download
     
     - name: Install Node dependencies
+      env:
+        NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       run: make delegation-server-setup
 
     - name: Run Go tests
