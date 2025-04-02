@@ -66,7 +66,11 @@ func main() {
 
 	// Initialize logger
 	logger.InitLogger()
-	defer logger.Sync()
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			fmt.Printf("Failed to sync logger: %v\n", err)
+		}
+	}()
 
 	// Parse and validate interval duration
 	checkDuration, err := time.ParseDuration(*interval)

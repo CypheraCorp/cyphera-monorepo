@@ -24,6 +24,9 @@ go.work.sum
 # Binaries
 bin/
 
+# DS_Store
+.DS_Store
+
 # Secrets
 .secrets
 

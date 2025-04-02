@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"cyphera-api/internal/logger"
 	"fmt"
 	"io"
@@ -132,29 +131,6 @@ func getRequestBody(c *gin.Context) ([]byte, error) {
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	}
 	return bodyBytes, nil
-}
-
-// getWalletAddress derives the Ethereum address from a private key
-func getWalletAddress(privateKeyHex string) (string, error) {
-	// Remove 0x prefix if present
-	privateKeyHex = strings.TrimPrefix(privateKeyHex, "0x")
-
-	// Parse the private key
-	privateKey, err := crypto.HexToECDSA(privateKeyHex)
-	if err != nil {
-		return "", fmt.Errorf("invalid private key: %w", err)
-	}
-
-	// Get public key
-	publicKey := privateKey.Public()
-	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
-	if !ok {
-		return "", fmt.Errorf("error casting public key to ECDSA")
-	}
-
-	// Get address
-	address := crypto.PubkeyToAddress(*publicKeyECDSA)
-	return address.Hex(), nil
 }
 
 // AuthMiddleware handles authentication for both Supabase JWT and API keys

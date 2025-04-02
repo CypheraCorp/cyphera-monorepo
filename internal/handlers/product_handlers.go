@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
 )
@@ -318,7 +319,11 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 		sendError(c, http.StatusInternalServerError, "Failed to start transaction", err)
 		return
 	}
-	defer tx.Rollback(ctx) // Will be ignored if committed
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
+			logger.Error("Failed to rollback transaction", zap.Error(err))
+		}
+	}() // Will be ignored if committed
 
 	// Process customer and wallet, create new customer and wallet if they don't exist
 	customer, customerWallet, err := h.processCustomerAndWallet(ctx, qtx, normalizedAddress, product, productToken)
@@ -517,7 +522,7 @@ func (h *ProductHandler) validateSubscriptionRequest(request SubscribeRequest, p
 // normalizeWalletAddress ensures consistent wallet address format based on network type
 func normalizeWalletAddress(address, networkType string) string {
 	// For EVM addresses, convert to lowercase
-	if networkType == "evm" {
+	if networkType == string(db.NetworkTypeEvm) {
 		return strings.ToLower(address)
 	}
 	// For other network types, return as is (for now)
@@ -1741,19 +1746,19 @@ func determineNetworkType(networkTypeStr string) string {
 	networkType := strings.ToLower(networkTypeStr)
 
 	switch networkType {
-	case "ethereum", "sepolia", "goerli", "arbitrum", "optimism", "polygon", "base":
-		return "evm"
+	case "ethereum", "sepolia", "goerli", "arbitrum", "optimism", "polygon", "base", "linea":
+		return string(db.NetworkTypeEvm)
 	case "solana":
-		return "solana"
+		return string(db.NetworkTypeSolana)
 	case "cosmos":
-		return "cosmos"
+		return string(db.NetworkTypeCosmos)
 	case "bitcoin":
-		return "bitcoin"
+		return string(db.NetworkTypeBitcoin)
 	case "polkadot":
-		return "polkadot"
+		return string(db.NetworkTypePolkadot)
 	default:
 		// Default to EVM if unknown
-		return "evm"
+		return string(db.NetworkTypeEvm)
 	}
 }
 

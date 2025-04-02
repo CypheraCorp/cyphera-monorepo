@@ -75,29 +75,28 @@ func NewDelegationClient() (*DelegationClient, error) {
 	// Configure gRPC dial options for better timeout handling
 	dialOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(), // Make connection establishment blocking
+		// grpc.WithBlock(), // Make connection establishment blocking -- DEPRECATED
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(20*1024*1024), // 20MB
 			grpc.MaxCallSendMsgSize(20*1024*1024), // 20MB
 		),
+		// grpc.WithTimeout(30 * time.Second), // Add connection timeout -- Also deprecated with NewClient
 	}
 
-	dialCtx, dialCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer dialCancel()
+	// dialCtx, dialCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// defer dialCancel()
 
 	if useLocalMode {
 		// Use passthrough mode for local development/testing
 		// This bypasses DNS resolution and connects directly
-		conn, err = grpc.DialContext(
-			dialCtx,
+		conn, err = grpc.NewClient(
 			fmt.Sprintf("passthrough:///%s", grpcServerAddr),
 			dialOpts...,
 		)
 	} else {
 		// Use default DNS resolution for production
 		// This allows for service discovery and load balancing
-		conn, err = grpc.DialContext(
-			dialCtx,
+		conn, err = grpc.NewClient(
 			grpcServerAddr,
 			dialOpts...,
 		)
@@ -120,20 +119,8 @@ func NewDelegationClient() (*DelegationClient, error) {
 // RedeemDelegation redeems a delegation with the provided signature and execution details
 func (c *DelegationClient) RedeemDelegation(ctx context.Context, signature []byte, executionObject ExecutionObject) (string, error) {
 	// Validate inputs
-	if len(signature) == 0 {
-		return "", fmt.Errorf("signature cannot be empty")
-	}
-
-	if executionObject.MerchantAddress == "" || executionObject.MerchantAddress == "0x0000000000000000000000000000000000000000" {
-		return "", fmt.Errorf("valid merchant address is required")
-	}
-
-	if executionObject.TokenContractAddress == "" || executionObject.TokenContractAddress == "0x0000000000000000000000000000000000000000" {
-		return "", fmt.Errorf("valid token contract address is required")
-	}
-
-	if executionObject.Price == "" || executionObject.Price == "0" {
-		return "", fmt.Errorf("valid price is required")
+	if err := c.validateRedemptionInputs(signature, executionObject); err != nil {
+		return "", err
 	}
 
 	// Create a context with the configured timeout (default is now 3 minutes)
@@ -153,41 +140,51 @@ func (c *DelegationClient) RedeemDelegation(ctx context.Context, signature []byt
 	// Call the service
 	res, err := c.client.RedeemDelegation(ctx, req)
 	if err != nil {
-		st, ok := status.FromError(err)
-		if ok {
-			return "", fmt.Errorf("failed to redeem delegation: %s", st.Message())
-		}
-		return "", fmt.Errorf("failed to redeem delegation: %v", err)
+		return "", c.formatRPCError(err)
 	}
 
 	// Log the full response for debugging
 	log.Printf("Got response from server: %+v", res)
 
+	// Process the response
+	return c.processRedemptionResponse(res)
+}
+
+// validateRedemptionInputs validates the inputs for redemption
+func (c *DelegationClient) validateRedemptionInputs(signature []byte, executionObject ExecutionObject) error {
+	if len(signature) == 0 {
+		return fmt.Errorf("signature cannot be empty")
+	}
+
+	if executionObject.MerchantAddress == "" || executionObject.MerchantAddress == "0x0000000000000000000000000000000000000000" {
+		return fmt.Errorf("valid merchant address is required")
+	}
+
+	if executionObject.TokenContractAddress == "" || executionObject.TokenContractAddress == "0x0000000000000000000000000000000000000000" {
+		return fmt.Errorf("valid token contract address is required")
+	}
+
+	if executionObject.Price == "" || executionObject.Price == "0" {
+		return fmt.Errorf("valid price is required")
+	}
+
+	return nil
+}
+
+// formatRPCError formats gRPC errors into more readable format
+func (c *DelegationClient) formatRPCError(err error) error {
+	st, ok := status.FromError(err)
+	if ok {
+		return fmt.Errorf("failed to redeem delegation: %s", st.Message())
+	}
+	return fmt.Errorf("failed to redeem delegation: %v", err)
+}
+
+// processRedemptionResponse processes the response from the delegation server
+func (c *DelegationClient) processRedemptionResponse(res *proto.RedeemDelegationResponse) (string, error) {
 	// Check if the operation was successful based on the success field
 	if !res.GetSuccess() {
-		errorMsg := res.GetErrorMessage()
-		// The field might be in snake_case in the response if the server is using keepCase: true
-		if errorMsg == "" {
-			// Check if we can extract the error message from another field or property
-			errorMsgBytes, _ := json.Marshal(res)
-			log.Printf("JSON response: %s", string(errorMsgBytes))
-			if errorMsgBytes != nil {
-				var respMap map[string]interface{}
-				if err := json.Unmarshal(errorMsgBytes, &respMap); err == nil {
-					log.Printf("Response map: %+v", respMap)
-					// Try different field name variations
-					if snake, ok := respMap["error_message"].(string); ok && snake != "" {
-						errorMsg = snake
-					} else if camel, ok := respMap["errorMessage"].(string); ok && camel != "" {
-						errorMsg = camel
-					}
-				}
-			}
-		}
-
-		if errorMsg == "" {
-			errorMsg = "unknown error (empty error message from server)"
-		}
+		errorMsg := c.extractErrorMessage(res)
 		return "", fmt.Errorf("delegation redemption failed: %s", errorMsg)
 	}
 
@@ -198,6 +195,35 @@ func (c *DelegationClient) RedeemDelegation(ctx context.Context, signature []byt
 	}
 
 	return txHash, nil
+}
+
+// extractErrorMessage extracts error message from the response
+func (c *DelegationClient) extractErrorMessage(res *proto.RedeemDelegationResponse) string {
+	errorMsg := res.GetErrorMessage()
+	// The field might be in snake_case in the response if the server is using keepCase: true
+	if errorMsg == "" {
+		// Check if we can extract the error message from another field or property
+		errorMsgBytes, _ := json.Marshal(res)
+		log.Printf("JSON response: %s", string(errorMsgBytes))
+		if errorMsgBytes != nil {
+			var respMap map[string]interface{}
+			if err := json.Unmarshal(errorMsgBytes, &respMap); err == nil {
+				log.Printf("Response map: %+v", respMap)
+				// Try different field name variations
+				if snake, ok := respMap["error_message"].(string); ok && snake != "" {
+					errorMsg = snake
+				} else if camel, ok := respMap["errorMessage"].(string); ok && camel != "" {
+					errorMsg = camel
+				}
+			}
+		}
+	}
+
+	if errorMsg == "" {
+		errorMsg = "unknown error (empty error message from server)"
+	}
+
+	return errorMsg
 }
 
 // RedeemDelegationDirectly attempts to redeem a delegation by calling the delegation service directly

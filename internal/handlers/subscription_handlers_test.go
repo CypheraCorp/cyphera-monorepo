@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -248,7 +249,7 @@ func TestCreateSubscription(t *testing.T) {
 				// Parse status
 				var status db.SubscriptionStatus
 				switch request.Status {
-				case "active", "canceled", "expired", "suspended", "failed":
+				case string(db.SubscriptionStatusActive), string(db.SubscriptionStatusCanceled), string(db.SubscriptionStatusExpired), string(db.SubscriptionStatusSuspended), string(db.SubscriptionStatusFailed):
 					status = db.SubscriptionStatus(request.Status)
 				default:
 					testSendError(c, http.StatusBadRequest, "Invalid status value", nil)
@@ -586,7 +587,7 @@ func TestUpdateSubscription(t *testing.T) {
 
 				if request.Status != "" {
 					switch request.Status {
-					case "active", "canceled", "expired", "suspended", "failed":
+					case string(db.SubscriptionStatusActive), string(db.SubscriptionStatusCanceled), string(db.SubscriptionStatusExpired), string(db.SubscriptionStatusSuspended), string(db.SubscriptionStatusFailed):
 						params.Status = db.SubscriptionStatus(request.Status)
 					default:
 						testSendError(c, http.StatusBadRequest, "Invalid status value", nil)
@@ -889,7 +890,7 @@ func TestUpdateSubscriptionStatus(t *testing.T) {
 				// Validate status
 				var status db.SubscriptionStatus
 				switch request.Status {
-				case "active", "canceled", "expired", "suspended", "failed":
+				case string(db.SubscriptionStatusActive), string(db.SubscriptionStatusCanceled), string(db.SubscriptionStatusExpired), string(db.SubscriptionStatusSuspended), string(db.SubscriptionStatusFailed):
 					status = db.SubscriptionStatus(request.Status)
 				default:
 					testSendError(c, http.StatusBadRequest, "Invalid status value", nil)
@@ -2240,7 +2241,9 @@ func (h *testSubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (
 	// Ensure transaction is rolled back on error
 	defer func() {
 		if tx != nil {
-			tx.Rollback(ctx)
+			if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
+				log.Printf("Failed to rollback transaction: %v", err)
+			}
 		}
 	}()
 
