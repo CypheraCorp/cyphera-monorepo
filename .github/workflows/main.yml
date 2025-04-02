@@ -88,6 +88,7 @@ jobs:
       with:
         version: v1.59.1
         skip-cache: true
+        args: -v
 
   build:
     name: Build
