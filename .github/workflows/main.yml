@@ -92,7 +92,7 @@ jobs:
 
   build:
     name: Build
-    needs: [test, lint]
+    needs: [test]
     runs-on: ubuntu-latest
     
     steps:
