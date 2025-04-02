@@ -39,7 +39,6 @@ const redeemDelegation = async (delegationData, merchantAddress, tokenContractAd
         utils_1.logger.debug("[MOCK] Delegation details:", {
             delegate: delegation.delegate,
             delegator: delegation.delegator,
-            expiry: delegation.expiry ? delegation.expiry.toString() : 'undefined',
             merchantAddress,
             tokenContractAddress,
             price

@@ -43,6 +43,28 @@ const protoLoader = __importStar(require("@grpc/proto-loader"));
 const service_1 = require("./services/service");
 const utils_1 = require("./utils/utils");
 const config_1 = __importDefault(require("./config"));
+// Debug environment variables on startup
+function logEnvironmentVariables() {
+    const envVars = { ...process.env };
+    // Redact sensitive information
+    if (envVars.PRIVATE_KEY) {
+        envVars.PRIVATE_KEY = envVars.PRIVATE_KEY.substring(0, 6) + '...[REDACTED]';
+    }
+    utils_1.logger.info('===== ENVIRONMENT VARIABLES =====');
+    utils_1.logger.info(`MOCK_MODE: ${envVars.MOCK_MODE || 'not set'}`);
+    utils_1.logger.info(`GRPC_HOST: ${envVars.GRPC_HOST || 'not set'}`);
+    utils_1.logger.info(`GRPC_PORT: ${envVars.GRPC_PORT || 'not set'}`);
+    utils_1.logger.info(`RPC_URL: ${envVars.RPC_URL || 'not set'}`);
+    utils_1.logger.info(`BUNDLER_URL: ${envVars.BUNDLER_URL || 'not set'}`);
+    utils_1.logger.info(`CHAIN_ID: ${envVars.CHAIN_ID || 'not set'}`);
+    utils_1.logger.info(`PRIVATE_KEY: ${envVars.PRIVATE_KEY || 'not set'}`);
+    utils_1.logger.info(`LOG_LEVEL: ${envVars.LOG_LEVEL || 'not set'}`);
+    utils_1.logger.info('==================================');
+    // Log loaded configuration
+    utils_1.logger.info('Config loaded:');
+    utils_1.logger.info(`mockMode: ${config_1.default.mockMode}`);
+    utils_1.logger.info(`serverAddress: ${config_1.default.serverAddress}`);
+}
 // Load the protobuf definition
 const PROTO_PATH = path.join(__dirname, 'proto/delegation.proto');
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
@@ -80,5 +102,6 @@ function startServer() {
 }
 // Start the server directly when the file is executed
 if (require.main === module) {
+    logEnvironmentVariables();
     startServer();
 }

@@ -17,6 +17,7 @@ import (
 	"cyphera-api/internal/logger"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -46,6 +47,13 @@ Environment variables required:
 )
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		// It's often okay if the .env file is missing, especially in production
+		// where variables might be set directly in the environment.
+		// Log it but don't necessarily stop the application.
+		log.Printf("Warning: Error loading .env file: %v", err)
+	}
 	// Set custom usage message
 	flag.Usage = func() {
 		fmt.Fprint(os.Stderr, usageText)

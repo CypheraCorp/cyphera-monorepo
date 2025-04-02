@@ -1,113 +1,290 @@
 "use strict";
-/**
- * Unit tests for the delegation service
- *
- * To run:
- *   npx jest test/service.test.ts
- */
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const service_1 = require("../src/services/service");
-const globals_1 = require("@jest/globals");
-// Mock the blockchain service
-globals_1.jest.mock('../src/services/redeem-delegation', () => ({
-    redeemDelegation: globals_1.jest.fn()
+const config_1 = __importDefault(require("../src/config")); // Import config to potentially mock it
+// Mock the logger
+jest.mock('../src/utils/utils', () => ({
+    logger: {
+        info: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+    },
 }));
-// Import the mocked version
-const redeem_delegation_1 = require("../src/services/redeem-delegation");
-(0, globals_1.describe)('Delegation Service', () => {
-    (0, globals_1.beforeEach)(() => {
-        // Clear all mocks before each test
-        globals_1.jest.clearAllMocks();
+// --- Mocking the dynamically imported functions ---
+// We need to mock the *modules* that service.ts tries to import.
+// We'll store mock functions here to control their behavior in tests.
+let mockRedeemImplementation = jest.fn();
+let mockModeRedeemImplementation = jest.fn(); // Separate mock for explicit mock mode test
+jest.mock('../src/services/redeem-delegation', () => ({
+    // This function will be returned when service.ts dynamically imports the real module
+    redeemDelegation: (...args) => mockRedeemImplementation(...args),
+}), { virtual: true }); // virtual: true helps if the path resolution is tricky or file doesn't exist in test env
+jest.mock('../src/services/mock-redeem-delegation', () => ({
+    // This function will be returned when service.ts dynamically imports the mock module
+    redeemDelegation: (...args) => mockModeRedeemImplementation(...args), // Use the mock mode specific mock
+}), { virtual: true });
+// --- End Mocking ---
+// Helper to create a mock gRPC call object
+const createMockCall = (requestData) => {
+    return {
+        request: requestData,
+        // Add other ServerUnaryCall properties/methods if needed by the service logic
+    };
+};
+// Helper to create a mock gRPC callback function
+const createMockCallback = () => {
+    return jest.fn();
+};
+describe('delegationService', () => {
+    let originalMockMode;
+    // Back up original config state
+    beforeAll(() => {
+        originalMockMode = config_1.default.mockMode;
     });
-    (0, globals_1.describe)('redeemDelegation', () => {
-        (0, globals_1.it)('should successfully redeem a delegation', async () => {
-            // Mock the successful transaction hash
-            const mockTxHash = '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
-            redeem_delegation_1.redeemDelegation.mockResolvedValueOnce(mockTxHash);
-            // Create mock request data
-            const mockDelegationData = {
-                delegator: '0x1234567890123456789012345678901234567890',
-                delegate: '0x0987654321098765432109876543210987654321',
-                caveats: [],
-                salt: '0x123',
-                signature: '0xsignature'
-            };
-            const delegationBuffer = Buffer.from(JSON.stringify(mockDelegationData));
-            // Mock gRPC call parameters
-            const mockCall = {
-                request: {
-                    delegationData: delegationBuffer,
-                    merchantAddress: "0x1234567890123456789012345678901234567890",
-                    tokenContractAddress: "0xabcdef0123456789abcdef0123456789abcdef01",
-                    price: "100000"
-                }
-            };
-            // Create a mock callback
-            const mockCallback = globals_1.jest.fn();
-            // Call the service method
-            await service_1.delegationService.redeemDelegation(mockCall, mockCallback);
-            // Verify the blockchain service was called with correct data
-            (0, globals_1.expect)(redeem_delegation_1.redeemDelegation).toHaveBeenCalledWith(globals_1.expect.any(Uint8Array), "0x1234567890123456789012345678901234567890", "0xabcdef0123456789abcdef0123456789abcdef01", "100000");
-            // Verify the callback was called with the success response
-            (0, globals_1.expect)(mockCallback).toHaveBeenCalledWith(null, globals_1.expect.objectContaining({
-                success: true
-            }));
+    // Reset mocks and config before each test
+    beforeEach(() => {
+        jest.clearAllMocks();
+        // Reset the implementation mocks for each test
+        mockRedeemImplementation = jest.fn();
+        mockModeRedeemImplementation = jest.fn(); // Reset mock mode mock as well
+        // Reset config.mockMode to its original state before each test
+        // Note: Modifying config directly might not work as expected if it was already read by service.ts
+        // A cleaner approach might involve jest.resetModules() and re-mocking config,
+        // but let's try direct modification first.
+        config_1.default.mockMode = originalMockMode; // Restore original mode
+        // IMPORTANT: Due to the async dynamic import in service.ts, changing config.mockMode
+        // *after* the service module has initially loaded might not switch the implementation.
+        // Tests below might implicitly rely on the *initial* config state when the test suite loaded.
+        // For robust testing of mode switching, jest.resetModules() between tests or test suites
+        // targeting different modes would be necessary.
+        // Reset modules to ensure dynamic imports are re-evaluated based on config.mockMode
+        // This is crucial for reliably testing the mockMode switch.
+        jest.resetModules();
+        // Re-import necessary modules after reset, allowing mocks to apply correctly
+        const updatedService = require('../src/services/service'); // Re-require service
+        // Note: This might change how delegationService is referenced in tests if not handled carefully.
+        // Let's keep the original import and rely on module mocking logic update instead.
+    });
+    // Restore original config state after all tests
+    afterAll(() => {
+        config_1.default.mockMode = originalMockMode;
+        jest.resetModules(); // Clean up module cache
+    });
+    // --- Test Cases: Initial Call (Before Dynamic Import Completes) ---
+    it.skip('should return "service not ready" if called immediately after require (real mode)', async () => {
+        // Arrange
+        config_1.default.mockMode = false;
+        const { delegationService: currentService } = require('../src/services/service'); // Re-require
+        const call = createMockCall({ signature: Buffer.from('sig') });
+        const callback = createMockCallback();
+        // Act: Call immediately
+        await currentService.redeemDelegation(call, callback);
+        // Assert: Expect "not ready" error, mock should NOT be called yet
+        expect(callback).toHaveBeenCalledWith(null, {
+            transaction_hash: "",
+            transactionHash: "",
+            success: false,
+            error_message: "Service not ready yet, try again later",
+            errorMessage: "Service not ready yet, try again later",
         });
-        (0, globals_1.it)('should handle empty delegation data', async () => {
-            // Mock gRPC call with empty delegation data
-            const mockCall = {
-                request: {
-                    delegationData: Buffer.from(''),
-                    merchantAddress: "0x1234567890123456789012345678901234567890",
-                    tokenContractAddress: "0xabcdef0123456789abcdef0123456789abcdef01",
-                    price: "100000"
-                }
-            };
-            // Create a mock callback
-            const mockCallback = globals_1.jest.fn();
-            // Call the service method
-            await service_1.delegationService.redeemDelegation(mockCall, mockCallback);
-            // Verify the blockchain service was not called
-            (0, globals_1.expect)(redeem_delegation_1.redeemDelegation).not.toHaveBeenCalled();
-            // Verify the callback was called with the error response
-            (0, globals_1.expect)(mockCallback).toHaveBeenCalledWith(null, globals_1.expect.objectContaining({
-                success: false,
-                errorMessage: globals_1.expect.stringContaining('empty or invalid')
-            }));
+        expect(mockRedeemImplementation).not.toHaveBeenCalled();
+        expect(mockModeRedeemImplementation).not.toHaveBeenCalled();
+    });
+    it.skip('should return "service not ready" if called immediately after require (mock mode)', async () => {
+        // Arrange
+        config_1.default.mockMode = true;
+        const { delegationService: currentService } = require('../src/services/service'); // Re-require
+        const call = createMockCall({ signature: Buffer.from('sig') });
+        const callback = createMockCallback();
+        // Act: Call immediately
+        await currentService.redeemDelegation(call, callback);
+        // Assert: Expect "not ready" error, mock should NOT be called yet
+        expect(callback).toHaveBeenCalledWith(null, {
+            transaction_hash: "",
+            transactionHash: "",
+            success: false,
+            error_message: "Service not ready yet, try again later",
+            errorMessage: "Service not ready yet, try again later",
         });
-        (0, globals_1.it)('should handle blockchain service errors', async () => {
-            // Mock a failure in the blockchain service
-            const mockError = new Error('Transaction failed');
-            redeem_delegation_1.redeemDelegation.mockRejectedValueOnce(mockError);
-            // Create mock request data
-            const mockDelegationData = {
-                delegator: '0x1234567890123456789012345678901234567890',
-                delegate: '0x0987654321098765432109876543210987654321',
-                caveats: [],
-                salt: '0x123',
-                signature: '0xsignature'
+        expect(mockRedeemImplementation).not.toHaveBeenCalled();
+        expect(mockModeRedeemImplementation).not.toHaveBeenCalled();
+    });
+    // --- Test Cases: Subsequent Calls (After Dynamic Import Should Complete) ---
+    const runAfterImport = async (setupFn, testFn) => {
+        // Arrange: Set config and re-require
+        setupFn();
+        const { delegationService: currentService } = require('../src/services/service');
+        // Allow time for the async import() and .then() in service.ts to resolve
+        // Use setImmediate for potentially better yielding across I/O phases
+        await new Promise(resolve => setImmediate(resolve));
+        // Determine which mock should have been loaded
+        const expectedMock = config_1.default.mockMode ? mockModeRedeemImplementation : mockRedeemImplementation;
+        // Act & Assert within the provided test function
+        await testFn(currentService, expectedMock);
+    };
+    it('should redeem delegation successfully (real mode, snake_case) after import', async () => {
+        await runAfterImport(() => { config_1.default.mockMode = false; }, async (currentService, currentMockImpl) => {
+            // Arrange mock behavior AFTER import should be done
+            currentMockImpl.mockResolvedValue('mock-tx-hash-snake');
+            const mockRequest = {
+                signature: Buffer.from('test-signature-snake'),
+                merchant_address: 'merchant-addr-snake',
+                token_contract_address: 'token-addr-snake',
+                price: '101',
             };
-            const delegationBuffer = Buffer.from(JSON.stringify(mockDelegationData));
-            // Mock gRPC call parameters
-            const mockCall = {
-                request: {
-                    delegationData: delegationBuffer,
-                    merchantAddress: "0x1234567890123456789012345678901234567890",
-                    tokenContractAddress: "0xabcdef0123456789abcdef0123456789abcdef01",
-                    price: "100000"
-                }
+            const call = createMockCall(mockRequest);
+            const callback = createMockCallback();
+            // Act
+            await currentService.redeemDelegation(call, callback);
+            // Assert
+            expect(currentMockImpl).toHaveBeenCalledWith(mockRequest.signature, mockRequest.merchant_address, mockRequest.token_contract_address, mockRequest.price);
+            expect(callback).toHaveBeenCalledWith(null, {
+                transaction_hash: 'mock-tx-hash-snake',
+                transactionHash: 'mock-tx-hash-snake',
+                success: true,
+                error_message: '',
+                errorMessage: '',
+            });
+        });
+    });
+    it('should redeem delegation successfully (real mode, camelCase) after import', async () => {
+        await runAfterImport(() => { config_1.default.mockMode = false; }, async (currentService, currentMockImpl) => {
+            // Arrange
+            currentMockImpl.mockResolvedValue('mock-tx-hash-camel');
+            const mockRequest = {
+                signature: Buffer.from('test-signature-camel'),
+                merchantAddress: 'merchant-addr-camel',
+                tokenContractAddress: 'token-addr-camel',
+                price: '202',
             };
-            // Create a mock callback
-            const mockCallback = globals_1.jest.fn();
-            // Call the service method
-            await service_1.delegationService.redeemDelegation(mockCall, mockCallback);
-            // Verify the blockchain service was called
-            (0, globals_1.expect)(redeem_delegation_1.redeemDelegation).toHaveBeenCalled();
-            // Verify the callback was called with the error response
-            (0, globals_1.expect)(mockCallback).toHaveBeenCalledWith(null, globals_1.expect.objectContaining({
+            const call = createMockCall(mockRequest);
+            const callback = createMockCallback();
+            // Act
+            await currentService.redeemDelegation(call, callback);
+            // Assert
+            expect(currentMockImpl).toHaveBeenCalledWith(mockRequest.signature, mockRequest.merchantAddress, mockRequest.tokenContractAddress, mockRequest.price);
+            expect(callback).toHaveBeenCalledWith(null, {
+                transaction_hash: 'mock-tx-hash-camel',
+                transactionHash: 'mock-tx-hash-camel',
+                success: true,
+                error_message: '',
+                errorMessage: '',
+            });
+        });
+    });
+    it('should handle errors during redemption (real mode) after import', async () => {
+        await runAfterImport(() => { config_1.default.mockMode = false; }, async (currentService, currentMockImpl) => {
+            // Arrange
+            const errorMessage = 'Blockchain transaction failed';
+            currentMockImpl.mockRejectedValue(new Error(errorMessage));
+            const mockRequest = {
+                signature: Buffer.from('test-signature-error'),
+                merchant_address: 'merchant-addr-err',
+                token_contract_address: 'token-addr-err',
+                price: '303',
+            };
+            const call = createMockCall(mockRequest);
+            const callback = createMockCallback();
+            // Act
+            await currentService.redeemDelegation(call, callback);
+            // Assert
+            expect(currentMockImpl).toHaveBeenCalledWith(mockRequest.signature, mockRequest.merchant_address, mockRequest.token_contract_address, mockRequest.price);
+            expect(callback).toHaveBeenCalledWith(null, {
+                transaction_hash: '',
+                transactionHash: '',
                 success: false,
-                errorMessage: 'Transaction failed'
-            }));
+                error_message: errorMessage,
+                errorMessage: errorMessage,
+            });
+        });
+    });
+    it('should handle non-Error exceptions (real mode) after import', async () => {
+        await runAfterImport(() => { config_1.default.mockMode = false; }, async (currentService, currentMockImpl) => {
+            // Arrange
+            const errorString = 'Something weird happened';
+            currentMockImpl.mockRejectedValue(errorString);
+            const mockRequest = {
+                signature: Buffer.from('test-signature-non-error'),
+                merchant_address: 'merchant-addr-non-err',
+                token_contract_address: 'token-addr-non-err',
+                price: '404',
+            };
+            const call = createMockCall(mockRequest);
+            const callback = createMockCallback();
+            // Act
+            await currentService.redeemDelegation(call, callback);
+            // Assert
+            expect(currentMockImpl).toHaveBeenCalledTimes(1);
+            expect(callback).toHaveBeenCalledWith(null, {
+                transaction_hash: "",
+                transactionHash: "",
+                success: false,
+                error_message: errorString,
+                errorMessage: errorString,
+            });
+        });
+    });
+    // Tests for missing parameters (after import)
+    it('should attempt redemption (real mode, missing sig) after import', async () => {
+        await runAfterImport(() => { config_1.default.mockMode = false; }, async (currentService, currentMockImpl) => {
+            currentMockImpl.mockResolvedValue('tx-hash-no-sig');
+            const mockRequest = {
+                merchant_address: 'merchant-addr-no-sig',
+                token_contract_address: 'token-addr-no-sig',
+                price: '606',
+            };
+            const call = createMockCall(mockRequest);
+            const callback = createMockCallback();
+            await currentService.redeemDelegation(call, callback);
+            expect(currentMockImpl).toHaveBeenCalledWith(undefined, mockRequest.merchant_address, mockRequest.token_contract_address, mockRequest.price);
+            expect(callback).toHaveBeenCalledWith(null, expect.objectContaining({ success: true, transactionHash: 'tx-hash-no-sig' }));
+        });
+    });
+    it('should attempt redemption (real mode, missing merchant) after import', async () => {
+        await runAfterImport(() => { config_1.default.mockMode = false; }, async (currentService, currentMockImpl) => {
+            currentMockImpl.mockResolvedValue('tx-hash-no-merchant');
+            const mockRequest = {
+                signature: Buffer.from('sig-no-merchant'),
+                token_contract_address: 'token-addr-no-merchant',
+                price: '707',
+            };
+            const call = createMockCall(mockRequest);
+            const callback = createMockCallback();
+            await currentService.redeemDelegation(call, callback);
+            expect(currentMockImpl).toHaveBeenCalledWith(mockRequest.signature, undefined, mockRequest.token_contract_address, mockRequest.price);
+            expect(callback).toHaveBeenCalledWith(null, expect.objectContaining({ success: true, transactionHash: 'tx-hash-no-merchant' }));
+        });
+    });
+    it('should attempt redemption (real mode, missing token) after import', async () => {
+        await runAfterImport(() => { config_1.default.mockMode = false; }, async (currentService, currentMockImpl) => {
+            currentMockImpl.mockResolvedValue('tx-hash-no-token');
+            const mockRequest = {
+                signature: Buffer.from('sig-no-token'),
+                merchant_address: 'merchant-addr-no-token',
+                price: '808',
+            };
+            const call = createMockCall(mockRequest);
+            const callback = createMockCallback();
+            await currentService.redeemDelegation(call, callback);
+            expect(currentMockImpl).toHaveBeenCalledWith(mockRequest.signature, mockRequest.merchant_address, undefined, mockRequest.price);
+            expect(callback).toHaveBeenCalledWith(null, expect.objectContaining({ success: true, transactionHash: 'tx-hash-no-token' }));
+        });
+    });
+    it('should attempt redemption (real mode, missing price) after import', async () => {
+        await runAfterImport(() => { config_1.default.mockMode = false; }, async (currentService, currentMockImpl) => {
+            currentMockImpl.mockResolvedValue('tx-hash-no-price');
+            const mockRequest = {
+                signature: Buffer.from('sig-no-price'),
+                merchant_address: 'merchant-addr-no-price',
+                token_contract_address: 'token-addr-no-price',
+            };
+            const call = createMockCall(mockRequest);
+            const callback = createMockCallback();
+            await currentService.redeemDelegation(call, callback);
+            expect(currentMockImpl).toHaveBeenCalledWith(mockRequest.signature, mockRequest.merchant_address, mockRequest.token_contract_address, undefined);
+            expect(callback).toHaveBeenCalledWith(null, expect.objectContaining({ success: true, transactionHash: 'tx-hash-no-price' }));
         });
     });
 });

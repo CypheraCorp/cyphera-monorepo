@@ -2,11 +2,12 @@ export declare const erc20Abi: readonly [{
     readonly name: "transfer";
     readonly type: "function";
     readonly stateMutability: "nonpayable";
+    readonly constant: false;
     readonly inputs: readonly [{
-        readonly name: "recipient";
+        readonly name: "to";
         readonly type: "address";
     }, {
-        readonly name: "amount";
+        readonly name: "value";
         readonly type: "uint256";
     }];
     readonly outputs: readonly [{

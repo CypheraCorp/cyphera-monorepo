@@ -53,7 +53,6 @@ const globals_1 = require("@jest/globals");
                 signature: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
                 scheme: '0x00',
                 invocations: [],
-                expiry: BigInt(0)
             };
             (0, globals_1.expect)((0, delegation_helpers_1.validateDelegation)(mockDelegation)).toBe(true);
         });
@@ -79,7 +78,6 @@ const globals_1 = require("@jest/globals");
             (0, globals_1.expect)(() => (0, delegation_helpers_1.validateDelegation)(mockDelegation)).toThrow('missing signature');
         });
         (0, globals_1.it)('should throw for expired delegation', () => {
-            const yesterday = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
             const mockDelegation = {
                 delegator: '0x1234567890123456789012345678901234567890',
                 delegate: '0x0987654321098765432109876543210987654321',
@@ -93,7 +91,6 @@ const globals_1 = require("@jest/globals");
                 signature: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
                 scheme: '0x00',
                 invocations: [],
-                expiry: BigInt(yesterday)
             };
             (0, globals_1.expect)(() => (0, delegation_helpers_1.validateDelegation)(mockDelegation)).toThrow('Delegation is expired');
         });

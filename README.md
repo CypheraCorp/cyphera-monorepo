@@ -1,10 +1,10 @@
 # Cyphera API
 
-Cyphera API is a Go-based API service designed to run as an AWS Lambda function in production and as a standalone server for local development. It works in conjunction with a dedicated Node.js delegation server that handles MetaMask delegation redemption operations.
+Cyphera API is a comprehensive backend system that enables blockchain-based subscription and payment processing. It consists of multiple integrated components that work together to provide a complete solution for managing cryptocurrency-based transactions, delegations, and subscriptions.
 
-## System Architecture
+## System Overview
 
-The project consists of two main components:
+The Cyphera API ecosystem consists of four main components:
 
 1. **Main API** (`/cmd/api/main`)
    - Core API service written in Go
@@ -17,6 +17,18 @@ The project consists of two main components:
    - Handles blockchain interactions for delegation redemption
    - Can operate in mock mode for local testing
    - Communicates with the main API via gRPC
+
+3. **Subscription Processor** (`/cmd/subscription-processor`)
+   - Background service that processes recurring subscription payments
+   - Identifies subscriptions due for renewal
+   - Uses stored delegation credentials for payment processing
+   - Updates subscription records and logs events
+
+4. **PostgreSQL Database**
+   - Stores all application data including user accounts, workspaces, products, and subscriptions
+   - Manages delegation data and transaction records
+   - Runs locally via Docker for development
+   - Used by all three other components
 
 ```
                 ┌───────────────────┐         ┌────────────────────┐
@@ -34,15 +46,33 @@ The project consists of two main components:
                 │                   │         │         │          │         │ Blockchain  │
                 └───────────────────┘         │         ▼          │         │             │
                                               │  ┌──────────────┐  │         │  ┌───────┐  │
-                                              │  │Smart Account │  │user op  │  │       │  │
-                                              │  │  Creation    ├──┼─────────┼─►│ ERC20 │  │
-                                              │  └──────────────┘  │         │  │       │  │
-                                              │                    │         │  └───────┘  │
-                                              └────────────────────┘         │             │
-                                                                             └─────────────┘
+                ┌───────────────────┐         │  │Smart Account │  │user op  │  │       │  │
+                │                   │         │  │  Creation    ├──┼─────────┼─►│ ERC20 │  │
+                │  Subscription     │         │  └──────────────┘  │         │  │       │  │
+                │   Processor       │         │                    │         │  └───────┘  │
+                │                   │         └────────────────────┘         │             │
+                └───────────────────┘                                        └─────────────┘
+                          │
+                          │
+                          ▼
+                ┌───────────────────┐
+                │                   │
+                │    PostgreSQL     │
+                │    Database      │
+                │                   │
+                └───────────────────┘
 ```
 
-## Environment Setup
+## Installation and Setup
+
+### Prerequisites
+
+- Go 1.21 or later
+- Node.js 18 or later
+- Docker and Docker Compose
+- PostgreSQL 14 or later (Docker setup provided)
+
+### Environment Setup
 
 1. **Clone the repository:**
    ```bash
@@ -50,150 +80,274 @@ The project consists of two main components:
    cd cyphera-api
    ```
 
-2. **Configure environment variables:**
+2. **Configure main API environment:**
    ```bash
    cp .env.template .env
    ```
    
-3. **Edit the `.env` file with your configuration:**
-   Required variables include:
-   - `DATABASE_URL`: PostgreSQL connection string
-   - `DELEGATION_SERVER_URL`: URL for the delegation server
-   - `DELEGATION_LOCAL_MODE`: Set to "true" for local development
-   - `DELEGATION_GRPC_ADDR`: gRPC address for the delegation server (e.g., "localhost:50051")
-   - Additional variables for Auth0, CORS settings, etc.
+3. **Configure delegation server environment:**
+   ```bash
+   cp delegation-server/.env.example delegation-server/.env
+   ```
 
-## Running the Project
+4. **Configure NPM token for delegation server:**
+   Edit the delegation-server/.env file and ensure the NPM_TOKEN value is set correctly.
+   This token is required for installing private dependencies.
 
-### Development Mode
+5. **Install dependencies:**
+   ```bash
+   make install
+   ```
+   This command will install Go dependencies and set up the delegation server.
 
-To run both the API and delegation server locally:
+## Running the Application
+
+### Starting the Database
+
+Before running any of the application components, you need to start the PostgreSQL database:
 
 ```bash
-make dev
+docker-compose up postgres
+```
+
+This will start a PostgreSQL instance with the necessary schema loaded.
+
+### Running All Components
+
+To run all components (API, delegation server, and subscription processor) together:
+
+```bash
+make dev-all
 ```
 
 This command:
-- Loads environment variables from `.env`
-- Starts the delegation server in mock mode
-- Starts the API server
-- Sets up appropriate error handling and shutdown processes
+- Starts the PostgreSQL database if not already running
+- Launches the delegation server
+- Starts the main API server
+- Runs the subscription processor
 
-### Running Individual Components
+### Verifying the Setup
 
-**API Server only:**
-```bash
-make api-server
-```
-
-**Delegation Server only:**
-```bash
-make delegation-server
-```
-
-### Docker Compose (with PostgreSQL)
-
-For a complete local environment with PostgreSQL:
+Once all components are running, you can verify the API is working by making a request to the health endpoint:
 
 ```bash
-docker compose up
+curl http://localhost:8000/health
 ```
 
-## Testing
+If everything is set up correctly, you'll receive a successful response.
 
-### Running Unit Tests
+## Developing with Cyphera API
 
-```bash
-make test
-```
+### Development Lifecycle
 
-### Running Integration Tests
+1. **Making code changes:**
+   - The project uses hot reloading during development with Air for Go code
+   - API changes will automatically restart the server
+   - Delegation server uses nodemon to watch for changes
 
-```bash
-make test-integration
-```
+2. **Testing changes:**
+   - Unit tests: `make test`
+   - Integration tests: `make test-integration`
+   - Full test suite: `make test-all`
 
-This will:
-- Start the delegation server in mock mode
-- Run integration tests with the delegation system
-- Clean up processes after tests complete
+3. **Committing changes:**
+   - The project uses Git hooks for linting and formatting
+   - Run `make lint` to check for issues before committing
 
-### Manual API Testing
+### API Documentation with Swagger
 
-Once the servers are running, you can test the API:
-
-```bash
-curl -X GET 'http://localhost:8000/health'
-```
-
-## API Documentation
-
-Swagger documentation is available when the server is running:
-
-```
-http://localhost:8000/swagger/index.html
-```
-
-To update the Swagger documentation:
+The API is documented using Swagger/OpenAPI. To generate or update the Swagger documentation:
 
 ```bash
 make swagger
 ```
 
-## Project Structure
-
+Once the API is running, you can access the Swagger UI at:
 ```
-├── cmd/
-│   └── api/
-│       ├── local/      # Local server implementation
-│       └── main/       # AWS Lambda implementation
-├── delegation-server/  # Node.js gRPC server for delegations
-├── docs/               # Documentation files
-├── internal/           # Internal Go packages
-│   ├── auth/           # Authentication logic
-│   ├── client/         # External service clients
-│   ├── db/             # Database models and queries
-│   ├── handlers/       # API route handlers
-│   ├── logger/         # Logging utilities
-│   ├── server/         # HTTP server setup
-│   └── proto/          # Protocol buffer definitions
-├── scripts/            # Helper scripts
-├── .env                # Environment variables (not committed)
-├── .env.template       # Template for environment variables
-├── docker-compose.yml  # Docker setup with PostgreSQL
-├── Makefile            # Build and run commands
-└── serverless.yml      # AWS Lambda configuration
+http://localhost:8000/swagger/index.html
 ```
 
-## Build and Deployment
+Swagger annotations are added to handlers in the `internal/handlers` directory using comments starting with `// @`.
 
-### Building the Binary
+### Authentication and Authorization
 
-```bash
-make build
+The API uses two authentication methods:
+
+1. **JWT Token Authentication**
+   - Used for user-based authentication
+   - Tokens are validated in the `auth.EnsureValidAPIKeyOrToken` middleware
+   - User roles and permissions are enforced in handlers
+
+2. **API Key Authentication**
+   - Used for service-to-service and programmatic access
+   - Keys can have different access levels (read, write, admin)
+   - Each API key is associated with a specific workspace
+
+The authentication middleware is defined in `internal/auth/middleware.go` and is applied to routes that require authentication.
+
+### Database Operations with SQLC
+
+The project uses [sqlc](https://sqlc.dev/) to generate type-safe Go code from SQL queries.
+
+#### Database Schema
+
+The database schema is defined in `internal/db/init-scripts/01-init.sql`, which includes tables for:
+- Users and accounts
+- Workspaces
+- Products and tokens
+- Subscriptions and subscription events
+- Customer and wallet information
+- API keys and delegation data
+
+#### Working with SQLC
+
+1. **Writing queries:**
+   - Create or modify SQL query files in `internal/db/queries/`
+   - Follow the existing pattern for query naming and structure
+
+2. **Generating Go code:**
+   ```bash
+   make gen
+   ```
+   This command runs sqlc to generate Go files based on your SQL queries.
+
+3. **Using generated code:**
+   - Import the db package: `import "cyphera-api/internal/db"`
+   - Create a database connection
+   - Use the generated methods to interact with the database
+
+Example of using the generated code in a handler:
+
+```go
+// Get a user by ID
+user, err := queries.GetUser(ctx, userID)
+if err != nil {
+    // Handle error
+}
+
+// Create a new user
+newUser, err := queries.CreateUser(ctx, db.CreateUserParams{
+    Name:  "John Doe",
+    Email: "john@example.com",
+    Role:  db.RoleUser,
+})
 ```
 
-### AWS Lambda Deployment
+### Server Handlers
 
-The API is designed to run as an AWS Lambda function in production:
+The API routes and handlers are defined in the `internal/handlers` directory, organized by resource type. Each handler file contains functions that handle specific API endpoints.
 
-```bash
-make deploy
+Handlers follow a consistent pattern:
+1. Extract parameters from the request
+2. Validate input data
+3. Perform database operations or call other services
+4. Return an appropriate response
+
+Example handler structure:
+
+```go
+// @Summary Get product by ID
+// @Description Retrieves a product by its ID
+// @Tags products
+// @Accept json
+// @Produce json
+// @Param product_id path string true "Product ID"
+// @Success 200 {object} ProductResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /products/{product_id} [get]
+func GetProduct(c *gin.Context) {
+    // Extract product ID from request
+    productID := c.Param("product_id")
+    
+    // Convert to UUID
+    id, err := uuid.Parse(productID)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid product ID format"})
+        return
+    }
+    
+    // Query the database
+    product, err := queries.GetProduct(c.Request.Context(), id)
+    if err != nil {
+        // Handle error (not found, server error, etc.)
+        handleDatabaseError(c, err, "product")
+        return
+    }
+    
+    // Return the product
+    c.JSON(http.StatusOK, formatProductResponse(product))
+}
 ```
+
+## Component Details
+
+### Main API
+
+The main API is a Go application built with the Gin web framework. It provides HTTP endpoints for all operations and internally communicates with the delegation server and database.
+
+Key features:
+- RESTful API design with proper status codes and error handling
+- JWT and API key authentication
+- Rate limiting and request validation
+- Swagger documentation
+- Structured logging
+
+### Delegation Server
+
+The delegation server is a Node.js application that handles blockchain-related operations for delegations:
+
+- Implements a gRPC service defined in protocol buffers
+- Handles delegation redemption and validation
+- Interacts with blockchain networks through Web3 providers
+- Supports both production and mock modes for testing
+
+### Subscription Processor
+
+The subscription processor is a Go application that runs either on a schedule or continuously to process subscription renewals:
+
+- Identifies subscriptions that need processing
+- Processes payments using stored delegation credentials
+- Records subscription events and handles failures
+- Provides detailed logs for troubleshooting
+
+### Database Structure
+
+The PostgreSQL database is structured with the following main tables:
+
+- `accounts` - Organization accounts and settings
+- `users` - User information and authentication
+- `workspaces` - Organizational units within accounts
+- `products` - Subscription products offered by workspaces
+- `subscriptions` - Active and historical subscriptions
+- `tokens` - Supported cryptocurrency tokens
+- `networks` - Blockchain networks and connection details
+- `wallets` - Cryptocurrency wallet information
+- `delegation_data` - Stored delegation credentials
+- `api_keys` - API keys for programmatic access
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **Database Connection Errors**
-   - Ensure PostgreSQL is running and accessible
+   - Ensure PostgreSQL is running: `docker ps | grep postgres`
    - Check your `DATABASE_URL` in the `.env` file
+   - Verify the database schema has been initialized
 
 2. **Delegation Server Connection Issues**
-   - Verify the delegation server is running (`make delegation-server`)
+   - Verify the delegation server is running: `make delegation-server`
    - Check `DELEGATION_GRPC_ADDR` in your `.env` file
+   - Look for gRPC connection errors in the logs
 
-3. **AWS Lambda Environment Variables**
-   - Ensure all required environment variables are set in both local `.env` and Lambda configuration
+3. **NPM Token Issues**
+   - If delegation server setup fails with npm errors, check the NPM_TOKEN in delegation-server/.env
+   - Ensure you have the correct permissions to access private packages
 
-For detailed information about the delegation system, refer to `docs/DELEGATION_SYSTEM.md`.
+4. **API Return Errors**
+   - Check the server logs for detailed error information
+   - Verify authentication credentials are correct
+   - Ensure the requested resource exists
+
+For more detailed component-specific troubleshooting, refer to the documentation in the `docs/` directory.

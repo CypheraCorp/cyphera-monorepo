@@ -1,4 +1,4 @@
-.PHONY: all build test clean lint run swagger deploy test-all test-integration stop-integration-server ensure-executable proto-build-go proto-build-js proto-build-all subscription-processor
+.PHONY: all build install test clean lint run swagger deploy test-all test-integration stop-integration-server ensure-executable proto-build-go proto-build-js proto-build-all subscription-processor delegation-server delegation-server-setup delegation-server-build delegation-server-start delegation-server-mock delegation-server-test delegation-server-lint
 
 # Go parameters
 BINARY_NAME=cyphera-api
@@ -10,22 +10,40 @@ all: lint test build
 build:
 	$(GO) build -o bin/$(BINARY_NAME) $(MAIN_PACKAGE)
 
-// TODO: no unit tests are running in the delegation-server
-test:
-	$(GO) test -v ./...
+install: delegation-server-setup
+	go mod tidy
 
 # Run all tests including integration tests
-test-all: test test-integration
+test-all: test test-integration delegation-server-test
 
-# Ensure scripts are executable
-ensure-executable:
-	@chmod +x scripts/integration-test.sh
-	@chmod +x scripts/start-dev.sh
+test:
+	$(GO) test -v ./...
+	@echo "Note: Run 'make delegation-server-test' to test the delegation server"
+
+delegation-server-test:
+	cd delegation-server && npm run test
 
 # Run integration tests with the delegation server
 test-integration: ensure-executable
 	@echo "Running delegation integration tests with mock server..."
 	DELEGATION_LOCAL_MODE=true ./scripts/integration-test.sh --cli
+
+# Run the subscription processor
+subscription-processor:
+	@echo "Starting subscription processor with 1-minute interval..."
+	$(GO) run ./cmd/subscription-processor/main.go --interval=1m
+
+dev: ensure-executable
+	air
+
+dev-all: ensure-executable
+	@echo "Starting development environment with hot reloading for the API server..."
+	./scripts/start-dev-all.sh
+
+# Ensure scripts are executable
+ensure-executable:
+	@chmod +x scripts/integration-test.sh
+	@chmod +x scripts/start-dev-all.sh
 
 # Stop integration server processes if they're still running
 stop-integration-server:
@@ -54,15 +72,6 @@ swagger:
 deploy:
 	# Add deployment steps here
 
-# Run the subscription processor
-subscription-processor:
-	@echo "Starting subscription processor with 1-minute interval..."
-	$(GO) run ./cmd/subscription-processor/main.go --interval=1m
-
-dev: ensure-executable
-	@echo "Starting development environment with hot reloading for the API server..."
-	./scripts/start-dev.sh
-
 # Build proto definitions for Go
 proto-build-go:
 	@echo "Generating Go gRPC code from proto definitions..."
@@ -89,9 +98,25 @@ api-server:
 
 api-server-air:
 	air
-
+	
+# Delegation server commands
 delegation-server:
 	cd delegation-server && npm run dev
+
+delegation-server-setup:
+	cd delegation-server && npm run setup
+
+delegation-server-build:
+	cd delegation-server && npm run build
+
+delegation-server-start:
+	cd delegation-server && npm run start
+
+delegation-server-mock:
+	cd delegation-server && npm run start:mock
+
+delegation-server-lint:
+	cd delegation-server && npm run lint
 
 help:
 	@echo "Usage: make [target]"

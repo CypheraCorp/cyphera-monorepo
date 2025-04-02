@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.redeemDelegation = exports.getFeePerGas = exports.createMetaMaskAccount = exports.bundlerClient = exports.publicClient = void 0;
+exports.getBundlerClient = getBundlerClient;
 const delegator_core_viem_1 = require("@metamask-private/delegator-core-viem");
 const viem_1 = require("viem");
 const accounts_1 = require("viem/accounts");
@@ -9,43 +10,45 @@ const config_1 = require("../config/config");
 const utils_1 = require("../utils/utils");
 const delegation_helpers_1 = require("../utils/delegation-helpers");
 const erc20_1 = require("../abis/erc20");
-// Try to use viem/account-abstraction first, or fall back to permissionless
-let createBundlerClient, createPaymasterClient;
-try {
-    // Attempt to import from viem/account-abstraction (viem >= 2.x)
-    const viemAA = require("viem/account-abstraction");
-    createBundlerClient = viemAA.createBundlerClient;
-    createPaymasterClient = viemAA.createPaymasterClient;
-    utils_1.logger.info("Using viem/account-abstraction for bundler client");
-}
-catch (error) {
-    // Fall back to permissionless if viem/account-abstraction doesn't exist
-    utils_1.logger.info("viem/account-abstraction not found, falling back to permissionless");
-    const permissionless = require("permissionless/clients/bundler");
-    createBundlerClient = permissionless.createBundlerClient;
-    createPaymasterClient = permissionless.createPaymasterClient;
-}
-// Use a const for the EntryPoint address to avoid hardcoding in multiple places
-const ENTRY_POINT_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'; // Ethereum EntryPoint v0.6
+// Import account abstraction types and bundler clients
+const account_abstraction_1 = require("viem/account-abstraction");
+const pimlico_1 = require("permissionless/clients/pimlico");
+// TODO: support multiple chains and paymasters/bundlers
 // Initialize clients
 const chain = chains_1.sepolia;
-// Create public client for reading blockchain state
+/**
+ * Create public client for reading blockchain state
+ */
 exports.publicClient = (0, viem_1.createPublicClient)({
     chain,
     transport: (0, viem_1.http)(config_1.config.blockchain.rpcUrl)
 });
-// Create bundler client for user operations
-exports.bundlerClient = createBundlerClient({
-    chain,
-    transport: (0, viem_1.http)(config_1.config.blockchain.bundlerUrl),
-    paymaster: config_1.config.blockchain.paymasterUrl
-        ? createPaymasterClient({
-            transport: (0, viem_1.http)(config_1.config.blockchain.paymasterUrl)
-        })
-        : undefined
-});
+/**
+ * Create bundler client for user operations
+ */
+exports.bundlerClient = getBundlerClient();
+/**
+ * Creates a bundler client based on configuration settings
+ */
+function getBundlerClient() {
+    if (!config_1.config.blockchain.bundlerUrl) {
+        throw new Error('Bundler URL is not configured');
+    }
+    const paymasterClient = (0, account_abstraction_1.createPaymasterClient)({
+        transport: (0, viem_1.http)(config_1.config.blockchain.bundlerUrl)
+    });
+    const bundlerClient = (0, account_abstraction_1.createBundlerClient)({
+        transport: (0, viem_1.http)(config_1.config.blockchain.bundlerUrl),
+        chain,
+        paymaster: paymasterClient,
+    });
+    return bundlerClient;
+}
 /**
  * Creates a MetaMask smart account from a private key
+ *
+ * @param privateKey - The private key to create the account from
+ * @returns A MetaMask smart account instance
  */
 const createMetaMaskAccount = async (privateKey) => {
     try {
@@ -70,28 +73,28 @@ const createMetaMaskAccount = async (privateKey) => {
 exports.createMetaMaskAccount = createMetaMaskAccount;
 /**
  * Gets the fee per gas for a user operation
+ *
+ * @returns Gas fee parameters (maxFeePerGas and maxPriorityFeePerGas)
  */
 const getFeePerGas = async () => {
-    try {
-        // Simplified fee estimation - could be improved with actual gas estimation
-        return {
-            maxFeePerGas: (0, viem_1.parseEther)("0.00000001"),
-            maxPriorityFeePerGas: (0, viem_1.parseEther)("0.000000001")
-        };
-    }
-    catch (error) {
-        utils_1.logger.error(`Failed to get fee per gas:`, error);
-        throw error;
-    }
+    // The method for determining fee per gas is dependent on the bundler
+    // implementation. For this reason, this is centralized here.
+    const pimlicoClient = (0, pimlico_1.createPimlicoClient)({
+        chain,
+        transport: (0, viem_1.http)(config_1.config.blockchain.bundlerUrl),
+    });
+    const { fast } = await pimlicoClient.getUserOperationGasPrice();
+    return fast;
 };
 exports.getFeePerGas = getFeePerGas;
 /**
  * Redeems a delegation, executing actions on behalf of the delegator
- * @param delegationData The serialized delegation data
- * @param merchantAddress The address of the merchant
- * @param tokenContractAddress The address of the token contract
- * @param price The price of the token
- * @returns The transaction hash
+ *
+ * @param delegationData - The serialized delegation data
+ * @param merchantAddress - The address of the merchant
+ * @param tokenContractAddress - The address of the token contract
+ * @param price - The price of the token
+ * @returns The transaction hash of the redemption
  */
 const redeemDelegation = async (delegationData, merchantAddress, tokenContractAddress, price) => {
     try {
@@ -116,7 +119,6 @@ const redeemDelegation = async (delegationData, merchantAddress, tokenContractAd
         utils_1.logger.debug("Delegation details:", {
             delegate: delegation.delegate,
             delegator: delegation.delegator,
-            expiry: delegation.expiry?.toString(),
             merchantAddress,
             tokenContractAddress,
             price
@@ -133,28 +135,26 @@ const redeemDelegation = async (delegationData, merchantAddress, tokenContractAd
         }
         // Create ERC20 transfer calldata
         const transferCalldata = (0, viem_1.encodeFunctionData)({
-            abi: erc20_1.erc20Abi,
-            functionName: 'transfer',
+            abi: erc20_1.erc20Abi, // ABI for the ERC20 contract
+            functionName: 'transfer', // Name of the function to call
             args: [merchantAddress, (0, viem_1.parseUnits)(price, 6)] // Assuming USDC with 6 decimals
         });
-        console.log("transferCalldata", transferCalldata);
         // The execution that will be performed on behalf of the delegator
+        // target is the address of the merchant (the recipient of the ERC20 transfer)
+        // value is 0 because we are not sending any ETH with the transaction
+        // callData is the calldata for the ERC20 transfer
         const executions = [
             {
-                target: tokenContractAddress,
+                target: tokenContractAddress, // Address of the ERC20 contract
                 value: 0n, // No ETH value for ERC20 transfers
-                callData: transferCalldata
+                callData: transferCalldata // Calldata for the ERC20 transfer
             }
         ];
-        console.log("executions", executions);
-        // We need to treat the delegation as the required type for DelegationFramework
-        // This casting is necessary because our types might differ slightly from the framework's types
+        // Format the delegation for the framework
         const delegationForFramework = delegation;
         const delegationChain = [delegationForFramework];
-        console.log("delegationChain", delegationChain);
         // Create the calldata for redeeming the delegation
         const redeemDelegationCalldata = delegator_core_viem_1.DelegationFramework.encode.redeemDelegations([delegationChain], [delegator_core_viem_1.SINGLE_DEFAULT_MODE], [executions]);
-        console.log("redeemDelegationCalldata", redeemDelegationCalldata);
         // The call to the delegation framework to redeem the delegation
         const calls = [
             {
@@ -162,41 +162,34 @@ const redeemDelegation = async (delegationData, merchantAddress, tokenContractAd
                 data: redeemDelegationCalldata
             }
         ];
-        console.log("calls", calls);
-        // Get fee per gas
+        // Get fee per gas for the transaction
         const feePerGas = await (0, exports.getFeePerGas)();
-        // Encode calldata based on account interface
-        let callData;
-        if ('encodeCallData' in redeemer && typeof redeemer.encodeCallData === 'function') {
-            callData = redeemer.encodeCallData(calls);
-            console.log("callData1", callData);
-        }
-        else if ('encodeCalls' in redeemer && typeof redeemer.encodeCalls === 'function') {
-            callData = redeemer.encodeCalls(calls);
-            console.log("callData2", callData);
-        }
-        else {
-            throw new Error('Account does not have encodeCallData or encodeCalls method');
-        }
         utils_1.logger.info("Sending UserOperation...");
+        // Start timer for overall transaction operation
+        const overallStartTime = Date.now();
+        // Properly type our account for the bundler client
+        // Note: This assertion is necessary because the MetaMask smart account
+        // implementation doesn't exactly match what the bundler expects
+        const sendOpStartTime = Date.now();
         const userOperationHash = await exports.bundlerClient.sendUserOperation({
             account: redeemer,
-            userOperation: {
-                callData,
-                maxFeePerGas: feePerGas.maxFeePerGas,
-                maxPriorityFeePerGas: feePerGas.maxPriorityFeePerGas
-            },
-            entryPoint: ENTRY_POINT_ADDRESS
+            calls,
+            ...feePerGas
         });
-        utils_1.logger.info("UserOperation hash:", userOperationHash);
+        const sendOpTime = (Date.now() - sendOpStartTime) / 1000;
+        utils_1.logger.info(`UserOperation hash (sent in ${sendOpTime.toFixed(2)}s):`, userOperationHash);
         // Wait for the user operation to be included in a transaction
         utils_1.logger.info("Waiting for transaction receipt...");
+        const receiptStartTime = Date.now();
         const receipt = await exports.bundlerClient.waitForUserOperationReceipt({
             hash: userOperationHash,
             timeout: 60000 // 60 second timeout
         });
+        const receiptWaitTime = (Date.now() - receiptStartTime) / 1000;
         const transactionHash = receipt.receipt.transactionHash;
-        utils_1.logger.info("Transaction confirmed:", transactionHash);
+        // Calculate and log elapsed time
+        const totalElapsedTimeSeconds = (Date.now() - overallStartTime) / 1000;
+        utils_1.logger.info(`Transaction confirmed in ${totalElapsedTimeSeconds.toFixed(2)}s total (${sendOpTime.toFixed(2)}s to send, ${receiptWaitTime.toFixed(2)}s to confirm):`, transactionHash);
         return transactionHash;
     }
     catch (error) {

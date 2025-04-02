@@ -48,30 +48,10 @@ else
   echo "Delegation server .env file found."
 fi
 
-# Create a temporary env script to ensure all variables are passed
-cat > run_with_env.sh << 'EOF'
-#!/bin/bash
-# Load variables from delegation-server/.env
-if [ -f .env ]; then
-  set -a
-  source .env
-  set +a
-fi
-# Log environment variables for debugging (with sensitive info redacted)
-echo "Environment variables being used by delegation server:"
-echo "MOCK_MODE=${MOCK_MODE}"
-echo "GRPC_HOST=${GRPC_HOST}"
-echo "GRPC_PORT=${GRPC_PORT}"
-echo "CHAIN_ID=${CHAIN_ID}"
-[ -n "${PRIVATE_KEY}" ] && echo "PRIVATE_KEY=[REDACTED]" || echo "PRIVATE_KEY=not set"
-echo "LOG_LEVEL=${LOG_LEVEL}"
-npm run dev
-EOF
-
-chmod +x run_with_env.sh
+chmod +x scripts/run.sh
 
 # Run with environment variables
-./run_with_env.sh &
+./scripts/run.sh &
 
 # Clean up the temporary script (but not immediately, to ensure it's available for the background process)
 sleep 1
@@ -81,10 +61,6 @@ cd ..
 # Wait a moment for the delegation server to start
 sleep 2
 
-# Start the subscription processor in the background
-echo "Starting subscription processor with 1-minute interval..."
-go run ./cmd/subscription-processor/main.go --interval=1m &
-
 # Start the API server with hot reloading via air
 echo "Starting API server with hot reloading via air..." 
 # Load root .env variables
@@ -93,6 +69,10 @@ if [ -f .env ]; then
   source .env
   set +a
 fi
+
+# Start the subscription processor in the background
+echo "Starting subscription processor with 1-minute interval..."
+go run ./cmd/subscription-processor/main.go --interval=1m &
 
 # Check if air is installed
 if ! command -v air &> /dev/null; then

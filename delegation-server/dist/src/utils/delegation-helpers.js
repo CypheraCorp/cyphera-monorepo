@@ -85,31 +85,5 @@ function validateDelegation(delegation) {
     if (!isValidEthereumAddress(delegation.delegate)) {
         throw new Error('Invalid delegate address format: must be a valid Ethereum address (0x + 40 hex chars)');
     }
-    // Check if delegation is expired (convert various types to bigint for consistent comparison)
-    let expiryBigInt = null;
-    if (delegation.expiry) {
-        if (typeof delegation.expiry === 'bigint') {
-            expiryBigInt = delegation.expiry;
-        }
-        else if (typeof delegation.expiry === 'number') {
-            expiryBigInt = BigInt(delegation.expiry);
-        }
-        else if (typeof delegation.expiry === 'string') {
-            try {
-                expiryBigInt = BigInt(delegation.expiry);
-            }
-            catch (error) {
-                utils_1.logger.error('Invalid expiry format', error);
-                throw new Error('Invalid expiry format: must be a valid number or bigint');
-            }
-        }
-        // Check if the delegation is expired
-        if (expiryBigInt !== null && expiryBigInt > 0n) {
-            const nowBigInt = BigInt(Math.floor(Date.now() / 1000));
-            if (expiryBigInt < nowBigInt) {
-                throw new Error(`Delegation is expired (expiry: ${expiryBigInt}, now: ${nowBigInt})`);
-            }
-        }
-    }
     return true;
 }
