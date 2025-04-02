@@ -102,17 +102,7 @@ The Cyphera API ecosystem consists of four main components:
 
 ## Running the Application
 
-### Starting the Database
-
-Before running any of the application components, you need to start the PostgreSQL database:
-
-```bash
-docker-compose up postgres
-```
-
-This will start a PostgreSQL instance with the necessary schema loaded.
-
-### Running All Components
+### Running All Components At Once
 
 To run all components (API, delegation server, and subscription processor) together:
 
@@ -126,7 +116,34 @@ This command:
 - Starts the main API server
 - Runs the subscription processor
 
-### Verifying the Setup
+### Starting Just The Database
+
+If you just want to run the PostgreSQL database by itself then run the following:
+
+```bash
+docker-compose up postgres
+```
+
+This will start a PostgreSQL instance with the necessary schema loaded.
+
+### Starting The Delegation Server
+
+If you want to just run the delegation server individually, then run the following:
+
+```bash
+make delegation-server
+```
+
+### Starting the Cyphera API
+
+If you want to just run the cyphera api individually you first need to make sure that the delegation-server is running, then run the following:
+
+```bash
+make dev
+```
+update the parameters int he make file to change the time interval
+
+### Verifying the Cyphera API Setup
 
 Once all components are running, you can verify the API is working by making a request to the health endpoint:
 
@@ -134,7 +151,17 @@ Once all components are running, you can verify the API is working by making a r
 curl http://localhost:8000/health
 ```
 
-If everything is set up correctly, you'll receive a successful response.
+If the api is set up correctly, you'll receive a successful response.
+
+### Starting the Subscription Processor
+
+If you want to just run the subscription processor individually, then run the following:
+
+```bash
+make subscription-processor
+```
+update the parameters int he make file to change the time interval
+
 
 ## Developing with Cyphera API
 
