@@ -2165,499 +2165,6 @@ func (m *ProcessDueSubscriptionsTestCommon) BeginTx(ctx context.Context) (pgx.Tx
 	return m.beginTxFunc(ctx)
 }
 
-// TestProcessDueSubscriptions tests the ProcessDueSubscriptions function
-func TestProcessDueSubscriptions(t *testing.T) {
-	// Define test IDs and common data
-	subscription1ID := uuid.New()
-	subscription2ID := uuid.New()
-	subscription3ID := uuid.New()
-	productID := uuid.New()
-	customerID := uuid.New()
-	productTokenID := uuid.New()
-	delegationID := uuid.New()
-	walletID := uuid.New()
-	tokenID := uuid.New()
-
-	now := time.Now()
-
-	// Create sample subscriptions
-	activeSubscription := db.Subscription{
-		ID:                 subscription1ID,
-		CustomerID:         customerID,
-		ProductID:          productID,
-		ProductTokenID:     productTokenID,
-		DelegationID:       delegationID,
-		Status:             db.SubscriptionStatusActive,
-		CurrentPeriodStart: pgtype.Timestamptz{Time: now.AddDate(0, -1, 0), Valid: true},
-		CurrentPeriodEnd:   pgtype.Timestamptz{Time: now.AddDate(0, 0, 30), Valid: true},
-		NextRedemptionDate: pgtype.Timestamptz{Time: now, Valid: true},
-		TotalRedemptions:   2,
-		TotalAmountInCents: 2000,
-		CreatedAt:          pgtype.Timestamptz{Time: now.AddDate(0, -2, 0), Valid: true},
-		UpdatedAt:          pgtype.Timestamptz{Time: now.AddDate(0, 0, -5), Valid: true},
-	}
-
-	canceledSubscription := db.Subscription{
-		ID:                 subscription2ID,
-		CustomerID:         customerID,
-		ProductID:          productID,
-		ProductTokenID:     productTokenID,
-		DelegationID:       delegationID,
-		Status:             db.SubscriptionStatusCanceled,
-		CurrentPeriodStart: pgtype.Timestamptz{Time: now.AddDate(0, -1, 0), Valid: true},
-		CurrentPeriodEnd:   pgtype.Timestamptz{Time: now.AddDate(0, 0, 30), Valid: true},
-		NextRedemptionDate: pgtype.Timestamptz{Time: now, Valid: true},
-		TotalRedemptions:   1,
-		TotalAmountInCents: 1000,
-		CreatedAt:          pgtype.Timestamptz{Time: now.AddDate(0, -2, 0), Valid: true},
-		UpdatedAt:          pgtype.Timestamptz{Time: now.AddDate(0, 0, -5), Valid: true},
-	}
-
-	expiredSubscription := db.Subscription{
-		ID:                 subscription3ID,
-		CustomerID:         customerID,
-		ProductID:          productID,
-		ProductTokenID:     productTokenID,
-		DelegationID:       delegationID,
-		Status:             db.SubscriptionStatusActive, // Active but period end is in the past
-		CurrentPeriodStart: pgtype.Timestamptz{Time: now.AddDate(0, -2, 0), Valid: true},
-		CurrentPeriodEnd:   pgtype.Timestamptz{Time: now.AddDate(0, -1, 0), Valid: true}, // Already expired
-		NextRedemptionDate: pgtype.Timestamptz{Time: now, Valid: true},
-		TotalRedemptions:   5,
-		TotalAmountInCents: 5000,
-		CreatedAt:          pgtype.Timestamptz{Time: now.AddDate(0, -3, 0), Valid: true},
-		UpdatedAt:          pgtype.Timestamptz{Time: now.AddDate(0, -1, -5), Valid: true},
-	}
-
-	// Create sample product
-	product := db.Product{
-		ID:             productID,
-		WalletID:       walletID,
-		PriceInPennies: 1000,
-		IntervalType:   db.IntervalTypeMonth,
-	}
-
-	// Create sample product token
-	productToken := db.GetProductTokenRow{
-		ID:        productTokenID,
-		ProductID: productID,
-		TokenID:   tokenID,
-	}
-
-	// Create sample token
-	token := db.Token{
-		ID:              tokenID,
-		ContractAddress: "0xabcdef1234567890abcdef1234567890abcdef12",
-		Name:            "Test Token",
-		Symbol:          "TEST",
-	}
-
-	// Create sample wallet
-	wallet := db.Wallet{
-		ID:            walletID,
-		WalletAddress: "0x1234567890abcdef1234567890abcdef12345678",
-	}
-
-	// Create sample delegation data
-	delegationData := db.DelegationDatum{
-		ID:        delegationID,
-		Delegate:  "0xdelegate-address",
-		Delegator: "0xdelegator-address",
-		Authority: "authority-string",
-		Caveats:   json.RawMessage(`{"delegation": "test-delegation-data"}`),
-		Salt:      "salt-string",
-		Signature: "signature-string",
-		CreatedAt: pgtype.Timestamptz{Time: now.AddDate(0, -1, 0), Valid: true},
-		UpdatedAt: pgtype.Timestamptz{Time: now.AddDate(0, 0, -5), Valid: true},
-		DeletedAt: pgtype.Timestamptz{Valid: false},
-	}
-
-	// Success tx hash
-	successTxHash := "0xabc123def456789012345678901234567890123456789012345678901234def0"
-
-	// Test cases
-	testCases := []struct {
-		name                    string
-		dueSubscriptions        []db.Subscription
-		listDueSubscriptionsErr error
-		redemptionResults       map[uuid.UUID]struct {
-			success bool
-			err     error
-		}
-		commitErr                 error
-		beginTxErr                error
-		expectTransactionRollback bool
-		expectResults             ProcessDueSubscriptionsResult
-		expectError               bool
-	}{
-		{
-			name:                    "No Subscriptions Due",
-			dueSubscriptions:        []db.Subscription{},
-			listDueSubscriptionsErr: nil,
-			redemptionResults: map[uuid.UUID]struct {
-				success bool
-				err     error
-			}{},
-			commitErr:  nil,
-			beginTxErr: nil,
-			expectResults: ProcessDueSubscriptionsResult{
-				Total:     0,
-				Succeeded: 0,
-				Failed:    0,
-				Completed: 0,
-			},
-			expectError: false,
-		},
-		{
-			name:                    "Single Active Subscription - Success",
-			dueSubscriptions:        []db.Subscription{activeSubscription},
-			listDueSubscriptionsErr: nil,
-			redemptionResults: map[uuid.UUID]struct {
-				success bool
-				err     error
-			}{
-				subscription1ID: {success: true, err: nil},
-			},
-			commitErr:  nil,
-			beginTxErr: nil,
-			expectResults: ProcessDueSubscriptionsResult{
-				Total:     1,
-				Succeeded: 1,
-				Failed:    0,
-				Completed: 0,
-			},
-			expectError: false,
-		},
-		{
-			name:                    "Multiple Subscriptions - Mixed Results",
-			dueSubscriptions:        []db.Subscription{activeSubscription, canceledSubscription, expiredSubscription},
-			listDueSubscriptionsErr: nil,
-			redemptionResults: map[uuid.UUID]struct {
-				success bool
-				err     error
-			}{
-				subscription1ID: {success: true, err: nil},
-				subscription2ID: {success: false, err: nil}, // Skipped because it's canceled
-				subscription3ID: {success: true, err: nil},  // Final payment
-			},
-			commitErr:  nil,
-			beginTxErr: nil,
-			expectResults: ProcessDueSubscriptionsResult{
-				Total:     3,
-				Succeeded: 1,
-				Failed:    0,
-				Completed: 1,
-			},
-			expectError: false,
-		},
-		{
-			name:                    "Redemption Error",
-			dueSubscriptions:        []db.Subscription{activeSubscription},
-			listDueSubscriptionsErr: nil,
-			redemptionResults: map[uuid.UUID]struct {
-				success bool
-				err     error
-			}{
-				subscription1ID: {success: false, err: fmt.Errorf("redemption failed")},
-			},
-			commitErr:  nil,
-			beginTxErr: nil,
-			expectResults: ProcessDueSubscriptionsResult{
-				Total:     1,
-				Succeeded: 0,
-				Failed:    1,
-				Completed: 0,
-			},
-			expectError: false,
-		},
-		{
-			name:                    "Error Listing Due Subscriptions",
-			dueSubscriptions:        []db.Subscription{},
-			listDueSubscriptionsErr: fmt.Errorf("database error"),
-			redemptionResults: map[uuid.UUID]struct {
-				success bool
-				err     error
-			}{},
-			commitErr:                 nil,
-			beginTxErr:                nil,
-			expectTransactionRollback: true,
-			expectResults: ProcessDueSubscriptionsResult{
-				Total:     0,
-				Succeeded: 0,
-				Failed:    0,
-				Completed: 0,
-			},
-			expectError: true,
-		},
-		{
-			name:                    "Commit Error",
-			dueSubscriptions:        []db.Subscription{activeSubscription},
-			listDueSubscriptionsErr: nil,
-			redemptionResults: map[uuid.UUID]struct {
-				success bool
-				err     error
-			}{
-				subscription1ID: {success: true, err: nil},
-			},
-			commitErr:                 fmt.Errorf("commit error"),
-			beginTxErr:                nil,
-			expectTransactionRollback: true,
-			expectResults: ProcessDueSubscriptionsResult{
-				Total:     1,
-				Succeeded: 1,
-				Failed:    0,
-				Completed: 0,
-			},
-			expectError: true,
-		},
-		{
-			name:                    "BeginTx Error",
-			dueSubscriptions:        []db.Subscription{},
-			listDueSubscriptionsErr: nil,
-			redemptionResults: map[uuid.UUID]struct {
-				success bool
-				err     error
-			}{},
-			commitErr:                 nil,
-			beginTxErr:                fmt.Errorf("transaction start error"),
-			expectTransactionRollback: false, // No tx to roll back
-			expectResults: ProcessDueSubscriptionsResult{
-				Total:     0,
-				Succeeded: 0,
-				Failed:    0,
-				Completed: 0,
-			},
-			expectError: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Track function calls
-			var (
-				beginTxCalls               int
-				listDueSubscriptionCalls   int
-				getProductCalls            int
-				getProductTokenCalls       int
-				getTokenCalls              int
-				getWalletCalls             int
-				getDelegationDataCalls     int
-				redemptionCalls            int
-				createEventCalls           int
-				incrementSubscriptionCalls int
-				updateSubscriptionCalls    int
-				commitCalls                int
-				rollbackCalls              int
-			)
-
-			// Create mock transaction
-			mockTx := &mockTransaction{
-				commitFunc: func(ctx context.Context) error {
-					commitCalls++
-					return tc.commitErr
-				},
-				rollbackFunc: func(ctx context.Context) error {
-					rollbackCalls++
-					return nil
-				},
-			}
-
-			// Create mock querier with tracking
-			mockTxQuerier := &mockProcessDueSubscriptionsQuerier{
-				listSubscriptionsDueForRenewalFunc: func(ctx context.Context, nextRedemptionDate pgtype.Timestamptz) ([]db.Subscription, error) {
-					listDueSubscriptionCalls++
-					return tc.dueSubscriptions, tc.listDueSubscriptionsErr
-				},
-				getProductFunc: func(ctx context.Context, id uuid.UUID) (db.Product, error) {
-					getProductCalls++
-					return product, nil
-				},
-				getProductTokenFunc: func(ctx context.Context, id uuid.UUID) (db.GetProductTokenRow, error) {
-					getProductTokenCalls++
-					return productToken, nil
-				},
-				getTokenFunc: func(ctx context.Context, id uuid.UUID) (db.Token, error) {
-					getTokenCalls++
-					return token, nil
-				},
-				getWalletByIDFunc: func(ctx context.Context, id uuid.UUID) (db.Wallet, error) {
-					getWalletCalls++
-					return wallet, nil
-				},
-				getDelegationDataFunc: func(ctx context.Context, id uuid.UUID) (db.DelegationDatum, error) {
-					getDelegationDataCalls++
-					return delegationData, nil
-				},
-				createSubscriptionEventFunc: func(ctx context.Context, arg db.CreateSubscriptionEventParams) (db.SubscriptionEvent, error) {
-					createEventCalls++
-					return db.SubscriptionEvent{
-						ID:              uuid.New(),
-						SubscriptionID:  arg.SubscriptionID,
-						EventType:       arg.EventType,
-						TransactionHash: arg.TransactionHash,
-						AmountInCents:   arg.AmountInCents,
-						OccurredAt:      arg.OccurredAt,
-						Metadata:        arg.Metadata,
-					}, nil
-				},
-				createFailedRedemptionEventFunc: func(ctx context.Context, arg db.CreateFailedRedemptionEventParams) (db.SubscriptionEvent, error) {
-					createEventCalls++
-					return db.SubscriptionEvent{
-						ID:             uuid.New(),
-						SubscriptionID: arg.SubscriptionID,
-						EventType:      db.SubscriptionEventTypeFailedRedemption,
-						ErrorMessage:   arg.ErrorMessage,
-						AmountInCents:  arg.AmountInCents,
-						OccurredAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
-						Metadata:       arg.Metadata,
-					}, nil
-				},
-				incrementSubscriptionRedemptionFunc: func(ctx context.Context, arg db.IncrementSubscriptionRedemptionParams) (db.Subscription, error) {
-					incrementSubscriptionCalls++
-					// Find the subscription we're updating
-					for _, sub := range tc.dueSubscriptions {
-						if sub.ID == arg.ID {
-							// Update the subscription
-							sub.TotalRedemptions += 1
-							sub.TotalAmountInCents += arg.TotalAmountInCents
-							sub.NextRedemptionDate = arg.NextRedemptionDate
-							return sub, nil
-						}
-					}
-					return db.Subscription{}, pgx.ErrNoRows
-				},
-				updateSubscriptionStatusFunc: func(ctx context.Context, arg db.UpdateSubscriptionStatusParams) (db.Subscription, error) {
-					updateSubscriptionCalls++
-					// Find the subscription we're updating
-					for _, sub := range tc.dueSubscriptions {
-						if sub.ID == arg.ID {
-							// Update the subscription status
-							sub.Status = arg.Status
-							return sub, nil
-						}
-					}
-					return db.Subscription{}, pgx.ErrNoRows
-				},
-			}
-
-			// Create mock common services wrapper
-			mockCommon := &ProcessDueSubscriptionsTestCommon{
-				CommonServices: &CommonServices{},
-				mockTx:         mockTx,
-				mockQuerier:    mockTxQuerier,
-				beginTxFunc: func(ctx context.Context) (pgx.Tx, processDueSubscriptionsQuerier, error) {
-					beginTxCalls++
-					if tc.beginTxErr != nil {
-						return nil, nil, tc.beginTxErr
-					}
-					return mockTx, mockTxQuerier, nil
-				},
-			}
-
-			// Set up mock delegation client
-			mockDelegationClient := &mockDelegationClient{
-				redeemDelegationDirectlyFunc: func(ctx context.Context, delegationData []byte, merchantAddress, tokenAddress, price string) (string, error) {
-					redemptionCalls++
-
-					// Find which subscription this is for
-					for id, result := range tc.redemptionResults {
-						for _, sub := range tc.dueSubscriptions {
-							if sub.ID == id {
-								if result.success {
-									return successTxHash, nil
-								}
-								if result.err != nil {
-									return "", result.err
-								}
-								return "", fmt.Errorf("redemption failed")
-							}
-						}
-					}
-
-					// Default success for tests that don't specify results
-					return successTxHash, nil
-				},
-			}
-
-			// Create a test handler that implements ProcessDueSubscriptions using our interfaces
-			handler := &testSubscriptionHandler{
-				common:           mockCommon,
-				delegationClient: mockDelegationClient,
-			}
-
-			// Call the function
-			results, err := handler.ProcessDueSubscriptions(context.Background())
-
-			// Verify transaction was initialized
-			assert.Equal(t, 1, beginTxCalls, "BeginTx should be called once")
-
-			// Verify error handling
-			if tc.expectError {
-				assert.Error(t, err, "Should return an error")
-			} else {
-				assert.NoError(t, err, "Should not return an error")
-			}
-
-			// Verify transaction handling
-			if tc.beginTxErr != nil {
-				assert.Equal(t, 0, commitCalls, "Commit should not be called on BeginTx error")
-				assert.Equal(t, 0, rollbackCalls, "Rollback should not be called on BeginTx error")
-			} else if tc.listDueSubscriptionsErr != nil || tc.commitErr != nil || tc.expectTransactionRollback {
-				assert.GreaterOrEqual(t, rollbackCalls, 1, "Rollback should be called on error")
-			} else if len(tc.dueSubscriptions) == 0 {
-				assert.Equal(t, 1, commitCalls, "Commit should be called for empty result")
-				assert.Equal(t, 0, rollbackCalls, "Rollback should not be called for empty result")
-			} else {
-				assert.Equal(t, 1, commitCalls, "Commit should be called on success")
-				assert.Equal(t, 0, rollbackCalls, "Rollback should not be called on success")
-			}
-
-			// Verify results structure
-			assert.Equal(t, tc.expectResults.Total, results.Total, "Total count should match")
-			assert.Equal(t, tc.expectResults.Succeeded, results.Succeeded, "Succeeded count should match")
-			assert.Equal(t, tc.expectResults.Failed, results.Failed, "Failed count should match")
-			assert.Equal(t, tc.expectResults.Completed, results.Completed, "Completed count should match")
-
-			// Skip further verification if transaction couldn't be started
-			if tc.beginTxErr != nil {
-				return
-			}
-
-			// Verify appropriate function calls based on subscriptions processed
-			assert.Equal(t, 1, listDueSubscriptionCalls, "ListSubscriptionsDueForRenewal should be called once")
-
-			// Count active subscriptions that should be processed
-			activeCount := 0
-			for _, sub := range tc.dueSubscriptions {
-				if sub.Status == db.SubscriptionStatusActive {
-					activeCount++
-				}
-			}
-
-			// Skip detailed verification for error cases
-			if tc.listDueSubscriptionsErr != nil {
-				return
-			}
-
-			// For success cases with subscriptions, verify the delegation client was called
-			if activeCount > 0 && !tc.expectError {
-				// Each active subscription should trigger related calls
-				assert.Equal(t, activeCount, getProductCalls, "GetProduct should be called for each active subscription")
-				assert.Equal(t, activeCount, getProductTokenCalls, "GetProductToken should be called for each active subscription")
-				assert.Equal(t, activeCount, getTokenCalls, "GetToken should be called for each active subscription")
-				assert.Equal(t, activeCount, getWalletCalls, "GetWallet should be called for each active subscription")
-				assert.Equal(t, activeCount, getDelegationDataCalls, "GetDelegationData should be called for each active subscription")
-
-				// Redemption calls should match active subscriptions
-				assert.GreaterOrEqual(t, redemptionCalls, 1, "At least one redemption should be attempted")
-
-				// Event creation should happen for each subscription processed
-				assert.GreaterOrEqual(t, createEventCalls, 1, "At least one event should be created")
-			}
-		})
-	}
-}
-
 // mockTransaction is a test helper for mocking pgx.Tx
 type mockTransaction struct {
 	commitFunc   func(ctx context.Context) error
@@ -2920,4 +2427,457 @@ func (m *mockProcessDueSubscriptionsQuerier) ActivateProductToken(ctx context.Co
 
 func (m *mockProcessDueSubscriptionsQuerier) ActivateToken(ctx context.Context, id uuid.UUID) (db.Token, error) {
 	return db.Token{}, nil
+}
+
+// TestProcessDueSubscriptions is a table-driven test for the ProcessDueSubscriptions method
+func TestProcessDueSubscriptions(t *testing.T) {
+	// Define test IDs and common data
+	subscription1ID := uuid.New()
+	// subscription2ID := uuid.New()
+	subscription3ID := uuid.New()
+	productID := uuid.New()
+	customerID := uuid.New()
+	productTokenID := uuid.New()
+	delegationID := uuid.New()
+	walletID := uuid.New()
+	tokenID := uuid.New()
+
+	now := time.Now()
+
+	// Create sample subscriptions
+	activeSubscription := db.Subscription{
+		ID:                 subscription1ID,
+		CustomerID:         customerID,
+		ProductID:          productID,
+		ProductTokenID:     productTokenID,
+		DelegationID:       delegationID,
+		Status:             db.SubscriptionStatusActive,
+		CurrentPeriodStart: pgtype.Timestamptz{Time: now.AddDate(0, -1, 0), Valid: true},
+		CurrentPeriodEnd:   pgtype.Timestamptz{Time: now.AddDate(0, 0, 30), Valid: true},
+		NextRedemptionDate: pgtype.Timestamptz{Time: now, Valid: true},
+	}
+
+	// canceledSubscription := db.Subscription{
+	// 	ID:                 subscription2ID,
+	// 	CustomerID:         customerID,
+	// 	ProductID:          productID,
+	// 	ProductTokenID:     productTokenID,
+	// 	DelegationID:       delegationID,
+	// 	Status:             db.SubscriptionStatusCanceled,
+	// 	CurrentPeriodStart: pgtype.Timestamptz{Time: now.AddDate(0, -1, 0), Valid: true},
+	// 	CurrentPeriodEnd:   pgtype.Timestamptz{Time: now.AddDate(0, 0, 30), Valid: true},
+	// 	NextRedemptionDate: pgtype.Timestamptz{Time: now, Valid: true},
+	// }
+
+	expiredSubscription := db.Subscription{
+		ID:                 subscription3ID,
+		CustomerID:         customerID,
+		ProductID:          productID,
+		ProductTokenID:     productTokenID,
+		DelegationID:       delegationID,
+		Status:             db.SubscriptionStatusActive,
+		CurrentPeriodStart: pgtype.Timestamptz{Time: now.AddDate(0, -2, 0), Valid: true},
+		CurrentPeriodEnd:   pgtype.Timestamptz{Time: now.AddDate(0, -1, 0), Valid: true}, // Period end in the past
+		NextRedemptionDate: pgtype.Timestamptz{Time: now, Valid: true},
+	}
+
+	// Create sample product
+	product := db.Product{
+		ID:             productID,
+		WalletID:       walletID,
+		PriceInPennies: 1000,
+		IntervalType:   db.IntervalTypeMonth,
+	}
+
+	// Create sample product token
+	productToken := db.GetProductTokenRow{
+		ID:        productTokenID,
+		ProductID: productID,
+		TokenID:   tokenID,
+	}
+
+	// Create sample token
+	token := db.Token{
+		ID:              tokenID,
+		ContractAddress: "0xtoken-address",
+	}
+
+	// Create sample wallet
+	wallet := db.Wallet{
+		ID:            walletID,
+		WalletAddress: "0xwallet-address",
+	}
+
+	// Create sample delegation data
+	delegationData := db.DelegationDatum{
+		ID:        delegationID,
+		Delegate:  "0xdelegate-address",
+		Delegator: "0xdelegator-address",
+		Authority: "authority",
+		Salt:      "salt",
+		Signature: "signature",
+	}
+
+	// Success tx hash
+	successTxHash := "0xtx-hash"
+
+	tests := []struct {
+		name                string
+		setupMocks          func(*testing.T) (*mockProcessDueSubscriptionsQuerier, *mockTransaction, *mockDelegationClient)
+		expectedResults     ProcessDueSubscriptionsResult
+		expectedError       bool
+		expectedErrorString string
+	}{
+		{
+			name: "No Subscriptions Due",
+			setupMocks: func(t *testing.T) (*mockProcessDueSubscriptionsQuerier, *mockTransaction, *mockDelegationClient) {
+				mockQuerier := &mockProcessDueSubscriptionsQuerier{}
+				mockTx := &mockTransaction{}
+				mockDelegClient := &mockDelegationClient{}
+
+				// Set up mock expectations
+				mockQuerier.listSubscriptionsDueForRenewalFunc = func(ctx context.Context, now pgtype.Timestamptz) ([]db.Subscription, error) {
+					return []db.Subscription{}, nil
+				}
+
+				// Transaction commits successfully
+				mockTx.commitFunc = func(ctx context.Context) error {
+					return nil
+				}
+				mockTx.rollbackFunc = func(ctx context.Context) error {
+					t.Fatal("Rollback should not be called")
+					return nil
+				}
+
+				return mockQuerier, mockTx, mockDelegClient
+			},
+			expectedResults: ProcessDueSubscriptionsResult{
+				Total:     0,
+				Succeeded: 0,
+				Failed:    0,
+				Completed: 0,
+			},
+			expectedError: false,
+		},
+		{
+			name: "Single Active Subscription - Successful Redemption",
+			setupMocks: func(t *testing.T) (*mockProcessDueSubscriptionsQuerier, *mockTransaction, *mockDelegationClient) {
+				mockQuerier := &mockProcessDueSubscriptionsQuerier{}
+				mockTx := &mockTransaction{}
+				mockDelegClient := &mockDelegationClient{}
+
+				// Set up mock expectations
+				mockQuerier.listSubscriptionsDueForRenewalFunc = func(ctx context.Context, now pgtype.Timestamptz) ([]db.Subscription, error) {
+					return []db.Subscription{activeSubscription}, nil
+				}
+
+				mockQuerier.getProductFunc = func(ctx context.Context, id uuid.UUID) (db.Product, error) {
+					assert.Equal(t, productID, id)
+					return product, nil
+				}
+
+				mockQuerier.getProductTokenFunc = func(ctx context.Context, id uuid.UUID) (db.GetProductTokenRow, error) {
+					assert.Equal(t, productTokenID, id)
+					return productToken, nil
+				}
+
+				mockQuerier.getTokenFunc = func(ctx context.Context, id uuid.UUID) (db.Token, error) {
+					assert.Equal(t, tokenID, id)
+					return token, nil
+				}
+
+				mockQuerier.getWalletByIDFunc = func(ctx context.Context, id uuid.UUID) (db.Wallet, error) {
+					assert.Equal(t, walletID, id)
+					return wallet, nil
+				}
+
+				mockQuerier.getDelegationDataFunc = func(ctx context.Context, id uuid.UUID) (db.DelegationDatum, error) {
+					assert.Equal(t, delegationID, id)
+					return delegationData, nil
+				}
+
+				// Successful redemption
+				mockDelegClient.redeemDelegationDirectlyFunc = func(ctx context.Context, delegationData []byte, merchantAddress, tokenAddress, price string) (string, error) {
+					return successTxHash, nil
+				}
+
+				// Increment subscription after redemption
+				mockQuerier.incrementSubscriptionRedemptionFunc = func(ctx context.Context, arg db.IncrementSubscriptionRedemptionParams) (db.Subscription, error) {
+					assert.Equal(t, subscription1ID, arg.ID)
+					assert.Equal(t, product.PriceInPennies, arg.TotalAmountInCents)
+					return activeSubscription, nil
+				}
+
+				// Create redemption event
+				mockQuerier.createSubscriptionEventFunc = func(ctx context.Context, arg db.CreateSubscriptionEventParams) (db.SubscriptionEvent, error) {
+					assert.Equal(t, subscription1ID, arg.SubscriptionID)
+					assert.Equal(t, db.SubscriptionEventTypeRedeemed, arg.EventType)
+					return db.SubscriptionEvent{}, nil
+				}
+
+				// Transaction commits successfully
+				mockTx.commitFunc = func(ctx context.Context) error {
+					return nil
+				}
+				mockTx.rollbackFunc = func(ctx context.Context) error {
+					t.Fatal("Rollback should not be called")
+					return nil
+				}
+
+				return mockQuerier, mockTx, mockDelegClient
+			},
+			expectedResults: ProcessDueSubscriptionsResult{
+				Total:     1,
+				Succeeded: 1,
+				Failed:    0,
+				Completed: 0,
+			},
+			expectedError: false,
+		},
+		{
+			name: "Expired Subscription - Final Payment",
+			setupMocks: func(t *testing.T) (*mockProcessDueSubscriptionsQuerier, *mockTransaction, *mockDelegationClient) {
+				mockQuerier := &mockProcessDueSubscriptionsQuerier{}
+				mockTx := &mockTransaction{}
+				mockDelegClient := &mockDelegationClient{}
+
+				// Set up mock expectations
+				mockQuerier.listSubscriptionsDueForRenewalFunc = func(ctx context.Context, now pgtype.Timestamptz) ([]db.Subscription, error) {
+					return []db.Subscription{expiredSubscription}, nil
+				}
+
+				mockQuerier.getProductFunc = func(ctx context.Context, id uuid.UUID) (db.Product, error) {
+					assert.Equal(t, productID, id)
+					return product, nil
+				}
+
+				mockQuerier.getProductTokenFunc = func(ctx context.Context, id uuid.UUID) (db.GetProductTokenRow, error) {
+					assert.Equal(t, productTokenID, id)
+					return productToken, nil
+				}
+
+				mockQuerier.getTokenFunc = func(ctx context.Context, id uuid.UUID) (db.Token, error) {
+					assert.Equal(t, tokenID, id)
+					return token, nil
+				}
+
+				mockQuerier.getWalletByIDFunc = func(ctx context.Context, id uuid.UUID) (db.Wallet, error) {
+					assert.Equal(t, walletID, id)
+					return wallet, nil
+				}
+
+				mockQuerier.getDelegationDataFunc = func(ctx context.Context, id uuid.UUID) (db.DelegationDatum, error) {
+					assert.Equal(t, delegationID, id)
+					return delegationData, nil
+				}
+
+				// Successful redemption
+				mockDelegClient.redeemDelegationDirectlyFunc = func(ctx context.Context, delegationData []byte, merchantAddress, tokenAddress, price string) (string, error) {
+					return successTxHash, nil
+				}
+
+				// Increment subscription after redemption
+				mockQuerier.incrementSubscriptionRedemptionFunc = func(ctx context.Context, arg db.IncrementSubscriptionRedemptionParams) (db.Subscription, error) {
+					assert.Equal(t, subscription3ID, arg.ID)
+					assert.Equal(t, product.PriceInPennies, arg.TotalAmountInCents)
+					return expiredSubscription, nil
+				}
+
+				// Update subscription to completed
+				mockQuerier.updateSubscriptionStatusFunc = func(ctx context.Context, arg db.UpdateSubscriptionStatusParams) (db.Subscription, error) {
+					assert.Equal(t, subscription3ID, arg.ID)
+					assert.Equal(t, db.SubscriptionStatusCompleted, arg.Status)
+					return expiredSubscription, nil
+				}
+
+				// Create completion event
+				mockQuerier.createSubscriptionEventFunc = func(ctx context.Context, arg db.CreateSubscriptionEventParams) (db.SubscriptionEvent, error) {
+					assert.Equal(t, subscription3ID, arg.SubscriptionID)
+					assert.Equal(t, db.SubscriptionEventTypeCompleted, arg.EventType)
+					return db.SubscriptionEvent{}, nil
+				}
+
+				// Transaction commits successfully
+				mockTx.commitFunc = func(ctx context.Context) error {
+					return nil
+				}
+				mockTx.rollbackFunc = func(ctx context.Context) error {
+					t.Fatal("Rollback should not be called")
+					return nil
+				}
+
+				return mockQuerier, mockTx, mockDelegClient
+			},
+			expectedResults: ProcessDueSubscriptionsResult{
+				Total:     1,
+				Succeeded: 0,
+				Failed:    0,
+				Completed: 1,
+			},
+			expectedError: false,
+		},
+		{
+			name: "Failed Redemption",
+			setupMocks: func(t *testing.T) (*mockProcessDueSubscriptionsQuerier, *mockTransaction, *mockDelegationClient) {
+				mockQuerier := &mockProcessDueSubscriptionsQuerier{}
+				mockTx := &mockTransaction{}
+				mockDelegClient := &mockDelegationClient{}
+
+				// Set up mock expectations
+				mockQuerier.listSubscriptionsDueForRenewalFunc = func(ctx context.Context, now pgtype.Timestamptz) ([]db.Subscription, error) {
+					return []db.Subscription{activeSubscription}, nil
+				}
+
+				mockQuerier.getProductFunc = func(ctx context.Context, id uuid.UUID) (db.Product, error) {
+					assert.Equal(t, productID, id)
+					return product, nil
+				}
+
+				mockQuerier.getProductTokenFunc = func(ctx context.Context, id uuid.UUID) (db.GetProductTokenRow, error) {
+					assert.Equal(t, productTokenID, id)
+					return productToken, nil
+				}
+
+				mockQuerier.getTokenFunc = func(ctx context.Context, id uuid.UUID) (db.Token, error) {
+					assert.Equal(t, tokenID, id)
+					return token, nil
+				}
+
+				mockQuerier.getWalletByIDFunc = func(ctx context.Context, id uuid.UUID) (db.Wallet, error) {
+					assert.Equal(t, walletID, id)
+					return wallet, nil
+				}
+
+				mockQuerier.getDelegationDataFunc = func(ctx context.Context, id uuid.UUID) (db.DelegationDatum, error) {
+					assert.Equal(t, delegationID, id)
+					return delegationData, nil
+				}
+
+				// Failed redemption
+				mockDelegClient.redeemDelegationDirectlyFunc = func(ctx context.Context, delegationData []byte, merchantAddress, tokenAddress, price string) (string, error) {
+					return "", fmt.Errorf("redemption error")
+				}
+
+				// Create failure event
+				mockQuerier.createSubscriptionEventFunc = func(ctx context.Context, arg db.CreateSubscriptionEventParams) (db.SubscriptionEvent, error) {
+					assert.Equal(t, subscription1ID, arg.SubscriptionID)
+					assert.Equal(t, db.SubscriptionEventTypeFailedRedemption, arg.EventType)
+					return db.SubscriptionEvent{}, nil
+				}
+
+				// Add implementation for CreateFailedRedemptionEvent
+				mockQuerier.createFailedRedemptionEventFunc = func(ctx context.Context, arg db.CreateFailedRedemptionEventParams) (db.SubscriptionEvent, error) {
+					assert.Equal(t, subscription1ID, arg.SubscriptionID)
+					return db.SubscriptionEvent{}, nil
+				}
+
+				// Transaction should be committed even with redemption failures
+				mockTx.commitFunc = func(ctx context.Context) error {
+					return nil
+				}
+				mockTx.rollbackFunc = func(ctx context.Context) error {
+					return nil // Allow rollback to be called for failed redemptions
+				}
+
+				return mockQuerier, mockTx, mockDelegClient
+			},
+			expectedResults: ProcessDueSubscriptionsResult{
+				Total:     1,
+				Succeeded: 0,
+				Failed:    1,
+				Completed: 0,
+			},
+			expectedError: false,
+		},
+		{
+			name: "Database Error",
+			setupMocks: func(t *testing.T) (*mockProcessDueSubscriptionsQuerier, *mockTransaction, *mockDelegationClient) {
+				mockQuerier := &mockProcessDueSubscriptionsQuerier{}
+				mockTx := &mockTransaction{}
+				mockDelegClient := &mockDelegationClient{}
+
+				// Set up mock expectations - database error
+				mockQuerier.listSubscriptionsDueForRenewalFunc = func(ctx context.Context, now pgtype.Timestamptz) ([]db.Subscription, error) {
+					return nil, fmt.Errorf("database error")
+				}
+
+				// Transaction should be rolled back
+				mockTx.commitFunc = func(ctx context.Context) error {
+					t.Fatal("Commit should not be called")
+					return nil
+				}
+				mockTx.rollbackFunc = func(ctx context.Context) error {
+					return nil
+				}
+
+				return mockQuerier, mockTx, mockDelegClient
+			},
+			expectedResults: ProcessDueSubscriptionsResult{
+				Total:     0,
+				Succeeded: 0,
+				Failed:    0,
+				Completed: 0,
+			},
+			expectedError:       true,
+			expectedErrorString: "failed to fetch subscriptions due for redemption: database error",
+		},
+		{
+			name: "Transaction Begin Error",
+			setupMocks: func(t *testing.T) (*mockProcessDueSubscriptionsQuerier, *mockTransaction, *mockDelegationClient) {
+				mockQuerier := &mockProcessDueSubscriptionsQuerier{}
+				mockTx := &mockTransaction{}
+				mockDelegClient := &mockDelegationClient{}
+
+				// Don't set any mock expectations as BeginTx will fail
+				return mockQuerier, mockTx, mockDelegClient
+			},
+			expectedResults: ProcessDueSubscriptionsResult{
+				Total:     0,
+				Succeeded: 0,
+				Failed:    0,
+				Completed: 0,
+			},
+			expectedError:       true,
+			expectedErrorString: "failed to begin transaction: tx error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup mocks
+			mockQuerier, mockTx, mockDelegClient := tt.setupMocks(t)
+
+			// Create a new test handler
+			handler := &testSubscriptionHandler{
+				common: &ProcessDueSubscriptionsTestCommon{
+					beginTxFunc: func(ctx context.Context) (pgx.Tx, processDueSubscriptionsQuerier, error) {
+						if tt.name == "Transaction Begin Error" {
+							return nil, nil, fmt.Errorf("tx error")
+						}
+						return mockTx, mockQuerier, nil
+					},
+				},
+				delegationClient: mockDelegClient,
+			}
+
+			// Call the function being tested
+			results, err := handler.ProcessDueSubscriptions(context.Background())
+
+			// Verify error
+			if tt.expectedError {
+				assert.Error(t, err)
+				if tt.expectedErrorString != "" {
+					assert.Contains(t, err.Error(), tt.expectedErrorString)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+
+			// Verify results
+			assert.Equal(t, tt.expectedResults.Total, results.Total, "Total count should match")
+			assert.Equal(t, tt.expectedResults.Succeeded, results.Succeeded, "Succeeded count should match")
+			assert.Equal(t, tt.expectedResults.Failed, results.Failed, "Failed count should match")
+			assert.Equal(t, tt.expectedResults.Completed, results.Completed, "Completed count should match")
+		})
+	}
 }

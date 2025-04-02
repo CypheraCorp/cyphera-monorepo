@@ -9,9 +9,19 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+
+	err := godotenv.Load()
+	if err != nil {
+		// It's often okay if the .env file is missing, especially in production
+		// where variables might be set directly in the environment.
+		// Log it but don't necessarily stop the application.
+		log.Printf("Warning: Error loading .env file: %v", err)
+	}
+
 	// Initialize logger first
 	logger.InitLogger()
 

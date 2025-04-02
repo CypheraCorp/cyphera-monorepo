@@ -6,7 +6,6 @@ export declare const config: {
     blockchain: {
         rpcUrl: string | undefined;
         bundlerUrl: string | undefined;
-        paymasterUrl: string | undefined;
         chainId: number;
         privateKey: string | undefined;
     };

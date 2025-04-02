@@ -24,6 +24,9 @@ go.work.sum
 # Binaries
 bin/
 
+# Secrets
+.secrets
+
 # env file
 .env
 .env.prod

@@ -968,20 +968,18 @@ func (h *TestSubscriptionHandler) SubscribeToProduct(c *gin.Context) {
 	h.db.On("CreateDelegationDatum", ctx, mock.Anything).Return(delegationData, nil)
 
 	// Create subscription
-	now := time.Now()
-	nextRedemption := CalculateNextRedemption(db.IntervalTypeMonth, now)
-	periodEnd := CalculatePeriodEnd(now, db.IntervalTypeMonth, 1)
-
 	subscription := db.Subscription{
 		ID:                 uuid.New(),
 		CustomerID:         customer.ID,
 		ProductID:          product.ID,
 		ProductTokenID:     parsedProductTokenID,
-		DelegationID:       delegationData.ID,
 		Status:             db.SubscriptionStatusActive,
-		CurrentPeriodStart: pgtype.Timestamptz{Time: now, Valid: true},
-		CurrentPeriodEnd:   pgtype.Timestamptz{Time: periodEnd, Valid: true},
-		NextRedemptionDate: pgtype.Timestamptz{Time: nextRedemption, Valid: true},
+		DelegationID:       delegationData.ID,
+		CurrentPeriodStart: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		CurrentPeriodEnd:   pgtype.Timestamptz{Time: time.Now().Add(30 * 24 * time.Hour), Valid: true},
+		NextRedemptionDate: pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour), Valid: true},
+		CreatedAt:          pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		UpdatedAt:          pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
 	h.db.On("CreateSubscription", ctx, mock.Anything).Return(subscription, nil)
 

@@ -1,4 +1,7 @@
-import { DelegationStruct } from '../types/delegation';
+/**
+ * Utility functions for handling delegation data
+ */
+import { DelegationStruct } from '@metamask-private/delegator-core-viem';
 /**
  * Validates that the input is a valid Ethereum address
  * @param address The address to validate

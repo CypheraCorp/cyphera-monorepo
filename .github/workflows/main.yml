@@ -43,15 +43,30 @@ jobs:
         go-version: ${{ env.GO_VERSION }}
         cache: true
     
-    - name: Install dependencies
+    - name: Install Go dependencies
       run: go mod download
+    
+    - name: Install Node dependencies
+      run: make delegation-server-setup
 
-    - name: Run tests
-      env:  
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
-        AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
-        AUTH0_AUDIENCE: ${{ secrets.AUTH0_AUDIENCE }}
+    - name: Run Go tests
       run: go test -v ./...
+
+    - name: Run delegation server tests
+      run: make delegation-server-test
+
+    - name: Run integration tests
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
+        DELEGATION_LOCAL_MODE: true
+        DELEGATION_SERVER_URL: localhost:50051
+        DELEGATION_GRPC_ADDR: localhost:50051
+        GRPC_PORT: 50051
+        GRPC_HOST: 0.0.0.0
+        PORT: 8000
+      run: |
+        chmod +x scripts/integration-test.sh
+        make test-integration
 
   lint:
     name: Lint
@@ -107,6 +122,15 @@ jobs:
         name: bootstrap
         path: bootstrap
 
+    - name: Build delegation server
+      run: make delegation-server-build
+
+    - name: Upload delegation server artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: delegation-server
+        path: delegation-server
+
   deploy:
     name: Deploy
     needs: [build]
@@ -120,6 +144,12 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: bootstrap
+        path: .
+
+    - name: Download delegation server artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: delegation-server
         path: .
 
     - name: Configure AWS credentials
@@ -142,9 +172,20 @@ jobs:
     - name: Deploy with Serverless
       env:
         STAGE: ${{ env.STAGE }}
-        AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
-        AUTH0_AUDIENCE: ${{ secrets.AUTH0_AUDIENCE }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS || 'http://localhost:3000' }}
+        CORS_ALLOWED_METHODS: ${{ secrets.CORS_ALLOWED_METHODS || 'GET,POST,PUT,DELETE,OPTIONS,PATCH' }}
+        CORS_ALLOWED_HEADERS: ${{ secrets.CORS_ALLOWED_HEADERS || 'Content-Type,Authorization,X-API-Key,X-Workspace-ID,X-Account-ID' }}
+        CORS_EXPOSED_HEADERS: ${{ secrets.CORS_EXPOSED_HEADERS || 'Content-Length,Content-Type' }}
+        CORS_ALLOW_CREDENTIALS: ${{ secrets.CORS_ALLOW_CREDENTIALS || 'true' }}
+        DELEGATION_SERVER_URL: ${{ secrets.DELEGATION_SERVER_URL || 'localhost:50051' }}
+        DELEGATION_LOCAL_MODE: ${{ secrets.DELEGATION_LOCAL_MODE || 'true' }}
+        DELEGATION_GRPC_ADDR: ${{ secrets.DELEGATION_GRPC_ADDR || 'localhost:50051' }}
+        GRPC_PORT: ${{ secrets.GRPC_PORT || '50051' }}
+        GRPC_HOST: ${{ secrets.GRPC_HOST || '0.0.0.0' }}
+        PORT: ${{ secrets.PORT || '8000' }}
       run: |
         # Create domain if it doesn't exist
         serverless create-domain --stage ${{ env.STAGE }} --verbose || true
@@ -156,9 +197,20 @@ jobs:
     - name: Log deployment info
       env:
         STAGE: ${{ env.STAGE }}
-        AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
-        AUTH0_AUDIENCE: ${{ secrets.AUTH0_AUDIENCE }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS || 'http://localhost:3000' }}
+        CORS_ALLOWED_METHODS: ${{ secrets.CORS_ALLOWED_METHODS || 'GET,POST,PUT,DELETE,OPTIONS,PATCH' }}
+        CORS_ALLOWED_HEADERS: ${{ secrets.CORS_ALLOWED_HEADERS || 'Content-Type,Authorization,X-API-Key,X-Workspace-ID,X-Account-ID' }}
+        CORS_EXPOSED_HEADERS: ${{ secrets.CORS_EXPOSED_HEADERS || 'Content-Length,Content-Type' }}
+        CORS_ALLOW_CREDENTIALS: ${{ secrets.CORS_ALLOW_CREDENTIALS || 'true' }}
+        DELEGATION_SERVER_URL: ${{ secrets.DELEGATION_SERVER_URL || 'localhost:50051' }}
+        DELEGATION_LOCAL_MODE: ${{ secrets.DELEGATION_LOCAL_MODE || 'true' }}
+        DELEGATION_GRPC_ADDR: ${{ secrets.DELEGATION_GRPC_ADDR || 'localhost:50051' }}
+        GRPC_PORT: ${{ secrets.GRPC_PORT || '50051' }}
+        GRPC_HOST: ${{ secrets.GRPC_HOST || '0.0.0.0' }}
+        PORT: ${{ secrets.PORT || '8000' }}
       run: |
         echo "Deployed to AWS Lambda"
         serverless info --stage ${{ env.STAGE }} 
