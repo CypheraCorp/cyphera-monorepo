@@ -228,11 +228,20 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	}
 
 	// Get pagination parameters
-	limit, offset, err := validatePaginationParams(c)
+	limit, page, err := validatePaginationParams(c)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid pagination parameters", err)
 		return
 	}
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	offset := (page - 1) * limit
 
 	customers, err := h.common.db.ListCustomersWithPagination(c.Request.Context(), db.ListCustomersWithPaginationParams{
 		WorkspaceID: parsedWorkspaceID,

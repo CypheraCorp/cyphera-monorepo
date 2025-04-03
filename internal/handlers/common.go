@@ -195,6 +195,7 @@ func sendPaginatedSuccess(c *gin.Context, statusCode int, data interface{}, page
 			"total_pages":  (total + limit - 1) / limit,
 		},
 	}
+
 	c.JSON(statusCode, response)
 }
 

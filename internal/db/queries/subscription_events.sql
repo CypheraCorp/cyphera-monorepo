@@ -117,4 +117,62 @@ WHERE subscription_id = $1 AND event_type = 'redeemed';
 SELECT * FROM subscription_events
 WHERE subscription_id = $1
 ORDER BY occurred_at DESC
-LIMIT 1; 
+LIMIT 1;
+
+-- name: ListSubscriptionEventDetailsWithPagination :many
+SELECT 
+    se.id,
+    se.event_type,
+    se.transaction_hash,
+    se.amount_in_cents,
+    se.occurred_at,
+    se.error_message,
+    -- Subscription details
+    s.id as subscription_id,
+    s.status as subscription_status,
+    -- Customer details
+    c.id as customer_id,
+    c.name as customer_name,
+    c.email as customer_email,
+    -- Product details
+    p.id as product_id,
+    p.name as product_name,
+    p.product_type,
+    p.interval_type,
+    -- Token details
+    t.symbol as token_symbol,
+    t.contract_address as token_address,
+    -- Network details
+    n.name as network_name,
+    n.type as network_type,
+    n.chain_id,
+    -- Customer wallet details
+    cw.wallet_address as customer_wallet_address
+FROM subscription_events se
+JOIN subscriptions s ON se.subscription_id = s.id
+JOIN customers c ON s.customer_id = c.id
+JOIN products p ON s.product_id = p.id
+JOIN products_tokens pt ON s.product_token_id = pt.id
+JOIN tokens t ON pt.token_id = t.id
+JOIN networks n ON pt.network_id = n.id
+LEFT JOIN customer_wallets cw ON s.customer_wallet_id = cw.id
+WHERE s.deleted_at IS NULL
+    AND c.deleted_at IS NULL
+    AND p.deleted_at IS NULL
+    AND pt.deleted_at IS NULL
+    AND t.deleted_at IS NULL
+    AND n.deleted_at IS NULL
+    AND p.workspace_id = $3
+    AND se.event_type IN ('redeemed', 'failed', 'failed_redemption')
+ORDER BY se.occurred_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountSubscriptionEventDetails :one
+SELECT COUNT(*) 
+FROM subscription_events se
+JOIN subscriptions s ON se.subscription_id = s.id
+JOIN products p ON s.product_id = p.id
+WHERE s.deleted_at IS NULL
+    AND p.deleted_at IS NULL
+    AND p.workspace_id = $1
+    AND se.event_type IN ('redeemed', 'failed'); 

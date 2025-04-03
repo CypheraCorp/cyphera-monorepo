@@ -12,6 +12,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countSubscriptionEventDetails = `-- name: CountSubscriptionEventDetails :one
+SELECT COUNT(*) 
+FROM subscription_events se
+JOIN subscriptions s ON se.subscription_id = s.id
+JOIN products p ON s.product_id = p.id
+WHERE s.deleted_at IS NULL
+    AND p.deleted_at IS NULL
+    AND p.workspace_id = $1
+    AND se.event_type IN ('redeemed', 'failed')
+`
+
+func (q *Queries) CountSubscriptionEventDetails(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countSubscriptionEventDetails, workspaceID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSubscriptionEvents = `-- name: CountSubscriptionEvents :one
 SELECT COUNT(*) FROM subscription_events
 `
@@ -388,6 +406,127 @@ func (q *Queries) ListRecentSubscriptionEventsByType(ctx context.Context, arg Li
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubscriptionEventDetailsWithPagination = `-- name: ListSubscriptionEventDetailsWithPagination :many
+SELECT 
+    se.id,
+    se.event_type,
+    se.transaction_hash,
+    se.amount_in_cents,
+    se.occurred_at,
+    se.error_message,
+    -- Subscription details
+    s.id as subscription_id,
+    s.status as subscription_status,
+    -- Customer details
+    c.id as customer_id,
+    c.name as customer_name,
+    c.email as customer_email,
+    -- Product details
+    p.id as product_id,
+    p.name as product_name,
+    p.product_type,
+    p.interval_type,
+    -- Token details
+    t.symbol as token_symbol,
+    t.contract_address as token_address,
+    -- Network details
+    n.name as network_name,
+    n.type as network_type,
+    n.chain_id,
+    -- Customer wallet details
+    cw.wallet_address as customer_wallet_address
+FROM subscription_events se
+JOIN subscriptions s ON se.subscription_id = s.id
+JOIN customers c ON s.customer_id = c.id
+JOIN products p ON s.product_id = p.id
+JOIN products_tokens pt ON s.product_token_id = pt.id
+JOIN tokens t ON pt.token_id = t.id
+JOIN networks n ON pt.network_id = n.id
+LEFT JOIN customer_wallets cw ON s.customer_wallet_id = cw.id
+WHERE s.deleted_at IS NULL
+    AND c.deleted_at IS NULL
+    AND p.deleted_at IS NULL
+    AND pt.deleted_at IS NULL
+    AND t.deleted_at IS NULL
+    AND n.deleted_at IS NULL
+    AND p.workspace_id = $3
+    AND se.event_type IN ('redeemed', 'failed', 'failed_redemption')
+ORDER BY se.occurred_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListSubscriptionEventDetailsWithPaginationParams struct {
+	Limit       int32     `json:"limit"`
+	Offset      int32     `json:"offset"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+type ListSubscriptionEventDetailsWithPaginationRow struct {
+	ID                    uuid.UUID             `json:"id"`
+	EventType             SubscriptionEventType `json:"event_type"`
+	TransactionHash       pgtype.Text           `json:"transaction_hash"`
+	AmountInCents         int32                 `json:"amount_in_cents"`
+	OccurredAt            pgtype.Timestamptz    `json:"occurred_at"`
+	ErrorMessage          pgtype.Text           `json:"error_message"`
+	SubscriptionID        uuid.UUID             `json:"subscription_id"`
+	SubscriptionStatus    SubscriptionStatus    `json:"subscription_status"`
+	CustomerID            uuid.UUID             `json:"customer_id"`
+	CustomerName          pgtype.Text           `json:"customer_name"`
+	CustomerEmail         pgtype.Text           `json:"customer_email"`
+	ProductID             uuid.UUID             `json:"product_id"`
+	ProductName           string                `json:"product_name"`
+	ProductType           ProductType           `json:"product_type"`
+	IntervalType          IntervalType          `json:"interval_type"`
+	TokenSymbol           string                `json:"token_symbol"`
+	TokenAddress          string                `json:"token_address"`
+	NetworkName           string                `json:"network_name"`
+	NetworkType           string                `json:"network_type"`
+	ChainID               int32                 `json:"chain_id"`
+	CustomerWalletAddress pgtype.Text           `json:"customer_wallet_address"`
+}
+
+func (q *Queries) ListSubscriptionEventDetailsWithPagination(ctx context.Context, arg ListSubscriptionEventDetailsWithPaginationParams) ([]ListSubscriptionEventDetailsWithPaginationRow, error) {
+	rows, err := q.db.Query(ctx, listSubscriptionEventDetailsWithPagination, arg.Limit, arg.Offset, arg.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSubscriptionEventDetailsWithPaginationRow{}
+	for rows.Next() {
+		var i ListSubscriptionEventDetailsWithPaginationRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventType,
+			&i.TransactionHash,
+			&i.AmountInCents,
+			&i.OccurredAt,
+			&i.ErrorMessage,
+			&i.SubscriptionID,
+			&i.SubscriptionStatus,
+			&i.CustomerID,
+			&i.CustomerName,
+			&i.CustomerEmail,
+			&i.ProductID,
+			&i.ProductName,
+			&i.ProductType,
+			&i.IntervalType,
+			&i.TokenSymbol,
+			&i.TokenAddress,
+			&i.NetworkName,
+			&i.NetworkType,
+			&i.ChainID,
+			&i.CustomerWalletAddress,
 		); err != nil {
 			return nil, err
 		}

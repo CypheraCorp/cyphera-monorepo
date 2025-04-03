@@ -10,7 +10,7 @@
     "start:mock": "MOCK_MODE=true ts-node src/index.ts",
     "clean": "rm -rf dist node_modules",
     "lint": "tsc --noEmit",
-    "setup": "bash ./scripts/install.sh",
+    "setup": "bash ./scripts/setup.sh",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

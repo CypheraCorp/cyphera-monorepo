@@ -165,4 +165,50 @@ SELECT *
 FROM subscriptions
 WHERE id = $1 AND status = 'active' AND deleted_at IS NULL
 FOR UPDATE NOWAIT
-LIMIT 1; 
+LIMIT 1;
+
+-- name: ListSubscriptionDetailsWithPagination :many
+SELECT 
+    s.id,
+    s.status,
+    s.current_period_start,
+    s.current_period_end,
+    s.next_redemption_date,
+    s.total_redemptions,
+    s.total_amount_in_cents,
+    -- Customer details
+    c.id as customer_id,
+    c.name as customer_name,
+    c.email as customer_email,
+    -- Product details
+    p.id as product_id,
+    p.name as product_name,
+    p.product_type,
+    p.interval_type,
+    p.price_in_pennies,
+    -- Token details
+    t.symbol as token_symbol,
+    t.contract_address as token_address,
+    -- Network details
+    n.name as network_name,
+    n.type as network_type,
+    n.chain_id,
+    -- Customer wallet details
+    cw.wallet_address as customer_wallet_address
+FROM subscriptions s
+JOIN customers c ON s.customer_id = c.id
+JOIN products p ON s.product_id = p.id
+JOIN products_tokens pt ON s.product_token_id = pt.id
+JOIN tokens t ON pt.token_id = t.id
+JOIN networks n ON pt.network_id = n.id
+LEFT JOIN customer_wallets cw ON s.customer_wallet_id = cw.id
+WHERE s.deleted_at IS NULL
+    AND c.deleted_at IS NULL
+    AND p.deleted_at IS NULL
+    AND pt.deleted_at IS NULL
+    AND t.deleted_at IS NULL
+    AND n.deleted_at IS NULL
+    AND cw.deleted_at IS NULL
+    AND p.workspace_id = $3
+ORDER BY s.created_at DESC
+LIMIT $1 OFFSET $2; 
