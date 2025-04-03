@@ -485,6 +485,125 @@ func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]Subscription, 
 	return items, nil
 }
 
+const listSubscriptionDetailsWithPagination = `-- name: ListSubscriptionDetailsWithPagination :many
+SELECT 
+    s.id,
+    s.status,
+    s.current_period_start,
+    s.current_period_end,
+    s.next_redemption_date,
+    s.total_redemptions,
+    s.total_amount_in_cents,
+    -- Customer details
+    c.id as customer_id,
+    c.name as customer_name,
+    c.email as customer_email,
+    -- Product details
+    p.id as product_id,
+    p.name as product_name,
+    p.product_type,
+    p.interval_type,
+    p.price_in_pennies,
+    -- Token details
+    t.symbol as token_symbol,
+    t.contract_address as token_address,
+    -- Network details
+    n.name as network_name,
+    n.type as network_type,
+    n.chain_id,
+    -- Customer wallet details
+    cw.wallet_address as customer_wallet_address
+FROM subscriptions s
+JOIN customers c ON s.customer_id = c.id
+JOIN products p ON s.product_id = p.id
+JOIN products_tokens pt ON s.product_token_id = pt.id
+JOIN tokens t ON pt.token_id = t.id
+JOIN networks n ON pt.network_id = n.id
+LEFT JOIN customer_wallets cw ON s.customer_wallet_id = cw.id
+WHERE s.deleted_at IS NULL
+    AND c.deleted_at IS NULL
+    AND p.deleted_at IS NULL
+    AND pt.deleted_at IS NULL
+    AND t.deleted_at IS NULL
+    AND n.deleted_at IS NULL
+    AND cw.deleted_at IS NULL
+    AND p.workspace_id = $3
+ORDER BY s.created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListSubscriptionDetailsWithPaginationParams struct {
+	Limit       int32     `json:"limit"`
+	Offset      int32     `json:"offset"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+type ListSubscriptionDetailsWithPaginationRow struct {
+	ID                    uuid.UUID          `json:"id"`
+	Status                SubscriptionStatus `json:"status"`
+	CurrentPeriodStart    pgtype.Timestamptz `json:"current_period_start"`
+	CurrentPeriodEnd      pgtype.Timestamptz `json:"current_period_end"`
+	NextRedemptionDate    pgtype.Timestamptz `json:"next_redemption_date"`
+	TotalRedemptions      int32              `json:"total_redemptions"`
+	TotalAmountInCents    int32              `json:"total_amount_in_cents"`
+	CustomerID            uuid.UUID          `json:"customer_id"`
+	CustomerName          pgtype.Text        `json:"customer_name"`
+	CustomerEmail         pgtype.Text        `json:"customer_email"`
+	ProductID             uuid.UUID          `json:"product_id"`
+	ProductName           string             `json:"product_name"`
+	ProductType           ProductType        `json:"product_type"`
+	IntervalType          IntervalType       `json:"interval_type"`
+	PriceInPennies        int32              `json:"price_in_pennies"`
+	TokenSymbol           string             `json:"token_symbol"`
+	TokenAddress          string             `json:"token_address"`
+	NetworkName           string             `json:"network_name"`
+	NetworkType           string             `json:"network_type"`
+	ChainID               int32              `json:"chain_id"`
+	CustomerWalletAddress pgtype.Text        `json:"customer_wallet_address"`
+}
+
+func (q *Queries) ListSubscriptionDetailsWithPagination(ctx context.Context, arg ListSubscriptionDetailsWithPaginationParams) ([]ListSubscriptionDetailsWithPaginationRow, error) {
+	rows, err := q.db.Query(ctx, listSubscriptionDetailsWithPagination, arg.Limit, arg.Offset, arg.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSubscriptionDetailsWithPaginationRow{}
+	for rows.Next() {
+		var i ListSubscriptionDetailsWithPaginationRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.CurrentPeriodStart,
+			&i.CurrentPeriodEnd,
+			&i.NextRedemptionDate,
+			&i.TotalRedemptions,
+			&i.TotalAmountInCents,
+			&i.CustomerID,
+			&i.CustomerName,
+			&i.CustomerEmail,
+			&i.ProductID,
+			&i.ProductName,
+			&i.ProductType,
+			&i.IntervalType,
+			&i.PriceInPennies,
+			&i.TokenSymbol,
+			&i.TokenAddress,
+			&i.NetworkName,
+			&i.NetworkType,
+			&i.ChainID,
+			&i.CustomerWalletAddress,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSubscriptions = `-- name: ListSubscriptions :many
 SELECT id, customer_id, product_id, product_token_id, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, created_at, updated_at, deleted_at FROM subscriptions
 WHERE deleted_at IS NULL

@@ -1139,7 +1139,7 @@ func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequ
 }
 
 // validatePaginationParams validates and returns pagination parameters
-func validatePaginationParams(c *gin.Context) (limit int32, offset int32, err error) {
+func validatePaginationParams(c *gin.Context) (limit int32, page int32, err error) {
 	const maxLimit int32 = 100
 	limit = 10 // default limit
 
@@ -1155,17 +1155,17 @@ func validatePaginationParams(c *gin.Context) (limit int32, offset int32, err er
 		}
 	}
 
-	if offsetStr := c.Query("offset"); offsetStr != "" {
-		parsedOffset, err := strconv.ParseInt(offsetStr, 10, 32)
+	if pageStr := c.Query("page"); pageStr != "" {
+		parsedPage, err := strconv.ParseInt(pageStr, 10, 32)
 		if err != nil {
-			return 0, 0, fmt.Errorf("invalid offset parameter")
+			return 0, 0, fmt.Errorf("invalid page parameter")
 		}
-		if parsedOffset > 0 {
-			offset = int32(parsedOffset)
+		if parsedPage > 0 {
+			page = int32(parsedPage)
 		}
 	}
 
-	return limit, offset, nil
+	return limit, page, nil
 }
 
 // validateProductUpdate validates all update parameters at once
@@ -1270,11 +1270,20 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 	}
 
 	// Get pagination parameters
-	limit, offset, err := validatePaginationParams(c)
+	limit, page, err := validatePaginationParams(c)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, err.Error(), err)
 		return
 	}
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	offset := (page - 1) * limit
 
 	// Get total count
 	total, err := h.common.db.CountProducts(c.Request.Context(), parsedWorkspaceID)

@@ -10,7 +10,6 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -132,9 +131,19 @@ func (h *SubscriptionHandler) GetSubscriptionWithDetails(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /subscriptions [get]
 func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
-	// Check for pagination parameters
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
+	// Get pagination parameters
+	limit, page, err := validatePaginationParams(c)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, err.Error(), err)
+		return
+	}
 
 	if page < 1 {
 		page = 1
@@ -143,40 +152,28 @@ func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 		limit = 20
 	}
 
-	// If pagination is requested, use it
-	if c.Query("page") != "" || c.Query("limit") != "" {
-		offset := (page - 1) * limit
+	offset := (page - 1) * limit
 
-		params := db.ListSubscriptionsWithPaginationParams{
-			Limit:  int32(limit),
-			Offset: int32(offset),
-		}
-
-		subscriptions, err := h.common.db.ListSubscriptionsWithPagination(c.Request.Context(), params)
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to retrieve subscriptions", err)
-			return
-		}
-
-		// Get the total count for pagination metadata
-		totalCount, err := h.common.db.CountSubscriptions(c.Request.Context())
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to count subscriptions", err)
-			return
-		}
-
-		sendPaginatedSuccess(c, http.StatusOK, subscriptions, page, limit, int(totalCount))
-		return
+	params := db.ListSubscriptionDetailsWithPaginationParams{
+		WorkspaceID: parsedWorkspaceID,
+		Limit:       int32(limit),
+		Offset:      int32(offset),
 	}
 
-	// Otherwise get all subscriptions
-	subscriptions, err := h.common.db.ListSubscriptions(c.Request.Context())
+	subscriptions, err := h.common.db.ListSubscriptionDetailsWithPagination(c.Request.Context(), params)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve subscriptions", err)
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, subscriptions)
+	// Get the total count for pagination metadata
+	totalCount, err := h.common.db.CountSubscriptions(c.Request.Context())
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to count subscriptions", err)
+		return
+	}
+
+	sendPaginatedSuccess(c, http.StatusOK, subscriptions, int(page), int(limit), int(totalCount))
 }
 
 // ListActiveSubscriptions godoc

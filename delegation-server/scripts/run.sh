@@ -5,14 +5,6 @@ if [ -f .env ]; then
   source .env
   set +a
 fi
-# Log environment variables for debugging (with sensitive info redacted)
-echo "Environment variables being used by delegation server:"
-echo "MOCK_MODE=${MOCK_MODE}"
-echo "GRPC_HOST=${GRPC_HOST}"
-echo "GRPC_PORT=${GRPC_PORT}"
-echo "CHAIN_ID=${CHAIN_ID}"
-[ -n "${PRIVATE_KEY}" ] && echo "PRIVATE_KEY=[REDACTED]" || echo "PRIVATE_KEY=not set"
-echo "LOG_LEVEL=${LOG_LEVEL}"
 
 # Use npx to find the locally installed ts-node
 npx ts-node src/index.ts

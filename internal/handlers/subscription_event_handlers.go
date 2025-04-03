@@ -108,14 +108,24 @@ func (h *SubscriptionEventHandler) GetSubscriptionEventByTxHash(c *gin.Context) 
 // @Produce json
 // @Param page query int false "Page number"
 // @Param limit query int false "Items per page"
-// @Success 200 {array} db.SubscriptionEvent
+// @Success 200 {array} db.SubscriptionEventDetails
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /subscription-events [get]
 func (h *SubscriptionEventHandler) ListSubscriptionEvents(c *gin.Context) {
-	// Check for pagination parameters
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
+	// Get pagination parameters
+	limit, page, err := validatePaginationParams(c)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, err.Error(), err)
+		return
+	}
 
 	if page < 1 {
 		page = 1
@@ -124,40 +134,28 @@ func (h *SubscriptionEventHandler) ListSubscriptionEvents(c *gin.Context) {
 		limit = 20
 	}
 
-	// If pagination is requested, use it
-	if c.Query("page") != "" || c.Query("limit") != "" {
-		offset := (page - 1) * limit
+	offset := (page - 1) * limit
 
-		params := db.ListSubscriptionEventsWithPaginationParams{
-			Limit:  int32(limit),
-			Offset: int32(offset),
-		}
-
-		events, err := h.common.db.ListSubscriptionEventsWithPagination(c.Request.Context(), params)
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to retrieve subscription events", err)
-			return
-		}
-
-		// Get the total count for pagination metadata
-		totalCount, err := h.common.db.CountSubscriptionEvents(c.Request.Context())
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to count subscription events", err)
-			return
-		}
-
-		sendPaginatedSuccess(c, http.StatusOK, events, page, limit, int(totalCount))
-		return
+	params := db.ListSubscriptionEventDetailsWithPaginationParams{
+		Limit:       int32(limit),
+		Offset:      int32(offset),
+		WorkspaceID: parsedWorkspaceID,
 	}
 
-	// Otherwise get all events
-	events, err := h.common.db.ListSubscriptionEvents(c.Request.Context())
+	events, err := h.common.db.ListSubscriptionEventDetailsWithPagination(c.Request.Context(), params)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve subscription events", err)
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, events)
+	// Get the total count for pagination metadata
+	totalCount, err := h.common.db.CountSubscriptionEvents(c.Request.Context())
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to count subscription events", err)
+		return
+	}
+
+	sendPaginatedSuccess(c, http.StatusOK, events, int(page), int(limit), int(totalCount))
 }
 
 // ListSubscriptionEventsBySubscription godoc

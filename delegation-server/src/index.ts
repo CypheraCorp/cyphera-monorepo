@@ -8,21 +8,30 @@ import config from './config'
 // Debug environment variables on startup
 function logEnvironmentVariables() {
   const envVars = { ...process.env };
+
+    // Helper function to redact sensitive URLs
+    const redactPrivateKey = (url: string | undefined) => {
+      if (!url || url === 'not set') return 'not set'
+      return url.substring(0, 5) + '...[REDACTED]'
+    }
   
-  // Redact sensitive information
-  if (envVars.PRIVATE_KEY) {
-    envVars.PRIVATE_KEY = envVars.PRIVATE_KEY.substring(0, 6) + '...[REDACTED]';
+  // Helper function to redact sensitive values
+  const redactUrl = (value: string | undefined) => {
+    if (!value || value === 'not set') return 'not set'
+    if (value.length <= 20) return '...[REDACTED]'
+    return value.slice(0, -20) + '...[REDACTED]'
   }
   
   logger.info('===== ENVIRONMENT VARIABLES =====');
   logger.info(`MOCK_MODE: ${envVars.MOCK_MODE || 'not set'}`);
   logger.info(`GRPC_HOST: ${envVars.GRPC_HOST || 'not set'}`);
   logger.info(`GRPC_PORT: ${envVars.GRPC_PORT || 'not set'}`);
-  logger.info(`RPC_URL: ${envVars.RPC_URL || 'not set'}`);
-  logger.info(`BUNDLER_URL: ${envVars.BUNDLER_URL || 'not set'}`);
+  logger.info(`RPC_URL: ${redactUrl(envVars.RPC_URL)}`);
+  logger.info(`BUNDLER_URL: ${redactUrl(envVars.BUNDLER_URL)}`);
+  logger.info(`NPM_TOKEN: ${redactPrivateKey(envVars.NPM_TOKEN)}`);
 
   logger.info(`CHAIN_ID: ${envVars.CHAIN_ID || 'not set'}`);
-  logger.info(`PRIVATE_KEY: ${envVars.PRIVATE_KEY || 'not set'}`);
+  logger.info(`PRIVATE_KEY: ${redactPrivateKey(envVars.PRIVATE_KEY)}`);
   logger.info(`LOG_LEVEL: ${envVars.LOG_LEVEL || 'not set'}`);
   logger.info('==================================');
   
