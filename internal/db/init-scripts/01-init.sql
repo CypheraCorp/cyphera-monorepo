@@ -43,45 +43,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
--- Wallets table
-CREATE TABLE IF NOT EXISTS wallets (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    account_id UUID NOT NULL REFERENCES accounts(id),
-    wallet_type TEXT NOT NULL,                -- 'wallet' or 'circle_wallet'
-    wallet_address TEXT NOT NULL,
-    network_type network_type NOT NULL,
-    network_id UUID REFERENCES networks(id),
-    nickname TEXT,
-    ens TEXT,
-    is_primary BOOLEAN DEFAULT false,
-    verified BOOLEAN DEFAULT false,
-    last_used_at TIMESTAMP WITH TIME ZONE,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE,
-    UNIQUE(account_id, wallet_address, network_type),
-    CONSTRAINT check_wallet_type CHECK (wallet_type IN ('wallet', 'circle_wallet'))
-);
-
--- Circle Wallets Table
--- Stores Circle-specific wallet data
-CREATE TABLE IF NOT EXISTS circle_wallets (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    wallet_id UUID NOT NULL REFERENCES wallets(id),
-    circle_user_id UUID NOT NULL REFERENCES circle_users(id),
-    circle_wallet_id TEXT NOT NULL,
-    chain_id INTEGER NOT NULL,
-    state TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE,
-    
-    -- Constraints
-    UNIQUE(wallet_id),
-    UNIQUE(circle_wallet_id)
-);
-
 -- Circle Users Table
 -- Stores Circle user data
 CREATE TABLE IF NOT EXISTS circle_users (
@@ -185,6 +146,75 @@ CREATE TABLE IF NOT EXISTS api_keys (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
+-- Create networks table
+CREATE TABLE networks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    chain_id INTEGER NOT NULL UNIQUE,
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Wallets table
+CREATE TABLE IF NOT EXISTS wallets (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(id),
+    wallet_type TEXT NOT NULL,                -- 'wallet' or 'circle_wallet'
+    wallet_address TEXT NOT NULL,
+    network_type network_type NOT NULL,
+    network_id UUID REFERENCES networks(id),
+    nickname TEXT,
+    ens TEXT,
+    is_primary BOOLEAN DEFAULT false,
+    verified BOOLEAN DEFAULT false,
+    last_used_at TIMESTAMP WITH TIME ZONE,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    UNIQUE(account_id, wallet_address, network_type),
+    CONSTRAINT check_wallet_type CHECK (wallet_type IN ('wallet', 'circle_wallet'))
+);
+
+-- Circle Wallets Table
+-- Stores Circle-specific wallet data
+CREATE TABLE IF NOT EXISTS circle_wallets (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    wallet_id UUID NOT NULL REFERENCES wallets(id),
+    circle_user_id UUID NOT NULL REFERENCES circle_users(id),
+    circle_wallet_id TEXT NOT NULL,
+    chain_id INTEGER NOT NULL,
+    state TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Constraints
+    UNIQUE(wallet_id),
+    UNIQUE(circle_wallet_id)
+);
+
+-- Create customer_wallets table
+CREATE TABLE customer_wallets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID NOT NULL REFERENCES customers(id),
+    wallet_address TEXT NOT NULL,
+    network_type network_type NOT NULL,
+    nickname TEXT,
+    ens TEXT,
+    is_primary BOOLEAN DEFAULT false,
+    verified BOOLEAN DEFAULT false,
+    last_used_at TIMESTAMP WITH TIME ZONE,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    UNIQUE(customer_id, wallet_address, network_type)
+);
+
 -- Create products table
 CREATE TABLE products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -212,36 +242,6 @@ CREATE TABLE products (
         (product_type = 'recurring' AND interval_type IS NOT NULL) OR
         (product_type = 'one_off' AND interval_type IS NULL)
     )
-);
-
--- Create networks table
-CREATE TABLE networks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    type TEXT NOT NULL,
-    chain_id INTEGER NOT NULL UNIQUE,
-    active BOOLEAN NOT NULL DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE
-);
-
--- Create customer_wallets table
-CREATE TABLE customer_wallets (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    customer_id UUID NOT NULL REFERENCES customers(id),
-    wallet_address TEXT NOT NULL,
-    network_type network_type NOT NULL,
-    nickname TEXT,
-    ens TEXT,
-    is_primary BOOLEAN DEFAULT false,
-    verified BOOLEAN DEFAULT false,
-    last_used_at TIMESTAMP WITH TIME ZONE,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE,
-    UNIQUE(customer_id, wallet_address, network_type)
 );
 
 -- Create tokens table
@@ -477,6 +477,12 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
+-- Insert test networks
+INSERT INTO networks (name, type, chain_id, active)
+VALUES 
+    ('Ethereum Sepolia', 'Sepolia', 11155111, true)
+ON CONFLICT DO NOTHING;
+
 -- Insert test wallets
 INSERT INTO wallets (
     account_id,
@@ -651,12 +657,6 @@ VALUES
         true,
         '{"chain": "solana", "tags": ["gaming"]}'::jsonb
     )
-ON CONFLICT DO NOTHING;
-
--- Insert some test networks
-INSERT INTO networks (name, type, chain_id, active)
-VALUES 
-    ('Ethereum Sepolia', 'Sepolia', 11155111, true)
 ON CONFLICT DO NOTHING;
 
 -- Insert some test tokens
@@ -850,6 +850,11 @@ CREATE TRIGGER set_failed_subscription_attempts_updated_at
 -- Add triggers for circle tables
 CREATE TRIGGER set_circle_users_updated_at
     BEFORE UPDATE ON circle_users
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_circle_wallets_updated_at
+    BEFORE UPDATE ON circle_wallets
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 
