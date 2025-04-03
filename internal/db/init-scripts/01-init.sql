@@ -22,6 +22,9 @@ CREATE TYPE interval_type AS ENUM ('1min', '5mins', 'daily', 'week', 'month', 'y
 -- Create network type enum
 CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkadot');
 
+-- Create wallet type enum
+CREATE TYPE wallet_type AS ENUM ('wallet', 'circle_wallet');
+
 -- Accounts table (top level organization)
 CREATE TABLE IF NOT EXISTS accounts (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -44,8 +47,10 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE TABLE IF NOT EXISTS wallets (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     account_id UUID NOT NULL REFERENCES accounts(id),
+    wallet_type TEXT NOT NULL,                -- 'wallet' or 'circle_wallet'
     wallet_address TEXT NOT NULL,
     network_type network_type NOT NULL,
+    network_id UUID REFERENCES networks(id),
     nickname TEXT,
     ens TEXT,
     is_primary BOOLEAN DEFAULT false,
@@ -55,7 +60,40 @@ CREATE TABLE IF NOT EXISTS wallets (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
-    UNIQUE(account_id, wallet_address, network_type)
+    UNIQUE(account_id, wallet_address, network_type),
+    CONSTRAINT check_wallet_type CHECK (wallet_type IN ('wallet', 'circle_wallet'))
+);
+
+-- Circle Wallets Table
+-- Stores Circle-specific wallet data
+CREATE TABLE IF NOT EXISTS circle_wallets (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    wallet_id UUID NOT NULL REFERENCES wallets(id),
+    circle_user_id UUID NOT NULL REFERENCES circle_users(id),
+    circle_wallet_id TEXT NOT NULL,
+    chain_id INTEGER NOT NULL,
+    state TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Constraints
+    UNIQUE(wallet_id),
+    UNIQUE(circle_wallet_id)
+);
+
+-- Circle Users Table
+-- Stores Circle user data
+CREATE TABLE IF NOT EXISTS circle_users (
+    id UUID PRIMARY KEY,                      -- Circle User ID
+    account_id UUID NOT NULL REFERENCES accounts(id), -- Our Account ID
+    token TEXT NOT NULL,                      -- User token from Circle
+    encryption_key TEXT NOT NULL,             -- Encryption key from Circle
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Index for fast lookups by account_id
+    UNIQUE(account_id)
 );
 
 -- Users table
@@ -362,6 +400,8 @@ CREATE INDEX idx_wallets_account_id ON wallets(account_id);
 CREATE INDEX idx_wallets_address ON wallets(wallet_address);
 CREATE INDEX idx_wallets_network_type ON wallets(network_type);
 CREATE INDEX idx_wallets_is_primary ON wallets(is_primary) WHERE deleted_at IS NULL;
+CREATE INDEX idx_wallets_network_id ON wallets(network_id);
+CREATE INDEX idx_wallets_wallet_type ON wallets(wallet_type);
 
 CREATE INDEX idx_products_workspace_id ON products(workspace_id);
 CREATE INDEX idx_products_wallet_id ON products(wallet_id);
@@ -412,6 +452,14 @@ CREATE INDEX idx_failed_subscription_attempts_error_type ON failed_subscription_
 CREATE INDEX idx_failed_subscription_attempts_wallet_address ON failed_subscription_attempts(wallet_address);
 CREATE INDEX idx_failed_subscription_attempts_occurred_at ON failed_subscription_attempts(occurred_at);
 
+-- Indexes for circle tables
+CREATE INDEX idx_circle_users_account_id ON circle_users(account_id);
+
+CREATE INDEX idx_circle_wallets_wallet_id ON circle_wallets(wallet_id);
+CREATE INDEX idx_circle_wallets_circle_user_id ON circle_wallets(circle_user_id);
+CREATE INDEX idx_circle_wallets_circle_wallet_id ON circle_wallets(circle_wallet_id);
+CREATE INDEX idx_circle_wallets_state ON circle_wallets(state);
+
 -- Insert test data for development
 INSERT INTO accounts (name, account_type, business_name, business_type)
 VALUES 
@@ -432,6 +480,7 @@ ON CONFLICT DO NOTHING;
 -- Insert test wallets
 INSERT INTO wallets (
     account_id,
+    wallet_type,
     wallet_address,
     network_type,
     nickname,
@@ -443,6 +492,7 @@ INSERT INTO wallets (
 VALUES 
     (
         (SELECT id FROM accounts WHERE name = 'Test Account'),
+        'wallet',
         '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
         'evm',
         'Main Payment Wallet',
@@ -453,6 +503,7 @@ VALUES
     ),
     (
         (SELECT id FROM accounts WHERE name = 'Test Account'),
+        'wallet',
         '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
         'polkadot',
         'DOT Wallet',
@@ -463,6 +514,7 @@ VALUES
     ),
     (
         (SELECT id FROM accounts WHERE name = 'Admin Account'),
+        'wallet',
         '0x8894e0a0c962cb723c1976a4421c95949be2d4e3',
         'evm',
         'Admin ETH Wallet',
@@ -473,6 +525,7 @@ VALUES
     ),
     (
         (SELECT id FROM accounts WHERE name = 'Admin Account'),
+        'wallet',
         '6fYU3gaCuDGK7HLqsMW2nwpBJqecxLmLDBo5Hc3YzKf5',
         'solana',
         'Admin SOL Wallet',
@@ -791,6 +844,12 @@ CREATE TRIGGER set_customer_wallets_updated_at
 
 CREATE TRIGGER set_failed_subscription_attempts_updated_at
     BEFORE UPDATE ON failed_subscription_attempts
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+-- Add triggers for circle tables
+CREATE TRIGGER set_circle_users_updated_at
+    BEFORE UPDATE ON circle_users
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 

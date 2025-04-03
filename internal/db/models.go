@@ -419,6 +419,48 @@ func (ns NullUserStatus) Value() (driver.Value, error) {
 	return string(ns.UserStatus), nil
 }
 
+type WalletType string
+
+const (
+	WalletTypeWallet       WalletType = "wallet"
+	WalletTypeCircleWallet WalletType = "circle_wallet"
+)
+
+func (e *WalletType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = WalletType(s)
+	case string:
+		*e = WalletType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for WalletType: %T", src)
+	}
+	return nil
+}
+
+type NullWalletType struct {
+	WalletType WalletType `json:"wallet_type"`
+	Valid      bool       `json:"valid"` // Valid is true if WalletType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullWalletType) Scan(value interface{}) error {
+	if value == nil {
+		ns.WalletType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.WalletType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullWalletType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.WalletType), nil
+}
+
 type Account struct {
 	ID                 uuid.UUID          `json:"id"`
 	Name               string             `json:"name"`
@@ -448,6 +490,27 @@ type ApiKey struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type CircleUser struct {
+	ID            uuid.UUID          `json:"id"`
+	AccountID     uuid.UUID          `json:"account_id"`
+	Token         string             `json:"token"`
+	EncryptionKey string             `json:"encryption_key"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CircleWallet struct {
+	ID             uuid.UUID          `json:"id"`
+	WalletID       uuid.UUID          `json:"wallet_id"`
+	CircleUserID   uuid.UUID          `json:"circle_user_id"`
+	CircleWalletID string             `json:"circle_wallet_id"`
+	ChainID        int32              `json:"chain_id"`
+	State          string             `json:"state"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type Customer struct {
@@ -638,8 +701,10 @@ type User struct {
 type Wallet struct {
 	ID            uuid.UUID          `json:"id"`
 	AccountID     uuid.UUID          `json:"account_id"`
+	WalletType    string             `json:"wallet_type"`
 	WalletAddress string             `json:"wallet_address"`
 	NetworkType   NetworkType        `json:"network_type"`
+	NetworkID     pgtype.UUID        `json:"network_id"`
 	Nickname      pgtype.Text        `json:"nickname"`
 	Ens           pgtype.Text        `json:"ens"`
 	IsPrimary     pgtype.Bool        `json:"is_primary"`
