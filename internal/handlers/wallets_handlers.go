@@ -61,7 +61,7 @@ type CreateWalletRequest struct {
 	WalletType    string                 `json:"wallet_type" binding:"required"` // 'wallet' or 'circle_wallet'
 	WalletAddress string                 `json:"wallet_address" binding:"required"`
 	NetworkType   string                 `json:"network_type" binding:"required"`
-	NetworkID     string                 `json:"network_id,omitempty"`
+	NetworkID     string                 `json:"network_id" binding:"required"`
 	Nickname      string                 `json:"nickname,omitempty"`
 	ENS           string                 `json:"ens,omitempty"`
 	IsPrimary     bool                   `json:"is_primary"`
@@ -250,18 +250,10 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 		return
 	}
 
-	// Validate wallet type
-	if req.WalletType != "wallet" && req.WalletType != "circle_wallet" {
-		sendError(c, http.StatusBadRequest, "Invalid wallet type", nil)
+	// Validate wallet type - only allow non-Circle wallets
+	if req.WalletType != "wallet" {
+		sendError(c, http.StatusBadRequest, "Invalid wallet type. Circle wallets should be created using the Circle API endpoints.", nil)
 		return
-	}
-
-	// For Circle wallets, validate required fields
-	if req.WalletType == "circle_wallet" {
-		if req.CircleUserID == "" || req.CircleWalletID == "" || req.ChainID == 0 || req.State == "" {
-			sendError(c, http.StatusBadRequest, "Missing required Circle wallet fields", nil)
-			return
-		}
 	}
 
 	// Parse network ID if provided
@@ -276,16 +268,8 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 		networkIDUUID.Valid = true
 	}
 
-	// Begin a database transaction
-	tx, qtx, err := h.common.BeginTx(c.Request.Context())
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to begin transaction", err)
-		return
-	}
-	defer tx.Rollback(c.Request.Context())
-
 	// Create wallet
-	wallet, err := qtx.CreateWallet(c.Request.Context(), db.CreateWalletParams{
+	wallet, err := h.common.db.CreateWallet(c.Request.Context(), db.CreateWalletParams{
 		AccountID:     accountID,
 		WalletType:    req.WalletType,
 		WalletAddress: req.WalletAddress,
@@ -299,44 +283,6 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to create wallet", err)
-		return
-	}
-
-	// If it's a Circle wallet, create the circle wallet entry
-	if req.WalletType == "circle_wallet" {
-		circleUserUUID, err := uuid.Parse(req.CircleUserID)
-		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid Circle user ID format", err)
-			return
-		}
-
-		_, err = qtx.CreateCircleWalletEntry(c.Request.Context(), db.CreateCircleWalletEntryParams{
-			WalletID:       wallet.ID,
-			CircleUserID:   circleUserUUID,
-			CircleWalletID: req.CircleWalletID,
-			ChainID:        req.ChainID,
-			State:          req.State,
-		})
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to create Circle wallet entry", err)
-			return
-		}
-	}
-
-	// Commit the transaction
-	if err := tx.Commit(c.Request.Context()); err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to commit transaction", err)
-		return
-	}
-
-	// If it's a Circle wallet, get the wallet with Circle data
-	if req.WalletType == "circle_wallet" {
-		walletWithCircleData, err := h.common.db.GetWalletWithCircleDataByID(c.Request.Context(), wallet.ID)
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to get wallet with Circle data", err)
-			return
-		}
-		sendSuccess(c, http.StatusCreated, toWalletWithCircleDataByIDResponse(walletWithCircleData))
 		return
 	}
 
