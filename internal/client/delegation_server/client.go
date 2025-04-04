@@ -1,4 +1,4 @@
-package client
+package delegation_server
 
 import (
 	"context"

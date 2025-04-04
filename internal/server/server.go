@@ -4,7 +4,9 @@ import (
 	"context"
 	_ "cyphera-api/docs" // This will be generated
 	"cyphera-api/internal/auth"
-	"cyphera-api/internal/client"
+	"cyphera-api/internal/client/circle"
+	client "cyphera-api/internal/client/delegation_server"
+	dsClient "cyphera-api/internal/client/delegation_server"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
 	"cyphera-api/internal/logger"
@@ -36,8 +38,9 @@ var (
 	subscriptionHandler              *handlers.SubscriptionHandler
 	subscriptionEventHandler         *handlers.SubscriptionEventHandler
 	failedSubscriptionAttemptHandler *handlers.FailedSubscriptionAttemptHandler
-	delegationClient                 *client.DelegationClient
+	delegationClient                 *dsClient.DelegationClient
 	redemptionProcessor              *handlers.RedemptionProcessor
+	circleClient                     *circle.CircleClient
 
 	// Database
 	dbQueries *db.Queries
@@ -86,6 +89,14 @@ func InitializeHandlers() {
 	if err != nil {
 		logger.Fatal("Unable to create delegation client", zap.Error(err))
 	}
+
+	// validate the circle api key
+	if os.Getenv("CIRCLE_API_KEY") == "" {
+		logger.Fatal("CIRCLE_API_KEY environment variable is required")
+	}
+
+	// Initialize the circle client
+	circleClient = circle.NewCircleClient(os.Getenv("CIRCLE_API_KEY"))
 
 	commonServices := handlers.NewCommonServices(
 		dbQueries,

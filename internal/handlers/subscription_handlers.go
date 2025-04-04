@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"context"
-	"cyphera-api/internal/client"
+	dsClient "cyphera-api/internal/client/delegation_server"
 	"cyphera-api/internal/db"
 	"encoding/json"
 	"fmt"
@@ -22,12 +22,12 @@ import (
 // SubscriptionHandler manages subscription-related HTTP endpoints
 type SubscriptionHandler struct {
 	common               *CommonServices
-	delegationClient     *client.DelegationClient
+	delegationClient     *dsClient.DelegationClient
 	lastRedemptionTxHash string // Stores the transaction hash from the last successful redemption
 }
 
 // NewSubscriptionHandler creates a new subscription handler with the required dependencies
-func NewSubscriptionHandler(common *CommonServices, delegationClient *client.DelegationClient) *SubscriptionHandler {
+func NewSubscriptionHandler(common *CommonServices, delegationClient *dsClient.DelegationClient) *SubscriptionHandler {
 	return &SubscriptionHandler{
 		common:           common,
 		delegationClient: delegationClient,
