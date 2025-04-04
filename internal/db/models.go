@@ -98,6 +98,58 @@ func (ns NullApiKeyLevel) Value() (driver.Value, error) {
 	return string(ns.ApiKeyLevel), nil
 }
 
+type CircleNetworkType string
+
+const (
+	CircleNetworkTypeARB             CircleNetworkType = "ARB"
+	CircleNetworkTypeARBSEPOLIA      CircleNetworkType = "ARB-SEPOLIA"
+	CircleNetworkTypeETH             CircleNetworkType = "ETH"
+	CircleNetworkTypeETHSEPOLIA      CircleNetworkType = "ETH-SEPOLIA"
+	CircleNetworkTypeMATIC           CircleNetworkType = "MATIC"
+	CircleNetworkTypeMATICAMOY       CircleNetworkType = "MATIC-AMOY"
+	CircleNetworkTypeBASE            CircleNetworkType = "BASE"
+	CircleNetworkTypeBASESEPOLIA     CircleNetworkType = "BASE-SEPOLIA"
+	CircleNetworkTypeUNICHAIN        CircleNetworkType = "UNICHAIN"
+	CircleNetworkTypeUNICHAINSEPOLIA CircleNetworkType = "UNICHAIN-SEPOLIA"
+	CircleNetworkTypeSOL             CircleNetworkType = "SOL"
+	CircleNetworkTypeSOLDEVNET       CircleNetworkType = "SOL-DEVNET"
+)
+
+func (e *CircleNetworkType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CircleNetworkType(s)
+	case string:
+		*e = CircleNetworkType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CircleNetworkType: %T", src)
+	}
+	return nil
+}
+
+type NullCircleNetworkType struct {
+	CircleNetworkType CircleNetworkType `json:"circle_network_type"`
+	Valid             bool              `json:"valid"` // Valid is true if CircleNetworkType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCircleNetworkType) Scan(value interface{}) error {
+	if value == nil {
+		ns.CircleNetworkType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CircleNetworkType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCircleNetworkType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CircleNetworkType), nil
+}
+
 type IntervalType string
 
 const (
@@ -582,14 +634,15 @@ type FailedSubscriptionAttempt struct {
 }
 
 type Network struct {
-	ID        uuid.UUID          `json:"id"`
-	Name      string             `json:"name"`
-	Type      string             `json:"type"`
-	ChainID   int32              `json:"chain_id"`
-	Active    bool               `json:"active"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+	ID                uuid.UUID          `json:"id"`
+	Name              string             `json:"name"`
+	Type              string             `json:"type"`
+	CircleNetworkType CircleNetworkType  `json:"circle_network_type"`
+	ChainID           int32              `json:"chain_id"`
+	Active            bool               `json:"active"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type Product struct {

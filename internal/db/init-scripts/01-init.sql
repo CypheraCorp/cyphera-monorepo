@@ -25,6 +25,9 @@ CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkado
 -- Create wallet type enum
 CREATE TYPE wallet_type AS ENUM ('wallet', 'circle_wallet');
 
+-- Create circle network type enum
+CREATE TYPE circle_network_type AS ENUM ('ARB', 'ARB-SEPOLIA', 'ETH', 'ETH-SEPOLIA', 'MATIC', 'MATIC-AMOY', 'BASE', 'BASE-SEPOLIA', 'UNICHAIN', 'UNICHAIN-SEPOLIA', 'SOL', 'SOL-DEVNET');
+
 -- Accounts table (top level organization)
 CREATE TABLE IF NOT EXISTS accounts (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -151,6 +154,7 @@ CREATE TABLE networks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     type TEXT NOT NULL,
+    circle_network_type circle_network_type NOT NULL,
     chain_id INTEGER NOT NULL UNIQUE,
     active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

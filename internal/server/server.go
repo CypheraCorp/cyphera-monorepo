@@ -34,7 +34,6 @@ var (
 	tokenHandler                     *handlers.TokenHandler
 	productHandler                   *handlers.ProductHandler
 	walletHandler                    *handlers.WalletHandler
-	circleUserHandler                *handlers.CircleUserHandler
 	subscriptionHandler              *handlers.SubscriptionHandler
 	subscriptionEventHandler         *handlers.SubscriptionEventHandler
 	failedSubscriptionAttemptHandler *handlers.FailedSubscriptionAttemptHandler
@@ -113,7 +112,6 @@ func InitializeHandlers() {
 	tokenHandler = handlers.NewTokenHandler(commonServices)
 	productHandler = handlers.NewProductHandler(commonServices, delegationClient)
 	walletHandler = handlers.NewWalletHandler(commonServices)
-	circleUserHandler = handlers.NewCircleUserHandler(commonServices)
 
 	// Initialize subscription handlers
 	subscriptionHandler = handlers.NewSubscriptionHandler(commonServices, delegationClient)
@@ -332,21 +330,6 @@ func InitializeRoutes(router *gin.Engine) {
 				wallets.DELETE("/:wallet_id", walletHandler.DeleteWallet)
 				wallets.GET("/address/:wallet_address", walletHandler.GetWalletByAddress)
 				wallets.POST("/:wallet_id/primary", walletHandler.SetWalletAsPrimary)
-			}
-
-			// Circle Users
-			circleUsers := protected.Group("/circle-users")
-			{
-				circleUsers.POST("", circleUserHandler.CreateCircleUser)
-				circleUsers.GET("", circleUserHandler.ListCircleUsers)
-				circleUsers.GET("/:id", circleUserHandler.GetCircleUserByID)
-				circleUsers.GET("/account", circleUserHandler.GetCircleUserByAccountID)
-				circleUsers.PATCH("/:id", circleUserHandler.UpdateCircleUser)
-				circleUsers.PATCH("/account", circleUserHandler.UpdateCircleUserByAccountID)
-				circleUsers.DELETE("/:id", circleUserHandler.DeleteCircleUser)
-				circleUsers.DELETE("/account", circleUserHandler.DeleteCircleUserByAccountID)
-				circleUsers.GET("/:id/wallets", circleUserHandler.GetCircleUserWithWallets)
-				circleUsers.GET("/account/wallets", circleUserHandler.GetCircleUserWithWalletsByAccountID)
 			}
 
 			// Circle API endpoints

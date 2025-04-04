@@ -20,10 +20,11 @@ ORDER BY chain_id ASC;
 INSERT INTO networks (
     name,
     type,
+    circle_network_type,
     chain_id,
     active
 ) VALUES (
-    $1, $2, $3, $4
+    $1, $2, $3, $4, $5
 )
 RETURNING *;
 
@@ -32,8 +33,9 @@ UPDATE networks
 SET
     name = COALESCE($2, name),
     type = COALESCE($3, type),
-    chain_id = COALESCE($4, chain_id),
-    active = COALESCE($5, active),
+    circle_network_type = COALESCE($4, circle_network_type),
+    chain_id = COALESCE($5, chain_id),
+    active = COALESCE($6, active),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;

@@ -30,6 +30,12 @@ The Cyphera API ecosystem consists of four main components:
    - Runs locally via Docker for development
    - Used by all three other components
 
+5. **Circle API Integration**
+   - Provides seamless integration with Circle's programmable wallets
+   - Automatically synchronizes Circle data with our database
+   - Maintains a caching layer for improved performance
+   - Supports multiple blockchain networks via Circle's infrastructure
+
 ```
                 ┌───────────────────┐         ┌────────────────────┐
                 │                   │         │                    │
@@ -339,6 +345,23 @@ The subscription processor is a Go application that runs either on a schedule or
 - Records subscription events and handles failures
 - Provides detailed logs for troubleshooting
 
+### Circle API Integration
+
+The Circle API integration provides programmable wallet functionality through Circle's infrastructure:
+
+- **Automatic Caching**: All Circle users, wallets, and balances are automatically stored in the database, creating a caching layer
+- **Network Support**: Compatible with multiple blockchain networks supported by Circle (Ethereum, Polygon, Arbitrum, Base, Solana)
+- **Synchronization**: Database records are kept in sync with Circle's data whenever API calls are made
+- **Performance**: Reduces redundant API calls to Circle by storing wallet and user data locally
+- **Transparent Proxy**: Acts as a transparent proxy to Circle's API while adding persistence and caching
+
+Key features:
+- User management with automatic database synchronization
+- Wallet creation and management across multiple blockchains
+- Balance retrieval with local caching
+- PIN management for secure operations
+- Challenge handling for secure wallet operations
+
 ### Database Structure
 
 The PostgreSQL database is structured with the following main tables:
@@ -353,6 +376,8 @@ The PostgreSQL database is structured with the following main tables:
 - `wallets` - Cryptocurrency wallet information
 - `delegation_data` - Stored delegation credentials
 - `api_keys` - API keys for programmatic access
+- `circle_users` - Circle user information and tokens
+- `circle_wallets` - Circle wallet details linked to local wallets
 
 ## Troubleshooting
 
