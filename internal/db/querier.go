@@ -118,6 +118,7 @@ type Querier interface {
 	GetLatestSubscriptionEvent(ctx context.Context, subscriptionID uuid.UUID) (SubscriptionEvent, error)
 	GetNetwork(ctx context.Context, id uuid.UUID) (Network, error)
 	GetNetworkByChainID(ctx context.Context, chainID int32) (Network, error)
+	GetNetworkByCircleNetworkType(ctx context.Context, circleNetworkType CircleNetworkType) (Network, error)
 	GetPrimaryCustomerWallet(ctx context.Context, customerID uuid.UUID) (CustomerWallet, error)
 	GetProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	GetProductNetworks(ctx context.Context, productID uuid.UUID) ([]GetProductNetworksRow, error)

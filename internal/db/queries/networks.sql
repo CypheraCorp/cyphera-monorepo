@@ -59,4 +59,9 @@ SET
     active = true,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING *; 
+RETURNING *;
+
+-- name: GetNetworkByCircleNetworkType :one
+SELECT * FROM networks
+WHERE circle_network_type = $1 AND deleted_at IS NULL
+LIMIT 1; 
