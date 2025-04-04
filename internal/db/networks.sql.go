@@ -162,6 +162,29 @@ func (q *Queries) GetNetworkByChainID(ctx context.Context, chainID int32) (Netwo
 	return i, err
 }
 
+const getNetworkByCircleNetworkType = `-- name: GetNetworkByCircleNetworkType :one
+SELECT id, name, type, circle_network_type, chain_id, active, created_at, updated_at, deleted_at FROM networks
+WHERE circle_network_type = $1 AND deleted_at IS NULL
+LIMIT 1
+`
+
+func (q *Queries) GetNetworkByCircleNetworkType(ctx context.Context, circleNetworkType CircleNetworkType) (Network, error) {
+	row := q.db.QueryRow(ctx, getNetworkByCircleNetworkType, circleNetworkType)
+	var i Network
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Type,
+		&i.CircleNetworkType,
+		&i.ChainID,
+		&i.Active,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const listActiveNetworks = `-- name: ListActiveNetworks :many
 SELECT id, name, type, circle_network_type, chain_id, active, created_at, updated_at, deleted_at FROM networks
 WHERE active = true AND deleted_at IS NULL
