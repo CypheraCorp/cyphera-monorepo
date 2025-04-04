@@ -40,7 +40,7 @@ var (
 	failedSubscriptionAttemptHandler *handlers.FailedSubscriptionAttemptHandler
 	delegationClient                 *dsClient.DelegationClient
 	redemptionProcessor              *handlers.RedemptionProcessor
-	circleClient                     *circle.CircleClient
+	circleHandler                    *handlers.CircleHandler
 
 	// Database
 	dbQueries *db.Queries
@@ -96,7 +96,7 @@ func InitializeHandlers() {
 	}
 
 	// Initialize the circle client
-	circleClient = circle.NewCircleClient(os.Getenv("CIRCLE_API_KEY"))
+	circleClient := circle.NewCircleClient(os.Getenv("CIRCLE_API_KEY"))
 
 	commonServices := handlers.NewCommonServices(
 		dbQueries,
@@ -119,6 +119,9 @@ func InitializeHandlers() {
 	subscriptionHandler = handlers.NewSubscriptionHandler(commonServices, delegationClient)
 	subscriptionEventHandler = handlers.NewSubscriptionEventHandler(commonServices)
 	failedSubscriptionAttemptHandler = handlers.NewFailedSubscriptionAttemptHandler(commonServices)
+
+	// 3rd party handlers
+	circleHandler = handlers.NewCircleHandler(commonServices, circleClient)
 }
 
 func InitializeRoutes(router *gin.Engine) {
@@ -344,6 +347,36 @@ func InitializeRoutes(router *gin.Engine) {
 				circleUsers.DELETE("/account", circleUserHandler.DeleteCircleUserByAccountID)
 				circleUsers.GET("/:id/wallets", circleUserHandler.GetCircleUserWithWallets)
 				circleUsers.GET("/account/wallets", circleUserHandler.GetCircleUserWithWalletsByAccountID)
+			}
+
+			// Circle API endpoints
+			circle := protected.Group("/circle")
+			{
+				// Circle user endpoints
+				circleUser := circle.Group("/users")
+				{
+					circleUser.POST("/:user_id/token", circleHandler.CreateUserToken)
+					circleUser.GET("/token", circleHandler.GetUserByToken)
+					circleUser.GET("/:user_id", circleHandler.GetUserByID)
+					circleUser.POST("/initialize", circleHandler.InitializeUser)
+
+					// PIN management
+					circleUser.POST("/pin/create", circleHandler.CreatePinChallenge)
+					circleUser.PUT("/pin/update", circleHandler.UpdatePinChallenge)
+					circleUser.POST("/pin/restore", circleHandler.CreatePinRestoreChallenge)
+				}
+
+				// Circle wallet endpoints
+				circleWallet := circle.Group("/wallets")
+				{
+					circleWallet.POST("", circleHandler.CreateWallets)
+					circleWallet.GET("", circleHandler.ListWallets)
+					circleWallet.GET("/:wallet_id", circleHandler.GetWallet)
+					circleWallet.GET("/:wallet_id/balances", circleHandler.GetWalletBalance)
+				}
+
+				// Circle challenge endpoints
+				circle.GET("/challenges/:challenge_id", circleHandler.GetChallenge)
 			}
 
 			// Subscriptions
