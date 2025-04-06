@@ -338,6 +338,7 @@ func InitializeRoutes(router *gin.Engine) {
 				// Circle user endpoints
 				circleUser := circle.Group("/users")
 				{
+					circleUser.POST("/", circleHandler.CreateUser)
 					circleUser.POST("/:user_id/token", circleHandler.CreateUserToken)
 					circleUser.GET("/token", circleHandler.GetUserByToken)
 					circleUser.GET("/:user_id", circleHandler.GetUserByID)

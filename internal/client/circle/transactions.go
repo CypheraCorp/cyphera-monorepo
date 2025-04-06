@@ -66,7 +66,7 @@ func (c *CircleClient) CreateTransferChallenge(ctx context.Context, request Tran
 	// Make the API request
 	resp, err := c.httpClient.Post(
 		ctx,
-		"/user/transactions/transfer",
+		"user/transactions/transfer",
 		request,
 		httpClient.WithBearerToken(c.apiKey),
 		httpClient.WithHeader("X-User-Token", userToken),
@@ -230,7 +230,7 @@ func (c *CircleClient) ListTransactions(ctx context.Context, userToken string, p
 	// Make the API request
 	resp, err := c.httpClient.Get(
 		ctx,
-		"/transactions",
+		"transactions",
 		options...,
 	)
 	if err != nil {
@@ -264,7 +264,7 @@ func (c *CircleClient) GetTransaction(ctx context.Context, transactionID string,
 	// Make the API request
 	resp, err := c.httpClient.Get(
 		ctx,
-		fmt.Sprintf("/transactions/%s", transactionID),
+		fmt.Sprintf("transactions/%s", transactionID),
 		httpClient.WithBearerToken(c.apiKey),
 		httpClient.WithHeader("X-User-Token", userToken),
 	)
@@ -342,7 +342,7 @@ func (c *CircleClient) EstimateTransferFee(ctx context.Context, request Estimate
 	// Make the API request
 	resp, err := c.httpClient.Post(
 		ctx,
-		"/transactions/transfer/estimateFee",
+		"transactions/transfer/estimateFee",
 		request,
 		httpClient.WithBearerToken(c.apiKey),
 		httpClient.WithHeader("X-User-Token", userToken),
@@ -394,7 +394,7 @@ func (c *CircleClient) ValidateAddress(ctx context.Context, request ValidateAddr
 	// Make the API request
 	resp, err := c.httpClient.Post(
 		ctx,
-		"/transactions/validateAddress",
+		"transactions/validateAddress",
 		request,
 		httpClient.WithBearerToken(c.apiKey),
 	)

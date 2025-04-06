@@ -118,7 +118,7 @@ func (c *CircleClient) CreateWallets(ctx context.Context, request CreateWalletsR
 
 	resp, err := c.httpClient.Post(
 		ctx,
-		"/user/wallets",
+		"user/wallets",
 		request,
 		httpClient.WithBearerToken(c.apiKey),
 		httpClient.WithHeader("X-User-Token", userToken),
@@ -171,7 +171,7 @@ func (c *CircleClient) GetWalletBalance(ctx context.Context, walletID string, us
 	// Make the API request
 	resp, err := c.httpClient.Get(
 		ctx,
-		fmt.Sprintf("/wallets/%s/balances", walletID),
+		fmt.Sprintf("wallets/%s/balances", walletID),
 		options...,
 	)
 	if err != nil {
@@ -190,7 +190,7 @@ func (c *CircleClient) GetWalletBalance(ctx context.Context, walletID string, us
 func (c *CircleClient) GetWallet(ctx context.Context, walletID string, userToken string) (*WalletResponse, error) {
 	resp, err := c.httpClient.Get(
 		ctx,
-		fmt.Sprintf("/wallets/%s", walletID),
+		fmt.Sprintf("wallets/%s", walletID),
 		httpClient.WithBearerToken(c.apiKey),
 		httpClient.WithHeader("X-User-Token", userToken),
 	)
@@ -251,7 +251,7 @@ func (c *CircleClient) ListWallets(ctx context.Context, userToken string, params
 	// Make the API request
 	resp, err := c.httpClient.Get(
 		ctx,
-		"/wallets",
+		"wallets",
 		options...,
 	)
 	if err != nil {

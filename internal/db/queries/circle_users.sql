@@ -2,10 +2,12 @@
 INSERT INTO circle_users (
     id,
     account_id,
-    token,
-    encryption_key
+    circle_create_date,
+    pin_status,
+    status,
+    security_question_status
 ) VALUES (
-    $1, $2, $3, $4
+    $1, $2, $3, $4, $5, $6
 ) RETURNING *;
 
 -- name: GetCircleUserByID :one
@@ -23,19 +25,21 @@ ORDER BY created_at DESC;
 -- name: UpdateCircleUser :one
 UPDATE circle_users
 SET 
-    token = COALESCE($1, token),
-    encryption_key = COALESCE($2, encryption_key),
+    pin_status = COALESCE($1, pin_status),
+    status = COALESCE($2, status),
+    security_question_status = COALESCE($3, security_question_status),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $3
+WHERE id = $4
 RETURNING *;
 
 -- name: UpdateCircleUserByAccountID :one
 UPDATE circle_users
 SET 
-    token = COALESCE($1, token),
-    encryption_key = COALESCE($2, encryption_key),
+    pin_status = COALESCE($1, pin_status),
+    status = COALESCE($2, status),
+    security_question_status = COALESCE($3, security_question_status),
     updated_at = CURRENT_TIMESTAMP
-WHERE account_id = $3
+WHERE account_id = $4
 RETURNING *;
 
 -- name: DeleteCircleUser :exec

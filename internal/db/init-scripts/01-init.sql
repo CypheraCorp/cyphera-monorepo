@@ -51,13 +51,20 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE TABLE IF NOT EXISTS circle_users (
     id UUID PRIMARY KEY,                      -- Circle User ID
     account_id UUID NOT NULL REFERENCES accounts(id), -- Our Account ID
-    token TEXT NOT NULL,                      -- User token from Circle
-    encryption_key TEXT NOT NULL,             -- Encryption key from Circle
+    circle_create_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    pin_status TEXT NOT NULL DEFAULT 'UNSET',
+    status TEXT NOT NULL DEFAULT 'ENABLED',
+    security_question_status TEXT NOT NULL DEFAULT 'UNSET',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     
     -- Index for fast lookups by account_id
-    UNIQUE(account_id)
+    UNIQUE(account_id),
+    
+    -- Constraints for enum-like fields
+    CONSTRAINT valid_pin_status CHECK (pin_status IN ('ENABLED', 'UNSET', 'LOCKED')),
+    CONSTRAINT valid_status CHECK (status IN ('ENABLED', 'DISABLED')),
+    CONSTRAINT valid_security_question_status CHECK (security_question_status IN ('ENABLED', 'UNSET', 'LOCKED'))
 );
 
 -- Users table
@@ -154,8 +161,10 @@ CREATE TABLE networks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     type TEXT NOT NULL,
+    network_type network_type NOT NULL,
     circle_network_type circle_network_type NOT NULL,
     chain_id INTEGER NOT NULL UNIQUE,
+    is_testnet BOOLEAN NOT NULL DEFAULT false,
     active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -179,9 +188,11 @@ CREATE TABLE IF NOT EXISTS wallets (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
-    UNIQUE(account_id, wallet_address, network_type),
     CONSTRAINT check_wallet_type CHECK (wallet_type IN ('wallet', 'circle_wallet'))
 );
+
+-- Add partial unique index that only applies to non-deleted wallets
+CREATE UNIQUE INDEX wallets_account_wallet_network_unique_idx ON wallets(account_id, wallet_address, network_type) WHERE deleted_at IS NULL;
 
 -- Circle Wallets Table
 -- Stores Circle-specific wallet data
@@ -215,9 +226,11 @@ CREATE TABLE customer_wallets (
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE,
-    UNIQUE(customer_id, wallet_address, network_type)
+    deleted_at TIMESTAMP WITH TIME ZONE
 );
+
+-- Add partial unique index that only applies to non-deleted customer wallets
+CREATE UNIQUE INDEX customer_wallets_customer_address_network_unique_idx ON customer_wallets(customer_id, wallet_address, network_type) WHERE deleted_at IS NULL;
 
 -- Create products table
 CREATE TABLE products (
@@ -256,7 +269,7 @@ CREATE TABLE tokens (
     name TEXT NOT NULL,
     symbol TEXT NOT NULL,
     contract_address TEXT NOT NULL,
-    active BOOLEAN NOT NULL DEFAULT true,
+    active BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
@@ -481,10 +494,19 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
--- Insert test networks
-INSERT INTO networks (name, type, chain_id, active)
+-- Insert some initial networks
+INSERT INTO networks (name, type, network_type, circle_network_type, chain_id, is_testnet, active)
 VALUES 
-    ('Ethereum Sepolia', 'Sepolia', 11155111, true)
+    ('Ethereum Sepolia', 'Sepolia', 'evm', 'ETH-SEPOLIA', 11155111, true, true),
+    ('Ethereum Mainnet', 'Mainnet', 'evm', 'ETH', 1, false, false),
+    ('Polygon Amoy', 'Amoy', 'evm', 'MATIC-AMOY', 80002, true, false),
+    ('Polygon Mainnet', 'Mainnet', 'evm', 'MATIC', 137, false, false),
+    ('Arbitrum Sepolia', 'Sepolia', 'evm', 'ARB-SEPOLIA', 421614, true, false),
+    ('Arbitrum One', 'Mainnet', 'evm', 'ARB', 42161, false, false),
+    ('Base Sepolia', 'Sepolia', 'evm', 'BASE-SEPOLIA', 84532, true, false),
+    ('Base Mainnet', 'Mainnet', 'evm', 'BASE', 8453, false, false),
+    ('Solana Devnet', 'Devnet', 'solana', 'SOL-DEVNET', 103, true, false),
+    ('Solana Mainnet', 'Mainnet', 'solana', 'SOL', 101, false, false)
 ON CONFLICT DO NOTHING;
 
 -- Insert test wallets
@@ -664,9 +686,11 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 -- Insert some test tokens
-INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token)
+INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token, active)
 VALUES 
-    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'USD Coin', 'USDC', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', false)
+    -- Ethereum Sepolia tokens
+    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'Ethereum', 'ETH', '0x0000000000000000000000000000000000000000', true, false),
+    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'USD Coin', 'USDC', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', false, true),
 ON CONFLICT DO NOTHING;
 
 -- Insert test products
@@ -764,6 +788,7 @@ WHERE p.name = 'Annual Pro Plan'
 AND t.network_id = (SELECT id FROM networks WHERE chain_id = 11155111)
 AND t.symbol = 'ETH'
 ON CONFLICT DO NOTHING;
+
 -- Create function for updating updated_at timestamp
 CREATE OR REPLACE FUNCTION trigger_set_updated_at()
 RETURNS TRIGGER AS $$

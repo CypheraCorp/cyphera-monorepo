@@ -16,33 +16,41 @@ const createCircleUser = `-- name: CreateCircleUser :one
 INSERT INTO circle_users (
     id,
     account_id,
-    token,
-    encryption_key
+    circle_create_date,
+    pin_status,
+    status,
+    security_question_status
 ) VALUES (
-    $1, $2, $3, $4
-) RETURNING id, account_id, token, encryption_key, created_at, updated_at
+    $1, $2, $3, $4, $5, $6
+) RETURNING id, account_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at
 `
 
 type CreateCircleUserParams struct {
-	ID            uuid.UUID `json:"id"`
-	AccountID     uuid.UUID `json:"account_id"`
-	Token         string    `json:"token"`
-	EncryptionKey string    `json:"encryption_key"`
+	ID                     uuid.UUID          `json:"id"`
+	AccountID              uuid.UUID          `json:"account_id"`
+	CircleCreateDate       pgtype.Timestamptz `json:"circle_create_date"`
+	PinStatus              string             `json:"pin_status"`
+	Status                 string             `json:"status"`
+	SecurityQuestionStatus string             `json:"security_question_status"`
 }
 
 func (q *Queries) CreateCircleUser(ctx context.Context, arg CreateCircleUserParams) (CircleUser, error) {
 	row := q.db.QueryRow(ctx, createCircleUser,
 		arg.ID,
 		arg.AccountID,
-		arg.Token,
-		arg.EncryptionKey,
+		arg.CircleCreateDate,
+		arg.PinStatus,
+		arg.Status,
+		arg.SecurityQuestionStatus,
 	)
 	var i CircleUser
 	err := row.Scan(
 		&i.ID,
 		&i.AccountID,
-		&i.Token,
-		&i.EncryptionKey,
+		&i.CircleCreateDate,
+		&i.PinStatus,
+		&i.Status,
+		&i.SecurityQuestionStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -70,7 +78,7 @@ func (q *Queries) DeleteCircleUserByAccountID(ctx context.Context, accountID uui
 }
 
 const getCircleUserByAccountID = `-- name: GetCircleUserByAccountID :one
-SELECT id, account_id, token, encryption_key, created_at, updated_at FROM circle_users
+SELECT id, account_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at FROM circle_users
 WHERE account_id = $1
 `
 
@@ -80,8 +88,10 @@ func (q *Queries) GetCircleUserByAccountID(ctx context.Context, accountID uuid.U
 	err := row.Scan(
 		&i.ID,
 		&i.AccountID,
-		&i.Token,
-		&i.EncryptionKey,
+		&i.CircleCreateDate,
+		&i.PinStatus,
+		&i.Status,
+		&i.SecurityQuestionStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -89,7 +99,7 @@ func (q *Queries) GetCircleUserByAccountID(ctx context.Context, accountID uuid.U
 }
 
 const getCircleUserByID = `-- name: GetCircleUserByID :one
-SELECT id, account_id, token, encryption_key, created_at, updated_at FROM circle_users
+SELECT id, account_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at FROM circle_users
 WHERE id = $1
 `
 
@@ -99,8 +109,10 @@ func (q *Queries) GetCircleUserByID(ctx context.Context, id uuid.UUID) (CircleUs
 	err := row.Scan(
 		&i.ID,
 		&i.AccountID,
-		&i.Token,
-		&i.EncryptionKey,
+		&i.CircleCreateDate,
+		&i.PinStatus,
+		&i.Status,
+		&i.SecurityQuestionStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -109,7 +121,7 @@ func (q *Queries) GetCircleUserByID(ctx context.Context, id uuid.UUID) (CircleUs
 
 const getCircleUserWithWallets = `-- name: GetCircleUserWithWallets :one
 SELECT 
-    cu.id, cu.account_id, cu.token, cu.encryption_key, cu.created_at, cu.updated_at,
+    cu.id, cu.account_id, cu.circle_create_date, cu.pin_status, cu.status, cu.security_question_status, cu.created_at, cu.updated_at,
     COUNT(cw.id) as wallet_count
 FROM 
     circle_users cu
@@ -122,13 +134,15 @@ GROUP BY
 `
 
 type GetCircleUserWithWalletsRow struct {
-	ID            uuid.UUID          `json:"id"`
-	AccountID     uuid.UUID          `json:"account_id"`
-	Token         string             `json:"token"`
-	EncryptionKey string             `json:"encryption_key"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
-	WalletCount   int64              `json:"wallet_count"`
+	ID                     uuid.UUID          `json:"id"`
+	AccountID              uuid.UUID          `json:"account_id"`
+	CircleCreateDate       pgtype.Timestamptz `json:"circle_create_date"`
+	PinStatus              string             `json:"pin_status"`
+	Status                 string             `json:"status"`
+	SecurityQuestionStatus string             `json:"security_question_status"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	WalletCount            int64              `json:"wallet_count"`
 }
 
 func (q *Queries) GetCircleUserWithWallets(ctx context.Context, id uuid.UUID) (GetCircleUserWithWalletsRow, error) {
@@ -137,8 +151,10 @@ func (q *Queries) GetCircleUserWithWallets(ctx context.Context, id uuid.UUID) (G
 	err := row.Scan(
 		&i.ID,
 		&i.AccountID,
-		&i.Token,
-		&i.EncryptionKey,
+		&i.CircleCreateDate,
+		&i.PinStatus,
+		&i.Status,
+		&i.SecurityQuestionStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.WalletCount,
@@ -148,7 +164,7 @@ func (q *Queries) GetCircleUserWithWallets(ctx context.Context, id uuid.UUID) (G
 
 const getCircleUserWithWalletsByAccountID = `-- name: GetCircleUserWithWalletsByAccountID :one
 SELECT 
-    cu.id, cu.account_id, cu.token, cu.encryption_key, cu.created_at, cu.updated_at,
+    cu.id, cu.account_id, cu.circle_create_date, cu.pin_status, cu.status, cu.security_question_status, cu.created_at, cu.updated_at,
     COUNT(cw.id) as wallet_count
 FROM 
     circle_users cu
@@ -161,13 +177,15 @@ GROUP BY
 `
 
 type GetCircleUserWithWalletsByAccountIDRow struct {
-	ID            uuid.UUID          `json:"id"`
-	AccountID     uuid.UUID          `json:"account_id"`
-	Token         string             `json:"token"`
-	EncryptionKey string             `json:"encryption_key"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
-	WalletCount   int64              `json:"wallet_count"`
+	ID                     uuid.UUID          `json:"id"`
+	AccountID              uuid.UUID          `json:"account_id"`
+	CircleCreateDate       pgtype.Timestamptz `json:"circle_create_date"`
+	PinStatus              string             `json:"pin_status"`
+	Status                 string             `json:"status"`
+	SecurityQuestionStatus string             `json:"security_question_status"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	WalletCount            int64              `json:"wallet_count"`
 }
 
 func (q *Queries) GetCircleUserWithWalletsByAccountID(ctx context.Context, accountID uuid.UUID) (GetCircleUserWithWalletsByAccountIDRow, error) {
@@ -176,8 +194,10 @@ func (q *Queries) GetCircleUserWithWalletsByAccountID(ctx context.Context, accou
 	err := row.Scan(
 		&i.ID,
 		&i.AccountID,
-		&i.Token,
-		&i.EncryptionKey,
+		&i.CircleCreateDate,
+		&i.PinStatus,
+		&i.Status,
+		&i.SecurityQuestionStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.WalletCount,
@@ -186,7 +206,7 @@ func (q *Queries) GetCircleUserWithWalletsByAccountID(ctx context.Context, accou
 }
 
 const listCircleUsers = `-- name: ListCircleUsers :many
-SELECT id, account_id, token, encryption_key, created_at, updated_at FROM circle_users
+SELECT id, account_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at FROM circle_users
 ORDER BY created_at DESC
 `
 
@@ -202,8 +222,10 @@ func (q *Queries) ListCircleUsers(ctx context.Context) ([]CircleUser, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.AccountID,
-			&i.Token,
-			&i.EncryptionKey,
+			&i.CircleCreateDate,
+			&i.PinStatus,
+			&i.Status,
+			&i.SecurityQuestionStatus,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -220,27 +242,36 @@ func (q *Queries) ListCircleUsers(ctx context.Context) ([]CircleUser, error) {
 const updateCircleUser = `-- name: UpdateCircleUser :one
 UPDATE circle_users
 SET 
-    token = COALESCE($1, token),
-    encryption_key = COALESCE($2, encryption_key),
+    pin_status = COALESCE($1, pin_status),
+    status = COALESCE($2, status),
+    security_question_status = COALESCE($3, security_question_status),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $3
-RETURNING id, account_id, token, encryption_key, created_at, updated_at
+WHERE id = $4
+RETURNING id, account_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at
 `
 
 type UpdateCircleUserParams struct {
-	Token         string    `json:"token"`
-	EncryptionKey string    `json:"encryption_key"`
-	ID            uuid.UUID `json:"id"`
+	PinStatus              string    `json:"pin_status"`
+	Status                 string    `json:"status"`
+	SecurityQuestionStatus string    `json:"security_question_status"`
+	ID                     uuid.UUID `json:"id"`
 }
 
 func (q *Queries) UpdateCircleUser(ctx context.Context, arg UpdateCircleUserParams) (CircleUser, error) {
-	row := q.db.QueryRow(ctx, updateCircleUser, arg.Token, arg.EncryptionKey, arg.ID)
+	row := q.db.QueryRow(ctx, updateCircleUser,
+		arg.PinStatus,
+		arg.Status,
+		arg.SecurityQuestionStatus,
+		arg.ID,
+	)
 	var i CircleUser
 	err := row.Scan(
 		&i.ID,
 		&i.AccountID,
-		&i.Token,
-		&i.EncryptionKey,
+		&i.CircleCreateDate,
+		&i.PinStatus,
+		&i.Status,
+		&i.SecurityQuestionStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -250,27 +281,36 @@ func (q *Queries) UpdateCircleUser(ctx context.Context, arg UpdateCircleUserPara
 const updateCircleUserByAccountID = `-- name: UpdateCircleUserByAccountID :one
 UPDATE circle_users
 SET 
-    token = COALESCE($1, token),
-    encryption_key = COALESCE($2, encryption_key),
+    pin_status = COALESCE($1, pin_status),
+    status = COALESCE($2, status),
+    security_question_status = COALESCE($3, security_question_status),
     updated_at = CURRENT_TIMESTAMP
-WHERE account_id = $3
-RETURNING id, account_id, token, encryption_key, created_at, updated_at
+WHERE account_id = $4
+RETURNING id, account_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at
 `
 
 type UpdateCircleUserByAccountIDParams struct {
-	Token         string    `json:"token"`
-	EncryptionKey string    `json:"encryption_key"`
-	AccountID     uuid.UUID `json:"account_id"`
+	PinStatus              string    `json:"pin_status"`
+	Status                 string    `json:"status"`
+	SecurityQuestionStatus string    `json:"security_question_status"`
+	AccountID              uuid.UUID `json:"account_id"`
 }
 
 func (q *Queries) UpdateCircleUserByAccountID(ctx context.Context, arg UpdateCircleUserByAccountIDParams) (CircleUser, error) {
-	row := q.db.QueryRow(ctx, updateCircleUserByAccountID, arg.Token, arg.EncryptionKey, arg.AccountID)
+	row := q.db.QueryRow(ctx, updateCircleUserByAccountID,
+		arg.PinStatus,
+		arg.Status,
+		arg.SecurityQuestionStatus,
+		arg.AccountID,
+	)
 	var i CircleUser
 	err := row.Scan(
 		&i.ID,
 		&i.AccountID,
-		&i.Token,
-		&i.EncryptionKey,
+		&i.CircleCreateDate,
+		&i.PinStatus,
+		&i.Status,
+		&i.SecurityQuestionStatus,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

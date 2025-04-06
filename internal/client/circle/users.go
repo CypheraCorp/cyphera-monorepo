@@ -3,9 +3,18 @@ package circle
 import (
 	"context"
 	httpClient "cyphera-api/internal/client/http"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"time"
 )
+
+// ErrUserAlreadyExists is returned when Circle API indicates the user already exists (409 Conflict with code 155101)
+var ErrUserAlreadyExists = errors.New("circle user already exists")
+
+const UserAlreadyExistsErrorCode = 155101
 
 // UserResponse represents the response from the Circle API when getting a user
 type UserResponse struct {
@@ -95,11 +104,22 @@ type UserTokenResponse struct {
 	} `json:"data"`
 }
 
+// CreateUserRequest defines the payload for the Create User API call
+type CreateUserRequest struct {
+	UserID string `json:"userId"`
+}
+
+// CircleAPIErrorResponse represents the standard error response format from Circle API
+type CircleAPIErrorResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
 // GetUserByToken retrieves a user from Circle API using an auth token
 func (c *CircleClient) GetUserByToken(ctx context.Context, userToken string) (*UserResponse, error) {
 	resp, err := c.httpClient.Get(
 		ctx,
-		"/users",
+		"users",
 		httpClient.WithBearerToken(c.apiKey),
 		httpClient.WithHeader("X-User-Token", userToken),
 	)
@@ -119,7 +139,7 @@ func (c *CircleClient) GetUserByToken(ctx context.Context, userToken string) (*U
 func (c *CircleClient) GetUserByID(ctx context.Context, userID string) (*UserByIDResponse, error) {
 	resp, err := c.httpClient.Get(
 		ctx,
-		fmt.Sprintf("/users/%s", userID),
+		fmt.Sprintf("users/%s", userID),
 		httpClient.WithBearerToken(c.apiKey),
 	)
 	if err != nil {
@@ -138,7 +158,7 @@ func (c *CircleClient) GetUserByID(ctx context.Context, userID string) (*UserByI
 func (c *CircleClient) GetChallenge(ctx context.Context, challengeID string, userToken string) (*ChallengeResponse, error) {
 	resp, err := c.httpClient.Get(
 		ctx,
-		fmt.Sprintf("/user/challenges/%s", challengeID),
+		fmt.Sprintf("user/challenges/%s", challengeID),
 		httpClient.WithBearerToken(c.apiKey),
 		httpClient.WithHeader("X-User-Token", userToken),
 	)
@@ -163,7 +183,7 @@ func (c *CircleClient) InitializeUser(ctx context.Context, request InitializeUse
 
 	resp, err := c.httpClient.Post(
 		ctx,
-		"/user/initialize",
+		"user/initialize",
 		request,
 		httpClient.WithBearerToken(c.apiKey),
 		httpClient.WithHeader("X-User-Token", userToken),
@@ -182,11 +202,20 @@ func (c *CircleClient) InitializeUser(ctx context.Context, request InitializeUse
 
 // CreateUserToken generates a user session token and encryption key
 func (c *CircleClient) CreateUserToken(ctx context.Context, userID string) (*UserTokenResponse, error) {
-	// The API expects the userID as a JSON string in the request body
+	if userID == "" {
+		return nil, fmt.Errorf("userID is required")
+	}
+
+	// Prepare the request payload
+	requestPayload := CreateUserRequest{
+		UserID: userID,
+	}
+
+	// The API expects the payload as a JSON object
 	resp, err := c.httpClient.Post(
 		ctx,
-		"/users/token",
-		userID, // Send the userID directly as the body
+		"users/token",  // Relative path
+		requestPayload, // Send the struct, httpClient will marshal it
 		httpClient.WithBearerToken(c.apiKey),
 	)
 	if err != nil {
@@ -199,4 +228,59 @@ func (c *CircleClient) CreateUserToken(ctx context.Context, userID string) (*Use
 	}
 
 	return &response, nil
+}
+
+// CreateUser creates a new user in the Circle system
+// The userId should be your unique external identifier for the user
+//
+// This endpoint creates a user entity in the W3S system so the client-side SDK
+// can authenticate and request wallet operations.
+func (c *CircleClient) CreateUserWithPinAuth(ctx context.Context, externalUserID string) (*UserResponse, error) {
+	if externalUserID == "" {
+		return nil, fmt.Errorf("externalUserID is required")
+	}
+
+	// Prepare the request payload
+	requestPayload := CreateUserRequest{
+		UserID: externalUserID,
+	}
+
+	// Make the API request
+	resp, err := c.httpClient.Post(
+		ctx,
+		"users", // Relative path
+		requestPayload,
+		httpClient.WithBearerToken(c.apiKey),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute create user request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, fmt.Errorf("failed to read create user response body: %w", readErr)
+	}
+
+	if resp.StatusCode == http.StatusCreated { // 201 Success
+		var successResponse UserResponse
+		if err := json.Unmarshal(bodyBytes, &successResponse); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal successful user creation response (status %d): %w, body: %s", resp.StatusCode, err, string(bodyBytes))
+		}
+		return &successResponse, nil
+	} else {
+		// Attempt to parse as standard Circle error response regardless of status code > 201
+		var errorResponse CircleAPIErrorResponse
+		if jsonErr := json.Unmarshal(bodyBytes, &errorResponse); jsonErr == nil {
+			// Check if it's the specific 'user already exists' error
+			if resp.StatusCode == http.StatusConflict && errorResponse.Code == UserAlreadyExistsErrorCode {
+				return nil, ErrUserAlreadyExists // Return the specific sentinel error
+			}
+			// Otherwise, return a generic Circle API error
+			return nil, fmt.Errorf("circle API error (status %d): %s (code: %d)", resp.StatusCode, errorResponse.Message, errorResponse.Code)
+		} else {
+			// If parsing the error body fails, return a generic HTTP error, including the parsing error
+			return nil, fmt.Errorf("unexpected status code from circle API: %d, failed to parse error body: %w, body: %s", resp.StatusCode, jsonErr, string(bodyBytes))
+		}
+	}
 }

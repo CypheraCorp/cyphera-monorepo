@@ -545,12 +545,14 @@ type ApiKey struct {
 }
 
 type CircleUser struct {
-	ID            uuid.UUID          `json:"id"`
-	AccountID     uuid.UUID          `json:"account_id"`
-	Token         string             `json:"token"`
-	EncryptionKey string             `json:"encryption_key"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	ID                     uuid.UUID          `json:"id"`
+	AccountID              uuid.UUID          `json:"account_id"`
+	CircleCreateDate       pgtype.Timestamptz `json:"circle_create_date"`
+	PinStatus              string             `json:"pin_status"`
+	Status                 string             `json:"status"`
+	SecurityQuestionStatus string             `json:"security_question_status"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
 }
 
 type CircleWallet struct {
@@ -637,8 +639,10 @@ type Network struct {
 	ID                uuid.UUID          `json:"id"`
 	Name              string             `json:"name"`
 	Type              string             `json:"type"`
+	NetworkType       NetworkType        `json:"network_type"`
 	CircleNetworkType CircleNetworkType  `json:"circle_network_type"`
 	ChainID           int32              `json:"chain_id"`
+	IsTestnet         bool               `json:"is_testnet"`
 	Active            bool               `json:"active"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
