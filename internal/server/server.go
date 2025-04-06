@@ -4,7 +4,9 @@ import (
 	"context"
 	_ "cyphera-api/docs" // This will be generated
 	"cyphera-api/internal/auth"
-	"cyphera-api/internal/client"
+	"cyphera-api/internal/client/circle"
+	client "cyphera-api/internal/client/delegation_server"
+	dsClient "cyphera-api/internal/client/delegation_server"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
 	"cyphera-api/internal/logger"
@@ -35,8 +37,9 @@ var (
 	subscriptionHandler              *handlers.SubscriptionHandler
 	subscriptionEventHandler         *handlers.SubscriptionEventHandler
 	failedSubscriptionAttemptHandler *handlers.FailedSubscriptionAttemptHandler
-	delegationClient                 *client.DelegationClient
+	delegationClient                 *dsClient.DelegationClient
 	redemptionProcessor              *handlers.RedemptionProcessor
+	circleHandler                    *handlers.CircleHandler
 
 	// Database
 	dbQueries *db.Queries
@@ -86,6 +89,14 @@ func InitializeHandlers() {
 		logger.Fatal("Unable to create delegation client", zap.Error(err))
 	}
 
+	// validate the circle api key
+	if os.Getenv("CIRCLE_API_KEY") == "" {
+		logger.Fatal("CIRCLE_API_KEY environment variable is required")
+	}
+
+	// Initialize the circle client
+	circleClient := circle.NewCircleClient(os.Getenv("CIRCLE_API_KEY"))
+
 	commonServices := handlers.NewCommonServices(
 		dbQueries,
 		cypheraSmartWalletAddress,
@@ -106,6 +117,9 @@ func InitializeHandlers() {
 	subscriptionHandler = handlers.NewSubscriptionHandler(commonServices, delegationClient)
 	subscriptionEventHandler = handlers.NewSubscriptionEventHandler(commonServices)
 	failedSubscriptionAttemptHandler = handlers.NewFailedSubscriptionAttemptHandler(commonServices)
+
+	// 3rd party handlers
+	circleHandler = handlers.NewCircleHandler(commonServices, circleClient)
 }
 
 func InitializeRoutes(router *gin.Engine) {
@@ -316,13 +330,37 @@ func InitializeRoutes(router *gin.Engine) {
 				wallets.DELETE("/:wallet_id", walletHandler.DeleteWallet)
 				wallets.GET("/address/:wallet_address", walletHandler.GetWalletByAddress)
 				wallets.POST("/:wallet_id/primary", walletHandler.SetWalletAsPrimary)
+			}
 
-				// Specialized endpoints
-				wallets.GET("/stats", walletHandler.GetWalletStats)
-				wallets.GET("/recent", walletHandler.GetRecentlyUsedWallets)
-				wallets.GET("/ens", walletHandler.GetWalletsByENS)
-				wallets.GET("/search", walletHandler.SearchWallets)
-				wallets.GET("/network/:network_type", walletHandler.ListWalletsByNetworkType)
+			// Circle API endpoints
+			circle := protected.Group("/circle")
+			{
+				// Circle user endpoints
+				circleUser := circle.Group("/users")
+				{
+					circleUser.POST("/", circleHandler.CreateUser)
+					circleUser.POST("/:user_id/token", circleHandler.CreateUserToken)
+					circleUser.GET("/token", circleHandler.GetUserByToken)
+					circleUser.GET("/:user_id", circleHandler.GetUserByID)
+					circleUser.POST("/initialize", circleHandler.InitializeUser)
+
+					// PIN management
+					circleUser.POST("/pin/create", circleHandler.CreatePinChallenge)
+					circleUser.PUT("/pin/update", circleHandler.UpdatePinChallenge)
+					circleUser.POST("/pin/restore", circleHandler.CreatePinRestoreChallenge)
+				}
+
+				// Circle wallet endpoints
+				circleWallet := circle.Group("/wallets")
+				{
+					circleWallet.POST("", circleHandler.CreateWallets)
+					circleWallet.GET("", circleHandler.ListWallets)
+					circleWallet.GET("/:wallet_id", circleHandler.GetWallet)
+					circleWallet.GET("/:wallet_id/balances", circleHandler.GetWalletBalance)
+				}
+
+				// Circle challenge endpoints
+				circle.GET("/challenges/:challenge_id", circleHandler.GetChallenge)
 			}
 
 			// Subscriptions

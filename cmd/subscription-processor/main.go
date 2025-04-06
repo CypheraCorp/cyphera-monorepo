@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"cyphera-api/internal/client"
+	dsClient "cyphera-api/internal/client/delegation_server"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
 	"cyphera-api/internal/logger"
@@ -110,7 +110,7 @@ func main() {
 	dbQueries := db.New(connPool)
 
 	// Initialize the delegation client
-	delegationClient, err := client.NewDelegationClient()
+	delegationClient, err := dsClient.NewDelegationClient()
 	if err != nil {
 		log.Fatalf("Failed to initialize delegation client: %v", err)
 	}

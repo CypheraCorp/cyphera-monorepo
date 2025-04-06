@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"context"
-	"cyphera-api/internal/client"
+	dsClient "cyphera-api/internal/client/delegation_server"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/logger"
 	"encoding/json"
@@ -31,7 +31,7 @@ type RedemptionTask struct {
 type RedemptionProcessor struct {
 	tasks            chan RedemptionTask
 	dbQueries        *db.Queries
-	delegationClient *client.DelegationClient
+	delegationClient *dsClient.DelegationClient
 	workerCount      int
 	wg               sync.WaitGroup
 	ctx              context.Context
@@ -51,7 +51,7 @@ type RedemptionProcessor struct {
 // and queue buffer size
 func NewRedemptionProcessor(
 	dbQueries *db.Queries,
-	delegationClient *client.DelegationClient,
+	delegationClient *dsClient.DelegationClient,
 	workerCount int,
 	bufferSize int,
 ) *RedemptionProcessor {
@@ -269,7 +269,7 @@ func (rp *RedemptionProcessor) processRedemption(task RedemptionTask) error {
 	// convert price in pennies to float
 	price := float64(product.PriceInPennies) / 100.0
 
-	executionObject := client.ExecutionObject{
+	executionObject := dsClient.ExecutionObject{
 		MerchantAddress:      merchantWallet.WalletAddress,
 		TokenContractAddress: token.ContractAddress,
 		Price:                strconv.FormatFloat(price, 'f', -1, 64),

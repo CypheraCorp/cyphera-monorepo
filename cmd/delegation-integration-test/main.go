@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"cyphera-api/internal/client"
+	dsClient "cyphera-api/internal/client/delegation_server"
 )
 
 // Sample delegation JSON structure based on the expected format by the Node.js server
@@ -45,13 +45,13 @@ type RedeemDelegationResponse struct {
 
 // DelegationService handles delegation-related operations
 type DelegationService struct {
-	delegationClient *client.DelegationClient
+	delegationClient *dsClient.DelegationClient
 }
 
 // NewDelegationService creates a new DelegationService
 func NewDelegationService() (*DelegationService, error) {
 	// Initialize the delegation client
-	delegationClient, err := client.NewDelegationClient()
+	delegationClient, err := dsClient.NewDelegationClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create delegation client: %w", err)
 	}
@@ -84,7 +84,7 @@ func (s *DelegationService) RedeemDelegationHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Create execution object
-	executionObject := client.ExecutionObject{
+	executionObject := dsClient.ExecutionObject{
 		MerchantAddress:      req.MerchantAddress,
 		TokenContractAddress: req.TokenContractAddress,
 		Price:                strconv.FormatFloat(price, 'f', -1, 64),
@@ -219,7 +219,7 @@ func main() {
 	}
 
 	// Create execution object
-	executionObject := client.ExecutionObject{
+	executionObject := dsClient.ExecutionObject{
 		MerchantAddress:      *merchantFlag,
 		TokenContractAddress: *tokenFlag,
 		Price:                strconv.FormatFloat(price, 'f', -1, 64),

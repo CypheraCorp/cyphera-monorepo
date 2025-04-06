@@ -27,16 +27,27 @@ type WalletResponse struct {
 	ID            string                 `json:"id"`
 	Object        string                 `json:"object"`
 	AccountID     string                 `json:"account_id"`
+	WalletType    string                 `json:"wallet_type"` // 'wallet' or 'circle_wallet'
 	WalletAddress string                 `json:"wallet_address"`
 	NetworkType   string                 `json:"network_type"`
+	NetworkID     string                 `json:"network_id,omitempty"`
 	Nickname      string                 `json:"nickname,omitempty"`
 	ENS           string                 `json:"ens,omitempty"`
 	IsPrimary     bool                   `json:"is_primary"`
 	Verified      bool                   `json:"verified"`
 	LastUsedAt    *int64                 `json:"last_used_at,omitempty"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	CircleData    *CircleWalletData      `json:"circle_data,omitempty"` // Only present for circle wallets
 	CreatedAt     int64                  `json:"created_at"`
 	UpdatedAt     int64                  `json:"updated_at"`
+}
+
+// CircleWalletData represents Circle-specific wallet data
+type CircleWalletData struct {
+	CircleWalletID string `json:"circle_wallet_id"`
+	CircleUserID   string `json:"circle_user_id"`
+	ChainID        int32  `json:"chain_id"`
+	State          string `json:"state"`
 }
 
 // WalletListResponse represents the paginated response for wallet list operations
@@ -45,24 +56,22 @@ type WalletListResponse struct {
 	Data   []WalletResponse `json:"data"`
 }
 
-// WalletStatsResponse represents the response for wallet statistics
-type WalletStatsResponse struct {
-	Object            string `json:"object"`
-	TotalWallets      int64  `json:"total_wallets"`
-	VerifiedWallets   int64  `json:"verified_wallets"`
-	PrimaryWallets    int64  `json:"primary_wallets"`
-	NetworkTypesCount int64  `json:"network_types_count"`
-}
-
 // CreateWalletRequest represents the request body for creating a wallet
 type CreateWalletRequest struct {
+	WalletType    string                 `json:"wallet_type" binding:"required"` // 'wallet' or 'circle_wallet'
 	WalletAddress string                 `json:"wallet_address" binding:"required"`
 	NetworkType   string                 `json:"network_type" binding:"required"`
+	NetworkID     string                 `json:"network_id" binding:"required"`
 	Nickname      string                 `json:"nickname,omitempty"`
 	ENS           string                 `json:"ens,omitempty"`
 	IsPrimary     bool                   `json:"is_primary"`
 	Verified      bool                   `json:"verified"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	// Circle wallet specific fields
+	CircleUserID   string `json:"circle_user_id,omitempty"`   // Only for circle wallets
+	CircleWalletID string `json:"circle_wallet_id,omitempty"` // Only for circle wallets
+	ChainID        int32  `json:"chain_id,omitempty"`         // Only for circle wallets
+	State          string `json:"state,omitempty"`            // Only for circle wallets
 }
 
 // UpdateWalletRequest represents the request body for updating a wallet
@@ -72,6 +81,8 @@ type UpdateWalletRequest struct {
 	IsPrimary bool                   `json:"is_primary,omitempty"`
 	Verified  bool                   `json:"verified,omitempty"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	// Circle wallet specific fields
+	State string `json:"state,omitempty"` // Only for circle wallets
 }
 
 // Helper function to convert database model to API response
@@ -88,12 +99,19 @@ func toWalletResponse(w db.Wallet) WalletResponse {
 		lastUsedAt = &unix
 	}
 
+	networkID := ""
+	if w.NetworkID.Valid {
+		networkID = w.NetworkID.String()
+	}
+
 	return WalletResponse{
 		ID:            w.ID.String(),
 		Object:        "wallet",
 		AccountID:     w.AccountID.String(),
+		WalletType:    w.WalletType,
 		WalletAddress: w.WalletAddress,
 		NetworkType:   string(w.NetworkType),
+		NetworkID:     networkID,
 		Nickname:      w.Nickname.String,
 		ENS:           w.Ens.String,
 		IsPrimary:     w.IsPrimary.Bool,
@@ -103,6 +121,100 @@ func toWalletResponse(w db.Wallet) WalletResponse {
 		CreatedAt:     w.CreatedAt.Time.Unix(),
 		UpdatedAt:     w.UpdatedAt.Time.Unix(),
 	}
+}
+
+// Helper function for GetWalletWithCircleDataByID results
+func toWalletWithCircleDataByIDResponse(w db.GetWalletWithCircleDataByIDRow) WalletResponse {
+	response := toWalletResponse(db.Wallet{
+		ID:            w.ID,
+		AccountID:     w.AccountID,
+		WalletType:    w.WalletType,
+		WalletAddress: w.WalletAddress,
+		NetworkType:   w.NetworkType,
+		NetworkID:     w.NetworkID,
+		Nickname:      w.Nickname,
+		Ens:           w.Ens,
+		IsPrimary:     w.IsPrimary,
+		Verified:      w.Verified,
+		LastUsedAt:    w.LastUsedAt,
+		Metadata:      w.Metadata,
+		CreatedAt:     w.CreatedAt,
+		UpdatedAt:     w.UpdatedAt,
+	})
+
+	// Add Circle data if it exists
+	if w.CircleWalletID.Valid && w.CircleUserID.Valid {
+		response.CircleData = &CircleWalletData{
+			CircleWalletID: w.CircleWalletID.String(),
+			CircleUserID:   w.CircleUserID.String(),
+			ChainID:        w.ChainID.Int32,
+			State:          w.CircleState.String,
+		}
+	}
+
+	return response
+}
+
+// Helper function for ListWalletsWithCircleDataByAccountID results
+func toListWalletsWithCircleDataResponse(w db.ListWalletsWithCircleDataByAccountIDRow) WalletResponse {
+	response := toWalletResponse(db.Wallet{
+		ID:            w.ID,
+		AccountID:     w.AccountID,
+		WalletType:    w.WalletType,
+		WalletAddress: w.WalletAddress,
+		NetworkType:   w.NetworkType,
+		NetworkID:     w.NetworkID,
+		Nickname:      w.Nickname,
+		Ens:           w.Ens,
+		IsPrimary:     w.IsPrimary,
+		Verified:      w.Verified,
+		LastUsedAt:    w.LastUsedAt,
+		Metadata:      w.Metadata,
+		CreatedAt:     w.CreatedAt,
+		UpdatedAt:     w.UpdatedAt,
+	})
+
+	// Add Circle data if it exists
+	if w.CircleWalletID.Valid && w.CircleUserID.Valid {
+		response.CircleData = &CircleWalletData{
+			CircleWalletID: w.CircleWalletID.String(),
+			CircleUserID:   w.CircleUserID.String(),
+			ChainID:        w.ChainID.Int32,
+			State:          w.CircleState.String,
+		}
+	}
+
+	return response
+}
+
+// Helper function for ListCircleWalletsByAccountID results
+func toListCircleWalletsResponse(w db.ListCircleWalletsByAccountIDRow) WalletResponse {
+	response := toWalletResponse(db.Wallet{
+		ID:            w.ID,
+		AccountID:     w.AccountID,
+		WalletType:    w.WalletType,
+		WalletAddress: w.WalletAddress,
+		NetworkType:   w.NetworkType,
+		NetworkID:     w.NetworkID,
+		Nickname:      w.Nickname,
+		Ens:           w.Ens,
+		IsPrimary:     w.IsPrimary,
+		Verified:      w.Verified,
+		LastUsedAt:    w.LastUsedAt,
+		Metadata:      w.Metadata,
+		CreatedAt:     w.CreatedAt,
+		UpdatedAt:     w.UpdatedAt,
+	})
+
+	// Add Circle data
+	response.CircleData = &CircleWalletData{
+		CircleWalletID: w.CircleID,
+		CircleUserID:   w.CircleUserID.String(),
+		ChainID:        w.ChainID,
+		State:          w.CircleState,
+	}
+
+	return response
 }
 
 // CreateWallet godoc
@@ -138,11 +250,31 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 		return
 	}
 
+	// Validate wallet type - only allow non-Circle wallets
+	if req.WalletType != "wallet" {
+		sendError(c, http.StatusBadRequest, "Invalid wallet type. Circle wallets should be created using the Circle API endpoints.", nil)
+		return
+	}
+
+	// Parse network ID if provided
+	var networkIDUUID pgtype.UUID
+	if req.NetworkID != "" {
+		parsedNetworkID, err := uuid.Parse(req.NetworkID)
+		if err != nil {
+			sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
+			return
+		}
+		networkIDUUID.Bytes = parsedNetworkID
+		networkIDUUID.Valid = true
+	}
+
 	// Create wallet
 	wallet, err := h.common.db.CreateWallet(c.Request.Context(), db.CreateWalletParams{
 		AccountID:     accountID,
+		WalletType:    req.WalletType,
 		WalletAddress: req.WalletAddress,
 		NetworkType:   db.NetworkType(req.NetworkType),
+		NetworkID:     networkIDUUID,
 		Nickname:      pgtype.Text{String: req.Nickname, Valid: req.Nickname != ""},
 		Ens:           pgtype.Text{String: req.ENS, Valid: req.ENS != ""},
 		IsPrimary:     pgtype.Bool{Bool: req.IsPrimary, Valid: true},
@@ -164,6 +296,7 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param wallet_id path string true "Wallet ID"
+// @Param include_circle_data query boolean false "Include Circle wallet data"
 // @Success 200 {object} WalletResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
@@ -174,6 +307,27 @@ func (h *WalletHandler) GetWallet(c *gin.Context) {
 	parsedUUID, err := uuid.Parse(walletID)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid wallet ID format", err)
+		return
+	}
+
+	// Check if Circle data should be included
+	includeCircleData := c.Query("include_circle_data") == "true"
+
+	if includeCircleData {
+		wallet, err := h.common.db.GetWalletWithCircleDataByID(c.Request.Context(), parsedUUID)
+		if err != nil {
+			handleDBError(c, err, "Wallet not found")
+			return
+		}
+
+		// Verify account access
+		accountID := c.GetString("account_id")
+		if wallet.AccountID.String() != accountID {
+			sendError(c, http.StatusForbidden, "Access denied", nil)
+			return
+		}
+
+		sendSuccess(c, http.StatusOK, toWalletWithCircleDataByIDResponse(wallet))
 		return
 	}
 
@@ -240,6 +394,8 @@ func (h *WalletHandler) GetWalletByAddress(c *gin.Context) {
 // @Tags wallets
 // @Accept json
 // @Produce json
+// @Param include_circle_data query boolean false "Include Circle wallet data"
+// @Param wallet_type query string false "Filter by wallet type (wallet, circle_wallet)"
 // @Success 200 {object} WalletListResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -253,15 +409,64 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 		return
 	}
 
-	wallets, err := h.common.db.ListWalletsByAccountID(c.Request.Context(), parsedAccountID)
-	if err != nil {
-		handleDBError(c, err, "Failed to retrieve wallets")
-		return
-	}
+	// Check if Circle data should be included
+	includeCircleData := c.Query("include_circle_data") == "true"
+	walletType := c.Query("wallet_type")
 
-	response := make([]WalletResponse, len(wallets))
-	for i, wallet := range wallets {
-		response[i] = toWalletResponse(wallet)
+	// Build response based on params
+	var response []WalletResponse
+
+	if walletType == "circle_wallet" {
+		// Get only Circle wallets
+		circleWallets, err := h.common.db.ListCircleWalletsByAccountID(c.Request.Context(), parsedAccountID)
+		if err != nil {
+			handleDBError(c, err, "Failed to retrieve Circle wallets")
+			return
+		}
+
+		response = make([]WalletResponse, len(circleWallets))
+		for i, wallet := range circleWallets {
+			response[i] = toListCircleWalletsResponse(wallet)
+		}
+	} else if walletType == "wallet" {
+		// Get only standard wallets
+		wallets, err := h.common.db.ListWalletsByWalletType(c.Request.Context(), db.ListWalletsByWalletTypeParams{
+			AccountID:  parsedAccountID,
+			WalletType: "wallet",
+		})
+		if err != nil {
+			handleDBError(c, err, "Failed to retrieve standard wallets")
+			return
+		}
+
+		response = make([]WalletResponse, len(wallets))
+		for i, wallet := range wallets {
+			response[i] = toWalletResponse(wallet)
+		}
+	} else if includeCircleData {
+		// Get all wallets with Circle data
+		walletsWithCircleData, err := h.common.db.ListWalletsWithCircleDataByAccountID(c.Request.Context(), parsedAccountID)
+		if err != nil {
+			handleDBError(c, err, "Failed to retrieve wallets with Circle data")
+			return
+		}
+
+		response = make([]WalletResponse, len(walletsWithCircleData))
+		for i, wallet := range walletsWithCircleData {
+			response[i] = toListWalletsWithCircleDataResponse(wallet)
+		}
+	} else {
+		// Get all wallets without Circle data
+		wallets, err := h.common.db.ListWalletsByAccountID(c.Request.Context(), parsedAccountID)
+		if err != nil {
+			handleDBError(c, err, "Failed to retrieve wallets")
+			return
+		}
+
+		response = make([]WalletResponse, len(wallets))
+		for i, wallet := range wallets {
+			response[i] = toWalletResponse(wallet)
+		}
 	}
 
 	listResponse := WalletListResponse{
@@ -270,130 +475,6 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 	}
 
 	sendSuccess(c, http.StatusOK, listResponse)
-}
-
-// ListWalletsByNetworkType godoc
-// @Summary List wallets by network type
-// @Description List all wallets for a specific network type
-// @Tags wallets
-// @Accept json
-// @Produce json
-// @Param network_type path string true "Network Type"
-// @Success 200 {object} WalletListResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /wallets/network/{network_type} [get]
-func (h *WalletHandler) ListWalletsByNetworkType(c *gin.Context) {
-	accountID := c.GetHeader("X-Account-ID")
-	parsedAccountID, err := uuid.Parse(accountID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID format", err)
-		return
-	}
-
-	networkType := c.Param("network_type")
-	if networkType == "" {
-		sendError(c, http.StatusBadRequest, "Network type is required", nil)
-		return
-	}
-
-	wallets, err := h.common.db.ListWalletsByNetworkType(c.Request.Context(), db.ListWalletsByNetworkTypeParams{
-		AccountID:   parsedAccountID,
-		NetworkType: db.NetworkType(networkType),
-	})
-	if err != nil {
-		handleDBError(c, err, "Failed to retrieve wallets")
-		return
-	}
-
-	response := make([]WalletResponse, len(wallets))
-	for i, wallet := range wallets {
-		response[i] = toWalletResponse(wallet)
-	}
-
-	listResponse := WalletListResponse{
-		Object: "list",
-		Data:   response,
-	}
-
-	sendSuccess(c, http.StatusOK, listResponse)
-}
-
-// SearchWallets godoc
-// @Summary Search wallets
-// @Description Search wallets by address, nickname, or ENS name
-// @Tags wallets
-// @Accept json
-// @Produce json
-// @Param query query string true "Search query"
-// @Param limit query int false "Number of results to return (default 10)"
-// @Param offset query int false "Number of results to skip (default 0)"
-// @Success 200 {object} WalletListResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /wallets/search [get]
-func (h *WalletHandler) SearchWallets(c *gin.Context) {
-	accountID, err := uuid.Parse(c.GetString("account_id"))
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
-		return
-	}
-
-	query := c.Query("query")
-	if query == "" {
-		sendError(c, http.StatusBadRequest, "Search query is required", nil)
-		return
-	}
-
-	// Parse pagination parameters with safe conversion
-	var limit, offset int32 = 10, 0 // default values
-	if limitStr := c.Query("limit"); limitStr != "" {
-		limit, err = safeParseInt32(limitStr)
-		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid limit parameter", err)
-			return
-		}
-		if limit <= 0 {
-			limit = 10
-		}
-	}
-	if offsetStr := c.Query("offset"); offsetStr != "" {
-		offset, err = safeParseInt32(offsetStr)
-		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid offset parameter", err)
-			return
-		}
-		if offset < 0 {
-			offset = 0
-		}
-	}
-
-	// Add wildcards for ILIKE search
-	searchPattern := "%" + query + "%"
-
-	wallets, err := h.common.db.SearchWallets(c.Request.Context(), db.SearchWalletsParams{
-		AccountID:     accountID,
-		WalletAddress: searchPattern,
-		Limit:         limit,
-		Offset:        offset,
-	})
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to search wallets", err)
-		return
-	}
-
-	// Convert to response format
-	response := WalletListResponse{
-		Object: "list",
-		Data:   make([]WalletResponse, len(wallets)),
-	}
-	for i, wallet := range wallets {
-		response.Data[i] = toWalletResponse(wallet)
-	}
-
-	sendSuccess(c, http.StatusOK, response)
 }
 
 // UpdateWallet godoc
@@ -581,128 +662,4 @@ func (h *WalletHandler) DeleteWallet(c *gin.Context) {
 	}
 
 	sendSuccess(c, http.StatusNoContent, nil)
-}
-
-// GetWalletStats godoc
-// @Summary Get wallet statistics
-// @Description Get statistics about wallets for the authenticated account
-// @Tags wallets
-// @Accept json
-// @Produce json
-// @Success 200 {object} WalletStatsResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /wallets/stats [get]
-func (h *WalletHandler) GetWalletStats(c *gin.Context) {
-	accountID, err := uuid.Parse(c.GetString("account_id"))
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
-		return
-	}
-
-	stats, err := h.common.db.GetWalletStats(c.Request.Context(), accountID)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to get wallet statistics", err)
-		return
-	}
-
-	response := WalletStatsResponse{
-		Object:            "wallet_stats",
-		TotalWallets:      stats.TotalWallets,
-		VerifiedWallets:   stats.VerifiedWallets,
-		PrimaryWallets:    stats.PrimaryWallets,
-		NetworkTypesCount: stats.NetworkTypesCount,
-	}
-
-	sendSuccess(c, http.StatusOK, response)
-}
-
-// GetRecentlyUsedWallets godoc
-// @Summary Get recently used wallets
-// @Description Get a list of recently used wallets for the authenticated account
-// @Tags wallets
-// @Accept json
-// @Produce json
-// @Param limit query int false "Number of results to return (default 5)"
-// @Success 200 {object} WalletListResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /wallets/recent [get]
-func (h *WalletHandler) GetRecentlyUsedWallets(c *gin.Context) {
-	accountID, err := uuid.Parse(c.GetString("account_id"))
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
-		return
-	}
-
-	// Parse limit parameter with safe conversion
-	var limit int32 = 5 // default limit
-	if limitStr := c.Query("limit"); limitStr != "" {
-		limit, err = safeParseInt32(limitStr)
-		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid limit parameter", err)
-			return
-		}
-		if limit <= 0 {
-			limit = 5
-		}
-	}
-
-	wallets, err := h.common.db.GetRecentlyUsedWallets(c.Request.Context(), db.GetRecentlyUsedWalletsParams{
-		AccountID: accountID,
-		Limit:     limit,
-	})
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to get recently used wallets", err)
-		return
-	}
-
-	// Convert to response format
-	response := WalletListResponse{
-		Object: "list",
-		Data:   make([]WalletResponse, len(wallets)),
-	}
-	for i, wallet := range wallets {
-		response.Data[i] = toWalletResponse(wallet)
-	}
-
-	sendSuccess(c, http.StatusOK, response)
-}
-
-// GetWalletsByENS godoc
-// @Summary Get wallets with ENS names
-// @Description Get a list of wallets that have ENS names for the authenticated account
-// @Tags wallets
-// @Accept json
-// @Produce json
-// @Success 200 {object} WalletListResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /wallets/ens [get]
-func (h *WalletHandler) GetWalletsByENS(c *gin.Context) {
-	accountID, err := uuid.Parse(c.GetString("account_id"))
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
-		return
-	}
-
-	wallets, err := h.common.db.GetWalletsByENS(c.Request.Context(), accountID)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to get wallets with ENS names", err)
-		return
-	}
-
-	// Convert to response format
-	response := WalletListResponse{
-		Object: "list",
-		Data:   make([]WalletResponse, len(wallets)),
-	}
-	for i, wallet := range wallets {
-		response.Data[i] = toWalletResponse(wallet)
-	}
-
-	sendSuccess(c, http.StatusOK, response)
 }

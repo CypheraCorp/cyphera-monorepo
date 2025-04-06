@@ -328,7 +328,7 @@ func (q *Queries) GetActiveProductTokensByProduct(ctx context.Context, productID
 
 const getProductNetworks = `-- name: GetProductNetworks :many
 SELECT DISTINCT
-    n.id, n.name, n.type, n.chain_id, n.active, n.created_at, n.updated_at, n.deleted_at,
+    n.id, n.name, n.type, n.network_type, n.circle_network_type, n.chain_id, n.is_testnet, n.active, n.created_at, n.updated_at, n.deleted_at,
     (
         SELECT COUNT(*) 
         FROM products_tokens pt2 
@@ -352,7 +352,10 @@ type GetProductNetworksRow struct {
 	ID                uuid.UUID          `json:"id"`
 	Name              string             `json:"name"`
 	Type              string             `json:"type"`
+	NetworkType       NetworkType        `json:"network_type"`
+	CircleNetworkType CircleNetworkType  `json:"circle_network_type"`
 	ChainID           int32              `json:"chain_id"`
+	IsTestnet         bool               `json:"is_testnet"`
 	Active            bool               `json:"active"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
@@ -373,7 +376,10 @@ func (q *Queries) GetProductNetworks(ctx context.Context, productID uuid.UUID) (
 			&i.ID,
 			&i.Name,
 			&i.Type,
+			&i.NetworkType,
+			&i.CircleNetworkType,
 			&i.ChainID,
+			&i.IsTestnet,
 			&i.Active,
 			&i.CreatedAt,
 			&i.UpdatedAt,
