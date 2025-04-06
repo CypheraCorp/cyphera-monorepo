@@ -11,10 +11,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -37,6 +39,7 @@ func NewCircleHandler(common *CommonServices, circleClient *circle.CircleClient)
 // RequestWithIdempotencyKey represents a request containing an idempotencyKey
 type RequestWithIdempotencyKey struct {
 	IdempotencyKey string `json:"idempotency_key" binding:"required"`
+	UserToken      string `json:"user_token" binding:"required"`
 }
 
 // InitializeUserRequest represents the request to initialize a Circle user
@@ -55,6 +58,7 @@ type CreateWalletsRequest struct {
 	IdempotencyKey string   `json:"idempotency_key" binding:"required"`
 	Blockchains    []string `json:"blockchains" binding:"required"`
 	AccountType    string   `json:"account_type,omitempty"`
+	UserToken      string   `json:"user_token" binding:"required"`
 	Metadata       []struct {
 		Name  string `json:"name"`
 		RefID string `json:"ref_id"`
@@ -141,6 +145,207 @@ type ListTransactionsParams struct {
 	PageAfter          string `form:"page_after"`
 }
 
+// CreateUserRequest represents the request to create a Circle user
+type CreateUserWithPinAuthRequest struct {
+	ExternalUserID string `json:"external_user_id" binding:"required"`
+}
+
+// PinDetails represents the PIN information for a Circle user
+type PinDetails struct {
+	FailedAttempts       int    `json:"failedAttempts"`
+	LockedDate           string `json:"lockedDate"`
+	LockedExpiryDate     string `json:"lockedExpiryDate"`
+	LastLockOverrideDate string `json:"lastLockOverrideDate"`
+}
+
+// CircleUserData represents user data returned from the Circle API
+type CircleUserData struct {
+	ID                      string     `json:"id"`
+	CreateDate              time.Time  `json:"createDate"`
+	PinStatus               string     `json:"pinStatus"`
+	Status                  string     `json:"status"`
+	SecurityQuestionStatus  string     `json:"securityQuestionStatus"`
+	PinDetails              PinDetails `json:"pinDetails"`
+	SecurityQuestionDetails PinDetails `json:"securityQuestionDetails"`
+}
+
+// TokenData represents the token information for Circle API access
+type TokenData struct {
+	UserToken     string `json:"user_token"`
+	EncryptionKey string `json:"encryption_key"`
+}
+
+// CreateUserResponse represents the response returned by the CreateUser endpoint
+type CreateUserResponse struct {
+	ID                     string `json:"id"`
+	CreateDate             string `json:"createDate"`
+	PinStatus              string `json:"pinStatus"`
+	Status                 string `json:"status"`
+	SecurityQuestionStatus string `json:"securityQuestionStatus"`
+	PinDetails             struct {
+		FailedAttempts       int    `json:"failedAttempts"`
+		LockedDate           string `json:"lockedDate"`
+		LockedExpiryDate     string `json:"lockedExpiryDate"`
+		LastLockOverrideDate string `json:"lastLockOverrideDate"`
+	} `json:"pinDetails"`
+	SecurityQuestionDetails struct {
+		FailedAttempts       int    `json:"failedAttempts"`
+		LockedDate           string `json:"lockedDate"`
+		LockedExpiryDate     string `json:"lockedExpiryDate"`
+		LastLockOverrideDate string `json:"lastLockOverrideDate"`
+	} `json:"securityQuestionDetails"`
+}
+
+// CreateUser godoc
+// @Summary Create a Circle user
+// @Description Creates a new Circle user with PIN authentication
+// @Tags circle
+// @Accept json
+// @Produce json
+// @Param X-Account-ID header string true "Account ID"
+// @Param request body CreateUserWithPinAuthRequest true "User creation request"
+// @Success 201 {object} CreateUserResponse "User created successfully"
+// @Success 200 {object} CreateUserResponse "User already exists"
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /circle/users [post]
+func (h *CircleHandler) CreateUser(c *gin.Context) {
+	// Validate account ID
+	accountID, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		return
+	}
+
+	// Bind request body
+	var req CreateUserWithPinAuthRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	// Check if user already exists in our database
+	existingUser, err := h.common.db.GetCircleUserByAccountID(c.Request.Context(), accountID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		logger.Log.Error("Failed to check for existing circle user",
+			zap.Error(err),
+			zap.String("account_id", accountID.String()))
+		sendError(c, http.StatusInternalServerError, "Failed to check for existing circle user", err)
+		return
+	}
+
+	var userID string
+	var createDate time.Time
+	var pinStatus string
+	var status string
+	var securityQuestionStatus string
+	var statusCode int
+	var pinDetails struct {
+		FailedAttempts       int    `json:"failedAttempts"`
+		LockedDate           string `json:"lockedDate"`
+		LockedExpiryDate     string `json:"lockedExpiryDate"`
+		LastLockOverrideDate string `json:"lastLockOverrideDate"`
+	}
+	var securityQuestionDetails struct {
+		FailedAttempts       int    `json:"failedAttempts"`
+		LockedDate           string `json:"lockedDate"`
+		LockedExpiryDate     string `json:"lockedExpiryDate"`
+		LastLockOverrideDate string `json:"lastLockOverrideDate"`
+	}
+
+	if err == nil {
+		// User exists in our database, verify with Circle
+		userByIDResponse, err := h.circleClient.GetUserByID(c.Request.Context(), existingUser.ID.String())
+		if err != nil {
+			logger.Log.Error("Failed to get user from Circle",
+				zap.Error(err),
+				zap.String("circle_user_id", existingUser.ID.String()))
+			sendError(c, http.StatusInternalServerError, "Failed to get user from Circle", err)
+			return
+		}
+
+		userID = userByIDResponse.Data.User.ID
+		createDate = userByIDResponse.Data.User.CreateDate
+		pinStatus = userByIDResponse.Data.User.PinStatus
+		status = userByIDResponse.Data.User.Status
+		securityQuestionStatus = userByIDResponse.Data.User.SecurityQuestionStatus
+		pinDetails = userByIDResponse.Data.User.PinDetails
+		securityQuestionDetails = userByIDResponse.Data.User.SecurityQuestionDetails
+		statusCode = http.StatusOK // User already exists
+
+		// Check if any status fields have changed
+		if existingUser.PinStatus != pinStatus ||
+			existingUser.Status != status ||
+			existingUser.SecurityQuestionStatus != securityQuestionStatus {
+
+			// Update the user in our database with new status values
+			_, err = h.common.db.UpdateCircleUser(c.Request.Context(), db.UpdateCircleUserParams{
+				PinStatus:              pinStatus,
+				Status:                 status,
+				SecurityQuestionStatus: securityQuestionStatus,
+				ID:                     existingUser.ID,
+			})
+			if err != nil {
+				logger.Log.Error("Failed to update circle user status",
+					zap.Error(err),
+					zap.String("circle_user_id", existingUser.ID.String()))
+				sendError(c, http.StatusInternalServerError, "Failed to update circle user status", err)
+				return
+			}
+		}
+	} else {
+		// Create new user in Circle
+		userResponse, err := h.circleClient.CreateUserWithPinAuth(c.Request.Context(), req.ExternalUserID)
+		if err != nil {
+			if errors.Is(err, circle.ErrUserAlreadyExists) {
+				sendError(c, http.StatusConflict, "User already exists in Circle", err)
+				return
+			}
+			logger.Log.Error("Failed to create user in Circle",
+				zap.Error(err),
+				zap.String("external_user_id", req.ExternalUserID))
+			sendError(c, http.StatusInternalServerError, "Failed to create user in Circle", err)
+			return
+		}
+		userID = userResponse.Data.ID
+		createDate = userResponse.Data.CreateDate
+		pinStatus = userResponse.Data.PinStatus
+		status = userResponse.Data.Status
+		securityQuestionStatus = userResponse.Data.SecurityQuestionStatus
+		pinDetails = userResponse.Data.PinDetails
+		securityQuestionDetails = userResponse.Data.SecurityQuestionDetails
+		statusCode = http.StatusCreated // New user created
+
+		// Store user in our database
+		_, err = h.common.db.CreateCircleUser(c.Request.Context(), db.CreateCircleUserParams{
+			ID:                     uuid.MustParse(userID),
+			AccountID:              accountID,
+			CircleCreateDate:       pgtype.Timestamptz{Time: createDate, Valid: true},
+			PinStatus:              pinStatus,
+			Status:                 status,
+			SecurityQuestionStatus: securityQuestionStatus,
+		})
+		if err != nil {
+			logger.Log.Error("Failed to store circle user in database",
+				zap.Error(err),
+				zap.String("circle_user_id", userID))
+			sendError(c, http.StatusInternalServerError, "Failed to store circle user in database", err)
+			return
+		}
+	}
+
+	sendSuccess(c, statusCode, CreateUserResponse{
+		ID:                      userID,
+		CreateDate:              createDate.Format(time.RFC3339),
+		PinStatus:               pinStatus,
+		Status:                  status,
+		SecurityQuestionStatus:  securityQuestionStatus,
+		PinDetails:              pinDetails,
+		SecurityQuestionDetails: securityQuestionDetails,
+	})
+}
+
 // CreateUserToken godoc
 // @Summary Create a Circle user token
 // @Description Creates a user token for Circle API operations and stores or updates the user in the database
@@ -155,7 +360,7 @@ type ListTransactionsParams struct {
 // @Router /circle/users/{user_id}/token [post]
 func (h *CircleHandler) CreateUserToken(c *gin.Context) {
 	// Validate account ID
-	accountID, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
 		return
@@ -174,39 +379,12 @@ func (h *CircleHandler) CreateUserToken(c *gin.Context) {
 		return
 	}
 
-	// Check if a circle user already exists for this account
-	_, err = h.common.db.GetCircleUserByAccountID(c.Request.Context(), accountID)
-	if err == nil {
-		// User exists, update the token and encryption key
-		_, err = h.common.db.UpdateCircleUserByAccountID(c.Request.Context(), db.UpdateCircleUserByAccountIDParams{
-			Token:         tokenResponse.Data.UserToken,
-			EncryptionKey: tokenResponse.Data.EncryptionKey,
-			AccountID:     accountID,
-		})
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to update circle user", err)
-			return
-		}
-	} else {
-		// User doesn't exist, create a new one
-		_, err = h.common.db.CreateCircleUser(c.Request.Context(), db.CreateCircleUserParams{
-			ID:            uuid.New(),
-			AccountID:     accountID,
-			Token:         tokenResponse.Data.UserToken,
-			EncryptionKey: tokenResponse.Data.EncryptionKey,
-		})
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to create circle user", err)
-			return
-		}
-	}
-
 	sendSuccess(c, http.StatusOK, tokenResponse)
 }
 
 // GetUserByToken godoc
 // @Summary Get Circle user by token
-// @Description Retrieves user details using a Circle user token and updates database if token changed
+// @Description Retrieves user details using a Circle user token
 // @Tags circle
 // @Accept json
 // @Produce json
@@ -238,19 +416,14 @@ func (h *CircleHandler) GetUserByToken(c *gin.Context) {
 	}
 
 	// Check if a circle user exists for this account
-	circleUser, err := h.common.db.GetCircleUserByAccountID(c.Request.Context(), accountID)
-
-	// If user exists but token doesn't match, update the token
-	if err == nil && circleUser.Token != userToken {
-		// Update token to ensure our database is in sync
-		_, err = h.common.db.UpdateCircleUserByAccountID(c.Request.Context(), db.UpdateCircleUserByAccountIDParams{
-			Token:     userToken,
-			AccountID: accountID,
-		})
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to update circle user token", err)
-			return
-		}
+	_, err = h.common.db.GetCircleUserByAccountID(c.Request.Context(), accountID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		// Only log and return error if it's not a "not found" error
+		logger.Log.Error("Failed to check for existing circle user",
+			zap.Error(err),
+			zap.String("account_id", accountID.String()))
+		sendError(c, http.StatusInternalServerError, "Failed to check for existing circle user", err)
+		return
 	}
 
 	sendSuccess(c, http.StatusOK, userResponse)
@@ -444,9 +617,9 @@ func (h *CircleHandler) CreatePinChallenge(c *gin.Context) {
 		return
 	}
 
-	userToken := c.GetHeader("User-Token")
+	userToken := req.UserToken
 	if userToken == "" {
-		sendError(c, http.StatusBadRequest, "User token is required in the User-Token header", nil)
+		sendError(c, http.StatusBadRequest, "User token is required in the body", nil)
 		return
 	}
 
@@ -573,9 +746,9 @@ func (h *CircleHandler) CreateWallets(c *gin.Context) {
 		return
 	}
 
-	userToken := c.GetHeader("User-Token")
+	userToken := req.UserToken
 	if userToken == "" {
-		sendError(c, http.StatusBadRequest, "User token is required in the User-Token header", nil)
+		sendError(c, http.StatusBadRequest, "User token is required in the body", nil)
 		return
 	}
 
@@ -621,52 +794,103 @@ func (h *CircleHandler) CreateWallets(c *gin.Context) {
 	// Store the challenge ID for future wallet creation tracking
 	challengeID := walletsResponse.Data.ChallengeID
 
-	// Note: Actual wallet creation happens asynchronously after the challenge is completed
-	// We should attempt to check if the challenge is already complete, and if so, create wallet entries
+	// Poll every second for up to one minute to check if the challenge completes
+	go func() {
+		ctx := context.Background() // Create a new context to avoid cancellation issues
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		timeout := time.After(60 * time.Second)
 
-	// Get the challenge status to see if it's already completed (unlikely but possible)
-	challengeResponse, err := h.circleClient.GetChallenge(c.Request.Context(), challengeID, userToken)
-	if err != nil {
-		// If we can't get challenge details, we'll just continue; wallets will be created later when ListWallets is called
-		logger.Warn("Could not check challenge status",
-			zap.String("challenge_id", challengeID),
-			zap.Error(err))
-	} else if challengeResponse.Data.Challenge.Status == "complete" {
-		// Challenge already completed, immediately list wallets and create them in our database
-		// This is unusual but possible for very fast challenge completion
-
-		// List wallets to get their details
-		listParams := &circle.ListWalletsParams{}
-		walletsListResponse, err := h.circleClient.ListWallets(c.Request.Context(), userToken, listParams)
-		if err == nil && len(walletsListResponse.Data.Wallets) > 0 {
-			// Begin a transaction for database operations
-			tx, qtx, err := h.common.BeginTx(c.Request.Context())
-			if err != nil {
-				logger.Error("Failed to begin transaction for wallet creation",
-					zap.Error(err))
-			} else {
-				defer tx.Rollback(c.Request.Context())
-
-				// Process each wallet and create Cyphera wallet entries
-				for _, walletData := range walletsListResponse.Data.Wallets {
-					err = h.createCypheraWalletEntry(c.Request.Context(), qtx, walletData, accountID, circleUser.ID)
-					if err != nil {
-						logger.Error("Failed to create Cyphera wallet entry",
-							zap.String("address", walletData.Address),
-							zap.Error(err))
-						// Continue processing other wallets
-						continue
-					}
-				}
-
-				// Commit transaction
-				if err := tx.Commit(c.Request.Context()); err != nil {
-					logger.Error("Failed to commit transaction for wallet creation",
+		for {
+			select {
+			case <-ticker.C:
+				// Check challenge status
+				challengeResp, err := h.circleClient.GetChallenge(ctx, challengeID, userToken)
+				if err != nil {
+					logger.Warn("Failed to check challenge status during polling",
+						zap.String("challenge_id", challengeID),
 						zap.Error(err))
+					continue
 				}
+
+				logger.Debug("Checking challenge status",
+					zap.String("challenge_id", challengeID),
+					zap.String("status", challengeResp.Data.Challenge.Status))
+
+				if challengeResp.Data.Challenge.Status == "COMPLETE" {
+					logger.Info("Challenge completed successfully",
+						zap.String("challenge_id", challengeID),
+						zap.String("user_id", circleUser.ID.String()))
+
+					// List wallets to get their details
+					listParams := &circle.ListWalletsParams{}
+					walletsListResponse, err := h.circleClient.ListWallets(ctx, userToken, listParams)
+					if err != nil {
+						logger.Error("Failed to list wallets after challenge completion",
+							zap.String("challenge_id", challengeID),
+							zap.Error(err))
+						return
+					}
+
+					spew.Dump(walletsListResponse)
+
+					if len(walletsListResponse.Data.Wallets) == 0 {
+						logger.Warn("No wallets returned after challenge completion",
+							zap.String("challenge_id", challengeID))
+						return
+					}
+
+					// Begin a transaction for database operations
+					tx, qtx, err := h.common.BeginTx(ctx)
+					if err != nil {
+						logger.Error("Failed to begin transaction for wallet creation after challenge completion",
+							zap.Error(err))
+						return
+					}
+					defer tx.Rollback(ctx)
+
+					// Process each wallet and create Cyphera wallet entries
+					walletCount := 0
+					for _, walletData := range walletsListResponse.Data.Wallets {
+						err = h.createCypheraWalletEntry(ctx, qtx, walletData, accountID, circleUser.ID)
+						if err != nil {
+							logger.Error("Failed to create Cyphera wallet entry during challenge polling",
+								zap.String("address", walletData.Address),
+								zap.Error(err))
+							continue
+						}
+						walletCount++
+					}
+
+					// Commit transaction
+					if err := tx.Commit(ctx); err != nil {
+						logger.Error("Failed to commit transaction for wallet creation during challenge polling",
+							zap.Error(err))
+						return
+					}
+
+					logger.Info("Successfully created wallets after challenge completion",
+						zap.String("challenge_id", challengeID),
+						zap.Int("wallet_count", walletCount))
+					return
+				} else if challengeResp.Data.Challenge.Status == "FAILED" {
+					logger.Error("Challenge failed",
+						zap.String("challenge_id", challengeID),
+						zap.Int("error_code", challengeResp.Data.Challenge.ErrorCode),
+						zap.String("error_message", challengeResp.Data.Challenge.ErrorMessage))
+					return
+				}
+
+			case <-timeout:
+				logger.Warn("Timed out waiting for challenge to complete",
+					zap.String("challenge_id", challengeID),
+					zap.String("user_id", circleUser.ID.String()))
+
+				sendError(c, http.StatusInternalServerError, "Timed out waiting for challenge to complete", nil)
+				return
 			}
 		}
-	}
+	}()
 
 	// Return the challenge info regardless of whether we've already created the wallets
 	sendSuccess(c, http.StatusOK, map[string]interface{}{

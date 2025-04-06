@@ -31,7 +31,7 @@ test-integration: ensure-executable
 # Run the subscription processor
 subscription-processor:
 	@echo "Starting subscription processor with 1-minute interval..."
-	$(GO) run ./cmd/subscription-processor/main.go --interval=1m
+	$(GO) run ./cmd/subscription-processor/main.go --interval=10s
 
 dev: ensure-executable
 	air

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"cyphera-api/internal/logger"
@@ -215,13 +216,23 @@ func (c *HTTPClient) Delete(ctx context.Context, path string, options ...Request
 func (c *HTTPClient) DoRequest(ctx context.Context, method, path string, body interface{}, options ...RequestOption) (*http.Response, error) {
 	start := time.Now()
 
-	// Build the full URL
+	// Build the full URL by directly concatenating base URL and path
 	fullURL := path
 	if c.baseURL != "" {
-		if baseURL, err := url.Parse(c.baseURL); err == nil {
-			if pathURL, err := url.Parse(path); err == nil {
-				fullURL = baseURL.ResolveReference(pathURL).String()
-			}
+		// Ensure the base URL does not have a trailing slash
+		trimmedBaseURL := strings.TrimSuffix(c.baseURL, "/")
+		// Ensure the path has a leading slash
+		trimmedPath := path
+		if !strings.HasPrefix(trimmedPath, "/") {
+			trimmedPath = "/" + trimmedPath
+		}
+		fullURL = trimmedBaseURL + trimmedPath
+	} else {
+		// If no base URL, use the path directly (ensure it's a valid URL)
+		// This branch might need more robust URL validation depending on usage
+		_, err := url.ParseRequestURI(path)
+		if err != nil {
+			return nil, fmt.Errorf("invalid path used without base URL: %s, error: %w", path, err)
 		}
 	}
 
@@ -412,6 +423,10 @@ func (l *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		zap.Duration("duration", duration))
 
 	return resp, nil
+}
+
+func (c *HTTPClient) GetBaseURL() string {
+	return c.baseURL
 }
 
 // Example usage:

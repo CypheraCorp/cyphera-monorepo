@@ -13,13 +13,22 @@ type PinChallengeResponse struct {
 	} `json:"data"`
 }
 
+// PinChallengeRequest represents the request to create a PIN challenge
+type PinChallengeRequest struct {
+	IdempotencyKey string `json:"idempotencyKey"`
+}
+
 // CreatePinChallenge creates a challenge for PIN setup without setting up wallets
 func (c *CircleClient) CreatePinChallenge(ctx context.Context, idempotencyKey string, userToken string) (*PinChallengeResponse, error) {
-	// The API expects the idempotencyKey as a JSON string in the request body
+	// Create a proper JSON request
+	request := PinChallengeRequest{
+		IdempotencyKey: idempotencyKey,
+	}
+
 	resp, err := c.httpClient.Post(
 		ctx,
-		"/user/pin",
-		idempotencyKey, // Send the idempotencyKey directly as the body
+		"user/pin",
+		request, // Send the structured request - httpClient will marshal to JSON
 		httpClient.WithBearerToken(c.apiKey),
 		httpClient.WithHeader("X-User-Token", userToken),
 	)
@@ -37,11 +46,15 @@ func (c *CircleClient) CreatePinChallenge(ctx context.Context, idempotencyKey st
 
 // UpdatePinChallenge creates a challenge to update a user's PIN via the existing PIN
 func (c *CircleClient) UpdatePinChallenge(ctx context.Context, idempotencyKey string, userToken string) (*PinChallengeResponse, error) {
-	// The API expects the idempotencyKey as a JSON string in the request body
+	// Create a proper JSON request
+	request := PinChallengeRequest{
+		IdempotencyKey: idempotencyKey,
+	}
+
 	resp, err := c.httpClient.Put(
 		ctx,
-		"/user/pin",
-		idempotencyKey, // Send the idempotencyKey directly as the body
+		"user/pin",
+		request, // Send the structured request - httpClient will marshal to JSON
 		httpClient.WithBearerToken(c.apiKey),
 		httpClient.WithHeader("X-User-Token", userToken),
 	)
@@ -59,11 +72,15 @@ func (c *CircleClient) UpdatePinChallenge(ctx context.Context, idempotencyKey st
 
 // CreatePinRestoreChallenge creates a challenge to change a user's PIN via Security Questions
 func (c *CircleClient) CreatePinRestoreChallenge(ctx context.Context, idempotencyKey string, userToken string) (*PinChallengeResponse, error) {
-	// The API expects the idempotencyKey as a JSON string in the request body
+	// Create a proper JSON request
+	request := PinChallengeRequest{
+		IdempotencyKey: idempotencyKey,
+	}
+
 	resp, err := c.httpClient.Post(
 		ctx,
-		"/user/pin/restore",
-		idempotencyKey, // Send the idempotencyKey directly as the body
+		"user/pin/restore",
+		request, // Send the structured request - httpClient will marshal to JSON
 		httpClient.WithBearerToken(c.apiKey),
 		httpClient.WithHeader("X-User-Token", userToken),
 	)

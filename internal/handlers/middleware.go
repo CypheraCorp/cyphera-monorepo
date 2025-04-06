@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"cyphera-api/internal/logger"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,6 +19,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// Context keys for storing values
+const (
+	RequestIDKey  = "request_id"
+	AccountIDKey  = "X-Account-ID"
+	UserIDKey     = "X-User-ID"
+	SupabaseIDKey = "supabase_id"
+)
+
 // RequestLog represents a structured log entry for an HTTP request
 type RequestLog struct {
 	Method     string    `json:"method"`
@@ -27,8 +36,8 @@ type RequestLog struct {
 	ClientIP   string    `json:"client_ip"`
 	RequestID  string    `json:"request_id,omitempty"`
 	AccountID  string    `json:"account_id,omitempty"`
+	UserID     string    `json:"user_id,omitempty"`
 	SupabaseID string    `json:"supabase_id,omitempty"`
-	Body       string    `json:"body"`
 	Timestamp  time.Time `json:"timestamp"`
 }
 
@@ -199,6 +208,8 @@ func LogRequest() gin.HandlerFunc {
 			return
 		}
 
+		start := time.Now()
+
 		// Get request body
 		bodyBytes, err := getRequestBody(c)
 		if err != nil {
@@ -212,24 +223,31 @@ func LogRequest() gin.HandlerFunc {
 			return
 		}
 
-		// convert bodyBytes to readable json with "/" replaced with "\/"
-		bodyString := strings.ReplaceAll(string(bodyBytes), "/", "\\/")
+		// Attempt to unmarshal body for pretty printing
+		var bodyField zap.Field
+		var prettyBody interface{}
+		if len(bodyBytes) > 0 && json.Unmarshal(bodyBytes, &prettyBody) == nil {
+			bodyField = zap.Any("body", prettyBody) // Log parsed JSON
+		} else {
+			// Fallback to string if not JSON or empty
+			bodyField = zap.String("body", string(bodyBytes))
+		}
 
-		// Create request log entry
+		// Prepare base log entry (without body initially)
 		requestLog := RequestLog{
 			Method:     c.Request.Method,
 			Path:       c.Request.URL.Path,
 			Query:      c.Request.URL.RawQuery,
 			UserAgent:  c.Request.UserAgent(),
 			ClientIP:   c.ClientIP(),
-			RequestID:  c.GetString("request_id"),
-			AccountID:  c.GetString("account_id"),
-			SupabaseID: c.GetString("supabase_id"), // Add Supabase ID to logs
-			Body:       bodyString,
-			Timestamp:  time.Now().UTC(),
+			RequestID:  c.GetHeader(RequestIDKey),  // Use defined constant
+			AccountID:  c.GetHeader(AccountIDKey),  // Use defined constant
+			UserID:     c.GetHeader(UserIDKey),     // Use defined constant
+			SupabaseID: c.GetHeader(SupabaseIDKey), // Use defined constant
+			Timestamp:  start.UTC(),
 		}
 
-		// Log the request
+		// Log the request details including the prepared body field
 		logger.Log.Debug("Request received",
 			zap.String("method", requestLog.Method),
 			zap.String("path", requestLog.Path),
@@ -238,8 +256,9 @@ func LogRequest() gin.HandlerFunc {
 			zap.String("client_ip", requestLog.ClientIP),
 			zap.String("request_id", requestLog.RequestID),
 			zap.String("account_id", requestLog.AccountID),
+			zap.String("user_id", requestLog.UserID),
 			zap.String("supabase_id", requestLog.SupabaseID),
-			zap.Any("body", requestLog.Body),
+			bodyField, // Add the dynamically created body field here
 			zap.Time("timestamp", requestLog.Timestamp),
 		)
 
