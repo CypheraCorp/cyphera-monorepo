@@ -3,7 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"cyphera-api/internal/client"
+	dsClient "cyphera-api/internal/client/delegation_server"
 	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/logger"
@@ -29,11 +29,11 @@ type SwaggerMetadata map[string]interface{}
 // ProductHandler handles product-related operations
 type ProductHandler struct {
 	common           *CommonServices
-	delegationClient *client.DelegationClient
+	delegationClient *dsClient.DelegationClient
 }
 
 // NewProductHandler creates a new ProductHandler instance
-func NewProductHandler(common *CommonServices, delegationClient *client.DelegationClient) *ProductHandler {
+func NewProductHandler(common *CommonServices, delegationClient *dsClient.DelegationClient) *ProductHandler {
 	return &ProductHandler{
 		common:           common,
 		delegationClient: delegationClient,
@@ -298,7 +298,7 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 	// convert price in pennies to float
 	price := float64(product.PriceInPennies) / 100.0
 
-	executionObject := client.ExecutionObject{
+	executionObject := dsClient.ExecutionObject{
 		MerchantAddress:      merchantWallet.WalletAddress,
 		TokenContractAddress: token.ContractAddress,
 		Price:                strconv.FormatFloat(price, 'f', -1, 64),
@@ -820,7 +820,7 @@ func (h *ProductHandler) performInitialRedemption(
 	product db.Product,
 	productToken db.GetProductTokenRow,
 	delegation DelegationStruct,
-	executionObject client.ExecutionObject,
+	executionObject dsClient.ExecutionObject,
 ) (db.Subscription, error) {
 	logger.Info("Performing initial redemption",
 		zap.String("subscription_id", subscription.ID.String()),
@@ -829,7 +829,7 @@ func (h *ProductHandler) performInitialRedemption(
 
 	// Marshal the delegation to JSON for the delegation client
 	rawCaveats := marshalCaveats(delegation.Caveats)
-	delegationData := client.DelegationData{
+	delegationData := dsClient.DelegationData{
 		Delegate:  delegation.Delegate,
 		Delegator: delegation.Delegator,
 		Authority: delegation.Authority,

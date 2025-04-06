@@ -20,30 +20,39 @@ func NewNetworkHandler(common *CommonServices) *NetworkHandler {
 
 // NetworkResponse represents the standardized API response for network operations
 type NetworkResponse struct {
-	ID        string `json:"id"`
-	Object    string `json:"object"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	ChainID   int32  `json:"chain_id"`
-	Active    bool   `json:"active"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	ID                string `json:"id"`
+	Object            string `json:"object"`
+	Name              string `json:"name"`
+	Type              string `json:"type"`
+	ChainID           int32  `json:"chain_id"`
+	NetworkType       string `json:"network_type"`
+	CircleNetworkType string `json:"circle_network_type"`
+	IsTestnet         bool   `json:"is_testnet"`
+	Active            bool   `json:"active"`
+	CreatedAt         int64  `json:"created_at"`
+	UpdatedAt         int64  `json:"updated_at"`
 }
 
 // CreateNetworkRequest represents the request body for creating a network
 type CreateNetworkRequest struct {
-	Name    string `json:"name" binding:"required"`
-	Type    string `json:"type" binding:"required"`
-	ChainID int32  `json:"chain_id" binding:"required"`
-	Active  bool   `json:"active"`
+	Name              string `json:"name" binding:"required"`
+	Type              string `json:"type" binding:"required"`
+	NetworkType       string `json:"network_type" binding:"required"`
+	CircleNetworkType string `json:"circle_network_type" binding:"required"`
+	ChainID           int32  `json:"chain_id" binding:"required"`
+	IsTestnet         bool   `json:"is_testnet"`
+	Active            bool   `json:"active"`
 }
 
 // UpdateNetworkRequest represents the request body for updating a network
 type UpdateNetworkRequest struct {
-	Name    string `json:"name,omitempty"`
-	Type    string `json:"type,omitempty"`
-	ChainID int32  `json:"chain_id,omitempty"`
-	Active  *bool  `json:"active,omitempty"`
+	Name              string `json:"name,omitempty"`
+	Type              string `json:"type,omitempty"`
+	NetworkType       string `json:"network_type,omitempty"`
+	CircleNetworkType string `json:"circle_network_type,omitempty"`
+	ChainID           int32  `json:"chain_id,omitempty"`
+	IsTestnet         *bool  `json:"is_testnet,omitempty"`
+	Active            *bool  `json:"active,omitempty"`
 }
 
 // ListNetworksResponse represents the paginated response for network list operations
@@ -192,10 +201,13 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 	}
 
 	network, err := h.common.db.CreateNetwork(c.Request.Context(), db.CreateNetworkParams{
-		Name:    req.Name,
-		Type:    req.Type,
-		ChainID: req.ChainID,
-		Active:  req.Active,
+		Name:              req.Name,
+		Type:              req.Type,
+		NetworkType:       db.NetworkType(req.NetworkType),
+		CircleNetworkType: db.CircleNetworkType(req.CircleNetworkType),
+		ChainID:           req.ChainID,
+		IsTestnet:         req.IsTestnet,
+		Active:            req.Active,
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to create network", err)
@@ -234,11 +246,14 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 	}
 
 	network, err := h.common.db.UpdateNetwork(c.Request.Context(), db.UpdateNetworkParams{
-		ID:      parsedUUID,
-		Name:    req.Name,
-		Type:    req.Type,
-		ChainID: req.ChainID,
-		Active:  *req.Active,
+		ID:                parsedUUID,
+		Name:              req.Name,
+		Type:              req.Type,
+		NetworkType:       db.NetworkType(req.NetworkType),
+		CircleNetworkType: db.CircleNetworkType(req.CircleNetworkType),
+		ChainID:           req.ChainID,
+		IsTestnet:         *req.IsTestnet,
+		Active:            *req.Active,
 	})
 	if err != nil {
 		handleDBError(c, err, "Failed to update network")
@@ -288,9 +303,9 @@ func (h *NetworkHandler) DeleteNetwork(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /networks/tokens [get]
 func (h *NetworkHandler) ListNetworksWithTokens(c *gin.Context) {
-	networks, err := h.common.db.ListNetworks(c.Request.Context())
+	networks, err := h.common.db.ListActiveNetworks(c.Request.Context())
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve networks", err)
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve active networks", err)
 		return
 	}
 
@@ -319,13 +334,16 @@ func (h *NetworkHandler) ListNetworksWithTokens(c *gin.Context) {
 // Helper function to convert database model to API response
 func toNetworkResponse(n db.Network) NetworkResponse {
 	return NetworkResponse{
-		ID:        n.ID.String(),
-		Object:    "network",
-		Name:      n.Name,
-		Type:      n.Type,
-		ChainID:   n.ChainID,
-		Active:    n.Active,
-		CreatedAt: n.CreatedAt.Time.Unix(),
-		UpdatedAt: n.UpdatedAt.Time.Unix(),
+		ID:                n.ID.String(),
+		Object:            "network",
+		Name:              n.Name,
+		Type:              n.Type,
+		NetworkType:       string(n.NetworkType),
+		CircleNetworkType: string(n.CircleNetworkType),
+		IsTestnet:         n.IsTestnet,
+		ChainID:           n.ChainID,
+		Active:            n.Active,
+		CreatedAt:         n.CreatedAt.Time.Unix(),
+		UpdatedAt:         n.UpdatedAt.Time.Unix(),
 	}
 }

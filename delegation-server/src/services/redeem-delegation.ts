@@ -14,7 +14,10 @@ import {
   http,
   encodeFunctionData,
   parseUnits,
-  parseEther
+  parseEther,
+  type Transport,
+  type Chain,
+  custom
 } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
 import { sepolia } from "viem/chains"
@@ -30,18 +33,52 @@ import {
   type UserOperationReceipt
 } from "viem/account-abstraction"
 import { createPimlicoClient } from "permissionless/clients/pimlico"
-
-// TODO: support multiple chains and paymasters/bundlers
+import fetch from 'node-fetch'
 
 // Initialize clients
 const chain = sepolia
+
+// Create a custom transport that uses node-fetch
+const createTransport = (url: string | undefined) => {
+  if (!url) {
+    throw new Error('URL is required for transport')
+  }
+  
+  return custom({
+    async request({ method, params }) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method,
+          params,
+          id: 1,
+        }),
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      if (data.error) {
+        throw new Error(data.error.message)
+      }
+      
+      return data.result
+    }
+  })
+}
 
 /**
  * Create public client for reading blockchain state
  */
 export const publicClient = createPublicClient({
   chain,
-  transport: http(config.blockchain.rpcUrl)
+  transport: createTransport(config.blockchain.rpcUrl)
 })
 
 /**
@@ -58,10 +95,10 @@ export function getBundlerClient() {
   }
 
   const paymasterClient = createPaymasterClient({
-    transport: http(config.blockchain.bundlerUrl)
+    transport: createTransport(config.blockchain.bundlerUrl)
   })
   const bundlerClient = createBundlerClient({
-    transport: http(config.blockchain.bundlerUrl),
+    transport: createTransport(config.blockchain.bundlerUrl),
     chain,
     paymaster: paymasterClient,
   })
@@ -107,7 +144,7 @@ export const getFeePerGas = async () => {
   // implementation. For this reason, this is centralized here.
   const pimlicoClient = createPimlicoClient({
     chain,
-    transport: http(config.blockchain.bundlerUrl),
+    transport: createTransport(config.blockchain.bundlerUrl),
   })
 
   const { fast } = await pimlicoClient.getUserOperationGasPrice()

@@ -20,10 +20,13 @@ ORDER BY chain_id ASC;
 INSERT INTO networks (
     name,
     type,
+    network_type,
+    circle_network_type,
     chain_id,
+    is_testnet,
     active
 ) VALUES (
-    $1, $2, $3, $4
+    $1, $2, $3, $4, $5, $6, $7
 )
 RETURNING *;
 
@@ -32,8 +35,11 @@ UPDATE networks
 SET
     name = COALESCE($2, name),
     type = COALESCE($3, type),
-    chain_id = COALESCE($4, chain_id),
-    active = COALESCE($5, active),
+    network_type = COALESCE($4, network_type),
+    circle_network_type = COALESCE($5, circle_network_type),
+    chain_id = COALESCE($6, chain_id),
+    is_testnet = COALESCE($7, is_testnet),
+    active = COALESCE($8, active),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
@@ -57,4 +63,9 @@ SET
     active = true,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING *; 
+RETURNING *;
+
+-- name: GetNetworkByCircleNetworkType :one
+SELECT * FROM networks
+WHERE circle_network_type = $1 AND deleted_at IS NULL
+LIMIT 1; 
