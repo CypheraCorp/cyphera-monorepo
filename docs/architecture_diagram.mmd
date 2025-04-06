@@ -1,0 +1,20 @@
+graph TB
+    Client[Client Applications] --> API[API Gateway]
+    API --> Server[Cyphera API Server]
+    
+    subgraph "Core Services"
+        Server --> Auth[Authentication & Authorization]
+        Server --> Handlers[API Handlers]
+        Handlers --> DB[(PostgreSQL Database)]
+    end
+    
+    subgraph "External Integrations"
+        Server --> DelegationServer[Delegation Server]
+        Server --> CircleAPI[Circle Payment API]
+        Server --> Blockchain[Blockchain Networks]
+    end
+    
+    subgraph "Processing Services"
+        Server --> RedemptionProcessor[Redemption Processor]
+        Server --> SubscriptionProcessor[Subscription Processor]
+    end 

@@ -1,0 +1,298 @@
+erDiagram
+    accounts ||--o{ users : has
+    accounts ||--o{ wallets : has
+    accounts ||--o{ workspaces : has
+    accounts ||--o{ circle_users : has
+    
+    workspaces ||--o{ customers : has
+    workspaces ||--o{ api_keys : has
+    workspaces ||--o{ products : has
+    
+    customers ||--o{ customer_wallets : has
+    customers ||--o{ subscriptions : has
+    
+    wallets ||--o{ products : "used_for"
+    wallets ||--o{ circle_wallets : has
+    wallets }o--|| networks : "belongs_to"
+    
+    circle_users ||--o{ circle_wallets : has
+    
+    networks ||--o{ tokens : has
+    
+    products ||--o{ products_tokens : has
+    products_tokens }o--|| tokens : references
+    products_tokens }o--|| networks : on
+    
+    delegation_data ||--o{ subscriptions : enables
+    
+    customer_wallets ||--o{ subscriptions : used_in
+    
+    subscriptions ||--o{ subscription_events : generates
+    subscriptions }o--|| products : subscribes_to
+    subscriptions }o--|| products_tokens : pays_with
+    
+    accounts {
+        uuid id PK
+        string name
+        enum account_type
+        uuid owner_id
+        string business_name
+        string business_type
+        text website_url
+        string support_email
+        string support_phone
+        jsonb metadata
+        boolean finished_onboarding
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    users {
+        uuid id PK
+        string supabase_id
+        string email
+        uuid account_id FK
+        enum user_role
+        boolean is_account_owner
+        string first_name
+        string last_name
+        string display_name
+        text picture_url
+        string phone
+        enum user_status
+        jsonb metadata
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    workspaces {
+        uuid id PK
+        uuid account_id FK
+        string name
+        text description
+        string business_name
+        string business_type
+        text website_url
+        string support_email
+        string support_phone
+        jsonb metadata
+        boolean livemode
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    api_keys {
+        uuid id PK
+        uuid workspace_id FK
+        string name
+        string key_hash
+        enum api_key_level
+        timestamp expires_at
+        timestamp last_used_at
+        jsonb metadata
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    customers {
+        uuid id PK
+        uuid workspace_id FK
+        string external_id
+        string email
+        string name
+        string phone
+        text description
+        integer balance_in_pennies
+        string currency
+        uuid default_source_id
+        string invoice_prefix
+        integer next_invoice_sequence
+        boolean tax_exempt
+        jsonb tax_ids
+        jsonb metadata
+        boolean livemode
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    customer_wallets {
+        uuid id PK
+        uuid customer_id FK
+        text wallet_address
+        enum network_type
+        text nickname
+        text ens
+        boolean is_primary
+        boolean verified
+        timestamp last_used_at
+        jsonb metadata
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    networks {
+        uuid id PK
+        text name
+        text type
+        enum network_type
+        enum circle_network_type
+        integer chain_id
+        boolean is_testnet
+        boolean active
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    wallets {
+        uuid id PK
+        uuid account_id FK
+        text wallet_type
+        text wallet_address
+        enum network_type
+        uuid network_id FK
+        text nickname
+        text ens
+        boolean is_primary
+        boolean verified
+        timestamp last_used_at
+        jsonb metadata
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    circle_users {
+        uuid id PK
+        uuid account_id FK
+        timestamp circle_create_date
+        text pin_status
+        text status
+        text security_question_status
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    circle_wallets {
+        uuid id PK
+        uuid wallet_id FK
+        uuid circle_user_id FK
+        text circle_wallet_id
+        integer chain_id
+        text state
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    tokens {
+        uuid id PK
+        uuid network_id FK
+        boolean gas_token
+        text name
+        text symbol
+        text contract_address
+        boolean active
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    products {
+        uuid id PK
+        uuid workspace_id FK
+        uuid wallet_id FK
+        text name
+        text description
+        enum product_type
+        enum interval_type
+        integer term_length
+        integer price_in_pennies
+        text image_url
+        text url
+        boolean merchant_paid_gas
+        boolean active
+        jsonb metadata
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    products_tokens {
+        uuid id PK
+        uuid product_id FK
+        uuid network_id FK
+        uuid token_id FK
+        boolean active
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    delegation_data {
+        uuid id PK
+        text delegate
+        text delegator
+        text authority
+        jsonb caveats
+        text salt
+        text signature
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    subscriptions {
+        uuid id PK
+        uuid customer_id FK
+        uuid product_id FK
+        uuid product_token_id FK
+        uuid delegation_id FK
+        uuid customer_wallet_id FK
+        enum subscription_status
+        timestamp current_period_start
+        timestamp current_period_end
+        timestamp next_redemption_date
+        integer total_redemptions
+        integer total_amount_in_cents
+        jsonb metadata
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at
+    }
+    
+    subscription_events {
+        uuid id PK
+        uuid subscription_id FK
+        enum subscription_event_type
+        text transaction_hash
+        integer amount_in_cents
+        timestamp occurred_at
+        text error_message
+        jsonb metadata
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    failed_subscription_attempts {
+        uuid id PK
+        uuid customer_id FK
+        uuid product_id FK
+        uuid product_token_id FK
+        uuid customer_wallet_id FK
+        text wallet_address
+        enum subscription_event_type
+        text error_message
+        jsonb error_details
+        text delegation_signature
+        timestamp occurred_at
+        jsonb metadata
+        timestamp created_at
+        timestamp updated_at
+    } 

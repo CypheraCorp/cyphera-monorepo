@@ -1,0 +1,11 @@
+sequenceDiagram
+    participant Client
+    participant API as Cyphera API
+    participant Circle as Circle Payment API
+    participant DB as Database
+    
+    Client->>API: Payment Request
+    API->>Circle: Process Payment
+    Circle->>API: Payment Response
+    API->>DB: Record Transaction
+    API->>Client: Payment Confirmation 

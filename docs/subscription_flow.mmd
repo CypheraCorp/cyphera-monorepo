@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant Client
+    participant API as Cyphera API
+    participant DB as Database
+    participant DS as Delegation Server
+    participant BC as Blockchain
+    
+    Client->>API: Request to Subscribe to Product
+    API->>DB: Verify Customer & Product
+    API->>DB: Create Subscription Record
+    API->>DS: Request Token Delegation
+    DS->>BC: Deploy/Call Smart Contract
+    BC->>DS: Transaction Confirmation
+    DS->>API: Delegation Success
+    API->>DB: Update Subscription Status
+    API->>Client: Subscription Confirmation 

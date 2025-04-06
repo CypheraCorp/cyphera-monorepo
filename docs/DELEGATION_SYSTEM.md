@@ -80,7 +80,7 @@ This system enables our Go API to redeem MetaMask delegations using a dedicated 
 ## Setup and Integration
 
 For detailed setup instructions, refer to:
-- [README.md](js-server/README.md) for Node.js server setup
+- [README.md](delegation-server/README.md) for Node.js server setup
 - [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md) for complete integration details
 - [TESTING_GUIDE.md](TESTING_GUIDE.md) for testing procedures
 
@@ -93,7 +93,7 @@ For detailed setup instructions, refer to:
 │   │   └── delegation_handler.go  # Go delegation handler
 │   └── proto/
 │       └── delegation.proto       # Protocol buffer definition
-├── js-server/                     # Node.js gRPC server
+├── delegation-server/                     # Node.js gRPC server
 │   ├── src/
 │   │   ├── blockchain.ts          # Blockchain operations
 │   │   ├── grpc-server.ts         # gRPC server implementation
