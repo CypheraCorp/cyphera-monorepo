@@ -2,6 +2,18 @@
 
 Cyphera API is a comprehensive backend system that enables blockchain-based subscription and payment processing. It consists of multiple integrated components that work together to provide a complete solution for managing cryptocurrency-based transactions, delegations, and subscriptions.
 
+## Documentation
+
+Detailed documentation on the architecture, workflows, and components of the Cyphera API can be found in the [docs/README.md](docs/README.md) file. The documentation includes:
+
+- System architecture diagrams
+- Component flow explanations
+- Database schema overview
+- Request processing workflows
+- Subscription and payment processes
+- Delegation system details
+- API reference information
+
 ## System Overview
 
 The Cyphera API ecosystem consists of four main components:

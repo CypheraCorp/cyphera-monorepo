@@ -1,0 +1,19 @@
+flowchart TD
+    A[Client Request] --> B{Authentication}
+    B -->|Invalid| C[Return 401 Unauthorized]
+    B -->|Valid| D[Route to Handler]
+    
+    D -->|Account Operations| E[Account Handler]
+    D -->|Workspace Operations| F[Workspace Handler]
+    D -->|Subscription Operations| G[Subscription Handler]
+    D -->|Product Operations| H[Product Handler]
+    D -->|Wallet Operations| I[Wallet Handler]
+    D -->|Payment Operations| J[Circle Handler]
+    
+    E & F & G & H & I & J --> K[Database Operations]
+    G & H --> L[Delegation Server Calls]
+    J --> M[Circle API Calls]
+    I --> N[Blockchain Operations]
+    
+    K & L & M & N --> O[Process Response]
+    O --> P[Return Response to Client] 

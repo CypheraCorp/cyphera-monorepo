@@ -1,0 +1,34 @@
+sequenceDiagram
+    participant Client as Client Application
+    participant GoAPI as Go API
+    participant DC as Delegation Client
+    participant NodeJS as Node.js gRPC Server
+    participant SC as Smart Contract
+    participant BC as Blockchain
+    
+    Client->>GoAPI: POST /api/v1/delegations/redeem
+    Note over Client,GoAPI: Delegation data and auth token
+    
+    GoAPI->>GoAPI: Validate request & auth
+    GoAPI->>DC: RedeemDelegation(delegationData)
+    
+    DC->>NodeJS: gRPC call RedeemDelegation
+    Note over DC,NodeJS: Serialized delegation data
+    
+    NodeJS->>NodeJS: Parse delegation data
+    NodeJS->>NodeJS: Create MetaMask smart account
+    
+    NodeJS->>SC: Prepare user operation
+    Note over NodeJS,SC: Create transaction with delegation
+    
+    NodeJS->>BC: Submit user operation
+    Note over NodeJS,BC: Through bundler service
+    
+    BC->>BC: Process transaction
+    BC-->>NodeJS: Transaction receipt
+    
+    NodeJS-->>DC: Transaction hash
+    DC-->>GoAPI: Transaction hash
+    GoAPI-->>Client: Success response with tx hash
+    
+    Note over Client,BC: Transaction is completed without<br>requiring client signature 
