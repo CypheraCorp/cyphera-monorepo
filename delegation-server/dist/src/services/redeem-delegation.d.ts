@@ -1,5 +1,5 @@
-import { Implementation, MetaMaskSmartAccount } from "@metamask-private/delegator-core-viem";
-import { type Address } from "viem";
+import { MetaMaskSmartAccount } from "@metamask/delegation-toolkit";
+import { type Address, type Chain } from "viem";
 /**
  * Create public client for reading blockchain state
  */
@@ -50,20 +50,13 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     };
     key: string;
     name: string;
     pollingInterval: number;
     request: import("viem").EIP1193RequestFn<import("viem").PublicRpcSchema>;
-    transport: import("viem").TransportConfig<"http", import("viem").EIP1193RequestFn> & {
-        fetchOptions?: import("viem").HttpTransportConfig["fetchOptions"] | undefined;
-        url?: string | undefined;
-    };
+    transport: import("viem").TransportConfig<"custom", import("viem").EIP1193RequestFn>;
     type: string;
     uid: string;
     call: (parameters: import("viem").CallParameters<{
@@ -104,11 +97,7 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }>) => Promise<import("viem").CallReturnType>;
     createAccessList: (parameters: import("viem/_types/actions/public/createAccessList").CreateAccessListParameters<{
         blockExplorers: {
@@ -148,11 +137,7 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }>) => Promise<{
         accessList: import("viem").AccessList;
         gasUsed: bigint;
@@ -161,7 +146,7 @@ export declare const publicClient: {
     createContractEventFilter: <const abi extends import("viem").Abi | readonly unknown[], eventName extends import("viem").ContractEventName<abi> | undefined, args extends import("viem").MaybeExtractEventArgsFromAbi<abi, eventName> | undefined, strict extends boolean | undefined = undefined, fromBlock extends import("viem").BlockNumber | import("viem").BlockTag | undefined = undefined, toBlock extends import("viem").BlockNumber | import("viem").BlockTag | undefined = undefined>(args: import("viem").CreateContractEventFilterParameters<abi, eventName, args, strict, fromBlock, toBlock>) => Promise<import("viem").CreateContractEventFilterReturnType<abi, eventName, args, strict, fromBlock, toBlock>>;
     createEventFilter: <const abiEvent extends import("viem").AbiEvent | undefined = undefined, const abiEvents extends readonly import("viem").AbiEvent[] | readonly unknown[] | undefined = abiEvent extends import("viem").AbiEvent ? [abiEvent] : undefined, strict extends boolean | undefined = undefined, fromBlock extends import("viem").BlockNumber | import("viem").BlockTag | undefined = undefined, toBlock extends import("viem").BlockNumber | import("viem").BlockTag | undefined = undefined, _EventName extends string | undefined = import("viem").MaybeAbiEventName<abiEvent>, _Args extends import("viem").MaybeExtractEventArgsFromAbi<abiEvents, _EventName> | undefined = undefined>(args?: import("viem").CreateEventFilterParameters<abiEvent, abiEvents, strict, fromBlock, toBlock, _EventName, _Args> | undefined) => Promise<import("viem").CreateEventFilterReturnType<abiEvent, abiEvents, strict, fromBlock, toBlock, _EventName, _Args>>;
     createPendingTransactionFilter: () => Promise<import("viem").CreatePendingTransactionFilterReturnType>;
-    estimateContractGas: <chain extends import("viem").Chain | undefined, const abi extends import("viem").Abi | readonly unknown[], functionName extends import("viem").ContractFunctionName<abi, "nonpayable" | "payable">, args extends import("viem").ContractFunctionArgs<abi, "nonpayable" | "payable", functionName>>(args: import("viem").EstimateContractGasParameters<abi, functionName, args, chain>) => Promise<import("viem").EstimateContractGasReturnType>;
+    estimateContractGas: <chain extends Chain | undefined, const abi extends import("viem").Abi | readonly unknown[], functionName extends import("viem").ContractFunctionName<abi, "nonpayable" | "payable">, args extends import("viem").ContractFunctionArgs<abi, "nonpayable" | "payable", functionName>>(args: import("viem").EstimateContractGasParameters<abi, functionName, args, chain>) => Promise<import("viem").EstimateContractGasReturnType>;
     estimateGas: (args: import("viem").EstimateGasParameters<{
         blockExplorers: {
             readonly default: {
@@ -200,11 +185,7 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }>) => Promise<import("viem").EstimateGasReturnType>;
     getBalance: (args: import("viem").GetBalanceParameters) => Promise<import("viem").GetBalanceReturnType>;
     getBlobBaseFee: () => Promise<import("viem").GetBlobBaseFeeReturnType>;
@@ -375,7 +356,7 @@ export declare const publicClient: {
     getEnsResolver: (args: import("viem").GetEnsResolverParameters) => Promise<import("viem").GetEnsResolverReturnType>;
     getEnsText: (args: import("viem").GetEnsTextParameters) => Promise<import("viem").GetEnsTextReturnType>;
     getFeeHistory: (args: import("viem").GetFeeHistoryParameters) => Promise<import("viem").GetFeeHistoryReturnType>;
-    estimateFeesPerGas: <chainOverride extends import("viem").Chain | undefined = undefined, type extends import("viem").FeeValuesType = "eip1559">(args?: import("viem").EstimateFeesPerGasParameters<{
+    estimateFeesPerGas: <chainOverride extends Chain | undefined = undefined, type extends import("viem").FeeValuesType = "eip1559">(args?: import("viem").EstimateFeesPerGasParameters<{
         blockExplorers: {
             readonly default: {
                 readonly name: "Etherscan";
@@ -413,18 +394,14 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }, chainOverride, type> | undefined) => Promise<import("viem").EstimateFeesPerGasReturnType<type>>;
     getFilterChanges: <filterType extends import("viem").FilterType, const abi extends import("viem").Abi | readonly unknown[] | undefined, eventName extends string | undefined, strict extends boolean | undefined = undefined, fromBlock extends import("viem").BlockNumber | import("viem").BlockTag | undefined = undefined, toBlock extends import("viem").BlockNumber | import("viem").BlockTag | undefined = undefined>(args: import("viem").GetFilterChangesParameters<filterType, abi, eventName, strict, fromBlock, toBlock>) => Promise<import("viem").GetFilterChangesReturnType<filterType, abi, eventName, strict, fromBlock, toBlock>>;
     getFilterLogs: <const abi extends import("viem").Abi | readonly unknown[] | undefined, eventName extends string | undefined, strict extends boolean | undefined = undefined, fromBlock extends import("viem").BlockNumber | import("viem").BlockTag | undefined = undefined, toBlock extends import("viem").BlockNumber | import("viem").BlockTag | undefined = undefined>(args: import("viem").GetFilterLogsParameters<abi, eventName, strict, fromBlock, toBlock>) => Promise<import("viem").GetFilterLogsReturnType<abi, eventName, strict, fromBlock, toBlock>>;
     getGasPrice: () => Promise<import("viem").GetGasPriceReturnType>;
     getLogs: <const abiEvent extends import("viem").AbiEvent | undefined = undefined, const abiEvents extends readonly import("viem").AbiEvent[] | readonly unknown[] | undefined = abiEvent extends import("viem").AbiEvent ? [abiEvent] : undefined, strict extends boolean | undefined = undefined, fromBlock extends import("viem").BlockNumber | import("viem").BlockTag | undefined = undefined, toBlock extends import("viem").BlockNumber | import("viem").BlockTag | undefined = undefined>(args?: import("viem").GetLogsParameters<abiEvent, abiEvents, strict, fromBlock, toBlock> | undefined) => Promise<import("viem").GetLogsReturnType<abiEvent, abiEvents, strict, fromBlock, toBlock>>;
     getProof: (args: import("viem").GetProofParameters) => Promise<import("viem").GetProofReturnType>;
-    estimateMaxPriorityFeePerGas: <chainOverride extends import("viem").Chain | undefined = undefined>(args?: {
+    estimateMaxPriorityFeePerGas: <chainOverride extends Chain | undefined = undefined>(args?: {
         chain?: chainOverride | null | undefined;
     } | undefined) => Promise<import("viem").EstimateMaxPriorityFeePerGasReturnType>;
     getStorageAt: (args: import("viem").GetStorageAtParameters) => Promise<import("viem").GetStorageAtReturnType>;
@@ -592,11 +569,7 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }>) => Promise<import("viem").GetTransactionConfirmationsReturnType>;
     getTransactionCount: (args: import("viem").GetTransactionCountParameters) => Promise<import("viem").GetTransactionCountReturnType>;
     getTransactionReceipt: (args: import("viem").GetTransactionReceiptParameters) => Promise<import("viem").TransactionReceipt>;
@@ -639,12 +612,8 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
-    }, chainOverride>, chainOverride extends import("viem").Chain | undefined = undefined, accountOverride extends import("viem").Account | Address | undefined = undefined>(args: import("viem").PrepareTransactionRequestParameters<{
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+    }, chainOverride>, chainOverride extends Chain | undefined = undefined, accountOverride extends import("viem").Account | Address | undefined = undefined>(args: import("viem").PrepareTransactionRequestParameters<{
         blockExplorers: {
             readonly default: {
                 readonly name: "Etherscan";
@@ -682,11 +651,7 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }, import("viem").Account | undefined, chainOverride, accountOverride, request>) => Promise<import("viem").UnionRequiredBy<Extract<import("viem").UnionOmit<import("viem").ExtractChainFormatterParameters<import("viem").DeriveChain<{
         blockExplorers: {
             readonly default: {
@@ -725,11 +690,7 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }, chainOverride>, "transactionRequest", import("viem").TransactionRequest>, "from"> & (import("viem").DeriveChain<{
         blockExplorers: {
             readonly default: {
@@ -768,11 +729,7 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }, chainOverride> extends infer T_14 ? T_14 extends import("viem").DeriveChain<{
         blockExplorers: {
             readonly default: {
@@ -811,12 +768,8 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
-    }, chainOverride> ? T_14 extends import("viem").Chain ? {
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+    }, chainOverride> ? T_14 extends Chain ? {
         chain: T_14;
     } : {
         chain?: undefined;
@@ -4106,11 +4059,7 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }, chainOverride>, "transactionRequest", import("viem").TransactionRequest>, "from"> & (import("viem").DeriveChain<{
         blockExplorers: {
             readonly default: {
@@ -4149,11 +4098,7 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }, chainOverride> extends infer T_1 ? T_1 extends import("viem").DeriveChain<{
         blockExplorers: {
             readonly default: {
@@ -4192,12 +4137,8 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
-    }, chainOverride> ? T_1 extends import("viem").Chain ? {
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+    }, chainOverride> ? T_1 extends Chain ? {
         chain: T_1;
     } : {
         chain?: undefined;
@@ -7455,7 +7396,7 @@ export declare const publicClient: {
     simulate: <const calls extends readonly unknown[]>(args: import("viem/_types/actions/public/simulateBlocks").SimulateBlocksParameters<calls>) => Promise<import("viem/_types/actions/public/simulateBlocks").SimulateBlocksReturnType<calls>>;
     simulateBlocks: <const calls extends readonly unknown[]>(args: import("viem/_types/actions/public/simulateBlocks").SimulateBlocksParameters<calls>) => Promise<import("viem/_types/actions/public/simulateBlocks").SimulateBlocksReturnType<calls>>;
     simulateCalls: <const calls extends readonly unknown[]>(args: import("viem/_types/actions/public/simulateCalls").SimulateCallsParameters<calls>) => Promise<import("viem/_types/actions/public/simulateCalls").SimulateCallsReturnType<calls>>;
-    simulateContract: <const abi extends import("viem").Abi | readonly unknown[], functionName extends import("viem").ContractFunctionName<abi, "nonpayable" | "payable">, const args_1 extends import("viem").ContractFunctionArgs<abi, "nonpayable" | "payable", functionName>, chainOverride extends import("viem").Chain | undefined, accountOverride extends import("viem").Account | Address | undefined = undefined>(args: import("viem").SimulateContractParameters<abi, functionName, args_1, {
+    simulateContract: <const abi extends import("viem").Abi | readonly unknown[], functionName extends import("viem").ContractFunctionName<abi, "nonpayable" | "payable">, const args_1 extends import("viem").ContractFunctionArgs<abi, "nonpayable" | "payable", functionName>, chainOverride extends Chain | undefined, accountOverride extends import("viem").Account | Address | undefined = undefined>(args: import("viem").SimulateContractParameters<abi, functionName, args_1, {
         blockExplorers: {
             readonly default: {
                 readonly name: "Etherscan";
@@ -7493,11 +7434,7 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }, chainOverride, accountOverride>) => Promise<import("viem").SimulateContractReturnType<abi, functionName, args_1, {
         blockExplorers: {
             readonly default: {
@@ -7536,11 +7473,7 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }, import("viem").Account | undefined, chainOverride, accountOverride>>;
     verifyMessage: (args: import("viem").VerifyMessageActionParameters) => Promise<import("viem").VerifyMessageActionReturnType>;
     verifySiweMessage: (args: import("viem/_types/actions/siwe/verifySiweMessage").VerifySiweMessageParameters) => Promise<import("viem/_types/actions/siwe/verifySiweMessage").VerifySiweMessageReturnType>;
@@ -7584,14 +7517,10 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }>) => Promise<import("viem").TransactionReceipt>;
     watchBlockNumber: (args: import("viem").WatchBlockNumberParameters) => import("viem").WatchBlockNumberReturnType;
-    watchBlocks: <includeTransactions extends boolean = false, blockTag extends import("viem").BlockTag = "latest">(args: import("viem").WatchBlocksParameters<import("viem").HttpTransport<undefined, false>, {
+    watchBlocks: <includeTransactions extends boolean = false, blockTag extends import("viem").BlockTag = "latest">(args: import("viem").WatchBlocksParameters<import("viem").CustomTransport, {
         blockExplorers: {
             readonly default: {
                 readonly name: "Etherscan";
@@ -7629,15 +7558,11 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }, includeTransactions, blockTag>) => import("viem").WatchBlocksReturnType;
-    watchContractEvent: <const abi extends import("viem").Abi | readonly unknown[], eventName extends import("viem").ContractEventName<abi>, strict extends boolean | undefined = undefined>(args: import("viem").WatchContractEventParameters<abi, eventName, strict, import("viem").HttpTransport<undefined, false>>) => import("viem").WatchContractEventReturnType;
-    watchEvent: <const abiEvent extends import("viem").AbiEvent | undefined = undefined, const abiEvents extends readonly import("viem").AbiEvent[] | readonly unknown[] | undefined = abiEvent extends import("viem").AbiEvent ? [abiEvent] : undefined, strict extends boolean | undefined = undefined>(args: import("viem").WatchEventParameters<abiEvent, abiEvents, strict, import("viem").HttpTransport<undefined, false>>) => import("viem").WatchEventReturnType;
-    watchPendingTransactions: (args: import("viem").WatchPendingTransactionsParameters<import("viem").HttpTransport<undefined, false>>) => import("viem").WatchPendingTransactionsReturnType;
+    watchContractEvent: <const abi extends import("viem").Abi | readonly unknown[], eventName extends import("viem").ContractEventName<abi>, strict extends boolean | undefined = undefined>(args: import("viem").WatchContractEventParameters<abi, eventName, strict, import("viem").CustomTransport>) => import("viem").WatchContractEventReturnType;
+    watchEvent: <const abiEvent extends import("viem").AbiEvent | undefined = undefined, const abiEvents extends readonly import("viem").AbiEvent[] | readonly unknown[] | undefined = abiEvent extends import("viem").AbiEvent ? [abiEvent] : undefined, strict extends boolean | undefined = undefined>(args: import("viem").WatchEventParameters<abiEvent, abiEvents, strict, import("viem").CustomTransport>) => import("viem").WatchEventReturnType;
+    watchPendingTransactions: (args: import("viem").WatchPendingTransactionsParameters<import("viem").CustomTransport>) => import("viem").WatchPendingTransactionsReturnType;
     extend: <const client extends {
         [x: string]: unknown;
         account?: undefined;
@@ -7652,7 +7577,7 @@ export declare const publicClient: {
         transport?: undefined;
         type?: undefined;
         uid?: undefined;
-    } & import("viem").ExactPartial<Pick<import("viem").PublicActions<import("viem").HttpTransport<undefined, false>, {
+    } & import("viem").ExactPartial<Pick<import("viem").PublicActions<import("viem").CustomTransport, {
         blockExplorers: {
             readonly default: {
                 readonly name: "Etherscan";
@@ -7690,11 +7615,7 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }, undefined>, "call" | "createContractEventFilter" | "createEventFilter" | "estimateContractGas" | "estimateGas" | "getBlock" | "getBlockNumber" | "getChainId" | "getContractEvents" | "getEnsText" | "getFilterChanges" | "getGasPrice" | "getLogs" | "getTransaction" | "getTransactionCount" | "getTransactionReceipt" | "prepareTransactionRequest" | "readContract" | "sendRawTransaction" | "simulateContract" | "uninstallFilter" | "watchBlockNumber" | "watchContractEvent"> & Pick<import("viem").WalletActions<{
         blockExplorers: {
             readonly default: {
@@ -7733,12 +7654,8 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
-    }, undefined>, "sendTransaction" | "writeContract">>>(fn: (client: import("viem").Client<import("viem").HttpTransport<undefined, false>, {
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+    }, undefined>, "sendTransaction" | "writeContract">>>(fn: (client: import("viem").Client<import("viem").CustomTransport, {
         blockExplorers: {
             readonly default: {
                 readonly name: "Etherscan";
@@ -7776,12 +7693,8 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
-    }, undefined, import("viem").PublicRpcSchema, import("viem").PublicActions<import("viem").HttpTransport<undefined, false>, {
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+    }, undefined, import("viem").PublicRpcSchema, import("viem").PublicActions<import("viem").CustomTransport, {
         blockExplorers: {
             readonly default: {
                 readonly name: "Etherscan";
@@ -7819,12 +7732,8 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
-    }>>) => client) => import("viem").Client<import("viem").HttpTransport<undefined, false>, {
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+    }>>) => client) => import("viem").Client<import("viem").CustomTransport, {
         blockExplorers: {
             readonly default: {
                 readonly name: "Etherscan";
@@ -7862,12 +7771,8 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
-    }, undefined, import("viem").PublicRpcSchema, { [K in keyof client]: client[K]; } & import("viem").PublicActions<import("viem").HttpTransport<undefined, false>, {
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+    }, undefined, import("viem").PublicRpcSchema, { [K in keyof client]: client[K]; } & import("viem").PublicActions<import("viem").CustomTransport, {
         blockExplorers: {
             readonly default: {
                 readonly name: "Etherscan";
@@ -7905,17 +7810,13 @@ export declare const publicClient: {
         custom?: Record<string, unknown> | undefined;
         fees?: import("viem").ChainFees<undefined> | undefined;
         formatters?: undefined;
-        serializers?: import(
-        /**
-         * Creates a bundler client based on configuration settings
-         */
-        "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+        serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
     }>>;
 };
 /**
  * Create bundler client for user operations
  */
-export declare const bundlerClient: import("viem/account-abstraction").BundlerClient<import("viem").HttpTransport<undefined, false>, {
+export declare const bundlerClient: import("viem/account-abstraction").BundlerClient<import("viem").CustomTransport, {
     blockExplorers: {
         readonly default: {
             readonly name: "Etherscan";
@@ -7953,16 +7854,12 @@ export declare const bundlerClient: import("viem/account-abstraction").BundlerCl
     custom?: Record<string, unknown> | undefined;
     fees?: import("viem").ChainFees<undefined> | undefined;
     formatters?: undefined;
-    serializers?: import(
-    /**
-     * Creates a bundler client based on configuration settings
-     */
-    "viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
+    serializers?: import("viem").ChainSerializers<undefined, import("viem").TransactionSerializable> | undefined;
 }, undefined, undefined, undefined>;
 /**
  * Creates a bundler client based on configuration settings
  */
-export declare function getBundlerClient(): import("viem/account-abstraction").BundlerClient<import("viem").HttpTransport<undefined, false>, {
+export declare function getBundlerClient(): import("viem/account-abstraction").BundlerClient<import("viem").CustomTransport, {
     blockExplorers: {
         readonly default: {
             readonly name: "Etherscan";
@@ -8008,7 +7905,7 @@ export declare function getBundlerClient(): import("viem/account-abstraction").B
  * @param privateKey - The private key to create the account from
  * @returns A MetaMask smart account instance
  */
-export declare const createMetaMaskAccount: (privateKey: string) => Promise<MetaMaskSmartAccount<Implementation>>;
+export declare const createMetaMaskAccount: (privateKey: string) => Promise<MetaMaskSmartAccount>;
 /**
  * Gets the fee per gas for a user operation
  *

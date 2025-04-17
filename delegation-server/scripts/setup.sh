@@ -15,18 +15,6 @@ if [ "$1" == "--clean" ]; then
   rm -rf node_modules package-lock.json dist
 fi
 
-# Check if NPM_TOKEN is set
-if [ -z "${NPM_TOKEN}" ]; then
-  echo "WARNING: NPM_TOKEN environment variable is not set!"
-  echo "You may not be able to access private packages."
-else
-  echo "Creating .npmrc file..."
-  echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
-
-  echo "Contents of .npmrc:"
-  cat .npmrc
-fi
-
 # Install dependencies without triggering the npm install script
 echo "Installing dependencies with --legacy-peer-deps and ignoring scripts..."
 npm install --legacy-peer-deps --ignore-scripts

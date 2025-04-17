@@ -134,7 +134,7 @@ fi
 
 # Start the subscription processor in the background
 echo "Starting subscription processor with 1-minute interval..."
-go run ./cmd/subscription-processor/main.go --interval=1m &
+go run ./cmd/subscription-processor/main.go --interval=10s &
 
 # Check if air is installed
 if ! command -v air &> /dev/null; then

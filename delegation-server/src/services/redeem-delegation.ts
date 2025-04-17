@@ -6,7 +6,7 @@ import {
   MetaMaskSmartAccount,
   ExecutionStruct,
   Call,
-} from "@metamask-private/delegator-core-viem"
+} from "@metamask/delegation-toolkit"
 import { 
   type Address, 
   isAddressEqual,
@@ -111,7 +111,7 @@ export function getBundlerClient() {
  * @param privateKey - The private key to create the account from
  * @returns A MetaMask smart account instance
  */
-export const createMetaMaskAccount = async (privateKey: string): Promise<MetaMaskSmartAccount<Implementation>> => {
+export const createMetaMaskAccount = async (privateKey: string): Promise<MetaMaskSmartAccount> => {
   try {
     const formattedKey = formatPrivateKey(privateKey)
     const account = privateKeyToAccount(formattedKey as `0x${string}`)
@@ -238,11 +238,11 @@ export const redeemDelegation = async (
     const delegationChain = [delegationForFramework]
 
     // Create the calldata for redeeming the delegation
-    const redeemDelegationCalldata = DelegationFramework.encode.redeemDelegations(
-      [delegationChain],
-      [SINGLE_DEFAULT_MODE],
-      [executions]
-    )
+    const redeemDelegationCalldata = DelegationFramework.encode.redeemDelegations({
+      delegations: [delegationChain],
+      modes: [SINGLE_DEFAULT_MODE],
+      executions: [executions]
+    })
 
     // The call to the delegation framework to redeem the delegation
     const calls: Call[] = [

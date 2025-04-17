@@ -1,7 +1,7 @@
 /**
  * Utility functions for handling delegation data
  */
-import { DelegationStruct } from '@metamask-private/delegator-core-viem';
+import { Delegation } from '@metamask/delegation-toolkit';
 /**
  * Validates that the input is a valid Ethereum address
  * @param address The address to validate
@@ -13,10 +13,10 @@ export declare function isValidEthereumAddress(address: string): boolean;
  * @param delegationData The delegation data as either Uint8Array or Buffer
  * @returns The parsed delegation structure
  */
-export declare function parseDelegation(delegationData: Uint8Array | Buffer): DelegationStruct;
+export declare function parseDelegation(delegationData: Uint8Array | Buffer): Delegation;
 /**
  * Validates a delegation structure
  * @param delegation The delegation to validate
  * @returns true if valid, throws error if invalid
  */
-export declare function validateDelegation(delegation: DelegationStruct): boolean;
+export declare function validateDelegation(delegation: Delegation): boolean;
