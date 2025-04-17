@@ -111,7 +111,7 @@ func (h *SubscriptionEventHandler) GetSubscriptionEventByTxHash(c *gin.Context) 
 // @Success 200 {array} db.SubscriptionEventDetails
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /subscription-events [get]
+// @Router /subscription-events/transactions [get]
 func (h *SubscriptionEventHandler) ListSubscriptionEvents(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
@@ -149,7 +149,7 @@ func (h *SubscriptionEventHandler) ListSubscriptionEvents(c *gin.Context) {
 	}
 
 	// Get the total count for pagination metadata
-	totalCount, err := h.common.db.CountSubscriptionEvents(c.Request.Context())
+	totalCount, err := h.common.db.CountSubscriptionEventDetails(c.Request.Context(), parsedWorkspaceID)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to count subscription events", err)
 		return

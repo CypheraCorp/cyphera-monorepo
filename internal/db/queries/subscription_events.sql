@@ -175,4 +175,4 @@ JOIN products p ON s.product_id = p.id
 WHERE s.deleted_at IS NULL
     AND p.deleted_at IS NULL
     AND p.workspace_id = $1
-    AND se.event_type IN ('redeemed', 'failed'); 
+    AND se.event_type IN ('redeemed', 'failed', 'failed_redemption');

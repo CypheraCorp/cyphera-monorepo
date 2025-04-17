@@ -18,7 +18,7 @@
     "proto:build": "grpc_tools_node_protoc --js_out=import_style=commonjs,binary:./src/proto --grpc_out=grpc_js:./src/proto --ts_out=grpc_js:./src/proto -I ./src/proto src/proto/delegation.proto"
   },
   "dependencies": {
-    "@metamask-private/delegator-core-viem": "0.7.0",
+    "@metamask/delegation-toolkit": "^0.10.0",
     "dotenv": "16.4.7",
     "permissionless": "0.2.36",
     "viem": "2.23.9"

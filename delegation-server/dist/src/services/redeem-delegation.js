@@ -1,8 +1,11 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.redeemDelegation = exports.getFeePerGas = exports.createMetaMaskAccount = exports.bundlerClient = exports.publicClient = void 0;
 exports.getBundlerClient = getBundlerClient;
-const delegator_core_viem_1 = require("@metamask-private/delegator-core-viem");
+const delegation_toolkit_1 = require("@metamask/delegation-toolkit");
 const viem_1 = require("viem");
 const accounts_1 = require("viem/accounts");
 const chains_1 = require("viem/chains");
@@ -13,15 +16,45 @@ const erc20_1 = require("../abis/erc20");
 // Import account abstraction types and bundler clients
 const account_abstraction_1 = require("viem/account-abstraction");
 const pimlico_1 = require("permissionless/clients/pimlico");
-// TODO: support multiple chains and paymasters/bundlers
+const node_fetch_1 = __importDefault(require("node-fetch"));
 // Initialize clients
 const chain = chains_1.sepolia;
+// Create a custom transport that uses node-fetch
+const createTransport = (url) => {
+    if (!url) {
+        throw new Error('URL is required for transport');
+    }
+    return (0, viem_1.custom)({
+        async request({ method, params }) {
+            const response = await (0, node_fetch_1.default)(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    method,
+                    params,
+                    id: 1,
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error.message);
+            }
+            return data.result;
+        }
+    });
+};
 /**
  * Create public client for reading blockchain state
  */
 exports.publicClient = (0, viem_1.createPublicClient)({
     chain,
-    transport: (0, viem_1.http)(config_1.config.blockchain.rpcUrl)
+    transport: createTransport(config_1.config.blockchain.rpcUrl)
 });
 /**
  * Create bundler client for user operations
@@ -35,10 +68,10 @@ function getBundlerClient() {
         throw new Error('Bundler URL is not configured');
     }
     const paymasterClient = (0, account_abstraction_1.createPaymasterClient)({
-        transport: (0, viem_1.http)(config_1.config.blockchain.bundlerUrl)
+        transport: createTransport(config_1.config.blockchain.bundlerUrl)
     });
     const bundlerClient = (0, account_abstraction_1.createBundlerClient)({
-        transport: (0, viem_1.http)(config_1.config.blockchain.bundlerUrl),
+        transport: createTransport(config_1.config.blockchain.bundlerUrl),
         chain,
         paymaster: paymasterClient,
     });
@@ -55,9 +88,9 @@ const createMetaMaskAccount = async (privateKey) => {
         const formattedKey = (0, utils_1.formatPrivateKey)(privateKey);
         const account = (0, accounts_1.privateKeyToAccount)(formattedKey);
         utils_1.logger.info(`Creating MetaMask Smart Account for address: ${account.address}`);
-        const smartAccount = await (0, delegator_core_viem_1.toMetaMaskSmartAccount)({
+        const smartAccount = await (0, delegation_toolkit_1.toMetaMaskSmartAccount)({
             client: exports.publicClient,
-            implementation: delegator_core_viem_1.Implementation.Hybrid,
+            implementation: delegation_toolkit_1.Implementation.Hybrid,
             deployParams: [account.address, [], [], []],
             deploySalt: "0x",
             signatory: { account }
@@ -81,7 +114,7 @@ const getFeePerGas = async () => {
     // implementation. For this reason, this is centralized here.
     const pimlicoClient = (0, pimlico_1.createPimlicoClient)({
         chain,
-        transport: (0, viem_1.http)(config_1.config.blockchain.bundlerUrl),
+        transport: createTransport(config_1.config.blockchain.bundlerUrl),
     });
     const { fast } = await pimlicoClient.getUserOperationGasPrice();
     return fast;
@@ -154,7 +187,11 @@ const redeemDelegation = async (delegationData, merchantAddress, tokenContractAd
         const delegationForFramework = delegation;
         const delegationChain = [delegationForFramework];
         // Create the calldata for redeeming the delegation
-        const redeemDelegationCalldata = delegator_core_viem_1.DelegationFramework.encode.redeemDelegations([delegationChain], [delegator_core_viem_1.SINGLE_DEFAULT_MODE], [executions]);
+        const redeemDelegationCalldata = delegation_toolkit_1.DelegationFramework.encode.redeemDelegations({
+            delegations: [delegationChain],
+            modes: [delegation_toolkit_1.SINGLE_DEFAULT_MODE],
+            executions: [executions]
+        });
         // The call to the delegation framework to redeem the delegation
         const calls = [
             {

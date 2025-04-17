@@ -389,7 +389,7 @@ func InitializeRoutes(router *gin.Engine) {
 			// Subscription events
 			subEvents := protected.Group("/subscription-events")
 			{
-				subEvents.GET("", subscriptionEventHandler.ListSubscriptionEvents)
+				subEvents.GET("/transactions", subscriptionEventHandler.ListSubscriptionEvents)
 				subEvents.POST("", subscriptionEventHandler.CreateSubscriptionEvent)
 				subEvents.GET("/:event_id", subscriptionEventHandler.GetSubscriptionEvent)
 				subEvents.PUT("/:event_id", subscriptionEventHandler.UpdateSubscriptionEvent)

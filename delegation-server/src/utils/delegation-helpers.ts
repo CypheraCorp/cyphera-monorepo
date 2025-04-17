@@ -1,7 +1,7 @@
 /**
  * Utility functions for handling delegation data
  */
-import { DelegationStruct } from '@metamask-private/delegator-core-viem'
+import { Delegation } from '@metamask/delegation-toolkit'
 import { logger } from './utils'
 
 
@@ -40,7 +40,7 @@ export function isValidEthereumAddress(address: string): boolean {
  * @param delegationData The delegation data as either Uint8Array or Buffer
  * @returns The parsed delegation structure
  */
-export function parseDelegation(delegationData: Uint8Array | Buffer): DelegationStruct {
+export function parseDelegation(delegationData: Uint8Array | Buffer): Delegation {
   try {
     try {
       // Try to parse as JSON first (most common case in our system)
@@ -53,7 +53,7 @@ export function parseDelegation(delegationData: Uint8Array | Buffer): Delegation
       }
       
       // If parsed successfully, return the object
-      return parsedObject as DelegationStruct
+      return parsedObject as Delegation
     } catch (jsonError) {
       logger.debug('Failed to parse delegation as JSON, trying alternative format', jsonError)
       
@@ -75,7 +75,7 @@ export function parseDelegation(delegationData: Uint8Array | Buffer): Delegation
  * @param delegation The delegation to validate
  * @returns true if valid, throws error if invalid
  */
-export function validateDelegation(delegation: DelegationStruct): boolean {
+export function validateDelegation(delegation: Delegation): boolean {
   // Check required fields
   if (!delegation.delegator) {
     throw new Error('Invalid delegation: missing delegator')

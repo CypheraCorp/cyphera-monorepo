@@ -689,8 +689,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token, active)
 VALUES 
     -- Ethereum Sepolia tokens
-    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'Ethereum', 'ETH', '0x0000000000000000000000000000000000000000', true, false),
-    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'USD Coin', 'USDC', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', false, true),
+    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'USD Coin', 'USDC', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', false, true)
 ON CONFLICT DO NOTHING;
 
 -- Insert test products

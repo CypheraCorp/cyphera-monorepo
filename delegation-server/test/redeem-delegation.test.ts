@@ -5,7 +5,7 @@ import { parseDelegation, validateDelegation } from '../src/utils/delegation-hel
 import { privateKeyToAccount } from 'viem/accounts'
 import { createPublicClient, http, encodeFunctionData, isAddressEqual, parseUnits } from 'viem'
 import { sepolia } from 'viem/chains'
-import { toMetaMaskSmartAccount, DelegationFramework, SINGLE_DEFAULT_MODE, Implementation } from '@metamask-private/delegator-core-viem'
+import { toMetaMaskSmartAccount, DelegationFramework, SINGLE_DEFAULT_MODE, Implementation } from '@metamask/delegation-toolkit'
 import { createBundlerClient, createPaymasterClient } from 'viem/account-abstraction'
 import { createPimlicoClient } from 'permissionless/clients/pimlico'
 
