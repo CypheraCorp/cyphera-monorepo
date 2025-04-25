@@ -1,9 +1,9 @@
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.app_name}-db-subnet-public"
-  subnet_ids = module.vpc.public_subnets
+  name       = "${var.app_name}-db-subnet-private"
+  subnet_ids = module.vpc.private_subnets
 
   tags = {
-    Name = "${var.app_name}-db-subnet-public"
+    Name = "${var.app_name}-db-subnet-private"
   }
 }
 
@@ -29,10 +29,10 @@ resource "aws_security_group" "rds" {
   }
 
   egress {
-    from_port       = 0
-    to_port         = 0
-    protocol        = "-1"
-    security_groups = [aws_security_group.lambda.id]
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
@@ -43,7 +43,7 @@ resource "aws_security_group" "rds" {
 }
 
 resource "aws_db_instance" "main" {
-  identifier        = "${var.app_name}-db"
+  identifier        = "${var.app_name}-db-${var.stage}"
   engine           = "postgres"
   engine_version   = "15.10"
   instance_class   = "db.t4g.micro"
@@ -51,31 +51,49 @@ resource "aws_db_instance" "main" {
   storage_type      = "gp3"
   max_allocated_storage = 20
 
-  db_name  = "cyphera"
-  username = var.db_username
-  password = var.db_password
+  db_name  = var.db_name
+  username = var.db_master_username
 
-  # Using the new public subnet group
+  manage_master_user_password = true
+  master_user_secret_kms_key_id = null
+
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  # Cost optimization settings
-  backup_retention_period = 0
-  skip_final_snapshot    = true
-  multi_az              = false
-  publicly_accessible    = true
-  storage_encrypted     = true
+  # --- Production vs Non-Production Settings ---
+  # Apply production settings only if var.stage is "prod"
+  backup_retention_period = var.stage == "prod" ? var.prod_backup_retention_period : 0
+  multi_az              = var.stage == "prod" ? true : false
+  skip_final_snapshot    = var.stage == "prod" ? false : true
+  deletion_protection = var.stage == "prod" ? true : false
+  # ---------------------------------------------
 
-  # Performance Insights settings
+  publicly_accessible    = false
+  storage_encrypted     = true
   performance_insights_enabled = true
   performance_insights_retention_period = 7
-
   auto_minor_version_upgrade = true
   maintenance_window = "Sun:03:00-Sun:04:00"
-  deletion_protection = false
 
-  tags = {
-    Environment = var.environment
-    App         = var.app_name
+  tags = merge(local.common_tags, {
+    Name = "${var.service_prefix}-rds-${var.stage}"
+  })
+
+  # Ignore changes to password attributes when managed by Secrets Manager
+  lifecycle {
+    ignore_changes = [password]
   }
+
+  depends_on = [aws_secretsmanager_secret.rds_master_password]
+}
+
+resource "aws_secretsmanager_secret" "rds_master_password" {
+  name        = "${var.service_prefix}-rds-master-password-${var.stage}"
+  description = "RDS master password managed by RDS for stage ${var.stage}"
+  tags        = local.common_tags
+}
+
+output "rds_master_password_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the RDS master password"
+  value       = aws_secretsmanager_secret.rds_master_password.arn
 } 

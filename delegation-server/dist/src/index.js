@@ -43,6 +43,8 @@ const protoLoader = __importStar(require("@grpc/proto-loader"));
 const service_1 = require("./services/service");
 const utils_1 = require("./utils/utils");
 const config_1 = __importDefault(require("./config"));
+// --- Health Check Imports --- 
+const grpc_health_check_1 = require("grpc-health-check");
 // Debug environment variables on startup
 function logEnvironmentVariables() {
     const envVars = { ...process.env };
@@ -89,8 +91,19 @@ const protoDescriptor = grpc.loadPackageDefinition(packageDefinition);
 const delegationPackage = protoDescriptor.delegation;
 // Create a gRPC server
 const server = new grpc.Server();
-// Register the service
+// Register the main delegation service
 server.addService(delegationPackage.DelegationService.service, service_1.delegationService);
+// --- Setup and Register Health Check Service ---
+// Define the service status map. Set overall status to SERVING.
+// Add specific services if needed, e.g., [delegationPackage.DelegationService.serviceName]: HealthCheckResponse.ServingStatus.SERVING
+const serviceStatusMap = {
+    "": grpc_health_check_1.HealthCheckResponse.ServingStatus.SERVING,
+    // You can dynamically update these statuses based on internal checks (DB connection, etc.) if needed later.
+};
+const healthImpl = new grpc_health_check_1.HealthService(serviceStatusMap);
+server.addService(grpc_health_check_1.HealthService.service, healthImpl);
+utils_1.logger.info('gRPC Health Check service registered.');
+// --- End Health Check Setup ---
 // Function to start the server - exported for backward compatibility
 function startServer() {
     // Bind and start the server

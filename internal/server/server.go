@@ -10,10 +10,16 @@ import (
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
 	"cyphera-api/internal/logger"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -45,16 +51,78 @@ var (
 )
 
 func InitializeHandlers() {
-	// Get database connection string from environment
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		logger.Fatal("DATABASE_URL environment variable is required")
+	var dsn string // Database Source Name (connection string)
+
+	// Determine environment and construct DSN accordingly
+	// Use GIN_MODE=release as indicator for deployed environment
+	if os.Getenv("GIN_MODE") == "release" {
+		logger.Info("Running in deployed environment (GIN_MODE=release), fetching DB credentials from Secrets Manager")
+
+		secretArn := os.Getenv("RDS_SECRET_ARN")
+		dbEndpoint := os.Getenv("DB_HOST") // This contains host:port
+		dbName := os.Getenv("DB_NAME")
+		dbSSLMode := os.Getenv("DB_SSLMODE")
+
+		if secretArn == "" || dbEndpoint == "" || dbName == "" {
+			logger.Fatal("Missing required environment variables for DB connection in deployed environment (RDS_SECRET_ARN, DB_HOST, DB_NAME)")
+		}
+		if dbSSLMode == "" {
+			dbSSLMode = "require" // Sensible default for RDS
+			logger.Warn("DB_SSLMODE not set, defaulting to 'require'")
+		}
+
+		// Fetch secret from Secrets Manager
+		cfg, err := config.LoadDefaultConfig(context.TODO())
+		if err != nil {
+			logger.Fatal("Unable to load AWS SDK config", zap.Error(err))
+		}
+		svc := secretsmanager.NewFromConfig(cfg)
+		input := &secretsmanager.GetSecretValueInput{
+			SecretId: aws.String(secretArn),
+		}
+		logger.Info("Fetching secret from Secrets Manager", zap.String("secretArn", secretArn))
+		result, err := svc.GetSecretValue(context.TODO(), input)
+		if err != nil {
+			logger.Fatal("Failed to retrieve secret from Secrets Manager", zap.Error(err), zap.String("secretArn", secretArn))
+		}
+
+		if result.SecretString == nil {
+			logger.Fatal("Secret string is nil", zap.String("secretArn", secretArn))
+		}
+
+		// Parse the secret string (it's JSON)
+		var secretData map[string]interface{} // Use interface{} for flexibility
+		err = json.Unmarshal([]byte(*result.SecretString), &secretData)
+		if err != nil {
+			logger.Fatal("Failed to unmarshal secret JSON", zap.Error(err))
+		}
+
+		dbUser, okUser := secretData["username"].(string)
+		dbPassword, okPassword := secretData["password"].(string)
+
+		if !okUser || !okPassword || dbUser == "" || dbPassword == "" {
+			logger.Fatal("Username or password not found or not a string in secret data", zap.Any("secretKeysFound", getMapKeys(secretData)))
+		}
+
+		// Construct DSN for deployed environment
+		// DB_HOST already contains host:port from RDS endpoint
+		dsn = fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=%s",
+			dbUser, dbPassword, dbEndpoint, dbName, dbSSLMode)
+		logger.Info("Constructed DSN from Secrets Manager credentials")
+
+	} else {
+		// --- Local Development Environment ---
+		logger.Info("Running in local environment (GIN_MODE != release), using DATABASE_URL from .env")
+		dsn = os.Getenv("DATABASE_URL")
+		if dsn == "" {
+			logger.Fatal("DATABASE_URL environment variable is required for local development")
+		}
 	}
 
-	// Create a connection pool using pgxpool
-	poolConfig, err := pgxpool.ParseConfig(dbURL)
+	// Create a connection pool using the determined DSN
+	poolConfig, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
-		logger.Fatal("Unable to parse database connection string", zap.Error(err))
+		logger.Fatal("Unable to parse database DSN", zap.Error(err), zap.String("dsnUsed", dsn)) // Log the DSN used
 	}
 
 	// Configure the connection pool
@@ -468,4 +536,13 @@ func configureCORS() gin.HandlerFunc {
 	corsConfig.AllowCredentials = os.Getenv("CORS_ALLOW_CREDENTIALS") == "true"
 
 	return cors.New(corsConfig)
+}
+
+// Helper function to get map keys for logging
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
