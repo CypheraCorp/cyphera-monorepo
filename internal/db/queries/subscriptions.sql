@@ -35,9 +35,10 @@ WHERE customer_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
 -- name: ListSubscriptionsByProduct :many
-SELECT * FROM subscriptions
-WHERE product_id = $1 AND deleted_at IS NULL
-ORDER BY created_at DESC;
+SELECT s.* FROM subscriptions s
+JOIN products p ON s.product_id = p.id
+WHERE s.product_id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL
+ORDER BY s.created_at DESC;
 
 -- name: ListActiveSubscriptions :many
 SELECT * FROM subscriptions

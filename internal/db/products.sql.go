@@ -171,11 +171,16 @@ func (q *Queries) DeactivateProduct(ctx context.Context, id uuid.UUID) (Product,
 const deleteProduct = `-- name: DeleteProduct :exec
 UPDATE products
 SET deleted_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 `
 
-func (q *Queries) DeleteProduct(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteProduct, id)
+type DeleteProductParams struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) DeleteProduct(ctx context.Context, arg DeleteProductParams) error {
+	_, err := q.db.Exec(ctx, deleteProduct, arg.ID, arg.WorkspaceID)
 	return err
 }
 
@@ -224,11 +229,46 @@ func (q *Queries) GetActiveProductsByWalletID(ctx context.Context, walletID uuid
 
 const getProduct = `-- name: GetProduct :one
 SELECT id, workspace_id, wallet_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at FROM products
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL LIMIT 1
+`
+
+type GetProductParams struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) GetProduct(ctx context.Context, arg GetProductParams) (Product, error) {
+	row := q.db.QueryRow(ctx, getProduct, arg.ID, arg.WorkspaceID)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.WalletID,
+		&i.Name,
+		&i.Description,
+		&i.ProductType,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.PriceInPennies,
+		&i.ImageUrl,
+		&i.Url,
+		&i.MerchantPaidGas,
+		&i.Active,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getProductWithoutWorkspaceId = `-- name: GetProductWithoutWorkspaceId :one
+SELECT id, workspace_id, wallet_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at FROM products
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
-func (q *Queries) GetProduct(ctx context.Context, id uuid.UUID) (Product, error) {
-	row := q.db.QueryRow(ctx, getProduct, id)
+func (q *Queries) GetProductWithoutWorkspaceId(ctx context.Context, id uuid.UUID) (Product, error) {
+	row := q.db.QueryRow(ctx, getProductWithoutWorkspaceId, id)
 	var i Product
 	err := row.Scan(
 		&i.ID,
@@ -394,25 +434,26 @@ func (q *Queries) ListProductsWithPagination(ctx context.Context, arg ListProduc
 const updateProduct = `-- name: UpdateProduct :one
 UPDATE products
 SET
-    name = COALESCE($2, name),
-    wallet_id = COALESCE($3, wallet_id),
-    description = COALESCE($4, description),
-    product_type = COALESCE($5, product_type),
-    interval_type = COALESCE($6, interval_type),
-    term_length = COALESCE($7, term_length),
-    price_in_pennies = COALESCE($8, price_in_pennies),
-    image_url = COALESCE($9, image_url),
-    url = COALESCE($10, url),
-    merchant_paid_gas = COALESCE($11, merchant_paid_gas),
-    active = COALESCE($12, active),
-    metadata = COALESCE($13, metadata),
+    name = COALESCE($3, name),
+    wallet_id = COALESCE($4, wallet_id),
+    description = COALESCE($5, description),
+    product_type = COALESCE($6, product_type),
+    interval_type = COALESCE($7, interval_type),
+    term_length = COALESCE($8, term_length),
+    price_in_pennies = COALESCE($9, price_in_pennies),
+    image_url = COALESCE($10, image_url),
+    url = COALESCE($11, url),
+    merchant_paid_gas = COALESCE($12, merchant_paid_gas),
+    active = COALESCE($13, active),
+    metadata = COALESCE($14, metadata),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 RETURNING id, workspace_id, wallet_id, name, description, product_type, interval_type, term_length, price_in_pennies, image_url, url, merchant_paid_gas, active, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateProductParams struct {
 	ID              uuid.UUID        `json:"id"`
+	WorkspaceID     uuid.UUID        `json:"workspace_id"`
 	Name            string           `json:"name"`
 	WalletID        uuid.UUID        `json:"wallet_id"`
 	Description     pgtype.Text      `json:"description"`
@@ -430,6 +471,7 @@ type UpdateProductParams struct {
 func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error) {
 	row := q.db.QueryRow(ctx, updateProduct,
 		arg.ID,
+		arg.WorkspaceID,
 		arg.Name,
 		arg.WalletID,
 		arg.Description,

@@ -111,11 +111,16 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 const deleteCustomer = `-- name: DeleteCustomer :exec
 UPDATE customers
 SET deleted_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 `
 
-func (q *Queries) DeleteCustomer(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteCustomer, id)
+type DeleteCustomerParams struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) DeleteCustomer(ctx context.Context, arg DeleteCustomerParams) error {
+	_, err := q.db.Exec(ctx, deleteCustomer, arg.ID, arg.WorkspaceID)
 	return err
 }
 
@@ -166,11 +171,16 @@ func (q *Queries) GetAllCustomers(ctx context.Context) ([]Customer, error) {
 
 const getCustomer = `-- name: GetCustomer :one
 SELECT id, workspace_id, external_id, email, name, phone, description, balance_in_pennies, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
-WHERE id = $1 AND deleted_at IS NULL LIMIT 1
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL LIMIT 1
 `
 
-func (q *Queries) GetCustomer(ctx context.Context, id uuid.UUID) (Customer, error) {
-	row := q.db.QueryRow(ctx, getCustomer, id)
+type GetCustomerParams struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) GetCustomer(ctx context.Context, arg GetCustomerParams) (Customer, error) {
+	row := q.db.QueryRow(ctx, getCustomer, arg.ID, arg.WorkspaceID)
 	var i Customer
 	err := row.Scan(
 		&i.ID,
@@ -505,26 +515,27 @@ func (q *Queries) ListCustomersWithPagination(ctx context.Context, arg ListCusto
 const updateCustomer = `-- name: UpdateCustomer :one
 UPDATE customers
 SET
-    email = COALESCE($2, email),
-    name = COALESCE($3, name),
-    phone = COALESCE($4, phone),
-    description = COALESCE($5, description),
-    balance_in_pennies = COALESCE($6, balance_in_pennies),
-    currency = COALESCE($7, currency),
-    default_source_id = COALESCE($8, default_source_id),
-    invoice_prefix = COALESCE($9, invoice_prefix),
-    next_invoice_sequence = COALESCE($10, next_invoice_sequence),
-    tax_exempt = COALESCE($11, tax_exempt),
-    tax_ids = COALESCE($12, tax_ids),
-    metadata = COALESCE($13, metadata),
-    livemode = COALESCE($14, livemode),
+    email = COALESCE($3, email),
+    name = COALESCE($4, name),
+    phone = COALESCE($5, phone),
+    description = COALESCE($6, description),
+    balance_in_pennies = COALESCE($7, balance_in_pennies),
+    currency = COALESCE($8, currency),
+    default_source_id = COALESCE($9, default_source_id),
+    invoice_prefix = COALESCE($10, invoice_prefix),
+    next_invoice_sequence = COALESCE($11, next_invoice_sequence),
+    tax_exempt = COALESCE($12, tax_exempt),
+    tax_ids = COALESCE($13, tax_ids),
+    metadata = COALESCE($14, metadata),
+    livemode = COALESCE($15, livemode),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 RETURNING id, workspace_id, external_id, email, name, phone, description, balance_in_pennies, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at
 `
 
 type UpdateCustomerParams struct {
 	ID                  uuid.UUID   `json:"id"`
+	WorkspaceID         uuid.UUID   `json:"workspace_id"`
 	Email               pgtype.Text `json:"email"`
 	Name                pgtype.Text `json:"name"`
 	Phone               pgtype.Text `json:"phone"`
@@ -543,6 +554,7 @@ type UpdateCustomerParams struct {
 func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, updateCustomer,
 		arg.ID,
+		arg.WorkspaceID,
 		arg.Email,
 		arg.Name,
 		arg.Phone,

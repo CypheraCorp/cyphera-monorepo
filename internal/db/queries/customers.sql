@@ -1,6 +1,6 @@
 -- name: GetCustomer :one
 SELECT * FROM customers
-WHERE id = $1 AND deleted_at IS NULL LIMIT 1;
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL LIMIT 1;
 
 -- name: GetCustomerByExternalID :one
 SELECT * FROM customers
@@ -40,27 +40,27 @@ RETURNING *;
 -- name: UpdateCustomer :one
 UPDATE customers
 SET
-    email = COALESCE($2, email),
-    name = COALESCE($3, name),
-    phone = COALESCE($4, phone),
-    description = COALESCE($5, description),
-    balance_in_pennies = COALESCE($6, balance_in_pennies),
-    currency = COALESCE($7, currency),
-    default_source_id = COALESCE($8, default_source_id),
-    invoice_prefix = COALESCE($9, invoice_prefix),
-    next_invoice_sequence = COALESCE($10, next_invoice_sequence),
-    tax_exempt = COALESCE($11, tax_exempt),
-    tax_ids = COALESCE($12, tax_ids),
-    metadata = COALESCE($13, metadata),
-    livemode = COALESCE($14, livemode),
+    email = COALESCE($3, email),
+    name = COALESCE($4, name),
+    phone = COALESCE($5, phone),
+    description = COALESCE($6, description),
+    balance_in_pennies = COALESCE($7, balance_in_pennies),
+    currency = COALESCE($8, currency),
+    default_source_id = COALESCE($9, default_source_id),
+    invoice_prefix = COALESCE($10, invoice_prefix),
+    next_invoice_sequence = COALESCE($11, next_invoice_sequence),
+    tax_exempt = COALESCE($12, tax_exempt),
+    tax_ids = COALESCE($13, tax_ids),
+    metadata = COALESCE($14, metadata),
+    livemode = COALESCE($15, livemode),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 RETURNING *;
 
 -- name: DeleteCustomer :exec
 UPDATE customers
 SET deleted_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL;
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL;
 
 -- name: GetCustomerByEmail :one
 SELECT * FROM customers

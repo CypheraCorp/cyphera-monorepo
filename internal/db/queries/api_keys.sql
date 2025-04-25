@@ -1,6 +1,6 @@
 -- name: GetAPIKey :one
 SELECT * FROM api_keys
-WHERE id = $1 AND deleted_at IS NULL LIMIT 1;
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL LIMIT 1;
 
 -- name: GetAPIKeyByKey :one
 SELECT * FROM api_keys
@@ -31,18 +31,18 @@ RETURNING *;
 -- name: UpdateAPIKey :one
 UPDATE api_keys
 SET
-    name = COALESCE($2, name),
-    access_level = COALESCE($3, access_level),
-    expires_at = COALESCE($4, expires_at),
-    metadata = COALESCE($5, metadata),
+    name = COALESCE($3, name),
+    access_level = COALESCE($4, access_level),
+    expires_at = COALESCE($5, expires_at),
+    metadata = COALESCE($6, metadata),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 RETURNING *;
 
 -- name: DeleteAPIKey :exec
 UPDATE api_keys
 SET deleted_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL;
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL;
 
 -- name: GetActiveAPIKeysCount :one
 SELECT COUNT(*) FROM api_keys

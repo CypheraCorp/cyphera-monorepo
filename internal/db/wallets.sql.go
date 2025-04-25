@@ -354,11 +354,16 @@ func (q *Queries) GetWalletByAddress(ctx context.Context, arg GetWalletByAddress
 
 const getWalletByID = `-- name: GetWalletByID :one
 SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 `
 
-func (q *Queries) GetWalletByID(ctx context.Context, id uuid.UUID) (Wallet, error) {
-	row := q.db.QueryRow(ctx, getWalletByID, id)
+type GetWalletByIDParams struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) GetWalletByID(ctx context.Context, arg GetWalletByIDParams) (Wallet, error) {
+	row := q.db.QueryRow(ctx, getWalletByID, arg.ID, arg.WorkspaceID)
 	var i Wallet
 	err := row.Scan(
 		&i.ID,
@@ -494,8 +499,13 @@ SELECT
     cw.state as circle_state
 FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
-WHERE w.id = $1 AND w.deleted_at IS NULL
+WHERE w.id = $1 AND w.workspace_id = $2 AND w.deleted_at IS NULL
 `
+
+type GetWalletWithCircleDataByIDParams struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
 
 type GetWalletWithCircleDataByIDRow struct {
 	ID             uuid.UUID          `json:"id"`
@@ -520,8 +530,8 @@ type GetWalletWithCircleDataByIDRow struct {
 	CircleState    pgtype.Text        `json:"circle_state"`
 }
 
-func (q *Queries) GetWalletWithCircleDataByID(ctx context.Context, id uuid.UUID) (GetWalletWithCircleDataByIDRow, error) {
-	row := q.db.QueryRow(ctx, getWalletWithCircleDataByID, id)
+func (q *Queries) GetWalletWithCircleDataByID(ctx context.Context, arg GetWalletWithCircleDataByIDParams) (GetWalletWithCircleDataByIDRow, error) {
+	row := q.db.QueryRow(ctx, getWalletWithCircleDataByID, arg.ID, arg.WorkspaceID)
 	var i GetWalletWithCircleDataByIDRow
 	err := row.Scan(
 		&i.ID,

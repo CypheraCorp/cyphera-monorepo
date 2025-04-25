@@ -202,6 +202,12 @@ func (h *ProductHandler) GetProductToken(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /products/{product_id}/networks/{network_id}/tokens/{token_id} [get]
 func (h *ProductHandler) GetProductTokenByIds(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
 	productID := c.Param("product_id")
 	parsedProductID, err := uuid.Parse(productID)
 	if err != nil {
@@ -224,9 +230,10 @@ func (h *ProductHandler) GetProductTokenByIds(c *gin.Context) {
 	}
 
 	productToken, err := h.common.db.GetProductTokenByIds(c.Request.Context(), db.GetProductTokenByIdsParams{
-		ProductID: parsedProductID,
-		NetworkID: parsedNetworkID,
-		TokenID:   parsedTokenID,
+		ProductID:   parsedProductID,
+		NetworkID:   parsedNetworkID,
+		TokenID:     parsedTokenID,
+		WorkspaceID: parsedWorkspaceID,
 	})
 	if err != nil {
 		handleDBError(c, err, "Product token not found")
@@ -457,6 +464,12 @@ func (h *ProductHandler) CreateProductToken(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /products/{product_id}/networks/{network_id}/tokens/{token_id} [put]
 func (h *ProductHandler) UpdateProductToken(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
 	productID := c.Param("product_id")
 	parsedProductID, err := uuid.Parse(productID)
 	if err != nil {
@@ -485,10 +498,11 @@ func (h *ProductHandler) UpdateProductToken(c *gin.Context) {
 	}
 
 	productToken, err := h.common.db.UpdateProductToken(c.Request.Context(), db.UpdateProductTokenParams{
-		ProductID: parsedProductID,
-		NetworkID: parsedNetworkID,
-		TokenID:   parsedTokenID,
-		Active:    req.Active,
+		WorkspaceID: parsedWorkspaceID,
+		ProductID:   parsedProductID,
+		NetworkID:   parsedNetworkID,
+		TokenID:     parsedTokenID,
+		Active:      req.Active,
 	})
 	if err != nil {
 		handleDBError(c, err, "Failed to update product token")
@@ -513,6 +527,12 @@ func (h *ProductHandler) UpdateProductToken(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /products/{product_id}/networks/{network_id}/tokens/{token_id} [delete]
 func (h *ProductHandler) DeleteProductToken(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
 	productID := c.Param("product_id")
 	parsedProductID, err := uuid.Parse(productID)
 	if err != nil {
@@ -535,9 +555,10 @@ func (h *ProductHandler) DeleteProductToken(c *gin.Context) {
 	}
 
 	err = h.common.db.DeleteProductTokenByIds(c.Request.Context(), db.DeleteProductTokenByIdsParams{
-		ProductID: parsedProductID,
-		NetworkID: parsedNetworkID,
-		TokenID:   parsedTokenID,
+		ProductID:   parsedProductID,
+		NetworkID:   parsedNetworkID,
+		TokenID:     parsedTokenID,
+		WorkspaceID: parsedWorkspaceID,
 	})
 	if err != nil {
 		handleDBError(c, err, "Product token not found")
