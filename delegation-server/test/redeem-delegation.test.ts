@@ -69,8 +69,7 @@ jest.mock('viem/accounts', () => ({
 // Mock viem/chains
 // We don't need to mock this directly as sepolia is just an object
 
-// Mock @metamask-private/delegator-core-viem
-jest.mock('@metamask-private/delegator-core-viem', () => ({
+jest.mock('@metamask/delegation-toolkit', () => ({
   toMetaMaskSmartAccount: jest.fn(),
   DelegationFramework: {
     encode: {
@@ -141,7 +140,7 @@ describe('redeem-delegation service', () => {
      // Re-require mocked modules
      const accountAbstractionMocks = require('viem/account-abstraction');
      const pimlicoMocks = require('permissionless/clients/pimlico');
-     const coreViemMocks = require('@metamask-private/delegator-core-viem');
+     const coreViemMocks = require('@metamask/delegation-toolkit');
      const viemAccountMocks = require('viem/accounts');
      const viemMocks = require('viem');
      const delegationHelperMocks = require('../src/utils/delegation-helpers');
@@ -206,7 +205,7 @@ describe('redeem-delegation service', () => {
     });
 
      it('should throw if redeemer address does not match delegate', async () => {
-         const { toMetaMaskSmartAccount: mockToMMA } = require('@metamask-private/delegator-core-viem');
+         const { toMetaMaskSmartAccount: mockToMMA } = require('@metamask/delegation-toolkit');
          // Use a different valid address for the delegate in the parsed delegation
          const differentDelegate = '0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B'; // Another example
          const parsedMismatchDelegation = { ...mockParsedDelegation, delegate: differentDelegate };
@@ -222,7 +221,7 @@ describe('redeem-delegation service', () => {
   describe('redeemDelegation happy path', () => {
      it('should successfully redeem a valid delegation', async () => {
         // Mocks are set up in beforeEach
-       const { toMetaMaskSmartAccount: mockToMMA, DelegationFramework: mockDF } = require('@metamask-private/delegator-core-viem');
+       const { toMetaMaskSmartAccount: mockToMMA, DelegationFramework: mockDF } = require('@metamask/delegation-toolkit');
        const { parseDelegation: mockParse, validateDelegation: mockValidate } = require('../src/utils/delegation-helpers');
        const { privateKeyToAccount: mockPKToAccount } = require('viem/accounts');
        const { encodeFunctionData: mockEncode, parseUnits: mockParseUnits, isAddressEqual } = require('viem');
@@ -240,11 +239,11 @@ describe('redeem-delegation service', () => {
           args: [mockMerchantAddress, BigInt(mockPrice + '000000')]
         });
        expect(mockParseUnits).toHaveBeenCalledWith(mockPrice, 6);
-       expect(mockDF.encode.redeemDelegations).toHaveBeenCalledWith(
-          [[mockParsedDelegation]],
-          ['mock-single-default-mode'],
-          [[{ target: mockTokenContractAddress, value: 0n, callData: mockEncodedTransfer }]]
-        );
+       expect(mockDF.encode.redeemDelegations).toHaveBeenCalledWith({
+          delegations: [[mockParsedDelegation]],
+          modes: ['mock-single-default-mode'],
+          executions: [[{ target: mockTokenContractAddress, value: 0n, callData: mockEncodedTransfer }]]
+        });
        expect(mockGetUserOperationGasPrice).toHaveBeenCalled();
        expect(mockSendUserOperation).toHaveBeenCalledWith({
           account: mockSmartAccount,
@@ -290,7 +289,7 @@ describe('redeem-delegation service', () => {
 
          it('should throw if createMetaMaskAccount (toMetaMaskSmartAccount) fails', async () => {
              const accountError = new Error('Failed to derive account');
-             const { toMetaMaskSmartAccount: mockToMMA } = require('@metamask-private/delegator-core-viem');
+             const { toMetaMaskSmartAccount: mockToMMA } = require('@metamask/delegation-toolkit');
              (mockToMMA as jest.Mock).mockRejectedValue(accountError);
 
              await expect(redeemDelegation(mockDelegationData, mockMerchantAddress, mockTokenContractAddress, mockPrice))
