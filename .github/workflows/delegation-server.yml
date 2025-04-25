@@ -1,0 +1,143 @@
+name: Delegation Server CI/CD
+
+on:
+  push:
+    branches: [ dev, main ]
+    paths: # Only trigger on changes within delegation-server or this workflow file
+      - 'delegation-server/**'
+      - '.github/workflows/delegation-server.yml'
+  pull_request:
+    branches: [ dev, main ]
+    paths:
+      - 'delegation-server/**'
+      - '.github/workflows/delegation-server.yml'
+
+env:
+  NODE_VERSION: '18'
+  # Define stage based on branch, similar to the API workflow
+  STAGE: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+
+jobs:
+  lint:
+    name: Lint Delegation Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: delegation-server/package-lock.json # Adjust if using yarn or pnpm
+      - name: Install dependencies
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }} # If needed for private packages
+        run: make delegation-server-setup # Runs npm install/ci via setup script
+      - name: Run linter
+        run: make delegation-server-lint
+
+  test:
+    name: Test Delegation Server
+    runs-on: ubuntu-latest
+    # Add services if needed (e.g., localstack for AWS S3/SQS interaction tests)
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: delegation-server/package-lock.json
+      - name: Install dependencies
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: make delegation-server-setup
+      - name: Run tests
+        run: make delegation-server-test
+
+  build:
+    name: Build Delegation Server
+    needs: [lint, test] # Run build only if lint and test pass
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: delegation-server/package-lock.json
+      - name: Install dependencies
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: make delegation-server-setup
+      - name: Build application
+        run: make delegation-server-build
+      - name: Archive build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: delegation-server-${{ env.STAGE }}
+          path: |
+            delegation-server/dist
+            delegation-server/package.json
+            delegation-server/package-lock.json # Include lock file for consistent deployment installs
+            # Include any other necessary files for deployment (e.g., .env.production template, static assets)
+
+  deploy:
+    name: Deploy Delegation Server
+    needs: [build]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: delegation-server-${{ env.STAGE }}
+          path: delegation-server-deploy # Download to a specific directory
+
+      # === DEPLOYMENT STEPS (COMMENTED OUT) ===
+      # Deployment strategy depends heavily on where you host the Node.js server
+      # (e.g., EC2, ECS Fargate, Google Cloud Run, Vercel, etc.)
+
+      # Example for AWS ECS Fargate (replace with your actual deployment):
+      # - name: Configure AWS credentials
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      #     aws-region: ${{ env.AWS_REGION }} # Use region from env or define here
+
+      # - name: Login to Amazon ECR
+      #   id: login-ecr
+      #   uses: aws-actions/amazon-ecr-login@v2
+
+      # - name: Build, tag, and push image to Amazon ECR
+      #   id: build-image
+      #   env:
+      #     ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      #     ECR_REPOSITORY: delegation-server-${{ env.STAGE }} # Example ECR repo name
+      #     IMAGE_TAG: ${{ github.sha }}
+      #   run: |
+      #     docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f delegation-server/Dockerfile . # Assuming Dockerfile exists
+      #     docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+      #     echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # - name: Fill in the new image ID in the Amazon ECS task definition
+      #   id: task-def
+      #   uses: aws-actions/amazon-ecs-render-task-definition@v1
+      #   with:
+      #     task-definition: delegation-server/ecs-task-definition-${{ env.STAGE }}.json # Path to your task definition file
+      #     container-name: delegation-server-container # Name of the container in the task definition
+      #     image: ${{ steps.build-image.outputs.image }}
+
+      # - name: Deploy Amazon ECS task definition
+      #   uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      #   with:
+      #     task-definition: ${{ steps.task-def.outputs.task-definition }}
+      #     service: delegation-server-service-${{ env.STAGE }} # Name of your ECS service
+      #     cluster: your-ecs-cluster-name # Name of your ECS cluster
+      #     wait-for-service-stability: true
+
+      - name: Deployment Placeholder
+        run: echo "Deployment steps for stage ${{ env.STAGE }} would go here." 

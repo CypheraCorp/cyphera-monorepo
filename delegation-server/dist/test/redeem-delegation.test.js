@@ -200,7 +200,11 @@ describe('redeem-delegation service', () => {
                 args: [mockMerchantAddress, BigInt(mockPrice + '000000')]
             });
             expect(mockParseUnits).toHaveBeenCalledWith(mockPrice, 6);
-            expect(mockDF.encode.redeemDelegations).toHaveBeenCalledWith([[mockParsedDelegation]], ['mock-single-default-mode'], [[{ target: mockTokenContractAddress, value: 0n, callData: mockEncodedTransfer }]]);
+            expect(mockDF.encode.redeemDelegations).toHaveBeenCalledWith({
+                delegations: [[mockParsedDelegation]],
+                modes: ['mock-single-default-mode'],
+                executions: [[{ target: mockTokenContractAddress, value: 0n, callData: mockEncodedTransfer }]]
+            });
             expect(mockGetUserOperationGasPrice).toHaveBeenCalled();
             expect(mockSendUserOperation).toHaveBeenCalledWith({
                 account: mockSmartAccount,
