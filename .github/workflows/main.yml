@@ -89,6 +89,7 @@ jobs:
         version: v1.59.1
         skip-cache: true
         args: -v
+        only-new-issues: true
 
   build:
     name: Build
