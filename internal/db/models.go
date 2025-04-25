@@ -546,7 +546,7 @@ type ApiKey struct {
 
 type CircleUser struct {
 	ID                     uuid.UUID          `json:"id"`
-	AccountID              uuid.UUID          `json:"account_id"`
+	WorkspaceID            uuid.UUID          `json:"workspace_id"`
 	CircleCreateDate       pgtype.Timestamptz `json:"circle_create_date"`
 	PinStatus              string             `json:"pin_status"`
 	Status                 string             `json:"status"`
@@ -656,7 +656,7 @@ type Product struct {
 	Name            string             `json:"name"`
 	Description     pgtype.Text        `json:"description"`
 	ProductType     ProductType        `json:"product_type"`
-	IntervalType    IntervalType       `json:"interval_type"`
+	IntervalType    NullIntervalType   `json:"interval_type"`
 	TermLength      pgtype.Int4        `json:"term_length"`
 	PriceInPennies  int32              `json:"price_in_pennies"`
 	ImageUrl        pgtype.Text        `json:"image_url"`
@@ -757,7 +757,7 @@ type User struct {
 
 type Wallet struct {
 	ID            uuid.UUID          `json:"id"`
-	AccountID     uuid.UUID          `json:"account_id"`
+	WorkspaceID   uuid.UUID          `json:"workspace_id"`
 	WalletType    string             `json:"wallet_type"`
 	WalletAddress string             `json:"wallet_address"`
 	NetworkType   NetworkType        `json:"network_type"`

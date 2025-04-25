@@ -1177,7 +1177,10 @@ func TestProcessSubscription(t *testing.T) {
 		ID:             productID,
 		WalletID:       walletID,
 		PriceInPennies: 1000,
-		IntervalType:   db.IntervalTypeMonth,
+		IntervalType: db.NullIntervalType{
+			IntervalType: db.IntervalTypeMonth,
+			Valid:        true,
+		},
 	}
 
 	// Success tx hash
@@ -1623,7 +1626,10 @@ func TestRedeemDueSubscriptions(t *testing.T) {
 		ID:             productID,
 		WalletID:       walletID,
 		PriceInPennies: 1000,
-		IntervalType:   db.IntervalTypeMonth,
+		IntervalType: db.NullIntervalType{
+			IntervalType: db.IntervalTypeMonth,
+			Valid:        true,
+		},
 	}
 
 	// Create sample product token
@@ -1978,7 +1984,7 @@ func TestRedeemDueSubscriptions(t *testing.T) {
 
 					// Redemption succeeded
 					// Calculate next redemption date
-					nextDate := CalculateNextRedemption(product.IntervalType, now)
+					nextDate := CalculateNextRedemption(product.IntervalType.IntervalType, now)
 					nextRedemptionDate := pgtype.Timestamptz{
 						Time:  nextDate,
 						Valid: true,
@@ -2340,7 +2346,7 @@ func (h *testSubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (
 
 		// Update next redemption date based on product interval
 		var nextRedemptionDate pgtype.Timestamptz
-		nextDate := CalculateNextRedemption(product.IntervalType, now)
+		nextDate := CalculateNextRedemption(product.IntervalType.IntervalType, now)
 		nextRedemptionDate = pgtype.Timestamptz{
 			Time:  nextDate,
 			Valid: true,
@@ -2489,7 +2495,10 @@ func TestProcessDueSubscriptions(t *testing.T) {
 		ID:             productID,
 		WalletID:       walletID,
 		PriceInPennies: 1000,
-		IntervalType:   db.IntervalTypeMonth,
+		IntervalType: db.NullIntervalType{
+			IntervalType: db.IntervalTypeMonth,
+			Valid:        true,
+		},
 	}
 
 	// Create sample product token
@@ -2567,7 +2576,7 @@ func TestProcessDueSubscriptions(t *testing.T) {
 			setupMocks: func(t *testing.T) (*mockProcessDueSubscriptionsQuerier, *mockTransaction, *mockDelegationClient) {
 				mockQuerier := &mockProcessDueSubscriptionsQuerier{}
 				mockTx := &mockTransaction{}
-				mockDelegClient := &mockDelegationClient{}
+				mockDelegationClient := &mockDelegationClient{}
 
 				// Set up mock expectations
 				mockQuerier.listSubscriptionsDueForRenewalFunc = func(ctx context.Context, now pgtype.Timestamptz) ([]db.Subscription, error) {
@@ -2600,7 +2609,7 @@ func TestProcessDueSubscriptions(t *testing.T) {
 				}
 
 				// Successful redemption
-				mockDelegClient.redeemDelegationDirectlyFunc = func(ctx context.Context, delegationData []byte, merchantAddress, tokenAddress, price string) (string, error) {
+				mockDelegationClient.redeemDelegationDirectlyFunc = func(ctx context.Context, delegationData []byte, merchantAddress, tokenAddress, price string) (string, error) {
 					return successTxHash, nil
 				}
 
@@ -2627,7 +2636,7 @@ func TestProcessDueSubscriptions(t *testing.T) {
 					return nil
 				}
 
-				return mockQuerier, mockTx, mockDelegClient
+				return mockQuerier, mockTx, mockDelegationClient
 			},
 			expectedResults: ProcessDueSubscriptionsResult{
 				Total:     1,
@@ -2642,7 +2651,7 @@ func TestProcessDueSubscriptions(t *testing.T) {
 			setupMocks: func(t *testing.T) (*mockProcessDueSubscriptionsQuerier, *mockTransaction, *mockDelegationClient) {
 				mockQuerier := &mockProcessDueSubscriptionsQuerier{}
 				mockTx := &mockTransaction{}
-				mockDelegClient := &mockDelegationClient{}
+				mockDelegationClient := &mockDelegationClient{}
 
 				// Set up mock expectations
 				mockQuerier.listSubscriptionsDueForRenewalFunc = func(ctx context.Context, now pgtype.Timestamptz) ([]db.Subscription, error) {
@@ -2675,7 +2684,7 @@ func TestProcessDueSubscriptions(t *testing.T) {
 				}
 
 				// Successful redemption
-				mockDelegClient.redeemDelegationDirectlyFunc = func(ctx context.Context, delegationData []byte, merchantAddress, tokenAddress, price string) (string, error) {
+				mockDelegationClient.redeemDelegationDirectlyFunc = func(ctx context.Context, delegationData []byte, merchantAddress, tokenAddress, price string) (string, error) {
 					return successTxHash, nil
 				}
 
@@ -2709,7 +2718,7 @@ func TestProcessDueSubscriptions(t *testing.T) {
 					return nil
 				}
 
-				return mockQuerier, mockTx, mockDelegClient
+				return mockQuerier, mockTx, mockDelegationClient
 			},
 			expectedResults: ProcessDueSubscriptionsResult{
 				Total:     1,
@@ -2724,7 +2733,7 @@ func TestProcessDueSubscriptions(t *testing.T) {
 			setupMocks: func(t *testing.T) (*mockProcessDueSubscriptionsQuerier, *mockTransaction, *mockDelegationClient) {
 				mockQuerier := &mockProcessDueSubscriptionsQuerier{}
 				mockTx := &mockTransaction{}
-				mockDelegClient := &mockDelegationClient{}
+				mockDelegationClient := &mockDelegationClient{}
 
 				// Set up mock expectations
 				mockQuerier.listSubscriptionsDueForRenewalFunc = func(ctx context.Context, now pgtype.Timestamptz) ([]db.Subscription, error) {
@@ -2757,7 +2766,7 @@ func TestProcessDueSubscriptions(t *testing.T) {
 				}
 
 				// Failed redemption
-				mockDelegClient.redeemDelegationDirectlyFunc = func(ctx context.Context, delegationData []byte, merchantAddress, tokenAddress, price string) (string, error) {
+				mockDelegationClient.redeemDelegationDirectlyFunc = func(ctx context.Context, delegationData []byte, merchantAddress, tokenAddress, price string) (string, error) {
 					return "", fmt.Errorf("redemption error")
 				}
 
@@ -2782,7 +2791,7 @@ func TestProcessDueSubscriptions(t *testing.T) {
 					return nil // Allow rollback to be called for failed redemptions
 				}
 
-				return mockQuerier, mockTx, mockDelegClient
+				return mockQuerier, mockTx, mockDelegationClient
 			},
 			expectedResults: ProcessDueSubscriptionsResult{
 				Total:     1,

@@ -487,7 +487,7 @@ type ListSubscriptionEventDetailsWithPaginationRow struct {
 	ProductID             uuid.UUID             `json:"product_id"`
 	ProductName           string                `json:"product_name"`
 	ProductType           ProductType           `json:"product_type"`
-	IntervalType          IntervalType          `json:"interval_type"`
+	IntervalType          NullIntervalType      `json:"interval_type"`
 	TokenSymbol           string                `json:"token_symbol"`
 	TokenAddress          string                `json:"token_address"`
 	NetworkName           string                `json:"network_name"`

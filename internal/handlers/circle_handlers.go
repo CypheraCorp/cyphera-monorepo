@@ -57,7 +57,7 @@ type InitializeUserRequest struct {
 type CreateWalletsRequest struct {
 	IdempotencyKey string   `json:"idempotency_key" binding:"required"`
 	Blockchains    []string `json:"blockchains" binding:"required"`
-	AccountType    string   `json:"account_type,omitempty"`
+	AccountType    string   `json:"account_type" binding:"required"`
 	UserToken      string   `json:"user_token" binding:"required"`
 	Metadata       []struct {
 		Name  string `json:"name"`
@@ -209,12 +209,20 @@ type CreateUserResponse struct {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /circle/users [post]
+// @Router /admin/circle/users/{workspace_id} [post]
 func (h *CircleHandler) CreateUser(c *gin.Context) {
-	// Validate account ID
-	accountID, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	// Validate workspace ID from path parameter
+	workspaceIDStr := c.Param("workspace_id")
+	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format in path", err)
+		return
+	}
+
+	// Validate that the workspace exists
+	_, err = h.common.db.GetWorkspace(c.Request.Context(), workspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
 		return
 	}
 
@@ -225,12 +233,14 @@ func (h *CircleHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	// Check if user already exists in our database
-	existingUser, err := h.common.db.GetCircleUserByAccountID(c.Request.Context(), accountID)
+	// Check if user already exists in our database using workspaceID
+	// Assuming GetCircleUserByWorkspaceID exists now
+	existingUser, err := h.common.db.GetCircleUserByWorkspaceID(c.Request.Context(), workspaceID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		logger.Log.Error("Failed to check for existing circle user",
 			zap.Error(err),
-			zap.String("account_id", accountID.String()))
+			// Use workspaceID for logging if accountID is removed
+			zap.String("workspace_id", workspaceID.String()))
 		sendError(c, http.StatusInternalServerError, "Failed to check for existing circle user", err)
 		return
 	}
@@ -318,9 +328,10 @@ func (h *CircleHandler) CreateUser(c *gin.Context) {
 		statusCode = http.StatusCreated // New user created
 
 		// Store user in our database
+		// Assuming CreateCircleUserParams now takes WorkspaceID
 		_, err = h.common.db.CreateCircleUser(c.Request.Context(), db.CreateCircleUserParams{
 			ID:                     uuid.MustParse(userID),
-			AccountID:              accountID,
+			WorkspaceID:            workspaceID, // Use WorkspaceID
 			CircleCreateDate:       pgtype.Timestamptz{Time: createDate, Valid: true},
 			PinStatus:              pinStatus,
 			Status:                 status,
@@ -357,23 +368,25 @@ func (h *CircleHandler) CreateUser(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /circle/users/{user_id}/token [post]
+// @Router /admin/circle/users/{workspace_id}/token [post]
 func (h *CircleHandler) CreateUserToken(c *gin.Context) {
-	// Validate account ID
-	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	// Validate workspace ID from path parameter
+	workspaceIDStr := c.Param("workspace_id")
+	_, err := uuid.Parse(workspaceIDStr) // Validate format
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format in path", err)
 		return
 	}
 
-	userID := c.Param("user_id")
-	if userID == "" {
-		sendError(c, http.StatusBadRequest, "User ID is required", nil)
+	// Bind request body
+	var req CreateUserWithPinAuthRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
 	// Call Circle API to create user token
-	tokenResponse, err := h.circleClient.CreateUserToken(c.Request.Context(), userID)
+	tokenResponse, err := h.circleClient.CreateUserToken(c.Request.Context(), req.ExternalUserID)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to create user token", err)
 		return
@@ -393,16 +406,24 @@ func (h *CircleHandler) CreateUserToken(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /circle/users/token [get]
+// @Router /circle/users/{workspace_id}/token [get]
 func (h *CircleHandler) GetUserByToken(c *gin.Context) {
-	// Validate account ID
-	accountID, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	// Validate workspace ID from path parameter
+	workspaceIDStr := c.Param("workspace_id")
+	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format in path", err)
 		return
 	}
 
-	userToken := c.GetHeader("User-Token")
+	// Validate that the workspace exists
+	_, err = h.common.db.GetWorkspace(c.Request.Context(), workspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
+		return
+	}
+
+	userToken := c.GetHeader("User-Token") // Keep reading user token from header
 	if userToken == "" {
 		sendError(c, http.StatusBadRequest, "User token is required in the User-Token header", nil)
 		return
@@ -415,13 +436,15 @@ func (h *CircleHandler) GetUserByToken(c *gin.Context) {
 		return
 	}
 
-	// Check if a circle user exists for this account
-	_, err = h.common.db.GetCircleUserByAccountID(c.Request.Context(), accountID)
+	// Check if a circle user exists for this workspace
+	// Assuming GetCircleUserByWorkspaceID exists now
+	_, err = h.common.db.GetCircleUserByWorkspaceID(c.Request.Context(), workspaceID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		// Only log and return error if it's not a "not found" error
 		logger.Log.Error("Failed to check for existing circle user",
 			zap.Error(err),
-			zap.String("account_id", accountID.String()))
+			// Use workspaceID for logging
+			zap.String("workspace_id", workspaceID.String()))
 		sendError(c, http.StatusInternalServerError, "Failed to check for existing circle user", err)
 		return
 	}
@@ -477,12 +500,20 @@ func (h *CircleHandler) GetUserByID(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /circle/challenges/{challenge_id} [get]
+// @Router /circle/{workspace_id}/challenges/{challenge_id} [get]
 func (h *CircleHandler) GetChallenge(c *gin.Context) {
-	// Validate account ID
-	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	// Validate workspace ID from path parameter
+	workspaceIDStr := c.Param("workspace_id")
+	workspaceID, err := uuid.Parse(workspaceIDStr) // Assign to workspaceID
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format in path", err)
+		return
+	}
+
+	// Validate that the workspace exists
+	_, err = h.common.db.GetWorkspace(c.Request.Context(), workspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
 		return
 	}
 
@@ -520,12 +551,20 @@ func (h *CircleHandler) GetChallenge(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /circle/users/initialize [post]
+// @Router /circle/users/{workspace_id}/initialize [post]
 func (h *CircleHandler) InitializeUser(c *gin.Context) {
-	// Validate account ID
-	accountID, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	// Validate workspace ID from path parameter
+	workspaceIDStr := c.Param("workspace_id")
+	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format in path", err)
+		return
+	}
+
+	// Validate that the workspace exists
+	_, err = h.common.db.GetWorkspace(c.Request.Context(), workspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
 		return
 	}
 
@@ -541,10 +580,16 @@ func (h *CircleHandler) InitializeUser(c *gin.Context) {
 		return
 	}
 
-	// Ensure the Circle user is in our database
-	_, err = h.common.db.GetCircleUserByAccountID(c.Request.Context(), accountID)
+	// Ensure the Circle user is in our database for this workspace
+	// Assuming GetCircleUserByWorkspaceID exists now
+	_, err = h.common.db.GetCircleUserByWorkspaceID(c.Request.Context(), workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Circle user not found for this account", err)
+		// Use specific error message if not found
+		if errors.Is(err, pgx.ErrNoRows) {
+			sendError(c, http.StatusNotFound, "Circle user not found for this workspace", err)
+		} else {
+			sendError(c, http.StatusInternalServerError, "Failed to check Circle user", err)
+		}
 		return
 	}
 
@@ -602,12 +647,20 @@ func (h *CircleHandler) InitializeUser(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /circle/users/pin/create [post]
+// @Router /circle/users/{workspace_id}/pin/create [post]
 func (h *CircleHandler) CreatePinChallenge(c *gin.Context) {
-	// Validate account ID
-	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	// Validate workspace ID from path parameter
+	workspaceIDStr := c.Param("workspace_id")
+	workspaceID, err := uuid.Parse(workspaceIDStr) // Validate format
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format in path", err)
+		return
+	}
+
+	// Validate that the workspace exists
+	_, err = h.common.db.GetWorkspace(c.Request.Context(), workspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
 		return
 	}
 
@@ -645,12 +698,20 @@ func (h *CircleHandler) CreatePinChallenge(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /circle/users/pin/update [put]
+// @Router /circle/users/{workspace_id}/pin/update [put]
 func (h *CircleHandler) UpdatePinChallenge(c *gin.Context) {
-	// Validate account ID
-	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	// Validate workspace ID from path parameter
+	workspaceIDStr := c.Param("workspace_id")
+	workspaceID, err := uuid.Parse(workspaceIDStr) // Assign to workspaceID
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format in path", err)
+		return
+	}
+
+	// Validate that the workspace exists
+	_, err = h.common.db.GetWorkspace(c.Request.Context(), workspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
 		return
 	}
 
@@ -660,9 +721,9 @@ func (h *CircleHandler) UpdatePinChallenge(c *gin.Context) {
 		return
 	}
 
-	userToken := c.GetHeader("User-Token")
+	userToken := req.UserToken
 	if userToken == "" {
-		sendError(c, http.StatusBadRequest, "User token is required in the User-Token header", nil)
+		sendError(c, http.StatusBadRequest, "User token is required in the body", nil)
 		return
 	}
 
@@ -688,12 +749,20 @@ func (h *CircleHandler) UpdatePinChallenge(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /circle/users/pin/restore [post]
+// @Router /circle/users/{workspace_id}/pin/restore [post]
 func (h *CircleHandler) CreatePinRestoreChallenge(c *gin.Context) {
-	// Validate account ID
-	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	// Validate workspace ID from path parameter
+	workspaceIDStr := c.Param("workspace_id")
+	workspaceID, err := uuid.Parse(workspaceIDStr) // Assign to workspaceID
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format in path", err)
+		return
+	}
+
+	// Validate that the workspace exists
+	_, err = h.common.db.GetWorkspace(c.Request.Context(), workspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
 		return
 	}
 
@@ -703,9 +772,9 @@ func (h *CircleHandler) CreatePinRestoreChallenge(c *gin.Context) {
 		return
 	}
 
-	userToken := c.GetHeader("User-Token")
+	userToken := req.UserToken
 	if userToken == "" {
-		sendError(c, http.StatusBadRequest, "User token is required in the User-Token header", nil)
+		sendError(c, http.StatusBadRequest, "User token is required in the body", nil)
 		return
 	}
 
@@ -731,12 +800,20 @@ func (h *CircleHandler) CreatePinRestoreChallenge(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /circle/wallets [post]
+// @Router /circle/wallets/{workspace_id} [post]
 func (h *CircleHandler) CreateWallets(c *gin.Context) {
-	// Validate account ID
-	accountID, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	// Validate workspace ID from path parameter
+	workspaceIDStr := c.Param("workspace_id")
+	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format in path", err)
+		return
+	}
+
+	// Validate that the workspace exists
+	_, err = h.common.db.GetWorkspace(c.Request.Context(), workspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
 		return
 	}
 
@@ -752,10 +829,16 @@ func (h *CircleHandler) CreateWallets(c *gin.Context) {
 		return
 	}
 
-	// Get the Circle user from our database
-	circleUser, err := h.common.db.GetCircleUserByAccountID(c.Request.Context(), accountID)
+	// Get the Circle user from our database using workspaceID
+	// Assuming GetCircleUserByWorkspaceID exists now
+	circleUser, err := h.common.db.GetCircleUserByWorkspaceID(c.Request.Context(), workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Circle user not found for this account", err)
+		// Use specific error message if not found
+		if errors.Is(err, pgx.ErrNoRows) {
+			sendError(c, http.StatusNotFound, "Circle user not found for this workspace", err)
+		} else {
+			sendError(c, http.StatusInternalServerError, "Failed to check Circle user", err)
+		}
 		return
 	}
 
@@ -852,7 +935,7 @@ func (h *CircleHandler) CreateWallets(c *gin.Context) {
 					// Process each wallet and create Cyphera wallet entries
 					walletCount := 0
 					for _, walletData := range walletsListResponse.Data.Wallets {
-						err = h.createCypheraWalletEntry(ctx, qtx, walletData, accountID, circleUser.ID)
+						err = h.createCypheraWalletEntry(ctx, qtx, walletData, workspaceID, circleUser.ID)
 						if err != nil {
 							logger.Error("Failed to create Cyphera wallet entry during challenge polling",
 								zap.String("address", walletData.Address),
@@ -902,7 +985,8 @@ func (h *CircleHandler) CreateWallets(c *gin.Context) {
 
 // createCypheraWalletEntry creates a Cyphera wallet entry for a Circle wallet in our database
 // This is used when we receive wallet data from Circle and need to store it in our system
-func (h *CircleHandler) createCypheraWalletEntry(ctx context.Context, qtx *db.Queries, walletData circle.Wallet, accountID uuid.UUID, circleUserID uuid.UUID) error {
+// Uses accountID because CreateWallet query requires it.
+func (h *CircleHandler) createCypheraWalletEntry(ctx context.Context, qtx *db.Queries, walletData circle.Wallet, workspaceID uuid.UUID, circleUserID uuid.UUID) error {
 	// Look up network ID and chain ID
 	networkID, chainID, err := h.lookupNetworkID(ctx, walletData.Blockchain)
 	if err != nil {
@@ -978,7 +1062,7 @@ func (h *CircleHandler) createCypheraWalletEntry(ctx context.Context, qtx *db.Qu
 
 		// First create the wallet
 		newWallet, err := qtx.CreateWallet(ctx, db.CreateWalletParams{
-			AccountID:     accountID,
+			WorkspaceID:   workspaceID,
 			WalletType:    "circle_wallet",
 			WalletAddress: walletData.Address,
 			NetworkType:   getNetworkType(walletData.Blockchain),
@@ -1018,12 +1102,20 @@ func (h *CircleHandler) createCypheraWalletEntry(ctx context.Context, qtx *db.Qu
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /circle/wallets/{wallet_id} [get]
+// @Router /circle/wallets/get/{wallet_id} [get]
 func (h *CircleHandler) GetWallet(c *gin.Context) {
-	// Validate account ID
-	accountID, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	// Validate workspace ID from path parameter
+	workspaceIDStr := c.Param("workspace_id") // Assuming path is now /admin/circle/wallets/{workspace_id}/{wallet_id}
+	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format in path", err)
+		return
+	}
+
+	// Validate that the workspace exists
+	_, err = h.common.db.GetWorkspace(c.Request.Context(), workspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
 		return
 	}
 
@@ -1039,10 +1131,16 @@ func (h *CircleHandler) GetWallet(c *gin.Context) {
 		return
 	}
 
-	// Get the Circle user from our database
-	circleUser, err := h.common.db.GetCircleUserByAccountID(c.Request.Context(), accountID)
+	// Get the Circle user from our database using workspaceID
+	// Assuming GetCircleUserByWorkspaceID exists now
+	circleUser, err := h.common.db.GetCircleUserByWorkspaceID(c.Request.Context(), workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Circle user not found for this account", err)
+		// Use specific error message if not found
+		if errors.Is(err, pgx.ErrNoRows) {
+			sendError(c, http.StatusNotFound, "Circle user not found for this workspace", err)
+		} else {
+			sendError(c, http.StatusInternalServerError, "Failed to check Circle user", err)
+		}
 		return
 	}
 
@@ -1143,7 +1241,7 @@ func (h *CircleHandler) GetWallet(c *gin.Context) {
 
 		// First create the wallet
 		newWallet, err := qtx.CreateWallet(c.Request.Context(), db.CreateWalletParams{
-			AccountID:     accountID,
+			WorkspaceID:   workspaceID, // Use WorkspaceID
 			WalletType:    "circle_wallet",
 			WalletAddress: walletData.Address,
 			NetworkType:   getNetworkType(walletData.Blockchain),
@@ -1245,12 +1343,13 @@ func getCircleNetworkType(blockchain string) (db.CircleNetworkType, error) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /circle/wallets/{wallet_id}/balances [get]
+// @Router /circle/wallets/balances/{wallet_id} [get]
 func (h *CircleHandler) GetWalletBalance(c *gin.Context) {
-	// Validate account ID
-	accountID, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	// Validate workspace ID from path parameter
+	workspaceIDStr := c.Param("workspace_id") // Assuming path is now /admin/circle/wallets/{workspace_id}/{wallet_id}/balances
+	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format in path", err)
 		return
 	}
 
@@ -1283,10 +1382,16 @@ func (h *CircleHandler) GetWalletBalance(c *gin.Context) {
 	// Extract wallet data
 	walletData := walletResponse.Data.Wallet
 
-	// Get the Circle user from our database
-	circleUser, err := h.common.db.GetCircleUserByAccountID(c.Request.Context(), accountID)
+	// Get the Circle user from our database using workspaceID
+	// Assuming GetCircleUserByWorkspaceID exists now
+	circleUser, err := h.common.db.GetCircleUserByWorkspaceID(c.Request.Context(), workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Circle user not found for this account", err)
+		// Use specific error message if not found
+		if errors.Is(err, pgx.ErrNoRows) {
+			sendError(c, http.StatusNotFound, "Circle user not found for this workspace", err)
+		} else {
+			sendError(c, http.StatusInternalServerError, "Failed to check Circle user", err)
+		}
 		return
 	}
 
@@ -1344,7 +1449,7 @@ func (h *CircleHandler) GetWalletBalance(c *gin.Context) {
 
 		// Create the wallet
 		newWallet, err := qtx.CreateWallet(c.Request.Context(), db.CreateWalletParams{
-			AccountID:     accountID,
+			WorkspaceID:   workspaceID,
 			WalletType:    "circle_wallet",
 			WalletAddress: walletData.Address,
 			NetworkType:   getNetworkType(walletData.Blockchain),
@@ -1441,12 +1546,20 @@ func (h *CircleHandler) GetWalletBalance(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /circle/wallets [get]
+// @Router /circle/wallets/{workspace_id} [get]
 func (h *CircleHandler) ListWallets(c *gin.Context) {
-	// Validate account ID
-	accountID, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	// Validate workspace ID from path parameter
+	workspaceIDStr := c.Param("workspace_id")
+	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format in path", err)
+		return
+	}
+
+	// Validate that the workspace exists
+	_, err = h.common.db.GetWorkspace(c.Request.Context(), workspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
 		return
 	}
 
@@ -1456,10 +1569,16 @@ func (h *CircleHandler) ListWallets(c *gin.Context) {
 		return
 	}
 
-	// Get the Circle user from our database
-	circleUser, err := h.common.db.GetCircleUserByAccountID(c.Request.Context(), accountID)
+	// Get the Circle user from our database using workspaceID
+	// Assuming GetCircleUserByWorkspaceID exists now
+	circleUser, err := h.common.db.GetCircleUserByWorkspaceID(c.Request.Context(), workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Circle user not found for this account", err)
+		// Use specific error message if not found
+		if errors.Is(err, pgx.ErrNoRows) {
+			sendError(c, http.StatusNotFound, "Circle user not found for this workspace", err)
+		} else {
+			sendError(c, http.StatusInternalServerError, "Failed to check Circle user", err)
+		}
 		return
 	}
 
@@ -1602,7 +1721,7 @@ func (h *CircleHandler) ListWallets(c *gin.Context) {
 
 			// First create the wallet
 			newWallet, err := qtx.CreateWallet(c.Request.Context(), db.CreateWalletParams{
-				AccountID:     accountID,
+				WorkspaceID:   workspaceID,
 				WalletType:    "circle_wallet",
 				WalletAddress: walletData.Address,
 				NetworkType:   getNetworkType(walletData.Blockchain),

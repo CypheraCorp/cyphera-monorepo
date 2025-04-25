@@ -739,8 +739,8 @@ func (h *ProductHandler) calculateSubscriptionPeriods(product db.Product) (time.
 	}
 
 	if product.ProductType == db.ProductTypeRecurring {
-		periodEnd = CalculatePeriodEnd(now, product.IntervalType, int32(termLength))
-		nextRedemption = CalculateNextRedemption(product.IntervalType, now)
+		periodEnd = CalculatePeriodEnd(now, product.IntervalType.IntervalType, int32(termLength))
+		nextRedemption = CalculateNextRedemption(product.IntervalType.IntervalType, now)
 	} else { // One-off product
 		// For one-off products, end date is same as start
 		periodEnd = now
@@ -890,7 +890,7 @@ func (h *ProductHandler) performInitialRedemption(
 	// Update subscription with redemption info
 	var nextRedemptionDate pgtype.Timestamptz
 	if product.ProductType == db.ProductTypeRecurring {
-		nextDate := CalculateNextRedemption(product.IntervalType, time.Now())
+		nextDate := CalculateNextRedemption(product.IntervalType.IntervalType, time.Now())
 		nextRedemptionDate = pgtype.Timestamptz{
 			Time:  nextDate,
 			Valid: true,
@@ -948,6 +948,11 @@ func toPublicProductResponse(workspace db.Workspace, product db.Product, product
 		}
 	}
 
+	var intervalTypeStr string
+	if product.IntervalType.Valid {
+		intervalTypeStr = string(product.IntervalType.IntervalType)
+	}
+
 	return PublicProductResponse{
 		ProductID:               product.ID.String(),
 		AccountID:               workspace.AccountID.String(),
@@ -956,7 +961,7 @@ func toPublicProductResponse(workspace db.Workspace, product db.Product, product
 		Name:                    product.Name,
 		Description:             product.Description.String,
 		ProductType:             string(product.ProductType),
-		IntervalType:            string(product.IntervalType),
+		IntervalType:            intervalTypeStr,
 		TermLength:              product.TermLength.Int32,
 		PriceInPennies:          product.PriceInPennies,
 		ImageURL:                product.ImageUrl.String,
@@ -1093,12 +1098,17 @@ func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequ
 	}
 
 	// Update interval type if provided and different
-	if req.IntervalType != "" && string(existingProduct.IntervalType) != req.IntervalType {
+	var currentIntervalStr string
+	if existingProduct.IntervalType.Valid {
+		currentIntervalStr = string(existingProduct.IntervalType.IntervalType)
+	}
+
+	if req.IntervalType != "" && currentIntervalStr != req.IntervalType {
 		intervalType, err := validateIntervalType(req.IntervalType)
 		if err != nil {
 			return params, err
 		}
-		params.IntervalType = intervalType
+		params.IntervalType = db.NullIntervalType{IntervalType: intervalType, Valid: true}
 	}
 
 	// Update term length if provided and different
@@ -1396,8 +1406,8 @@ func (h *ProductHandler) validateWallet(ctx *gin.Context, walletID uuid.UUID, wo
 		return fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	if wallet.AccountID != workspace.AccountID {
-		return fmt.Errorf("wallet does not belong to account")
+	if wallet.WorkspaceID != workspace.ID {
+		return fmt.Errorf("wallet does not belong to workspace")
 	}
 
 	return nil
@@ -1471,10 +1481,16 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	}
 
 	// Validate interval type
-	intervalType, err := validateIntervalType(req.IntervalType)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), nil)
-		return
+	var intervalTypeValue db.NullIntervalType
+	if req.IntervalType != "" {
+		validatedInterval, err := validateIntervalType(req.IntervalType)
+		if err != nil {
+			sendError(c, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
+		intervalTypeValue = db.NullIntervalType{IntervalType: validatedInterval, Valid: true}
+	} else {
+		intervalTypeValue = db.NullIntervalType{Valid: false}
 	}
 
 	// Validate wallet ID
@@ -1509,7 +1525,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		Name:            req.Name,
 		Description:     pgtype.Text{String: req.Description, Valid: req.Description != ""},
 		ProductType:     productType,
-		IntervalType:    intervalType,
+		IntervalType:    intervalTypeValue,
 		TermLength:      pgtype.Int4{Int32: req.TermLength, Valid: req.TermLength != 0},
 		PriceInPennies:  req.PriceInPennies,
 		ImageUrl:        pgtype.Text{String: req.ImageURL, Valid: req.ImageURL != ""},
@@ -1719,6 +1735,11 @@ func toProductResponse(p db.Product) ProductResponse {
 		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
 	}
 
+	var intervalTypeStr string
+	if p.IntervalType.Valid {
+		intervalTypeStr = string(p.IntervalType.IntervalType)
+	}
+
 	return ProductResponse{
 		ID:              p.ID.String(),
 		Object:          "product",
@@ -1727,7 +1748,7 @@ func toProductResponse(p db.Product) ProductResponse {
 		Name:            p.Name,
 		Description:     p.Description.String,
 		ProductType:     string(p.ProductType),
-		IntervalType:    string(p.IntervalType),
+		IntervalType:    intervalTypeStr,
 		TermLength:      p.TermLength.Int32,
 		PriceInPennies:  p.PriceInPennies,
 		ImageURL:        p.ImageUrl.String,

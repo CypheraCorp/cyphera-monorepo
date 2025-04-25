@@ -15,19 +15,19 @@ import (
 const createCircleUser = `-- name: CreateCircleUser :one
 INSERT INTO circle_users (
     id,
-    account_id,
+    workspace_id,
     circle_create_date,
     pin_status,
     status,
     security_question_status
 ) VALUES (
     $1, $2, $3, $4, $5, $6
-) RETURNING id, account_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at
+) RETURNING id, workspace_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at
 `
 
 type CreateCircleUserParams struct {
 	ID                     uuid.UUID          `json:"id"`
-	AccountID              uuid.UUID          `json:"account_id"`
+	WorkspaceID            uuid.UUID          `json:"workspace_id"`
 	CircleCreateDate       pgtype.Timestamptz `json:"circle_create_date"`
 	PinStatus              string             `json:"pin_status"`
 	Status                 string             `json:"status"`
@@ -37,7 +37,7 @@ type CreateCircleUserParams struct {
 func (q *Queries) CreateCircleUser(ctx context.Context, arg CreateCircleUserParams) (CircleUser, error) {
 	row := q.db.QueryRow(ctx, createCircleUser,
 		arg.ID,
-		arg.AccountID,
+		arg.WorkspaceID,
 		arg.CircleCreateDate,
 		arg.PinStatus,
 		arg.Status,
@@ -46,7 +46,7 @@ func (q *Queries) CreateCircleUser(ctx context.Context, arg CreateCircleUserPara
 	var i CircleUser
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.CircleCreateDate,
 		&i.PinStatus,
 		&i.Status,
@@ -67,27 +67,27 @@ func (q *Queries) DeleteCircleUser(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const deleteCircleUserByAccountID = `-- name: DeleteCircleUserByAccountID :exec
+const deleteCircleUserByWorkspaceID = `-- name: DeleteCircleUserByWorkspaceID :exec
 DELETE FROM circle_users
-WHERE account_id = $1
+WHERE workspace_id = $1
 `
 
-func (q *Queries) DeleteCircleUserByAccountID(ctx context.Context, accountID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteCircleUserByAccountID, accountID)
+func (q *Queries) DeleteCircleUserByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteCircleUserByWorkspaceID, workspaceID)
 	return err
 }
 
-const getCircleUserByAccountID = `-- name: GetCircleUserByAccountID :one
-SELECT id, account_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at FROM circle_users
-WHERE account_id = $1
+const getCircleUserByID = `-- name: GetCircleUserByID :one
+SELECT id, workspace_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at FROM circle_users
+WHERE id = $1
 `
 
-func (q *Queries) GetCircleUserByAccountID(ctx context.Context, accountID uuid.UUID) (CircleUser, error) {
-	row := q.db.QueryRow(ctx, getCircleUserByAccountID, accountID)
+func (q *Queries) GetCircleUserByID(ctx context.Context, id uuid.UUID) (CircleUser, error) {
+	row := q.db.QueryRow(ctx, getCircleUserByID, id)
 	var i CircleUser
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.CircleCreateDate,
 		&i.PinStatus,
 		&i.Status,
@@ -98,17 +98,17 @@ func (q *Queries) GetCircleUserByAccountID(ctx context.Context, accountID uuid.U
 	return i, err
 }
 
-const getCircleUserByID = `-- name: GetCircleUserByID :one
-SELECT id, account_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at FROM circle_users
-WHERE id = $1
+const getCircleUserByWorkspaceID = `-- name: GetCircleUserByWorkspaceID :one
+SELECT id, workspace_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at FROM circle_users
+WHERE workspace_id = $1
 `
 
-func (q *Queries) GetCircleUserByID(ctx context.Context, id uuid.UUID) (CircleUser, error) {
-	row := q.db.QueryRow(ctx, getCircleUserByID, id)
+func (q *Queries) GetCircleUserByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) (CircleUser, error) {
+	row := q.db.QueryRow(ctx, getCircleUserByWorkspaceID, workspaceID)
 	var i CircleUser
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.CircleCreateDate,
 		&i.PinStatus,
 		&i.Status,
@@ -121,7 +121,7 @@ func (q *Queries) GetCircleUserByID(ctx context.Context, id uuid.UUID) (CircleUs
 
 const getCircleUserWithWallets = `-- name: GetCircleUserWithWallets :one
 SELECT 
-    cu.id, cu.account_id, cu.circle_create_date, cu.pin_status, cu.status, cu.security_question_status, cu.created_at, cu.updated_at,
+    cu.id, cu.workspace_id, cu.circle_create_date, cu.pin_status, cu.status, cu.security_question_status, cu.created_at, cu.updated_at,
     COUNT(cw.id) as wallet_count
 FROM 
     circle_users cu
@@ -135,7 +135,7 @@ GROUP BY
 
 type GetCircleUserWithWalletsRow struct {
 	ID                     uuid.UUID          `json:"id"`
-	AccountID              uuid.UUID          `json:"account_id"`
+	WorkspaceID            uuid.UUID          `json:"workspace_id"`
 	CircleCreateDate       pgtype.Timestamptz `json:"circle_create_date"`
 	PinStatus              string             `json:"pin_status"`
 	Status                 string             `json:"status"`
@@ -150,7 +150,7 @@ func (q *Queries) GetCircleUserWithWallets(ctx context.Context, id uuid.UUID) (G
 	var i GetCircleUserWithWalletsRow
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.CircleCreateDate,
 		&i.PinStatus,
 		&i.Status,
@@ -162,23 +162,23 @@ func (q *Queries) GetCircleUserWithWallets(ctx context.Context, id uuid.UUID) (G
 	return i, err
 }
 
-const getCircleUserWithWalletsByAccountID = `-- name: GetCircleUserWithWalletsByAccountID :one
+const getCircleUserWithWalletsByWorkspaceID = `-- name: GetCircleUserWithWalletsByWorkspaceID :one
 SELECT 
-    cu.id, cu.account_id, cu.circle_create_date, cu.pin_status, cu.status, cu.security_question_status, cu.created_at, cu.updated_at,
+    cu.id, cu.workspace_id, cu.circle_create_date, cu.pin_status, cu.status, cu.security_question_status, cu.created_at, cu.updated_at,
     COUNT(cw.id) as wallet_count
 FROM 
     circle_users cu
 LEFT JOIN 
     circle_wallets cw ON cu.id = cw.circle_user_id
 WHERE 
-    cu.account_id = $1
+    cu.workspace_id = $1
 GROUP BY 
     cu.id
 `
 
-type GetCircleUserWithWalletsByAccountIDRow struct {
+type GetCircleUserWithWalletsByWorkspaceIDRow struct {
 	ID                     uuid.UUID          `json:"id"`
-	AccountID              uuid.UUID          `json:"account_id"`
+	WorkspaceID            uuid.UUID          `json:"workspace_id"`
 	CircleCreateDate       pgtype.Timestamptz `json:"circle_create_date"`
 	PinStatus              string             `json:"pin_status"`
 	Status                 string             `json:"status"`
@@ -188,12 +188,12 @@ type GetCircleUserWithWalletsByAccountIDRow struct {
 	WalletCount            int64              `json:"wallet_count"`
 }
 
-func (q *Queries) GetCircleUserWithWalletsByAccountID(ctx context.Context, accountID uuid.UUID) (GetCircleUserWithWalletsByAccountIDRow, error) {
-	row := q.db.QueryRow(ctx, getCircleUserWithWalletsByAccountID, accountID)
-	var i GetCircleUserWithWalletsByAccountIDRow
+func (q *Queries) GetCircleUserWithWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) (GetCircleUserWithWalletsByWorkspaceIDRow, error) {
+	row := q.db.QueryRow(ctx, getCircleUserWithWalletsByWorkspaceID, workspaceID)
+	var i GetCircleUserWithWalletsByWorkspaceIDRow
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.CircleCreateDate,
 		&i.PinStatus,
 		&i.Status,
@@ -206,7 +206,7 @@ func (q *Queries) GetCircleUserWithWalletsByAccountID(ctx context.Context, accou
 }
 
 const listCircleUsers = `-- name: ListCircleUsers :many
-SELECT id, account_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at FROM circle_users
+SELECT id, workspace_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at FROM circle_users
 ORDER BY created_at DESC
 `
 
@@ -221,7 +221,7 @@ func (q *Queries) ListCircleUsers(ctx context.Context) ([]CircleUser, error) {
 		var i CircleUser
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
 			&i.CircleCreateDate,
 			&i.PinStatus,
 			&i.Status,
@@ -247,7 +247,7 @@ SET
     security_question_status = COALESCE($3, security_question_status),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $4
-RETURNING id, account_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at
+RETURNING id, workspace_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at
 `
 
 type UpdateCircleUserParams struct {
@@ -267,7 +267,7 @@ func (q *Queries) UpdateCircleUser(ctx context.Context, arg UpdateCircleUserPara
 	var i CircleUser
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.CircleCreateDate,
 		&i.PinStatus,
 		&i.Status,
@@ -278,35 +278,35 @@ func (q *Queries) UpdateCircleUser(ctx context.Context, arg UpdateCircleUserPara
 	return i, err
 }
 
-const updateCircleUserByAccountID = `-- name: UpdateCircleUserByAccountID :one
+const updateCircleUserByWorkspaceID = `-- name: UpdateCircleUserByWorkspaceID :one
 UPDATE circle_users
 SET 
     pin_status = COALESCE($1, pin_status),
     status = COALESCE($2, status),
     security_question_status = COALESCE($3, security_question_status),
     updated_at = CURRENT_TIMESTAMP
-WHERE account_id = $4
-RETURNING id, account_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at
+WHERE workspace_id = $4
+RETURNING id, workspace_id, circle_create_date, pin_status, status, security_question_status, created_at, updated_at
 `
 
-type UpdateCircleUserByAccountIDParams struct {
+type UpdateCircleUserByWorkspaceIDParams struct {
 	PinStatus              string    `json:"pin_status"`
 	Status                 string    `json:"status"`
 	SecurityQuestionStatus string    `json:"security_question_status"`
-	AccountID              uuid.UUID `json:"account_id"`
+	WorkspaceID            uuid.UUID `json:"workspace_id"`
 }
 
-func (q *Queries) UpdateCircleUserByAccountID(ctx context.Context, arg UpdateCircleUserByAccountIDParams) (CircleUser, error) {
-	row := q.db.QueryRow(ctx, updateCircleUserByAccountID,
+func (q *Queries) UpdateCircleUserByWorkspaceID(ctx context.Context, arg UpdateCircleUserByWorkspaceIDParams) (CircleUser, error) {
+	row := q.db.QueryRow(ctx, updateCircleUserByWorkspaceID,
 		arg.PinStatus,
 		arg.Status,
 		arg.SecurityQuestionStatus,
-		arg.AccountID,
+		arg.WorkspaceID,
 	)
 	var i CircleUser
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.CircleCreateDate,
 		&i.PinStatus,
 		&i.Status,

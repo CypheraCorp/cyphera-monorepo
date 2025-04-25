@@ -314,7 +314,7 @@ type GetSubscriptionWithDetailsRow struct {
 	DeletedAt               pgtype.Timestamptz `json:"deleted_at"`
 	ProductName             string             `json:"product_name"`
 	ProductType             ProductType        `json:"product_type"`
-	IntervalType            IntervalType       `json:"interval_type"`
+	IntervalType            NullIntervalType   `json:"interval_type"`
 	CustomerName            pgtype.Text        `json:"customer_name"`
 	CustomerEmail           pgtype.Text        `json:"customer_email"`
 	SubscriberWalletAddress pgtype.Text        `json:"subscriber_wallet_address"`
@@ -552,7 +552,7 @@ type ListSubscriptionDetailsWithPaginationRow struct {
 	ProductID             uuid.UUID          `json:"product_id"`
 	ProductName           string             `json:"product_name"`
 	ProductType           ProductType        `json:"product_type"`
-	IntervalType          IntervalType       `json:"interval_type"`
+	IntervalType          NullIntervalType   `json:"interval_type"`
 	PriceInPennies        int32              `json:"price_in_pennies"`
 	TokenSymbol           string             `json:"token_symbol"`
 	TokenAddress          string             `json:"token_address"`

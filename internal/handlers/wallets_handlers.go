@@ -26,7 +26,7 @@ func NewWalletHandler(common *CommonServices) *WalletHandler {
 type WalletResponse struct {
 	ID            string                 `json:"id"`
 	Object        string                 `json:"object"`
-	AccountID     string                 `json:"account_id"`
+	WorkspaceID   string                 `json:"workspace_id"`
 	WalletType    string                 `json:"wallet_type"` // 'wallet' or 'circle_wallet'
 	WalletAddress string                 `json:"wallet_address"`
 	NetworkType   string                 `json:"network_type"`
@@ -107,7 +107,7 @@ func toWalletResponse(w db.Wallet) WalletResponse {
 	return WalletResponse{
 		ID:            w.ID.String(),
 		Object:        "wallet",
-		AccountID:     w.AccountID.String(),
+		WorkspaceID:   w.WorkspaceID.String(),
 		WalletType:    w.WalletType,
 		WalletAddress: w.WalletAddress,
 		NetworkType:   string(w.NetworkType),
@@ -127,7 +127,7 @@ func toWalletResponse(w db.Wallet) WalletResponse {
 func toWalletWithCircleDataByIDResponse(w db.GetWalletWithCircleDataByIDRow) WalletResponse {
 	response := toWalletResponse(db.Wallet{
 		ID:            w.ID,
-		AccountID:     w.AccountID,
+		WorkspaceID:   w.WorkspaceID,
 		WalletType:    w.WalletType,
 		WalletAddress: w.WalletAddress,
 		NetworkType:   w.NetworkType,
@@ -155,11 +155,11 @@ func toWalletWithCircleDataByIDResponse(w db.GetWalletWithCircleDataByIDRow) Wal
 	return response
 }
 
-// Helper function for ListWalletsWithCircleDataByAccountID results
-func toListWalletsWithCircleDataResponse(w db.ListWalletsWithCircleDataByAccountIDRow) WalletResponse {
+// Helper function for ListWalletsWithCircleDataByWorkspaceID results
+func toListWalletsWithCircleDataResponse(w db.ListWalletsWithCircleDataByWorkspaceIDRow) WalletResponse {
 	response := toWalletResponse(db.Wallet{
 		ID:            w.ID,
-		AccountID:     w.AccountID,
+		WorkspaceID:   w.WorkspaceID,
 		WalletType:    w.WalletType,
 		WalletAddress: w.WalletAddress,
 		NetworkType:   w.NetworkType,
@@ -187,11 +187,11 @@ func toListWalletsWithCircleDataResponse(w db.ListWalletsWithCircleDataByAccount
 	return response
 }
 
-// Helper function for ListCircleWalletsByAccountID results
-func toListCircleWalletsResponse(w db.ListCircleWalletsByAccountIDRow) WalletResponse {
+// Helper function for ListCircleWalletsByWorkspaceID results
+func toListCircleWalletsResponse(w db.ListCircleWalletsByWorkspaceIDRow) WalletResponse {
 	response := toWalletResponse(db.Wallet{
 		ID:            w.ID,
-		AccountID:     w.AccountID,
+		WorkspaceID:   w.WorkspaceID,
 		WalletType:    w.WalletType,
 		WalletAddress: w.WalletAddress,
 		NetworkType:   w.NetworkType,
@@ -219,7 +219,7 @@ func toListCircleWalletsResponse(w db.ListCircleWalletsByAccountIDRow) WalletRes
 
 // CreateWallet godoc
 // @Summary Create a new wallet
-// @Description Creates a new wallet for the authenticated account
+// @Description Creates a new wallet for the authenticated workspace
 // @Tags wallets
 // @Accept json
 // @Produce json
@@ -236,10 +236,11 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 		return
 	}
 
-	// Get account ID from context
-	accountID, err := uuid.Parse(c.GetHeader("X-Account-ID"))
+	// Get workspace ID from header (Assuming X-Workspace-ID is used now)
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
+		sendError(c, http.StatusBadRequest, "Invalid or missing X-Workspace-ID header", err)
 		return
 	}
 
@@ -270,7 +271,7 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 
 	// Create wallet
 	wallet, err := h.common.db.CreateWallet(c.Request.Context(), db.CreateWalletParams{
-		AccountID:     accountID,
+		WorkspaceID:   workspaceID,
 		WalletType:    req.WalletType,
 		WalletAddress: req.WalletAddress,
 		NetworkType:   db.NetworkType(req.NetworkType),
@@ -313,6 +314,14 @@ func (h *WalletHandler) GetWallet(c *gin.Context) {
 	// Check if Circle data should be included
 	includeCircleData := c.Query("include_circle_data") == "true"
 
+	// Get workspace ID from context (assuming it's set by middleware)
+	workspaceIDStr := c.GetString("workspace_id")
+	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
+	if err != nil {
+		sendError(c, http.StatusUnauthorized, "Invalid workspace context", err)
+		return
+	}
+
 	if includeCircleData {
 		wallet, err := h.common.db.GetWalletWithCircleDataByID(c.Request.Context(), parsedUUID)
 		if err != nil {
@@ -320,10 +329,9 @@ func (h *WalletHandler) GetWallet(c *gin.Context) {
 			return
 		}
 
-		// Verify account access
-		accountID := c.GetString("account_id")
-		if wallet.AccountID.String() != accountID {
-			sendError(c, http.StatusForbidden, "Access denied", nil)
+		// Verify workspace access
+		if wallet.WorkspaceID != parsedWorkspaceID {
+			sendError(c, http.StatusForbidden, "Access denied to this wallet", nil)
 			return
 		}
 
@@ -337,10 +345,9 @@ func (h *WalletHandler) GetWallet(c *gin.Context) {
 		return
 	}
 
-	// Verify account access
-	accountID := c.GetString("account_id")
-	if wallet.AccountID.String() != accountID {
-		sendError(c, http.StatusForbidden, "Access denied", nil)
+	// Verify workspace access
+	if wallet.WorkspaceID != parsedWorkspaceID {
+		sendError(c, http.StatusForbidden, "Access denied to this wallet", nil)
 		return
 	}
 
@@ -369,6 +376,14 @@ func (h *WalletHandler) GetWalletByAddress(c *gin.Context) {
 		return
 	}
 
+	// Get workspace ID from context (assuming it's set by middleware)
+	workspaceIDStr := c.GetString("workspace_id")
+	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
+	if err != nil {
+		sendError(c, http.StatusUnauthorized, "Invalid workspace context", err)
+		return
+	}
+
 	wallet, err := h.common.db.GetWalletByAddress(c.Request.Context(), db.GetWalletByAddressParams{
 		WalletAddress: walletAddress,
 		NetworkType:   db.NetworkType(networkType),
@@ -378,10 +393,9 @@ func (h *WalletHandler) GetWalletByAddress(c *gin.Context) {
 		return
 	}
 
-	// Verify account access
-	accountID := c.GetString("account_id")
-	if wallet.AccountID.String() != accountID {
-		sendError(c, http.StatusForbidden, "Access denied", nil)
+	// Verify workspace access
+	if wallet.WorkspaceID != parsedWorkspaceID {
+		sendError(c, http.StatusForbidden, "Access denied to this wallet", nil)
 		return
 	}
 
@@ -390,7 +404,7 @@ func (h *WalletHandler) GetWalletByAddress(c *gin.Context) {
 
 // ListWallets godoc
 // @Summary List all wallets
-// @Description List all wallets for the authenticated account
+// @Description List all wallets for the authenticated workspace
 // @Tags wallets
 // @Accept json
 // @Produce json
@@ -402,10 +416,11 @@ func (h *WalletHandler) GetWalletByAddress(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /wallets [get]
 func (h *WalletHandler) ListWallets(c *gin.Context) {
-	accountID := c.GetHeader("X-Account-ID")
-	parsedAccountID, err := uuid.Parse(accountID)
+	// Get workspace ID from header (Assuming X-Workspace-ID is used now)
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID format", err)
+		sendError(c, http.StatusBadRequest, "Invalid or missing X-Workspace-ID header", err)
 		return
 	}
 
@@ -417,8 +432,8 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 	var response []WalletResponse
 
 	if walletType == "circle_wallet" {
-		// Get only Circle wallets
-		circleWallets, err := h.common.db.ListCircleWalletsByAccountID(c.Request.Context(), parsedAccountID)
+		// Get only Circle wallets (using workspace ID)
+		circleWallets, err := h.common.db.ListCircleWalletsByWorkspaceID(c.Request.Context(), parsedWorkspaceID)
 		if err != nil {
 			handleDBError(c, err, "Failed to retrieve Circle wallets")
 			return
@@ -429,10 +444,10 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 			response[i] = toListCircleWalletsResponse(wallet)
 		}
 	} else if walletType == "wallet" {
-		// Get only standard wallets
+		// Get only standard wallets (using workspace ID)
 		wallets, err := h.common.db.ListWalletsByWalletType(c.Request.Context(), db.ListWalletsByWalletTypeParams{
-			AccountID:  parsedAccountID,
-			WalletType: "wallet",
+			WorkspaceID: parsedWorkspaceID,
+			WalletType:  "wallet",
 		})
 		if err != nil {
 			handleDBError(c, err, "Failed to retrieve standard wallets")
@@ -444,8 +459,8 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 			response[i] = toWalletResponse(wallet)
 		}
 	} else if includeCircleData {
-		// Get all wallets with Circle data
-		walletsWithCircleData, err := h.common.db.ListWalletsWithCircleDataByAccountID(c.Request.Context(), parsedAccountID)
+		// Get all wallets with Circle data (using workspace ID)
+		walletsWithCircleData, err := h.common.db.ListWalletsWithCircleDataByWorkspaceID(c.Request.Context(), parsedWorkspaceID)
 		if err != nil {
 			handleDBError(c, err, "Failed to retrieve wallets with Circle data")
 			return
@@ -456,8 +471,8 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 			response[i] = toListWalletsWithCircleDataResponse(wallet)
 		}
 	} else {
-		// Get all wallets without Circle data
-		wallets, err := h.common.db.ListWalletsByAccountID(c.Request.Context(), parsedAccountID)
+		// Get all wallets without Circle data (using workspace ID)
+		wallets, err := h.common.db.ListWalletsByWorkspaceID(c.Request.Context(), parsedWorkspaceID)
 		if err != nil {
 			handleDBError(c, err, "Failed to retrieve wallets")
 			return
@@ -504,6 +519,14 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 		return
 	}
 
+	// Get workspace ID from context (assuming it's set by middleware)
+	workspaceIDStr := c.GetString("workspace_id")
+	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
+	if err != nil {
+		sendError(c, http.StatusUnauthorized, "Invalid workspace context", err)
+		return
+	}
+
 	// Get current wallet to verify ownership
 	currentWallet, err := h.common.db.GetWalletByID(c.Request.Context(), parsedUUID)
 	if err != nil {
@@ -511,10 +534,9 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 		return
 	}
 
-	// Verify account access
-	accountID := c.GetString("account_id")
-	if currentWallet.AccountID.String() != accountID {
-		sendError(c, http.StatusForbidden, "Access denied", nil)
+	// Verify workspace access
+	if currentWallet.WorkspaceID != parsedWorkspaceID {
+		sendError(c, http.StatusForbidden, "Access denied to this wallet", nil)
 		return
 	}
 
@@ -565,6 +587,14 @@ func (h *WalletHandler) SetWalletAsPrimary(c *gin.Context) {
 		return
 	}
 
+	// Get workspace ID from context (assuming it's set by middleware)
+	workspaceIDStr := c.GetString("workspace_id")
+	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
+	if err != nil {
+		sendError(c, http.StatusUnauthorized, "Invalid workspace context", err)
+		return
+	}
+
 	// Get current wallet to verify ownership and get network type
 	currentWallet, err := h.common.db.GetWalletByID(c.Request.Context(), parsedUUID)
 	if err != nil {
@@ -572,20 +602,15 @@ func (h *WalletHandler) SetWalletAsPrimary(c *gin.Context) {
 		return
 	}
 
-	// Verify account access
-	accountID, err := uuid.Parse(c.GetString("account_id"))
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
-		return
-	}
-	if currentWallet.AccountID != accountID {
-		sendError(c, http.StatusForbidden, "Access denied", nil)
+	// Verify workspace access
+	if currentWallet.WorkspaceID != parsedWorkspaceID {
+		sendError(c, http.StatusForbidden, "Access denied to this wallet", nil)
 		return
 	}
 
 	// Set as primary
 	_, err = h.common.db.SetWalletAsPrimary(c.Request.Context(), db.SetWalletAsPrimaryParams{
-		AccountID:   accountID,
+		WorkspaceID: currentWallet.WorkspaceID,
 		NetworkType: currentWallet.NetworkType,
 		ID:          parsedUUID,
 	})
@@ -624,6 +649,14 @@ func (h *WalletHandler) DeleteWallet(c *gin.Context) {
 		return
 	}
 
+	// Get workspace ID from header (Assuming X-Workspace-ID is used now)
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid or missing X-Workspace-ID header", err)
+		return
+	}
+
 	// Cannot delete a wallet if there is a published product using it
 	products, err := h.common.db.GetActiveProductsByWalletID(c.Request.Context(), parsedUUID)
 	if err != nil {
@@ -643,14 +676,9 @@ func (h *WalletHandler) DeleteWallet(c *gin.Context) {
 		return
 	}
 
-	// Verify account access
-	accountID, err := uuid.Parse(c.GetHeader("X-Account-ID"))
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID", err)
-		return
-	}
-	if currentWallet.AccountID.String() != accountID.String() {
-		sendError(c, http.StatusForbidden, "Access denied", nil)
+	// Verify workspace access
+	if currentWallet.WorkspaceID != parsedWorkspaceID {
+		sendError(c, http.StatusForbidden, "Access denied to this wallet", nil)
 		return
 	}
 

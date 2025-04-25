@@ -57,7 +57,7 @@ func (q *Queries) CreateCircleWalletEntry(ctx context.Context, arg CreateCircleW
 
 const createWallet = `-- name: CreateWallet :one
 INSERT INTO wallets (
-    account_id,
+    workspace_id,
     wallet_type,
     wallet_address,
     network_type,
@@ -69,11 +69,11 @@ INSERT INTO wallets (
     metadata
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
-) RETURNING id, account_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at
+) RETURNING id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at
 `
 
 type CreateWalletParams struct {
-	AccountID     uuid.UUID   `json:"account_id"`
+	WorkspaceID   uuid.UUID   `json:"workspace_id"`
 	WalletType    string      `json:"wallet_type"`
 	WalletAddress string      `json:"wallet_address"`
 	NetworkType   NetworkType `json:"network_type"`
@@ -87,7 +87,7 @@ type CreateWalletParams struct {
 
 func (q *Queries) CreateWallet(ctx context.Context, arg CreateWalletParams) (Wallet, error) {
 	row := q.db.QueryRow(ctx, createWallet,
-		arg.AccountID,
+		arg.WorkspaceID,
 		arg.WalletType,
 		arg.WalletAddress,
 		arg.NetworkType,
@@ -101,7 +101,7 @@ func (q *Queries) CreateWallet(ctx context.Context, arg CreateWalletParams) (Wal
 	var i Wallet
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.WalletType,
 		&i.WalletAddress,
 		&i.NetworkType,
@@ -121,7 +121,7 @@ func (q *Queries) CreateWallet(ctx context.Context, arg CreateWalletParams) (Wal
 
 const getCircleWalletByCircleWalletID = `-- name: GetCircleWalletByCircleWalletID :one
 SELECT 
-    w.id, w.account_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -134,7 +134,7 @@ WHERE cw.circle_wallet_id = $1 AND w.deleted_at IS NULL
 
 type GetCircleWalletByCircleWalletIDRow struct {
 	ID             uuid.UUID          `json:"id"`
-	AccountID      uuid.UUID          `json:"account_id"`
+	WorkspaceID    uuid.UUID          `json:"workspace_id"`
 	WalletType     string             `json:"wallet_type"`
 	WalletAddress  string             `json:"wallet_address"`
 	NetworkType    NetworkType        `json:"network_type"`
@@ -160,7 +160,7 @@ func (q *Queries) GetCircleWalletByCircleWalletID(ctx context.Context, circleWal
 	var i GetCircleWalletByCircleWalletIDRow
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.WalletType,
 		&i.WalletAddress,
 		&i.NetworkType,
@@ -184,8 +184,8 @@ func (q *Queries) GetCircleWalletByCircleWalletID(ctx context.Context, circleWal
 }
 
 const getRecentlyUsedWallets = `-- name: GetRecentlyUsedWallets :many
-SELECT id, account_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
-WHERE account_id = $1 
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+WHERE workspace_id = $1
 AND last_used_at IS NOT NULL 
 AND deleted_at IS NULL
 ORDER BY last_used_at DESC
@@ -193,12 +193,12 @@ LIMIT $2
 `
 
 type GetRecentlyUsedWalletsParams struct {
-	AccountID uuid.UUID `json:"account_id"`
-	Limit     int32     `json:"limit"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+	Limit       int32     `json:"limit"`
 }
 
 func (q *Queries) GetRecentlyUsedWallets(ctx context.Context, arg GetRecentlyUsedWalletsParams) ([]Wallet, error) {
-	rows, err := q.db.Query(ctx, getRecentlyUsedWallets, arg.AccountID, arg.Limit)
+	rows, err := q.db.Query(ctx, getRecentlyUsedWallets, arg.WorkspaceID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +208,7 @@ func (q *Queries) GetRecentlyUsedWallets(ctx context.Context, arg GetRecentlyUse
 		var i Wallet
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
 			&i.WalletType,
 			&i.WalletAddress,
 			&i.NetworkType,
@@ -235,7 +235,7 @@ func (q *Queries) GetRecentlyUsedWallets(ctx context.Context, arg GetRecentlyUse
 
 const getRecentlyUsedWalletsWithCircleData = `-- name: GetRecentlyUsedWalletsWithCircleData :many
 SELECT 
-    w.id, w.account_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -243,7 +243,7 @@ SELECT
     cw.state as circle_state
 FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
-WHERE w.account_id = $1 
+WHERE w.workspace_id = $1
 AND w.last_used_at IS NOT NULL 
 AND w.deleted_at IS NULL
 ORDER BY w.last_used_at DESC
@@ -251,13 +251,13 @@ LIMIT $2
 `
 
 type GetRecentlyUsedWalletsWithCircleDataParams struct {
-	AccountID uuid.UUID `json:"account_id"`
-	Limit     int32     `json:"limit"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+	Limit       int32     `json:"limit"`
 }
 
 type GetRecentlyUsedWalletsWithCircleDataRow struct {
 	ID             uuid.UUID          `json:"id"`
-	AccountID      uuid.UUID          `json:"account_id"`
+	WorkspaceID    uuid.UUID          `json:"workspace_id"`
 	WalletType     string             `json:"wallet_type"`
 	WalletAddress  string             `json:"wallet_address"`
 	NetworkType    NetworkType        `json:"network_type"`
@@ -279,7 +279,7 @@ type GetRecentlyUsedWalletsWithCircleDataRow struct {
 }
 
 func (q *Queries) GetRecentlyUsedWalletsWithCircleData(ctx context.Context, arg GetRecentlyUsedWalletsWithCircleDataParams) ([]GetRecentlyUsedWalletsWithCircleDataRow, error) {
-	rows, err := q.db.Query(ctx, getRecentlyUsedWalletsWithCircleData, arg.AccountID, arg.Limit)
+	rows, err := q.db.Query(ctx, getRecentlyUsedWalletsWithCircleData, arg.WorkspaceID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +289,7 @@ func (q *Queries) GetRecentlyUsedWalletsWithCircleData(ctx context.Context, arg 
 		var i GetRecentlyUsedWalletsWithCircleDataRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
 			&i.WalletType,
 			&i.WalletAddress,
 			&i.NetworkType,
@@ -320,7 +320,7 @@ func (q *Queries) GetRecentlyUsedWalletsWithCircleData(ctx context.Context, arg 
 }
 
 const getWalletByAddress = `-- name: GetWalletByAddress :one
-SELECT id, account_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
 WHERE wallet_address = $1 AND network_type = $2 AND deleted_at IS NULL
 `
 
@@ -334,7 +334,7 @@ func (q *Queries) GetWalletByAddress(ctx context.Context, arg GetWalletByAddress
 	var i Wallet
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.WalletType,
 		&i.WalletAddress,
 		&i.NetworkType,
@@ -353,7 +353,7 @@ func (q *Queries) GetWalletByAddress(ctx context.Context, arg GetWalletByAddress
 }
 
 const getWalletByID = `-- name: GetWalletByID :one
-SELECT id, account_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -362,7 +362,7 @@ func (q *Queries) GetWalletByID(ctx context.Context, id uuid.UUID) (Wallet, erro
 	var i Wallet
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.WalletType,
 		&i.WalletAddress,
 		&i.NetworkType,
@@ -389,7 +389,7 @@ SELECT
     COUNT(*) FILTER (WHERE wallet_type = 'wallet') as standard_wallets_count,
     COUNT(*) FILTER (WHERE wallet_type = 'circle_wallet') as circle_wallets_count
 FROM wallets
-WHERE account_id = $1 AND deleted_at IS NULL
+WHERE workspace_id = $1 AND deleted_at IS NULL
 `
 
 type GetWalletStatsRow struct {
@@ -401,8 +401,8 @@ type GetWalletStatsRow struct {
 	CircleWalletsCount   int64 `json:"circle_wallets_count"`
 }
 
-func (q *Queries) GetWalletStats(ctx context.Context, accountID uuid.UUID) (GetWalletStatsRow, error) {
-	row := q.db.QueryRow(ctx, getWalletStats, accountID)
+func (q *Queries) GetWalletStats(ctx context.Context, workspaceID uuid.UUID) (GetWalletStatsRow, error) {
+	row := q.db.QueryRow(ctx, getWalletStats, workspaceID)
 	var i GetWalletStatsRow
 	err := row.Scan(
 		&i.TotalWallets,
@@ -417,7 +417,7 @@ func (q *Queries) GetWalletStats(ctx context.Context, accountID uuid.UUID) (GetW
 
 const getWalletWithCircleDataByAddress = `-- name: GetWalletWithCircleDataByAddress :one
 SELECT 
-    w.id, w.account_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -435,7 +435,7 @@ type GetWalletWithCircleDataByAddressParams struct {
 
 type GetWalletWithCircleDataByAddressRow struct {
 	ID             uuid.UUID          `json:"id"`
-	AccountID      uuid.UUID          `json:"account_id"`
+	WorkspaceID    uuid.UUID          `json:"workspace_id"`
 	WalletType     string             `json:"wallet_type"`
 	WalletAddress  string             `json:"wallet_address"`
 	NetworkType    NetworkType        `json:"network_type"`
@@ -461,7 +461,7 @@ func (q *Queries) GetWalletWithCircleDataByAddress(ctx context.Context, arg GetW
 	var i GetWalletWithCircleDataByAddressRow
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.WalletType,
 		&i.WalletAddress,
 		&i.NetworkType,
@@ -486,7 +486,7 @@ func (q *Queries) GetWalletWithCircleDataByAddress(ctx context.Context, arg GetW
 
 const getWalletWithCircleDataByID = `-- name: GetWalletWithCircleDataByID :one
 SELECT 
-    w.id, w.account_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -499,7 +499,7 @@ WHERE w.id = $1 AND w.deleted_at IS NULL
 
 type GetWalletWithCircleDataByIDRow struct {
 	ID             uuid.UUID          `json:"id"`
-	AccountID      uuid.UUID          `json:"account_id"`
+	WorkspaceID    uuid.UUID          `json:"workspace_id"`
 	WalletType     string             `json:"wallet_type"`
 	WalletAddress  string             `json:"wallet_address"`
 	NetworkType    NetworkType        `json:"network_type"`
@@ -525,7 +525,7 @@ func (q *Queries) GetWalletWithCircleDataByID(ctx context.Context, id uuid.UUID)
 	var i GetWalletWithCircleDataByIDRow
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.WalletType,
 		&i.WalletAddress,
 		&i.NetworkType,
@@ -549,15 +549,15 @@ func (q *Queries) GetWalletWithCircleDataByID(ctx context.Context, id uuid.UUID)
 }
 
 const getWalletsByENS = `-- name: GetWalletsByENS :many
-SELECT id, account_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
-WHERE account_id = $1 
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+WHERE workspace_id = $1
 AND ens IS NOT NULL 
 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
 
-func (q *Queries) GetWalletsByENS(ctx context.Context, accountID uuid.UUID) ([]Wallet, error) {
-	rows, err := q.db.Query(ctx, getWalletsByENS, accountID)
+func (q *Queries) GetWalletsByENS(ctx context.Context, workspaceID uuid.UUID) ([]Wallet, error) {
+	rows, err := q.db.Query(ctx, getWalletsByENS, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -567,7 +567,7 @@ func (q *Queries) GetWalletsByENS(ctx context.Context, accountID uuid.UUID) ([]W
 		var i Wallet
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
 			&i.WalletType,
 			&i.WalletAddress,
 			&i.NetworkType,
@@ -581,84 +581,6 @@ func (q *Queries) GetWalletsByENS(ctx context.Context, accountID uuid.UUID) ([]W
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listCircleWalletsByAccountID = `-- name: ListCircleWalletsByAccountID :many
-SELECT 
-    w.id, w.account_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
-    cw.id as circle_wallet_id,
-    cw.circle_user_id,
-    cw.circle_wallet_id as circle_id,
-    cw.chain_id,
-    cw.state as circle_state
-FROM wallets w
-JOIN circle_wallets cw ON w.id = cw.wallet_id
-WHERE w.account_id = $1 AND w.wallet_type = 'circle_wallet' AND w.deleted_at IS NULL
-ORDER BY w.created_at DESC
-`
-
-type ListCircleWalletsByAccountIDRow struct {
-	ID             uuid.UUID          `json:"id"`
-	AccountID      uuid.UUID          `json:"account_id"`
-	WalletType     string             `json:"wallet_type"`
-	WalletAddress  string             `json:"wallet_address"`
-	NetworkType    NetworkType        `json:"network_type"`
-	NetworkID      pgtype.UUID        `json:"network_id"`
-	Nickname       pgtype.Text        `json:"nickname"`
-	Ens            pgtype.Text        `json:"ens"`
-	IsPrimary      pgtype.Bool        `json:"is_primary"`
-	Verified       pgtype.Bool        `json:"verified"`
-	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
-	Metadata       []byte             `json:"metadata"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
-	CircleWalletID uuid.UUID          `json:"circle_wallet_id"`
-	CircleUserID   uuid.UUID          `json:"circle_user_id"`
-	CircleID       string             `json:"circle_id"`
-	ChainID        int32              `json:"chain_id"`
-	CircleState    string             `json:"circle_state"`
-}
-
-func (q *Queries) ListCircleWalletsByAccountID(ctx context.Context, accountID uuid.UUID) ([]ListCircleWalletsByAccountIDRow, error) {
-	rows, err := q.db.Query(ctx, listCircleWalletsByAccountID, accountID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListCircleWalletsByAccountIDRow{}
-	for rows.Next() {
-		var i ListCircleWalletsByAccountIDRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.AccountID,
-			&i.WalletType,
-			&i.WalletAddress,
-			&i.NetworkType,
-			&i.NetworkID,
-			&i.Nickname,
-			&i.Ens,
-			&i.IsPrimary,
-			&i.Verified,
-			&i.LastUsedAt,
-			&i.Metadata,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-			&i.CircleWalletID,
-			&i.CircleUserID,
-			&i.CircleID,
-			&i.ChainID,
-			&i.CircleState,
 		); err != nil {
 			return nil, err
 		}
@@ -672,7 +594,7 @@ func (q *Queries) ListCircleWalletsByAccountID(ctx context.Context, accountID uu
 
 const listCircleWalletsByCircleUserID = `-- name: ListCircleWalletsByCircleUserID :many
 SELECT 
-    w.id, w.account_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -686,7 +608,7 @@ ORDER BY w.created_at DESC
 
 type ListCircleWalletsByCircleUserIDRow struct {
 	ID             uuid.UUID          `json:"id"`
-	AccountID      uuid.UUID          `json:"account_id"`
+	WorkspaceID    uuid.UUID          `json:"workspace_id"`
 	WalletType     string             `json:"wallet_type"`
 	WalletAddress  string             `json:"wallet_address"`
 	NetworkType    NetworkType        `json:"network_type"`
@@ -718,7 +640,7 @@ func (q *Queries) ListCircleWalletsByCircleUserID(ctx context.Context, circleUse
 		var i ListCircleWalletsByCircleUserIDRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
 			&i.WalletType,
 			&i.WalletAddress,
 			&i.NetworkType,
@@ -748,14 +670,92 @@ func (q *Queries) ListCircleWalletsByCircleUserID(ctx context.Context, circleUse
 	return items, nil
 }
 
-const listPrimaryWalletsByAccountID = `-- name: ListPrimaryWalletsByAccountID :many
-SELECT id, account_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
-WHERE account_id = $1 AND is_primary = true AND deleted_at IS NULL
+const listCircleWalletsByWorkspaceID = `-- name: ListCircleWalletsByWorkspaceID :many
+SELECT 
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    cw.id as circle_wallet_id,
+    cw.circle_user_id,
+    cw.circle_wallet_id as circle_id,
+    cw.chain_id,
+    cw.state as circle_state
+FROM wallets w
+JOIN circle_wallets cw ON w.id = cw.wallet_id
+WHERE w.workspace_id = $1 AND w.wallet_type = 'circle_wallet' AND w.deleted_at IS NULL
+ORDER BY w.created_at DESC
+`
+
+type ListCircleWalletsByWorkspaceIDRow struct {
+	ID             uuid.UUID          `json:"id"`
+	WorkspaceID    uuid.UUID          `json:"workspace_id"`
+	WalletType     string             `json:"wallet_type"`
+	WalletAddress  string             `json:"wallet_address"`
+	NetworkType    NetworkType        `json:"network_type"`
+	NetworkID      pgtype.UUID        `json:"network_id"`
+	Nickname       pgtype.Text        `json:"nickname"`
+	Ens            pgtype.Text        `json:"ens"`
+	IsPrimary      pgtype.Bool        `json:"is_primary"`
+	Verified       pgtype.Bool        `json:"verified"`
+	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
+	Metadata       []byte             `json:"metadata"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+	CircleWalletID uuid.UUID          `json:"circle_wallet_id"`
+	CircleUserID   uuid.UUID          `json:"circle_user_id"`
+	CircleID       string             `json:"circle_id"`
+	ChainID        int32              `json:"chain_id"`
+	CircleState    string             `json:"circle_state"`
+}
+
+func (q *Queries) ListCircleWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListCircleWalletsByWorkspaceIDRow, error) {
+	rows, err := q.db.Query(ctx, listCircleWalletsByWorkspaceID, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCircleWalletsByWorkspaceIDRow{}
+	for rows.Next() {
+		var i ListCircleWalletsByWorkspaceIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.WalletType,
+			&i.WalletAddress,
+			&i.NetworkType,
+			&i.NetworkID,
+			&i.Nickname,
+			&i.Ens,
+			&i.IsPrimary,
+			&i.Verified,
+			&i.LastUsedAt,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.CircleWalletID,
+			&i.CircleUserID,
+			&i.CircleID,
+			&i.ChainID,
+			&i.CircleState,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPrimaryWalletsByWorkspaceID = `-- name: ListPrimaryWalletsByWorkspaceID :many
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+WHERE workspace_id = $1 AND is_primary = true AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListPrimaryWalletsByAccountID(ctx context.Context, accountID uuid.UUID) ([]Wallet, error) {
-	rows, err := q.db.Query(ctx, listPrimaryWalletsByAccountID, accountID)
+func (q *Queries) ListPrimaryWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]Wallet, error) {
+	rows, err := q.db.Query(ctx, listPrimaryWalletsByWorkspaceID, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -765,7 +765,7 @@ func (q *Queries) ListPrimaryWalletsByAccountID(ctx context.Context, accountID u
 		var i Wallet
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
 			&i.WalletType,
 			&i.WalletAddress,
 			&i.NetworkType,
@@ -790,9 +790,9 @@ func (q *Queries) ListPrimaryWalletsByAccountID(ctx context.Context, accountID u
 	return items, nil
 }
 
-const listPrimaryWalletsWithCircleDataByAccountID = `-- name: ListPrimaryWalletsWithCircleDataByAccountID :many
+const listPrimaryWalletsWithCircleDataByWorkspaceID = `-- name: ListPrimaryWalletsWithCircleDataByWorkspaceID :many
 SELECT 
-    w.id, w.account_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -800,13 +800,13 @@ SELECT
     cw.state as circle_state
 FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
-WHERE w.account_id = $1 AND w.is_primary = true AND w.deleted_at IS NULL
+WHERE w.workspace_id = $1 AND w.is_primary = true AND w.deleted_at IS NULL
 ORDER BY w.created_at DESC
 `
 
-type ListPrimaryWalletsWithCircleDataByAccountIDRow struct {
+type ListPrimaryWalletsWithCircleDataByWorkspaceIDRow struct {
 	ID             uuid.UUID          `json:"id"`
-	AccountID      uuid.UUID          `json:"account_id"`
+	WorkspaceID    uuid.UUID          `json:"workspace_id"`
 	WalletType     string             `json:"wallet_type"`
 	WalletAddress  string             `json:"wallet_address"`
 	NetworkType    NetworkType        `json:"network_type"`
@@ -827,18 +827,18 @@ type ListPrimaryWalletsWithCircleDataByAccountIDRow struct {
 	CircleState    pgtype.Text        `json:"circle_state"`
 }
 
-func (q *Queries) ListPrimaryWalletsWithCircleDataByAccountID(ctx context.Context, accountID uuid.UUID) ([]ListPrimaryWalletsWithCircleDataByAccountIDRow, error) {
-	rows, err := q.db.Query(ctx, listPrimaryWalletsWithCircleDataByAccountID, accountID)
+func (q *Queries) ListPrimaryWalletsWithCircleDataByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListPrimaryWalletsWithCircleDataByWorkspaceIDRow, error) {
+	rows, err := q.db.Query(ctx, listPrimaryWalletsWithCircleDataByWorkspaceID, workspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListPrimaryWalletsWithCircleDataByAccountIDRow{}
+	items := []ListPrimaryWalletsWithCircleDataByWorkspaceIDRow{}
 	for rows.Next() {
-		var i ListPrimaryWalletsWithCircleDataByAccountIDRow
+		var i ListPrimaryWalletsWithCircleDataByWorkspaceIDRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
 			&i.WalletType,
 			&i.WalletAddress,
 			&i.NetworkType,
@@ -868,61 +868,19 @@ func (q *Queries) ListPrimaryWalletsWithCircleDataByAccountID(ctx context.Contex
 	return items, nil
 }
 
-const listWalletsByAccountID = `-- name: ListWalletsByAccountID :many
-SELECT id, account_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
-WHERE account_id = $1 AND deleted_at IS NULL
-ORDER BY created_at DESC
-`
-
-func (q *Queries) ListWalletsByAccountID(ctx context.Context, accountID uuid.UUID) ([]Wallet, error) {
-	rows, err := q.db.Query(ctx, listWalletsByAccountID, accountID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Wallet{}
-	for rows.Next() {
-		var i Wallet
-		if err := rows.Scan(
-			&i.ID,
-			&i.AccountID,
-			&i.WalletType,
-			&i.WalletAddress,
-			&i.NetworkType,
-			&i.NetworkID,
-			&i.Nickname,
-			&i.Ens,
-			&i.IsPrimary,
-			&i.Verified,
-			&i.LastUsedAt,
-			&i.Metadata,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listWalletsByNetworkType = `-- name: ListWalletsByNetworkType :many
-SELECT id, account_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
-WHERE account_id = $1 AND network_type = $2 AND deleted_at IS NULL
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+WHERE workspace_id = $1 AND network_type = $2 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
 
 type ListWalletsByNetworkTypeParams struct {
-	AccountID   uuid.UUID   `json:"account_id"`
+	WorkspaceID uuid.UUID   `json:"workspace_id"`
 	NetworkType NetworkType `json:"network_type"`
 }
 
 func (q *Queries) ListWalletsByNetworkType(ctx context.Context, arg ListWalletsByNetworkTypeParams) ([]Wallet, error) {
-	rows, err := q.db.Query(ctx, listWalletsByNetworkType, arg.AccountID, arg.NetworkType)
+	rows, err := q.db.Query(ctx, listWalletsByNetworkType, arg.WorkspaceID, arg.NetworkType)
 	if err != nil {
 		return nil, err
 	}
@@ -932,7 +890,7 @@ func (q *Queries) ListWalletsByNetworkType(ctx context.Context, arg ListWalletsB
 		var i Wallet
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
 			&i.WalletType,
 			&i.WalletAddress,
 			&i.NetworkType,
@@ -958,18 +916,18 @@ func (q *Queries) ListWalletsByNetworkType(ctx context.Context, arg ListWalletsB
 }
 
 const listWalletsByWalletType = `-- name: ListWalletsByWalletType :many
-SELECT id, account_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
-WHERE account_id = $1 AND wallet_type = $2 AND deleted_at IS NULL
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+WHERE workspace_id = $1 AND wallet_type = $2 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
 
 type ListWalletsByWalletTypeParams struct {
-	AccountID  uuid.UUID `json:"account_id"`
-	WalletType string    `json:"wallet_type"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+	WalletType  string    `json:"wallet_type"`
 }
 
 func (q *Queries) ListWalletsByWalletType(ctx context.Context, arg ListWalletsByWalletTypeParams) ([]Wallet, error) {
-	rows, err := q.db.Query(ctx, listWalletsByWalletType, arg.AccountID, arg.WalletType)
+	rows, err := q.db.Query(ctx, listWalletsByWalletType, arg.WorkspaceID, arg.WalletType)
 	if err != nil {
 		return nil, err
 	}
@@ -979,7 +937,7 @@ func (q *Queries) ListWalletsByWalletType(ctx context.Context, arg ListWalletsBy
 		var i Wallet
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
 			&i.WalletType,
 			&i.WalletAddress,
 			&i.NetworkType,
@@ -1004,9 +962,51 @@ func (q *Queries) ListWalletsByWalletType(ctx context.Context, arg ListWalletsBy
 	return items, nil
 }
 
-const listWalletsWithCircleDataByAccountID = `-- name: ListWalletsWithCircleDataByAccountID :many
+const listWalletsByWorkspaceID = `-- name: ListWalletsByWorkspaceID :many
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+WHERE workspace_id = $1 AND deleted_at IS NULL
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]Wallet, error) {
+	rows, err := q.db.Query(ctx, listWalletsByWorkspaceID, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Wallet{}
+	for rows.Next() {
+		var i Wallet
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.WalletType,
+			&i.WalletAddress,
+			&i.NetworkType,
+			&i.NetworkID,
+			&i.Nickname,
+			&i.Ens,
+			&i.IsPrimary,
+			&i.Verified,
+			&i.LastUsedAt,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWalletsWithCircleDataByNetworkType = `-- name: ListWalletsWithCircleDataByNetworkType :many
 SELECT 
-    w.id, w.account_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -1014,13 +1014,18 @@ SELECT
     cw.state as circle_state
 FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
-WHERE w.account_id = $1 AND w.deleted_at IS NULL
+WHERE w.workspace_id = $1 AND w.network_type = $2 AND w.deleted_at IS NULL
 ORDER BY w.created_at DESC
 `
 
-type ListWalletsWithCircleDataByAccountIDRow struct {
+type ListWalletsWithCircleDataByNetworkTypeParams struct {
+	WorkspaceID uuid.UUID   `json:"workspace_id"`
+	NetworkType NetworkType `json:"network_type"`
+}
+
+type ListWalletsWithCircleDataByNetworkTypeRow struct {
 	ID             uuid.UUID          `json:"id"`
-	AccountID      uuid.UUID          `json:"account_id"`
+	WorkspaceID    uuid.UUID          `json:"workspace_id"`
 	WalletType     string             `json:"wallet_type"`
 	WalletAddress  string             `json:"wallet_address"`
 	NetworkType    NetworkType        `json:"network_type"`
@@ -1041,18 +1046,18 @@ type ListWalletsWithCircleDataByAccountIDRow struct {
 	CircleState    pgtype.Text        `json:"circle_state"`
 }
 
-func (q *Queries) ListWalletsWithCircleDataByAccountID(ctx context.Context, accountID uuid.UUID) ([]ListWalletsWithCircleDataByAccountIDRow, error) {
-	rows, err := q.db.Query(ctx, listWalletsWithCircleDataByAccountID, accountID)
+func (q *Queries) ListWalletsWithCircleDataByNetworkType(ctx context.Context, arg ListWalletsWithCircleDataByNetworkTypeParams) ([]ListWalletsWithCircleDataByNetworkTypeRow, error) {
+	rows, err := q.db.Query(ctx, listWalletsWithCircleDataByNetworkType, arg.WorkspaceID, arg.NetworkType)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListWalletsWithCircleDataByAccountIDRow{}
+	items := []ListWalletsWithCircleDataByNetworkTypeRow{}
 	for rows.Next() {
-		var i ListWalletsWithCircleDataByAccountIDRow
+		var i ListWalletsWithCircleDataByNetworkTypeRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
 			&i.WalletType,
 			&i.WalletAddress,
 			&i.NetworkType,
@@ -1082,9 +1087,9 @@ func (q *Queries) ListWalletsWithCircleDataByAccountID(ctx context.Context, acco
 	return items, nil
 }
 
-const listWalletsWithCircleDataByNetworkType = `-- name: ListWalletsWithCircleDataByNetworkType :many
+const listWalletsWithCircleDataByWorkspaceID = `-- name: ListWalletsWithCircleDataByWorkspaceID :many
 SELECT 
-    w.id, w.account_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -1092,18 +1097,13 @@ SELECT
     cw.state as circle_state
 FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
-WHERE w.account_id = $1 AND w.network_type = $2 AND w.deleted_at IS NULL
+WHERE w.workspace_id = $1 AND w.deleted_at IS NULL
 ORDER BY w.created_at DESC
 `
 
-type ListWalletsWithCircleDataByNetworkTypeParams struct {
-	AccountID   uuid.UUID   `json:"account_id"`
-	NetworkType NetworkType `json:"network_type"`
-}
-
-type ListWalletsWithCircleDataByNetworkTypeRow struct {
+type ListWalletsWithCircleDataByWorkspaceIDRow struct {
 	ID             uuid.UUID          `json:"id"`
-	AccountID      uuid.UUID          `json:"account_id"`
+	WorkspaceID    uuid.UUID          `json:"workspace_id"`
 	WalletType     string             `json:"wallet_type"`
 	WalletAddress  string             `json:"wallet_address"`
 	NetworkType    NetworkType        `json:"network_type"`
@@ -1124,18 +1124,18 @@ type ListWalletsWithCircleDataByNetworkTypeRow struct {
 	CircleState    pgtype.Text        `json:"circle_state"`
 }
 
-func (q *Queries) ListWalletsWithCircleDataByNetworkType(ctx context.Context, arg ListWalletsWithCircleDataByNetworkTypeParams) ([]ListWalletsWithCircleDataByNetworkTypeRow, error) {
-	rows, err := q.db.Query(ctx, listWalletsWithCircleDataByNetworkType, arg.AccountID, arg.NetworkType)
+func (q *Queries) ListWalletsWithCircleDataByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListWalletsWithCircleDataByWorkspaceIDRow, error) {
+	rows, err := q.db.Query(ctx, listWalletsWithCircleDataByWorkspaceID, workspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListWalletsWithCircleDataByNetworkTypeRow{}
+	items := []ListWalletsWithCircleDataByWorkspaceIDRow{}
 	for rows.Next() {
-		var i ListWalletsWithCircleDataByNetworkTypeRow
+		var i ListWalletsWithCircleDataByWorkspaceIDRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
 			&i.WalletType,
 			&i.WalletAddress,
 			&i.NetworkType,
@@ -1166,8 +1166,8 @@ func (q *Queries) ListWalletsWithCircleDataByNetworkType(ctx context.Context, ar
 }
 
 const searchWallets = `-- name: SearchWallets :many
-SELECT id, account_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
-WHERE account_id = $1 
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+WHERE workspace_id = $1
 AND deleted_at IS NULL
 AND (
     wallet_address ILIKE $2 
@@ -1179,7 +1179,7 @@ LIMIT $3 OFFSET $4
 `
 
 type SearchWalletsParams struct {
-	AccountID     uuid.UUID `json:"account_id"`
+	WorkspaceID   uuid.UUID `json:"workspace_id"`
 	WalletAddress string    `json:"wallet_address"`
 	Limit         int32     `json:"limit"`
 	Offset        int32     `json:"offset"`
@@ -1187,7 +1187,7 @@ type SearchWalletsParams struct {
 
 func (q *Queries) SearchWallets(ctx context.Context, arg SearchWalletsParams) ([]Wallet, error) {
 	rows, err := q.db.Query(ctx, searchWallets,
-		arg.AccountID,
+		arg.WorkspaceID,
 		arg.WalletAddress,
 		arg.Limit,
 		arg.Offset,
@@ -1201,7 +1201,7 @@ func (q *Queries) SearchWallets(ctx context.Context, arg SearchWalletsParams) ([
 		var i Wallet
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
 			&i.WalletType,
 			&i.WalletAddress,
 			&i.NetworkType,
@@ -1228,7 +1228,7 @@ func (q *Queries) SearchWallets(ctx context.Context, arg SearchWalletsParams) ([
 
 const searchWalletsWithCircleData = `-- name: SearchWalletsWithCircleData :many
 SELECT 
-    w.id, w.account_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -1236,7 +1236,7 @@ SELECT
     cw.state as circle_state
 FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
-WHERE w.account_id = $1 
+WHERE w.workspace_id = $1
 AND w.deleted_at IS NULL
 AND (
     w.wallet_address ILIKE $2 
@@ -1249,7 +1249,7 @@ LIMIT $3 OFFSET $4
 `
 
 type SearchWalletsWithCircleDataParams struct {
-	AccountID     uuid.UUID `json:"account_id"`
+	WorkspaceID   uuid.UUID `json:"workspace_id"`
 	WalletAddress string    `json:"wallet_address"`
 	Limit         int32     `json:"limit"`
 	Offset        int32     `json:"offset"`
@@ -1257,7 +1257,7 @@ type SearchWalletsWithCircleDataParams struct {
 
 type SearchWalletsWithCircleDataRow struct {
 	ID             uuid.UUID          `json:"id"`
-	AccountID      uuid.UUID          `json:"account_id"`
+	WorkspaceID    uuid.UUID          `json:"workspace_id"`
 	WalletType     string             `json:"wallet_type"`
 	WalletAddress  string             `json:"wallet_address"`
 	NetworkType    NetworkType        `json:"network_type"`
@@ -1280,7 +1280,7 @@ type SearchWalletsWithCircleDataRow struct {
 
 func (q *Queries) SearchWalletsWithCircleData(ctx context.Context, arg SearchWalletsWithCircleDataParams) ([]SearchWalletsWithCircleDataRow, error) {
 	rows, err := q.db.Query(ctx, searchWalletsWithCircleData,
-		arg.AccountID,
+		arg.WorkspaceID,
 		arg.WalletAddress,
 		arg.Limit,
 		arg.Offset,
@@ -1294,7 +1294,7 @@ func (q *Queries) SearchWalletsWithCircleData(ctx context.Context, arg SearchWal
 		var i SearchWalletsWithCircleDataRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.AccountID,
+			&i.WorkspaceID,
 			&i.WalletType,
 			&i.WalletAddress,
 			&i.NetworkType,
@@ -1328,7 +1328,7 @@ const setWalletAsPrimary = `-- name: SetWalletAsPrimary :execrows
 WITH updated_wallets AS (
     UPDATE wallets w
     SET is_primary = false
-    WHERE w.account_id = $1 
+    WHERE w.workspace_id = $1
     AND w.network_type = $2 
     AND w.is_primary = true 
     AND w.deleted_at IS NULL
@@ -1341,13 +1341,13 @@ WHERE w.id = $3 AND w.deleted_at IS NULL
 `
 
 type SetWalletAsPrimaryParams struct {
-	AccountID   uuid.UUID   `json:"account_id"`
+	WorkspaceID uuid.UUID   `json:"workspace_id"`
 	NetworkType NetworkType `json:"network_type"`
 	ID          uuid.UUID   `json:"id"`
 }
 
 func (q *Queries) SetWalletAsPrimary(ctx context.Context, arg SetWalletAsPrimaryParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setWalletAsPrimary, arg.AccountID, arg.NetworkType, arg.ID)
+	result, err := q.db.Exec(ctx, setWalletAsPrimary, arg.WorkspaceID, arg.NetworkType, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -1408,7 +1408,7 @@ SET
     metadata = COALESCE($5, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $6 AND deleted_at IS NULL
-RETURNING id, account_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateWalletParams struct {
@@ -1432,7 +1432,7 @@ func (q *Queries) UpdateWallet(ctx context.Context, arg UpdateWalletParams) (Wal
 	var i Wallet
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.WalletType,
 		&i.WalletAddress,
 		&i.NetworkType,
@@ -1469,7 +1469,7 @@ SET
     verified = $1,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $2 AND deleted_at IS NULL
-RETURNING id, account_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateWalletVerificationStatusParams struct {
@@ -1482,7 +1482,7 @@ func (q *Queries) UpdateWalletVerificationStatus(ctx context.Context, arg Update
 	var i Wallet
 	err := row.Scan(
 		&i.ID,
-		&i.AccountID,
+		&i.WorkspaceID,
 		&i.WalletType,
 		&i.WalletAddress,
 		&i.NetworkType,
