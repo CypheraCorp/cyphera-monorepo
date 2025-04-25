@@ -268,6 +268,7 @@ func (c *HTTPClient) DoRequest(ctx context.Context, method, path string, body in
 
 	if c.retryConfig != nil && c.retryConfig.MaxRetries > 0 {
 		operation := func() error {
+			// nolint:bodyclose // Body is closed conditionally for retries or handled by caller/later checks
 			resp, requestErr = c.httpClient.Do(req)
 
 			// Check if we should retry based on the status code
@@ -293,7 +294,8 @@ func (c *HTTPClient) DoRequest(ctx context.Context, method, path string, body in
 		expBackoff.Multiplier = c.retryConfig.Multiplier
 		expBackoff.MaxElapsedTime = c.retryConfig.MaxElapsedTime
 
-		err = backoff.Retry(operation, backoff.WithMaxRetries(expBackoff, uint64(c.retryConfig.MaxRetries)))
+		// Execute the retry operation
+		requestErr = backoff.Retry(operation, backoff.WithMaxRetries(expBackoff, uint64(c.retryConfig.MaxRetries)))
 	} else {
 		resp, requestErr = c.httpClient.Do(req)
 	}

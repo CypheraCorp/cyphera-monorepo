@@ -25,21 +25,20 @@ import (
 
 // Handler Definitions
 var (
-	accountHandler                   *handlers.AccountHandler
-	workspaceHandler                 *handlers.WorkspaceHandler
-	customerHandler                  *handlers.CustomerHandler
-	apiKeyHandler                    *handlers.APIKeyHandler
-	userHandler                      *handlers.UserHandler
-	networkHandler                   *handlers.NetworkHandler
-	tokenHandler                     *handlers.TokenHandler
-	productHandler                   *handlers.ProductHandler
-	walletHandler                    *handlers.WalletHandler
-	subscriptionHandler              *handlers.SubscriptionHandler
-	subscriptionEventHandler         *handlers.SubscriptionEventHandler
-	failedSubscriptionAttemptHandler *handlers.FailedSubscriptionAttemptHandler
-	delegationClient                 *dsClient.DelegationClient
-	redemptionProcessor              *handlers.RedemptionProcessor
-	circleHandler                    *handlers.CircleHandler
+	accountHandler           *handlers.AccountHandler
+	workspaceHandler         *handlers.WorkspaceHandler
+	customerHandler          *handlers.CustomerHandler
+	apiKeyHandler            *handlers.APIKeyHandler
+	userHandler              *handlers.UserHandler
+	networkHandler           *handlers.NetworkHandler
+	tokenHandler             *handlers.TokenHandler
+	productHandler           *handlers.ProductHandler
+	walletHandler            *handlers.WalletHandler
+	subscriptionHandler      *handlers.SubscriptionHandler
+	subscriptionEventHandler *handlers.SubscriptionEventHandler
+	delegationClient         *dsClient.DelegationClient
+	redemptionProcessor      *handlers.RedemptionProcessor
+	circleHandler            *handlers.CircleHandler
 
 	// Database
 	dbQueries *db.Queries
@@ -116,7 +115,6 @@ func InitializeHandlers() {
 	// Initialize subscription handlers
 	subscriptionHandler = handlers.NewSubscriptionHandler(commonServices, delegationClient)
 	subscriptionEventHandler = handlers.NewSubscriptionEventHandler(commonServices)
-	failedSubscriptionAttemptHandler = handlers.NewFailedSubscriptionAttemptHandler(commonServices)
 
 	// 3rd party handlers
 	circleHandler = handlers.NewCircleHandler(commonServices, circleClient)
@@ -282,9 +280,9 @@ func InitializeRoutes(router *gin.Engine) {
 			// Current Account routes
 			accounts := protected.Group("/accounts")
 			{
-				accounts.POST("/me/onboard", accountHandler.OnboardAccount)
-				accounts.GET("/me/details", accountHandler.GetCurrentAccountDetails)
-				accounts.PUT("/me", accountHandler.UpdateCurrentAccount)
+				accounts.PUT("/", accountHandler.UpdateAccount)
+				accounts.POST("/onboard", accountHandler.OnboardAccount)
+				accounts.GET("/details", accountHandler.GetAccountDetails)
 
 				accounts.GET("/:account_id", accountHandler.GetAccount)
 				accounts.PUT("/:account_id", accountHandler.UpdateAccount)

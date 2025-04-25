@@ -126,6 +126,9 @@ func (c *CircleClient) CreateWallets(ctx context.Context, request CreateWalletsR
 	if err != nil {
 		return nil, fmt.Errorf("failed to create wallets: %w", err)
 	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 
 	var response CreateWalletsResponse
 	if err := c.httpClient.ProcessJSONResponse(resp, &response); err != nil {
@@ -177,6 +180,9 @@ func (c *CircleClient) GetWalletBalance(ctx context.Context, walletID string, us
 	if err != nil {
 		return nil, fmt.Errorf("failed to get wallet balances: %w", err)
 	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 
 	var response WalletBalanceResponse
 	if err := c.httpClient.ProcessJSONResponse(resp, &response); err != nil {
@@ -196,6 +202,9 @@ func (c *CircleClient) GetWallet(ctx context.Context, walletID string, userToken
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get wallet: %w", err)
+	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
 	}
 
 	var response WalletResponse
@@ -256,6 +265,9 @@ func (c *CircleClient) ListWallets(ctx context.Context, userToken string, params
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list wallets: %w", err)
+	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
 	}
 
 	var response ListWalletsResponse
