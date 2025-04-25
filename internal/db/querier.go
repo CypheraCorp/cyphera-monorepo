@@ -59,17 +59,17 @@ type Querier interface {
 	DeactivateProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	DeactivateProductToken(ctx context.Context, id uuid.UUID) (ProductsToken, error)
 	DeactivateToken(ctx context.Context, id uuid.UUID) (Token, error)
-	DeleteAPIKey(ctx context.Context, id uuid.UUID) error
+	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) error
 	DeleteAccount(ctx context.Context, id uuid.UUID) error
 	DeleteCircleUser(ctx context.Context, id uuid.UUID) error
 	DeleteCircleUserByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) error
-	DeleteCustomer(ctx context.Context, id uuid.UUID) error
+	DeleteCustomer(ctx context.Context, arg DeleteCustomerParams) error
 	DeleteCustomerWallet(ctx context.Context, id uuid.UUID) error
 	DeleteCustomerWalletsByCustomer(ctx context.Context, customerID uuid.UUID) error
 	DeleteDelegationData(ctx context.Context, id uuid.UUID) error
 	DeleteFailedSubscriptionAttempt(ctx context.Context, id uuid.UUID) error
 	DeleteNetwork(ctx context.Context, id uuid.UUID) error
-	DeleteProduct(ctx context.Context, id uuid.UUID) error
+	DeleteProduct(ctx context.Context, arg DeleteProductParams) error
 	DeleteProductToken(ctx context.Context, id uuid.UUID) error
 	DeleteProductTokenByIds(ctx context.Context, arg DeleteProductTokenByIdsParams) error
 	DeleteProductTokensByProduct(ctx context.Context, productID uuid.UUID) error
@@ -77,7 +77,7 @@ type Querier interface {
 	DeleteToken(ctx context.Context, id uuid.UUID) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	DeleteWorkspace(ctx context.Context, id uuid.UUID) error
-	GetAPIKey(ctx context.Context, id uuid.UUID) (ApiKey, error)
+	GetAPIKey(ctx context.Context, arg GetAPIKeyParams) (ApiKey, error)
 	GetAPIKeyByKey(ctx context.Context, keyHash string) (ApiKey, error)
 	GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
 	GetAccountByID(ctx context.Context, id uuid.UUID) (Account, error)
@@ -97,7 +97,7 @@ type Querier interface {
 	GetCircleUserWithWallets(ctx context.Context, id uuid.UUID) (GetCircleUserWithWalletsRow, error)
 	GetCircleUserWithWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) (GetCircleUserWithWalletsByWorkspaceIDRow, error)
 	GetCircleWalletByCircleWalletID(ctx context.Context, circleWalletID string) (GetCircleWalletByCircleWalletIDRow, error)
-	GetCustomer(ctx context.Context, id uuid.UUID) (Customer, error)
+	GetCustomer(ctx context.Context, arg GetCustomerParams) (Customer, error)
 	GetCustomerByEmail(ctx context.Context, arg GetCustomerByEmailParams) (Customer, error)
 	GetCustomerByExternalID(ctx context.Context, arg GetCustomerByExternalIDParams) (Customer, error)
 	// Get the customer_id for a wallet
@@ -120,12 +120,13 @@ type Querier interface {
 	GetNetworkByChainID(ctx context.Context, chainID int32) (Network, error)
 	GetNetworkByCircleNetworkType(ctx context.Context, circleNetworkType CircleNetworkType) (Network, error)
 	GetPrimaryCustomerWallet(ctx context.Context, customerID uuid.UUID) (CustomerWallet, error)
-	GetProduct(ctx context.Context, id uuid.UUID) (Product, error)
+	GetProduct(ctx context.Context, arg GetProductParams) (Product, error)
 	GetProductNetworks(ctx context.Context, productID uuid.UUID) ([]GetProductNetworksRow, error)
 	GetProductToken(ctx context.Context, id uuid.UUID) (GetProductTokenRow, error)
 	GetProductTokenByIds(ctx context.Context, arg GetProductTokenByIdsParams) (GetProductTokenByIdsRow, error)
 	GetProductTokensByNetwork(ctx context.Context, arg GetProductTokensByNetworkParams) ([]GetProductTokensByNetworkRow, error)
 	GetProductTokensByProduct(ctx context.Context, productID uuid.UUID) ([]GetProductTokensByProductRow, error)
+	GetProductWithoutWorkspaceId(ctx context.Context, id uuid.UUID) (Product, error)
 	GetRecentlyUsedWallets(ctx context.Context, arg GetRecentlyUsedWalletsParams) ([]Wallet, error)
 	GetRecentlyUsedWalletsWithCircleData(ctx context.Context, arg GetRecentlyUsedWalletsWithCircleDataParams) ([]GetRecentlyUsedWalletsWithCircleDataRow, error)
 	GetSubscription(ctx context.Context, id uuid.UUID) (Subscription, error)
@@ -142,10 +143,10 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserBySupabaseID(ctx context.Context, supabaseID string) (User, error)
 	GetWalletByAddress(ctx context.Context, arg GetWalletByAddressParams) (Wallet, error)
-	GetWalletByID(ctx context.Context, id uuid.UUID) (Wallet, error)
+	GetWalletByID(ctx context.Context, arg GetWalletByIDParams) (Wallet, error)
 	GetWalletStats(ctx context.Context, workspaceID uuid.UUID) (GetWalletStatsRow, error)
 	GetWalletWithCircleDataByAddress(ctx context.Context, arg GetWalletWithCircleDataByAddressParams) (GetWalletWithCircleDataByAddressRow, error)
-	GetWalletWithCircleDataByID(ctx context.Context, id uuid.UUID) (GetWalletWithCircleDataByIDRow, error)
+	GetWalletWithCircleDataByID(ctx context.Context, arg GetWalletWithCircleDataByIDParams) (GetWalletWithCircleDataByIDRow, error)
 	GetWalletsByENS(ctx context.Context, workspaceID uuid.UUID) ([]Wallet, error)
 	GetWalletsWithSimilarAddress(ctx context.Context, arg GetWalletsWithSimilarAddressParams) ([]CustomerWallet, error)
 	GetWorkspace(ctx context.Context, id uuid.UUID) (Workspace, error)
@@ -191,7 +192,7 @@ type Querier interface {
 	ListSubscriptionEventsWithPagination(ctx context.Context, arg ListSubscriptionEventsWithPaginationParams) ([]SubscriptionEvent, error)
 	ListSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListSubscriptionsByCustomer(ctx context.Context, customerID uuid.UUID) ([]Subscription, error)
-	ListSubscriptionsByProduct(ctx context.Context, productID uuid.UUID) ([]Subscription, error)
+	ListSubscriptionsByProduct(ctx context.Context, arg ListSubscriptionsByProductParams) ([]Subscription, error)
 	ListSubscriptionsDueForRenewal(ctx context.Context, nextRedemptionDate pgtype.Timestamptz) ([]Subscription, error)
 	ListSubscriptionsWithPagination(ctx context.Context, arg ListSubscriptionsWithPaginationParams) ([]Subscription, error)
 	ListTokens(ctx context.Context) ([]Token, error)

@@ -148,22 +148,31 @@ func (q *Queries) DeleteProductToken(ctx context.Context, id uuid.UUID) error {
 }
 
 const deleteProductTokenByIds = `-- name: DeleteProductTokenByIds :exec
-UPDATE products_tokens
+UPDATE products_tokens pt
 SET deleted_at = CURRENT_TIMESTAMP
-WHERE product_id = $1 
-    AND network_id = $2 
-    AND token_id = $3 
-    AND deleted_at IS NULL
+FROM products p
+WHERE pt.product_id = p.id
+    AND pt.product_id = $1 
+    AND pt.network_id = $2 
+    AND pt.token_id = $3 
+    AND p.workspace_id = $4
+    AND pt.deleted_at IS NULL
 `
 
 type DeleteProductTokenByIdsParams struct {
-	ProductID uuid.UUID `json:"product_id"`
-	NetworkID uuid.UUID `json:"network_id"`
-	TokenID   uuid.UUID `json:"token_id"`
+	ProductID   uuid.UUID `json:"product_id"`
+	NetworkID   uuid.UUID `json:"network_id"`
+	TokenID     uuid.UUID `json:"token_id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
 }
 
 func (q *Queries) DeleteProductTokenByIds(ctx context.Context, arg DeleteProductTokenByIdsParams) error {
-	_, err := q.db.Exec(ctx, deleteProductTokenByIds, arg.ProductID, arg.NetworkID, arg.TokenID)
+	_, err := q.db.Exec(ctx, deleteProductTokenByIds,
+		arg.ProductID,
+		arg.NetworkID,
+		arg.TokenID,
+		arg.WorkspaceID,
+	)
 	return err
 }
 
@@ -462,16 +471,19 @@ SELECT
     t.gas_token
 FROM products_tokens pt
 JOIN tokens t ON t.id = pt.token_id
+JOIN products p ON pt.product_id = p.id
 WHERE pt.product_id = $1 
     AND pt.network_id = $2 
     AND pt.token_id = $3 
+    AND p.workspace_id = $4
     AND pt.deleted_at IS NULL
 `
 
 type GetProductTokenByIdsParams struct {
-	ProductID uuid.UUID `json:"product_id"`
-	NetworkID uuid.UUID `json:"network_id"`
-	TokenID   uuid.UUID `json:"token_id"`
+	ProductID   uuid.UUID `json:"product_id"`
+	NetworkID   uuid.UUID `json:"network_id"`
+	TokenID     uuid.UUID `json:"token_id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
 }
 
 type GetProductTokenByIdsRow struct {
@@ -490,7 +502,12 @@ type GetProductTokenByIdsRow struct {
 }
 
 func (q *Queries) GetProductTokenByIds(ctx context.Context, arg GetProductTokenByIdsParams) (GetProductTokenByIdsRow, error) {
-	row := q.db.QueryRow(ctx, getProductTokenByIds, arg.ProductID, arg.NetworkID, arg.TokenID)
+	row := q.db.QueryRow(ctx, getProductTokenByIds,
+		arg.ProductID,
+		arg.NetworkID,
+		arg.TokenID,
+		arg.WorkspaceID,
+	)
 	var i GetProductTokenByIdsRow
 	err := row.Scan(
 		&i.ID,
@@ -652,22 +669,26 @@ func (q *Queries) GetProductTokensByProduct(ctx context.Context, productID uuid.
 }
 
 const updateProductToken = `-- name: UpdateProductToken :one
-UPDATE products_tokens
+UPDATE products_tokens pt
 SET
-    active = COALESCE($4, active),
+    active = COALESCE($5, pt.active),
     updated_at = CURRENT_TIMESTAMP
-WHERE product_id = $1 
-    AND network_id = $2 
-    AND token_id = $3 
-    AND deleted_at IS NULL
-RETURNING id, product_id, network_id, token_id, active, created_at, updated_at, deleted_at
+FROM products p
+WHERE pt.product_id = p.id
+    AND pt.product_id = $1 
+    AND pt.network_id = $2 
+    AND pt.token_id = $3 
+    AND p.workspace_id = $4
+    AND pt.deleted_at IS NULL
+RETURNING pt.id, pt.product_id, pt.network_id, pt.token_id, pt.active, pt.created_at, pt.updated_at, pt.deleted_at
 `
 
 type UpdateProductTokenParams struct {
-	ProductID uuid.UUID `json:"product_id"`
-	NetworkID uuid.UUID `json:"network_id"`
-	TokenID   uuid.UUID `json:"token_id"`
-	Active    bool      `json:"active"`
+	ProductID   uuid.UUID `json:"product_id"`
+	NetworkID   uuid.UUID `json:"network_id"`
+	TokenID     uuid.UUID `json:"token_id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+	Active      bool      `json:"active"`
 }
 
 func (q *Queries) UpdateProductToken(ctx context.Context, arg UpdateProductTokenParams) (ProductsToken, error) {
@@ -675,6 +696,7 @@ func (q *Queries) UpdateProductToken(ctx context.Context, arg UpdateProductToken
 		arg.ProductID,
 		arg.NetworkID,
 		arg.TokenID,
+		arg.WorkspaceID,
 		arg.Active,
 	)
 	var i ProductsToken

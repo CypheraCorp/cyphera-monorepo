@@ -244,6 +244,39 @@ func InitializeRoutes(router *gin.Engine) {
 					// Circle challenge endpoints
 					circle.GET("/:workspace_id/challenges/:challenge_id", circleHandler.GetChallenge)
 				}
+
+				// Product Tokens
+				products := protected.Group("/products")
+				{
+					products.GET("/:product_id/tokens", productHandler.GetProductTokensByProduct)
+					products.GET("/:product_id/tokens/active", productHandler.GetActiveProductTokensByProduct)
+					products.POST("/:product_id/tokens", productHandler.CreateProductToken)
+					products.GET("/:product_id/tokens/:token_id", productHandler.GetProductToken)
+					products.GET("/:product_id/networks/:network_id/tokens", productHandler.GetProductTokensByNetwork)
+					products.GET("/:product_id/networks/:network_id/tokens/active", productHandler.GetActiveProductTokensByNetwork)
+					products.DELETE("/:product_id/tokens", productHandler.DeleteProductTokensByProduct)
+				}
+
+				// Networks
+				networks := protected.Group("/networks")
+				{
+					networks.GET("", networkHandler.ListNetworks)
+					networks.GET("/active", networkHandler.ListActiveNetworks)
+					networks.GET("/:network_id", networkHandler.GetNetwork)
+					networks.GET("/chain/:chain_id", networkHandler.GetNetworkByChainID)
+					networks.GET("/tokens", networkHandler.ListNetworksWithTokens)
+				}
+
+				// Tokens
+				tokens := protected.Group("/tokens")
+				{
+					tokens.GET("", tokenHandler.ListTokens)
+					tokens.GET("/:token_id", tokenHandler.GetToken)
+					tokens.GET("/networks/:network_id", tokenHandler.ListTokensByNetwork)
+					tokens.GET("/networks/:network_id/active", tokenHandler.ListActiveTokensByNetwork)
+					tokens.GET("/networks/:network_id/gas", tokenHandler.GetGasToken)
+					tokens.GET("/networks/:network_id/address/:address", tokenHandler.GetTokenByAddress)
+				}
 			}
 
 			// Current Account routes
@@ -266,14 +299,17 @@ func InitializeRoutes(router *gin.Engine) {
 			}
 
 			// Customers
-			protected.GET("/customers", customerHandler.ListCustomers)
-			protected.POST("/customers", customerHandler.CreateCustomer)
-			protected.GET("/customers/:customer_id", customerHandler.GetCustomer)
-			protected.PUT("/customers/:customer_id", customerHandler.UpdateCustomer)
-			protected.DELETE("/customers/:customer_id", customerHandler.DeleteCustomer)
+			customers := protected.Group("/customers")
+			{
+				customers.GET("", customerHandler.ListCustomers)
+				customers.POST("", customerHandler.CreateCustomer)
+				customers.GET("/:customer_id", customerHandler.GetCustomer)
+				customers.PUT("/:customer_id", customerHandler.UpdateCustomer)
+				customers.DELETE("/:customer_id", customerHandler.DeleteCustomer)
 
-			// Customer subscriptions
-			protected.GET("/customers/:customer_id/subscriptions", subscriptionHandler.ListSubscriptionsByCustomer)
+				// Customer subscriptions
+				customers.GET("/:customer_id/subscriptions", subscriptionHandler.ListSubscriptionsByCustomer)
+			}
 
 			// API Keys
 			apiKeys := protected.Group("/api-keys")
@@ -287,27 +323,6 @@ func InitializeRoutes(router *gin.Engine) {
 				apiKeys.DELETE("/:api_key_id", apiKeyHandler.DeleteAPIKey)
 			}
 
-			// Networks
-			networks := protected.Group("/networks")
-			{
-				networks.GET("", networkHandler.ListNetworks)
-				networks.GET("/active", networkHandler.ListActiveNetworks)
-				networks.GET("/:network_id", networkHandler.GetNetwork)
-				networks.GET("/chain/:chain_id", networkHandler.GetNetworkByChainID)
-				networks.GET("/tokens", networkHandler.ListNetworksWithTokens)
-			}
-
-			// Tokens
-			tokens := protected.Group("/tokens")
-			{
-				tokens.GET("", tokenHandler.ListTokens)
-				tokens.GET("/:token_id", tokenHandler.GetToken)
-				tokens.GET("/networks/:network_id", tokenHandler.ListTokensByNetwork)
-				tokens.GET("/networks/:network_id/active", tokenHandler.ListActiveTokensByNetwork)
-				tokens.GET("/networks/:network_id/gas", tokenHandler.GetGasToken)
-				tokens.GET("/networks/:network_id/address/:address", tokenHandler.GetTokenByAddress)
-			}
-
 			// Products
 			products := protected.Group("/products")
 			{
@@ -317,93 +332,84 @@ func InitializeRoutes(router *gin.Engine) {
 				products.GET("/:product_id", productHandler.GetProduct)
 				products.PUT("/:product_id", productHandler.UpdateProduct)
 				products.DELETE("/:product_id", productHandler.DeleteProduct)
-
-				// Product Tokens
-				products.GET("/:product_id/tokens", productHandler.GetProductTokensByProduct)
-				products.GET("/:product_id/tokens/active", productHandler.GetActiveProductTokensByProduct)
-				products.POST("/:product_id/tokens", productHandler.CreateProductToken)
-				products.GET("/:product_id/tokens/:token_id", productHandler.GetProductToken)
-				products.GET("/:product_id/networks/:network_id/tokens", productHandler.GetProductTokensByNetwork)
-				products.GET("/:product_id/networks/:network_id/tokens/active", productHandler.GetActiveProductTokensByNetwork)
 				products.GET("/:product_id/networks/:network_id/tokens/:token_id", productHandler.GetProductTokenByIds)
 				products.PUT("/:product_id/networks/:network_id/tokens/:token_id", productHandler.UpdateProductToken)
 				products.DELETE("/:product_id/networks/:network_id/tokens/:token_id", productHandler.DeleteProductToken)
-				products.DELETE("/:product_id/tokens", productHandler.DeleteProductTokensByProduct)
 
 				// Product subscriptions
 				products.GET("/:product_id/subscriptions", subscriptionHandler.ListSubscriptionsByProduct)
 			}
 
 			// Workspaces
-			workspaces := protected.Group("/workspaces")
-			{
-				workspaces.GET("", workspaceHandler.ListWorkspaces)
-				workspaces.POST("", workspaceHandler.CreateWorkspace)
-				workspaces.GET("/all", workspaceHandler.GetAllWorkspaces)
-				workspaces.GET("/:workspace_id", workspaceHandler.GetWorkspace)
-				workspaces.PUT("/:workspace_id", workspaceHandler.UpdateWorkspace)
-				workspaces.DELETE("/:workspace_id", workspaceHandler.DeleteWorkspace)
-				workspaces.DELETE("/:workspace_id/hard", workspaceHandler.HardDeleteWorkspace)
-				workspaces.GET("/:workspace_id/customers", workspaceHandler.ListWorkspaceCustomers)
-				workspaces.GET("/:workspace_id/products/active", productHandler.ListActiveProducts)
-			}
+			// workspaces := protected.Group("/workspaces")
+			// {
+			// 	workspaces.GET("", workspaceHandler.ListWorkspaces)
+			// 	workspaces.POST("", workspaceHandler.CreateWorkspace)
+			// 	workspaces.GET("/all", workspaceHandler.GetAllWorkspaces)
+			// 	workspaces.GET("/:workspace_id", workspaceHandler.GetWorkspace)
+			// 	workspaces.PUT("/:workspace_id", workspaceHandler.UpdateWorkspace)
+			// 	workspaces.DELETE("/:workspace_id", workspaceHandler.DeleteWorkspace)
+			// 	workspaces.DELETE("/:workspace_id/hard", workspaceHandler.HardDeleteWorkspace)
+			// 	workspaces.GET("/:workspace_id/customers", workspaceHandler.ListWorkspaceCustomers)
+			// 	workspaces.GET("/:workspace_id/products/active", productHandler.ListActiveProducts)
+			// }
 
 			// Wallets
-			protected.GET("/wallets", walletHandler.ListWallets)
-			protected.GET("/wallets/:wallet_id", walletHandler.GetWallet)
-			protected.POST("/wallets", walletHandler.CreateWallet)
+			wallets := protected.Group("/wallets")
+			{
+				wallets.GET("", walletHandler.ListWallets)
+				wallets.GET("/:wallet_id", walletHandler.GetWallet)
+				wallets.POST("/:workspace_id", walletHandler.CreateWallet)
+			}
 
 			// Subscriptions
 			subscriptions := protected.Group("/subscriptions")
 			{
 				subscriptions.GET("", subscriptionHandler.ListSubscriptions)
-				subscriptions.GET("/active", subscriptionHandler.ListActiveSubscriptions)
-				subscriptions.GET("/expired", subscriptionHandler.GetExpiredSubscriptions)
-				subscriptions.POST("", subscriptionHandler.CreateSubscription)
-				subscriptions.GET("/:subscription_id", subscriptionHandler.GetSubscription)
-				subscriptions.GET("/:subscription_id/details", subscriptionHandler.GetSubscriptionWithDetails)
-				subscriptions.PUT("/:subscription_id", subscriptionHandler.UpdateSubscription)
-				subscriptions.PATCH("/:subscription_id/status", subscriptionHandler.UpdateSubscriptionStatus)
-				subscriptions.POST("/:subscription_id/cancel", subscriptionHandler.CancelSubscription)
-				subscriptions.DELETE("/:subscription_id", subscriptionHandler.DeleteSubscription)
-				// Redemption endpoints
-				subscriptions.POST("/redeem-due", subscriptionHandler.RedeemDueSubscriptionsHTTP)
-				subscriptions.POST("/process-due", subscriptionHandler.ProcessDueSubscriptionsHTTP)
+				// subscriptions.GET("/active", subscriptionHandler.ListActiveSubscriptions)
+				// subscriptions.GET("/expired", subscriptionHandler.GetExpiredSubscriptions)
+				// subscriptions.POST("", subscriptionHandler.CreateSubscription)
+				// subscriptions.GET("/:subscription_id", subscriptionHandler.GetSubscription)
+				// subscriptions.GET("/:subscription_id/details", subscriptionHandler.GetSubscriptionWithDetails)
+				// subscriptions.PUT("/:subscription_id", subscriptionHandler.UpdateSubscription)
+				// subscriptions.PATCH("/:subscription_id/status", subscriptionHandler.UpdateSubscriptionStatus)
+				// subscriptions.POST("/:subscription_id/cancel", subscriptionHandler.CancelSubscription)
+				// subscriptions.DELETE("/:subscription_id", subscriptionHandler.DeleteSubscription)
 				// Subscription analytics
-				subscriptions.GET("/:subscription_id/total-amount", subscriptionEventHandler.GetTotalAmountBySubscription)
-				subscriptions.GET("/:subscription_id/redemption-count", subscriptionEventHandler.GetSuccessfulRedemptionCount)
-				subscriptions.GET("/:subscription_id/latest-event", subscriptionEventHandler.GetLatestSubscriptionEvent)
-				subscriptions.GET("/:subscription_id/events", subscriptionEventHandler.ListSubscriptionEventsBySubscription)
+				// subscriptions.GET("/:subscription_id/total-amount", subscriptionEventHandler.GetTotalAmountBySubscription)
+				// subscriptions.GET("/:subscription_id/redemption-count", subscriptionEventHandler.GetSuccessfulRedemptionCount)
+				// subscriptions.GET("/:subscription_id/latest-event", subscriptionEventHandler.GetLatestSubscriptionEvent)
+				// subscriptions.GET("/:subscription_id/events", subscriptionEventHandler.ListSubscriptionEventsBySubscription)
 			}
 
 			// Subscription events
 			subEvents := protected.Group("/subscription-events")
 			{
 				subEvents.GET("/transactions", subscriptionEventHandler.ListSubscriptionEvents)
-				subEvents.POST("", subscriptionEventHandler.CreateSubscriptionEvent)
-				subEvents.GET("/:event_id", subscriptionEventHandler.GetSubscriptionEvent)
-				subEvents.PUT("/:event_id", subscriptionEventHandler.UpdateSubscriptionEvent)
-				subEvents.GET("/transaction/:tx_hash", subscriptionEventHandler.GetSubscriptionEventByTxHash)
-				subEvents.GET("/type/:event_type", subscriptionEventHandler.ListSubscriptionEventsByType)
-				subEvents.GET("/failed", subscriptionEventHandler.ListFailedSubscriptionEvents)
-				subEvents.GET("/recent", subscriptionEventHandler.ListRecentSubscriptionEvents)
+				// subEvents.POST("", subscriptionEventHandler.CreateSubscriptionEvent)
+				// subEvents.GET("/:event_id", subscriptionEventHandler.GetSubscriptionEvent)
+				// subEvents.PUT("/:event_id", subscriptionEventHandler.UpdateSubscriptionEvent)
+				// subEvents.GET("/transaction/:tx_hash", subscriptionEventHandler.GetSubscriptionEventByTxHash)
+				// subEvents.GET("/type/:event_type", subscriptionEventHandler.ListSubscriptionEventsByType)
+				// subEvents.GET("/failed", subscriptionEventHandler.ListFailedSubscriptionEvents)
+				// subEvents.GET("/recent", subscriptionEventHandler.ListRecentSubscriptionEvents)
 			}
 
 			// Failed subscription attempts
-			failedAttempts := protected.Group("/failed-subscription-attempts")
-			{
-				failedAttempts.GET("", failedSubscriptionAttemptHandler.ListFailedSubscriptionAttempts)
-				failedAttempts.GET("/:attempt_id", failedSubscriptionAttemptHandler.GetFailedSubscriptionAttempt)
-				failedAttempts.GET("/customer/:customer_id", failedSubscriptionAttemptHandler.ListFailedSubscriptionAttemptsByCustomer)
-				failedAttempts.GET("/product/:product_id", failedSubscriptionAttemptHandler.ListFailedSubscriptionAttemptsByProduct)
-				failedAttempts.GET("/error-type/:error_type", failedSubscriptionAttemptHandler.ListFailedSubscriptionAttemptsByErrorType)
-			}
+			// failedAttempts := protected.Group("/failed-subscription-attempts")
+			// {
+			// 	failedAttempts.GET("", failedSubscriptionAttemptHandler.ListFailedSubscriptionAttempts)
+			// 	failedAttempts.GET("/:attempt_id", failedSubscriptionAttemptHandler.GetFailedSubscriptionAttempt)
+			// 	failedAttempts.GET("/customer/:customer_id", failedSubscriptionAttemptHandler.ListFailedSubscriptionAttemptsByCustomer)
+			// 	failedAttempts.GET("/product/:product_id", failedSubscriptionAttemptHandler.ListFailedSubscriptionAttemptsByProduct)
+			// 	failedAttempts.GET("/error-type/:error_type", failedSubscriptionAttemptHandler.ListFailedSubscriptionAttemptsByErrorType)
+			// }
 
 			// Delegations
-			delegations := protected.Group("/delegations")
-			{
-				delegations.GET("/:delegation_id/subscriptions", subscriptionHandler.GetSubscriptionsByDelegation)
-			}
+			// delegations := protected.Group("/delegations")
+			// {
+			// 	delegations.GET("/:delegation_id/subscriptions", subscriptionHandler.GetSubscriptionsByDelegation)
+			// }
 		}
 	}
 }

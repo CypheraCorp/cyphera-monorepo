@@ -227,7 +227,7 @@ func (rp *RedemptionProcessor) processRedemption(task RedemptionTask) error {
 	}
 
 	// get the product details
-	product, err := rp.dbQueries.GetProduct(ctx, task.ProductID)
+	product, err := rp.dbQueries.GetProductWithoutWorkspaceId(ctx, task.ProductID)
 	if err != nil {
 		logger.Error("Failed to get product details",
 			zap.Error(err),
@@ -237,7 +237,10 @@ func (rp *RedemptionProcessor) processRedemption(task RedemptionTask) error {
 	}
 
 	// get the merchant's wallet details
-	merchantWallet, err := rp.dbQueries.GetWalletByID(ctx, product.WalletID)
+	merchantWallet, err := rp.dbQueries.GetWalletByID(ctx, db.GetWalletByIDParams{
+		ID:          product.WalletID,
+		WorkspaceID: product.WorkspaceID,
+	})
 	if err != nil {
 		logger.Error("Failed to get merchant wallet details",
 			zap.Error(err),

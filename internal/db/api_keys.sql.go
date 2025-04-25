@@ -64,21 +64,31 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 const deleteAPIKey = `-- name: DeleteAPIKey :exec
 UPDATE api_keys
 SET deleted_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 `
 
-func (q *Queries) DeleteAPIKey(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteAPIKey, id)
+type DeleteAPIKeyParams struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) error {
+	_, err := q.db.Exec(ctx, deleteAPIKey, arg.ID, arg.WorkspaceID)
 	return err
 }
 
 const getAPIKey = `-- name: GetAPIKey :one
 SELECT id, workspace_id, name, key_hash, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at FROM api_keys
-WHERE id = $1 AND deleted_at IS NULL LIMIT 1
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL LIMIT 1
 `
 
-func (q *Queries) GetAPIKey(ctx context.Context, id uuid.UUID) (ApiKey, error) {
-	row := q.db.QueryRow(ctx, getAPIKey, id)
+type GetAPIKeyParams struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) GetAPIKey(ctx context.Context, arg GetAPIKeyParams) (ApiKey, error) {
+	row := q.db.QueryRow(ctx, getAPIKey, arg.ID, arg.WorkspaceID)
 	var i ApiKey
 	err := row.Scan(
 		&i.ID,
@@ -248,17 +258,18 @@ func (q *Queries) ListAPIKeys(ctx context.Context, workspaceID uuid.UUID) ([]Api
 const updateAPIKey = `-- name: UpdateAPIKey :one
 UPDATE api_keys
 SET
-    name = COALESCE($2, name),
-    access_level = COALESCE($3, access_level),
-    expires_at = COALESCE($4, expires_at),
-    metadata = COALESCE($5, metadata),
+    name = COALESCE($3, name),
+    access_level = COALESCE($4, access_level),
+    expires_at = COALESCE($5, expires_at),
+    metadata = COALESCE($6, metadata),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 RETURNING id, workspace_id, name, key_hash, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateAPIKeyParams struct {
 	ID          uuid.UUID          `json:"id"`
+	WorkspaceID uuid.UUID          `json:"workspace_id"`
 	Name        string             `json:"name"`
 	AccessLevel ApiKeyLevel        `json:"access_level"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
@@ -268,6 +279,7 @@ type UpdateAPIKeyParams struct {
 func (q *Queries) UpdateAPIKey(ctx context.Context, arg UpdateAPIKeyParams) (ApiKey, error) {
 	row := q.db.QueryRow(ctx, updateAPIKey,
 		arg.ID,
+		arg.WorkspaceID,
 		arg.Name,
 		arg.AccessLevel,
 		arg.ExpiresAt,

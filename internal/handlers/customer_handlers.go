@@ -104,6 +104,13 @@ type ListCustomersResponse struct {
 // @Security ApiKeyAuth
 // @Router /customers/{customer_id} [get]
 func (h *CustomerHandler) GetCustomer(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	customerId := c.Param("customer_id")
 	parsedUUID, err := uuid.Parse(customerId)
 	if err != nil {
@@ -111,7 +118,10 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 		return
 	}
 
-	customer, err := h.common.db.GetCustomer(c.Request.Context(), parsedUUID)
+	customer, err := h.common.db.GetCustomer(c.Request.Context(), db.GetCustomerParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Customer not found")
 		return
@@ -345,6 +355,13 @@ func validateCustomerParams(req *UpdateCustomerRequest) error {
 // @Security ApiKeyAuth
 // @Router /customers/{customer_id} [put]
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	customerId := c.Param("customer_id")
 	parsedUUID, err := uuid.Parse(customerId)
 	if err != nil {
@@ -370,6 +387,9 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 		return
 	}
 
+	// Update the workspace ID
+	params.WorkspaceID = parsedWorkspaceID
+
 	customer, err := h.common.db.UpdateCustomer(c.Request.Context(), params)
 	if err != nil {
 		handleDBError(c, err, "Failed to update customer")
@@ -392,6 +412,13 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /customers/{customer_id} [delete]
 func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	customerId := c.Param("customer_id")
 	parsedUUID, err := uuid.Parse(customerId)
 	if err != nil {
@@ -399,7 +426,10 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 		return
 	}
 
-	err = h.common.db.DeleteCustomer(c.Request.Context(), parsedUUID)
+	err = h.common.db.DeleteCustomer(c.Request.Context(), db.DeleteCustomerParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Failed to delete customer")
 		return

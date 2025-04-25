@@ -16,7 +16,7 @@ INSERT INTO wallets (
 
 -- name: GetWalletByID :one
 SELECT * FROM wallets
-WHERE id = $1 AND deleted_at IS NULL;
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL;
 
 -- name: GetWalletWithCircleDataByID :one
 SELECT 
@@ -28,7 +28,7 @@ SELECT
     cw.state as circle_state
 FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
-WHERE w.id = $1 AND w.deleted_at IS NULL;
+WHERE w.id = $1 AND w.workspace_id = $2 AND w.deleted_at IS NULL;
 
 -- name: GetWalletByAddress :one
 SELECT * FROM wallets

@@ -88,30 +88,18 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 			return
 		}
 
-		// Get workspaces for the account
-		workspaces, err := queries.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
-		if err != nil {
-			logger.Log.Debug("Failed to retrieve workspaces",
-				zap.Error(err),
-			)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve workspaces"})
+		// require workspace ID in the header
+		workspaceID := c.GetHeader("X-Workspace-ID")
+		if workspaceID == "" {
+			logger.Log.Debug("No workspace ID provided")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "No workspace ID provided"})
 			c.Abort()
-			return
 		}
-
-		if len(workspaces) == 0 {
-			logger.Log.Debug("No workspaces found for account")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "No workspaces found for account"})
-			c.Abort()
-			return
-		}
-
-		defaultWorkspace := workspaces[0]
 
 		// Set context with user and account information
 		c.Set("userID", user.ID.String())
 		c.Set("accountID", account.ID.String())
-		c.Set("workspaceID", defaultWorkspace.ID.String())
+		c.Set("workspaceID", workspaceID)
 		c.Set("accountType", string(account.AccountType))
 		c.Set("userRole", string(user.Role))
 		c.Set("authType", constants.AuthTypeJWT)

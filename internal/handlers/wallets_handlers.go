@@ -230,17 +230,17 @@ func toListCircleWalletsResponse(w db.ListCircleWalletsByWorkspaceIDRow) WalletR
 // @Security ApiKeyAuth
 // @Router /wallets [post]
 func (h *WalletHandler) CreateWallet(c *gin.Context) {
-	var req CreateWalletRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid request body", err)
-		return
-	}
-
 	// Get workspace ID from header (Assuming X-Workspace-ID is used now)
 	workspaceIDStr := c.GetHeader("X-Workspace-ID")
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid or missing X-Workspace-ID header", err)
+		return
+	}
+
+	var req CreateWalletRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
@@ -304,6 +304,13 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /wallets/{wallet_id} [get]
 func (h *WalletHandler) GetWallet(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	walletID := c.Param("wallet_id")
 	parsedUUID, err := uuid.Parse(walletID)
 	if err != nil {
@@ -314,24 +321,13 @@ func (h *WalletHandler) GetWallet(c *gin.Context) {
 	// Check if Circle data should be included
 	includeCircleData := c.Query("include_circle_data") == "true"
 
-	// Get workspace ID from context (assuming it's set by middleware)
-	workspaceIDStr := c.GetString("workspace_id")
-	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
-	if err != nil {
-		sendError(c, http.StatusUnauthorized, "Invalid workspace context", err)
-		return
-	}
-
 	if includeCircleData {
-		wallet, err := h.common.db.GetWalletWithCircleDataByID(c.Request.Context(), parsedUUID)
+		wallet, err := h.common.db.GetWalletWithCircleDataByID(c.Request.Context(), db.GetWalletWithCircleDataByIDParams{
+			ID:          parsedUUID,
+			WorkspaceID: parsedWorkspaceID,
+		})
 		if err != nil {
 			handleDBError(c, err, "Wallet not found")
-			return
-		}
-
-		// Verify workspace access
-		if wallet.WorkspaceID != parsedWorkspaceID {
-			sendError(c, http.StatusForbidden, "Access denied to this wallet", nil)
 			return
 		}
 
@@ -339,15 +335,12 @@ func (h *WalletHandler) GetWallet(c *gin.Context) {
 		return
 	}
 
-	wallet, err := h.common.db.GetWalletByID(c.Request.Context(), parsedUUID)
+	wallet, err := h.common.db.GetWalletByID(c.Request.Context(), db.GetWalletByIDParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Wallet not found")
-		return
-	}
-
-	// Verify workspace access
-	if wallet.WorkspaceID != parsedWorkspaceID {
-		sendError(c, http.StatusForbidden, "Access denied to this wallet", nil)
 		return
 	}
 
@@ -506,6 +499,13 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /wallets/{wallet_id} [patch]
 func (h *WalletHandler) UpdateWallet(c *gin.Context) {
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid or missing X-Workspace-ID header", err)
+		return
+	}
+
 	walletID := c.Param("wallet_id")
 	parsedUUID, err := uuid.Parse(walletID)
 	if err != nil {
@@ -519,16 +519,11 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 		return
 	}
 
-	// Get workspace ID from context (assuming it's set by middleware)
-	workspaceIDStr := c.GetString("workspace_id")
-	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
-	if err != nil {
-		sendError(c, http.StatusUnauthorized, "Invalid workspace context", err)
-		return
-	}
-
 	// Get current wallet to verify ownership
-	currentWallet, err := h.common.db.GetWalletByID(c.Request.Context(), parsedUUID)
+	currentWallet, err := h.common.db.GetWalletByID(c.Request.Context(), db.GetWalletByIDParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Wallet not found")
 		return
@@ -580,6 +575,13 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /wallets/{wallet_id}/primary [post]
 func (h *WalletHandler) SetWalletAsPrimary(c *gin.Context) {
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid or missing X-Workspace-ID header", err)
+		return
+	}
+
 	walletID := c.Param("wallet_id")
 	parsedUUID, err := uuid.Parse(walletID)
 	if err != nil {
@@ -587,16 +589,11 @@ func (h *WalletHandler) SetWalletAsPrimary(c *gin.Context) {
 		return
 	}
 
-	// Get workspace ID from context (assuming it's set by middleware)
-	workspaceIDStr := c.GetString("workspace_id")
-	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
-	if err != nil {
-		sendError(c, http.StatusUnauthorized, "Invalid workspace context", err)
-		return
-	}
-
 	// Get current wallet to verify ownership and get network type
-	currentWallet, err := h.common.db.GetWalletByID(c.Request.Context(), parsedUUID)
+	currentWallet, err := h.common.db.GetWalletByID(c.Request.Context(), db.GetWalletByIDParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Wallet not found")
 		return
@@ -620,7 +617,10 @@ func (h *WalletHandler) SetWalletAsPrimary(c *gin.Context) {
 	}
 
 	// Get updated wallet
-	updatedWallet, err := h.common.db.GetWalletByID(c.Request.Context(), parsedUUID)
+	updatedWallet, err := h.common.db.GetWalletByID(c.Request.Context(), db.GetWalletByIDParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to get updated wallet", err)
 		return
@@ -642,18 +642,18 @@ func (h *WalletHandler) SetWalletAsPrimary(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /wallets/{wallet_id} [delete]
 func (h *WalletHandler) DeleteWallet(c *gin.Context) {
-	walletID := c.Param("wallet_id")
-	parsedUUID, err := uuid.Parse(walletID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid wallet ID format", err)
-		return
-	}
-
 	// Get workspace ID from header (Assuming X-Workspace-ID is used now)
 	workspaceIDStr := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid or missing X-Workspace-ID header", err)
+		return
+	}
+
+	walletID := c.Param("wallet_id")
+	parsedUUID, err := uuid.Parse(walletID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid wallet ID format", err)
 		return
 	}
 
@@ -670,7 +670,10 @@ func (h *WalletHandler) DeleteWallet(c *gin.Context) {
 	}
 
 	// Get current wallet to verify ownership
-	currentWallet, err := h.common.db.GetWalletByID(c.Request.Context(), parsedUUID)
+	currentWallet, err := h.common.db.GetWalletByID(c.Request.Context(), db.GetWalletByIDParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Wallet not found")
 		return

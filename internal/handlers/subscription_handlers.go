@@ -238,6 +238,12 @@ func (h *SubscriptionHandler) ListSubscriptionsByCustomer(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /products/{product_id}/subscriptions [get]
 func (h *SubscriptionHandler) ListSubscriptionsByProduct(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
 	productID := c.Param("product_id")
 	parsedUUID, err := uuid.Parse(productID)
 	if err != nil {
@@ -245,7 +251,10 @@ func (h *SubscriptionHandler) ListSubscriptionsByProduct(c *gin.Context) {
 		return
 	}
 
-	subscriptions, err := h.common.db.ListSubscriptionsByProduct(c.Request.Context(), parsedUUID)
+	subscriptions, err := h.common.db.ListSubscriptionsByProduct(c.Request.Context(), db.ListSubscriptionsByProductParams{
+		ProductID:   parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve product subscriptions", err)
 		return
@@ -1139,7 +1148,7 @@ func (h *SubscriptionHandler) RedeemDueSubscriptions(ctx context.Context, subscr
 		}
 
 		// Get required data for processing
-		product, err := h.common.db.GetProduct(ctx, subscription.ProductID)
+		product, err := h.common.db.GetProductWithoutWorkspaceId(ctx, subscription.ProductID)
 		if err != nil {
 			log.Printf("Failed to get product for subscription %s: %v", subscriptionID, err)
 			results.Failed++
@@ -1160,7 +1169,10 @@ func (h *SubscriptionHandler) RedeemDueSubscriptions(ctx context.Context, subscr
 			continue
 		}
 
-		merchantWallet, err := h.common.db.GetWalletByID(ctx, product.WalletID)
+		merchantWallet, err := h.common.db.GetWalletByID(ctx, db.GetWalletByIDParams{
+			ID:          product.WalletID,
+			WorkspaceID: product.WorkspaceID,
+		})
 		if err != nil {
 			log.Printf("Failed to get merchant wallet for subscription %s: %v", subscriptionID, err)
 			results.Failed++
@@ -1300,7 +1312,7 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 		}
 
 		// Get required data for processing
-		product, err := qtx.GetProduct(ctx, subscription.ProductID)
+		product, err := qtx.GetProductWithoutWorkspaceId(ctx, subscription.ProductID)
 		if err != nil {
 			log.Printf("Failed to get product for subscription %s: %v", subscription.ID, err)
 			results.Failed++
@@ -1321,7 +1333,10 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 			continue
 		}
 
-		merchantWallet, err := qtx.GetWalletByID(ctx, product.WalletID)
+		merchantWallet, err := qtx.GetWalletByID(ctx, db.GetWalletByIDParams{
+			ID:          product.WalletID,
+			WorkspaceID: product.WorkspaceID,
+		})
 		if err != nil {
 			log.Printf("Failed to get merchant wallet for subscription %s: %v", subscription.ID, err)
 			results.Failed++

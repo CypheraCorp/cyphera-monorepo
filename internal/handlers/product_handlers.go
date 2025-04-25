@@ -147,6 +147,12 @@ type SubscribeRequest struct {
 // @Security ApiKeyAuth
 // @Router /products/{product_id} [get]
 func (h *ProductHandler) GetProduct(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
 	productId := c.Param("product_id")
 	parsedUUID, err := uuid.Parse(productId)
 	if err != nil {
@@ -154,7 +160,10 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 		return
 	}
 
-	product, err := h.common.db.GetProduct(c.Request.Context(), parsedUUID)
+	product, err := h.common.db.GetProduct(c.Request.Context(), db.GetProductParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Product not found")
 		return
@@ -183,13 +192,16 @@ func (h *ProductHandler) GetPublicProductByID(c *gin.Context) {
 		return
 	}
 
-	product, err := h.common.db.GetProduct(c.Request.Context(), parsedUUID)
+	product, err := h.common.db.GetProductWithoutWorkspaceId(c.Request.Context(), parsedUUID)
 	if err != nil {
 		handleDBError(c, err, "Product not found")
 		return
 	}
 
-	wallet, err := h.common.db.GetWalletByID(c.Request.Context(), product.WalletID)
+	wallet, err := h.common.db.GetWalletByID(c.Request.Context(), db.GetWalletByIDParams{
+		ID:          product.WalletID,
+		WorkspaceID: product.WorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Wallet not found")
 		return
@@ -263,7 +275,7 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 	}
 
 	// Get product details first to verify it exists
-	product, err := h.common.db.GetProduct(ctx, parsedProductID)
+	product, err := h.common.db.GetProductWithoutWorkspaceId(ctx, parsedProductID)
 	if err != nil {
 		handleDBError(c, err, "Product not found")
 		return
@@ -276,7 +288,10 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 	}
 
 	// retrieve the merchant's wallet details
-	merchantWallet, err := h.common.db.GetWalletByID(ctx, product.WalletID)
+	merchantWallet, err := h.common.db.GetWalletByID(ctx, db.GetWalletByIDParams{
+		ID:          product.WalletID,
+		WorkspaceID: product.WorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Merchant wallet not found")
 		return
@@ -1396,7 +1411,10 @@ func validateTermLength(productType string, termLength int32) error {
 
 // validateWallet validates the wallet exists and belongs to the workspace's account
 func (h *ProductHandler) validateWallet(ctx *gin.Context, walletID uuid.UUID, workspaceID uuid.UUID) error {
-	wallet, err := h.common.db.GetWalletByID(ctx.Request.Context(), walletID)
+	wallet, err := h.common.db.GetWalletByID(ctx.Request.Context(), db.GetWalletByIDParams{
+		ID:          walletID,
+		WorkspaceID: workspaceID,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to get wallet: %w", err)
 	}
@@ -1557,6 +1575,13 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /products/{product_id}/deploycontract [post]
 func (h *ProductHandler) PublishProduct(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	productId := c.Param("product_id")
 	parsedProductID, err := uuid.Parse(productId)
 	if err != nil {
@@ -1564,7 +1589,10 @@ func (h *ProductHandler) PublishProduct(c *gin.Context) {
 		return
 	}
 
-	product, err := h.common.db.GetProduct(c.Request.Context(), parsedProductID)
+	product, err := h.common.db.GetProduct(c.Request.Context(), db.GetProductParams{
+		ID:          parsedProductID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to get product", err)
 		return
@@ -1630,6 +1658,12 @@ func (h *ProductHandler) PublishProduct(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /products/{product_id} [put]
 func (h *ProductHandler) UpdateProduct(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
 	// Parse product ID
 	productId := c.Param("product_id")
 	parsedUUID, err := uuid.Parse(productId)
@@ -1646,16 +1680,12 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	}
 
 	// Get existing product to verify workspace ownership
-	existingProduct, err := h.common.db.GetProduct(c.Request.Context(), parsedUUID)
+	existingProduct, err := h.common.db.GetProduct(c.Request.Context(), db.GetProductParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Product not found")
-		return
-	}
-
-	// Verify workspace ownership
-	workspaceID := c.GetHeader("X-Workspace-ID")
-	if existingProduct.WorkspaceID.String() != workspaceID {
-		sendError(c, http.StatusForbidden, "Product does not belong to workspace", nil)
 		return
 	}
 
@@ -1671,6 +1701,8 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		sendError(c, http.StatusBadRequest, "Invalid update parameters", err)
 		return
 	}
+
+	params.WorkspaceID = parsedWorkspaceID
 
 	// Update the product
 	product, err := h.common.db.UpdateProduct(c.Request.Context(), params)
@@ -1711,6 +1743,12 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /products/{product_id} [delete]
 func (h *ProductHandler) DeleteProduct(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
 	productId := c.Param("product_id")
 	parsedUUID, err := uuid.Parse(productId)
 	if err != nil {
@@ -1718,7 +1756,10 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 		return
 	}
 
-	err = h.common.db.DeleteProduct(c.Request.Context(), parsedUUID)
+	err = h.common.db.DeleteProduct(c.Request.Context(), db.DeleteProductParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Failed to delete product")
 		return

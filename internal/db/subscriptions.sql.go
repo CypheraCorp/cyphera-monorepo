@@ -691,13 +691,19 @@ func (q *Queries) ListSubscriptionsByCustomer(ctx context.Context, customerID uu
 }
 
 const listSubscriptionsByProduct = `-- name: ListSubscriptionsByProduct :many
-SELECT id, customer_id, product_id, product_token_id, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, created_at, updated_at, deleted_at FROM subscriptions
-WHERE product_id = $1 AND deleted_at IS NULL
-ORDER BY created_at DESC
+SELECT s.id, s.customer_id, s.product_id, s.product_token_id, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.created_at, s.updated_at, s.deleted_at FROM subscriptions s
+JOIN products p ON s.product_id = p.id
+WHERE s.product_id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL
+ORDER BY s.created_at DESC
 `
 
-func (q *Queries) ListSubscriptionsByProduct(ctx context.Context, productID uuid.UUID) ([]Subscription, error) {
-	rows, err := q.db.Query(ctx, listSubscriptionsByProduct, productID)
+type ListSubscriptionsByProductParams struct {
+	ProductID   uuid.UUID `json:"product_id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) ListSubscriptionsByProduct(ctx context.Context, arg ListSubscriptionsByProductParams) ([]Subscription, error) {
+	rows, err := q.db.Query(ctx, listSubscriptionsByProduct, arg.ProductID, arg.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}

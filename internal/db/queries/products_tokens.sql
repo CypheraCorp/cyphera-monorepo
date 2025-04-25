@@ -22,9 +22,11 @@ SELECT
     t.gas_token
 FROM products_tokens pt
 JOIN tokens t ON t.id = pt.token_id
+JOIN products p ON pt.product_id = p.id
 WHERE pt.product_id = $1 
     AND pt.network_id = $2 
     AND pt.token_id = $3 
+    AND p.workspace_id = $4
     AND pt.deleted_at IS NULL;
 
 -- name: GetProductTokensByProduct :many
@@ -132,15 +134,18 @@ INSERT INTO products_tokens (
 RETURNING *;
 
 -- name: UpdateProductToken :one
-UPDATE products_tokens
+UPDATE products_tokens pt
 SET
-    active = COALESCE($4, active),
+    active = COALESCE($5, pt.active),
     updated_at = CURRENT_TIMESTAMP
-WHERE product_id = $1 
-    AND network_id = $2 
-    AND token_id = $3 
-    AND deleted_at IS NULL
-RETURNING *;
+FROM products p
+WHERE pt.product_id = p.id
+    AND pt.product_id = $1 
+    AND pt.network_id = $2 
+    AND pt.token_id = $3 
+    AND p.workspace_id = $4
+    AND pt.deleted_at IS NULL
+RETURNING pt.*;
 
 -- name: DeleteProductToken :exec
 UPDATE products_tokens
@@ -148,12 +153,15 @@ SET deleted_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: DeleteProductTokenByIds :exec
-UPDATE products_tokens
+UPDATE products_tokens pt
 SET deleted_at = CURRENT_TIMESTAMP
-WHERE product_id = $1 
-    AND network_id = $2 
-    AND token_id = $3 
-    AND deleted_at IS NULL;
+FROM products p
+WHERE pt.product_id = p.id
+    AND pt.product_id = $1 
+    AND pt.network_id = $2 
+    AND pt.token_id = $3 
+    AND p.workspace_id = $4
+    AND pt.deleted_at IS NULL;
 
 -- name: DeactivateProductToken :one
 UPDATE products_tokens

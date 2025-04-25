@@ -80,6 +80,13 @@ type ListAPIKeysResponse struct {
 // @Security ApiKeyAuth
 // @Router /api-keys/{api_key_id} [get]
 func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	apiKeyId := c.Param("api_key_id")
 	parsedUUID, err := uuid.Parse(apiKeyId)
 	if err != nil {
@@ -87,7 +94,10 @@ func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
 		return
 	}
 
-	apiKey, err := h.common.db.GetAPIKey(c.Request.Context(), parsedUUID)
+	apiKey, err := h.common.db.GetAPIKey(c.Request.Context(), db.GetAPIKeyParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "API key not found")
 		return
@@ -108,14 +118,14 @@ func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /api-keys [get]
 func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
-	workspaceID := c.GetString("workspaceID")
-	parsedUUID, err := uuid.Parse(workspaceID)
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
-	apiKeys, err := h.common.db.ListAPIKeys(c.Request.Context(), parsedUUID)
+	apiKeys, err := h.common.db.ListAPIKeys(c.Request.Context(), parsedWorkspaceID)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve API keys", err)
 		return
@@ -187,8 +197,8 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 		return
 	}
 
-	workspaceID := c.GetString("workspaceID")
-	parsedUUID, err := uuid.Parse(workspaceID)
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
@@ -207,7 +217,7 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	}
 
 	apiKey, err := h.common.db.CreateAPIKey(c.Request.Context(), db.CreateAPIKeyParams{
-		WorkspaceID: parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
 		Name:        req.Name,
 		KeyHash:     generateAPIKeyHash(),
 		AccessLevel: db.ApiKeyLevel(req.AccessLevel),
@@ -236,6 +246,13 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /api-keys/{api_key_id} [put]
 func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	apiKeyId := c.Param("api_key_id")
 	parsedUUID, err := uuid.Parse(apiKeyId)
 	if err != nil {
@@ -262,6 +279,7 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 	}
 
 	apiKey, err := h.common.db.UpdateAPIKey(c.Request.Context(), db.UpdateAPIKeyParams{
+		WorkspaceID: parsedWorkspaceID,
 		ID:          parsedUUID,
 		Name:        req.Name,
 		AccessLevel: db.ApiKeyLevel(req.AccessLevel),
@@ -289,6 +307,13 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /api-keys/{api_key_id} [delete]
 func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	apiKeyId := c.Param("api_key_id")
 	parsedUUID, err := uuid.Parse(apiKeyId)
 	if err != nil {
@@ -296,7 +321,10 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 		return
 	}
 
-	err = h.common.db.DeleteAPIKey(c.Request.Context(), parsedUUID)
+	err = h.common.db.DeleteAPIKey(c.Request.Context(), db.DeleteAPIKeyParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Failed to delete API key")
 		return
@@ -349,14 +377,14 @@ func (h *APIKeyHandler) GetExpiredAPIKeys(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /api-keys/count [get]
 func (h *APIKeyHandler) GetActiveAPIKeysCount(c *gin.Context) {
-	workspaceID := c.GetString("workspaceID")
-	parsedUUID, err := uuid.Parse(workspaceID)
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
 
-	count, err := h.common.db.GetActiveAPIKeysCount(c.Request.Context(), parsedUUID)
+	count, err := h.common.db.GetActiveAPIKeysCount(c.Request.Context(), parsedWorkspaceID)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to get API key count", err)
 		return
