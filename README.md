@@ -98,19 +98,31 @@ The Cyphera API ecosystem consists of four main components:
    cd cyphera-api
    ```
 
-2. **Configure main API environment:**
+2. **Configure Local Development Environment (`.env`):**
+   Copy the template file:
    ```bash
    cp .env.template .env
    ```
-   
-3. **Configure delegation server environment:**
+   *   Edit the `.env` file.
+   *   Set `DATABASE_URL` to point to your local PostgreSQL instance (e.g., the one started by `docker-compose`). The default `postgres://apiuser:apipassword@localhost:5432/cyphera?sslmode=disable` often works if using the provided `docker-compose.yml`.
+   *   Update `SUPABASE_URL`, `SUPABASE_JWT_SECRET`, `CYPHERA_SMART_WALLET_ADDRESS`, `CIRCLE_API_KEY`, and other necessary variables for your local setup.
+   *   **Important:** The `DATABASE_URL` in this file is **ONLY** used for local development runs (like `make dev` or `make dev-all`). Deployed environments (dev/prod in AWS Lambda) fetch credentials securely from AWS Secrets Manager.
+
+3. **Configure Delegation Server Local Environment:**
    ```bash
    cp delegation-server/.env.example delegation-server/.env
    ```
+   *   Edit `delegation-server/.env` and set necessary variables, including `NPM_TOKEN` if required for private dependencies.
 
-4. **Configure NPM token for delegation server:**
-   Edit the delegation-server/.env file and ensure the NPM_TOKEN value is set correctly.
-   This token is required for installing private dependencies.
+4. **Configure Deployment Secrets (GitHub Actions):**
+   For deployments via GitHub Actions, configure the following secrets in your GitHub repository settings (`Settings > Secrets and variables > Actions`):
+   *   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: For deploying to AWS.
+   *   `SUPABASE_URL`, `SUPABASE_JWT_SECRET`: For Supabase integration.
+   *   `CYPHERA_SMART_WALLET_ADDRESS`: Smart contract address.
+   *   `CIRCLE_API_KEY`: Circle API credentials.
+   *   `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_METHODS`, etc.: CORS settings for deployed environments.
+   *   `NPM_TOKEN` (if needed by delegation server build/setup).
+   *   **Note:** Database credentials (`DATABASE_URL` with password) are **NOT** stored here. They are managed by AWS Secrets Manager via Terraform.
 
 5. **Install dependencies:**
    ```bash

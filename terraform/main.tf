@@ -47,6 +47,7 @@ resource "aws_security_group" "lambda" {
   description = "Security group for Lambda functions"
   vpc_id      = module.vpc.vpc_id
 
+  # Default egress: Allow all outbound
   egress {
     from_port   = 0
     to_port     = 0
@@ -54,9 +55,66 @@ resource "aws_security_group" "lambda" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # Add specific egress rule for Delegation Server ALB (Optional but Recommended)
+  # Alternatively, the default egress rule above covers this.
+  # Keeping the default is simpler, but adding specific rule is more secure if you remove default.
+  # egress {
+  #   description     = "Allow outbound gRPC to Delegation Server ALB"
+  #   from_port       = 50051
+  #   to_port         = 50051
+  #   protocol        = "tcp"
+  #   security_groups = [aws_security_group.delegation_server_alb.id] # Reference ALB SG (needs depends_on if removing default egress)
+  # }
+
   tags = {
     Name        = "${var.app_name}-lambda-sg"
     Environment = var.environment
     App         = var.app_name
   }
-} 
+}
+
+# --- Add depends_on if adding specific egress and removing default ---
+# resource "aws_security_group_rule" "lambda_egress_to_ds_alb" {
+#   type                     = "egress"
+#   from_port                = 50051
+#   to_port                  = 50051
+#   protocol                 = "tcp"
+#   source_security_group_id = aws_security_group.delegation_server_alb.id
+#   security_group_id        = aws_security_group.lambda.id
+#   description              = "Allow outbound gRPC to Delegation Server ALB"
+# }
+
+locals {
+  # Common tags applied to all resources for organization and cost tracking
+  common_tags = {
+    Project     = var.service_prefix
+    Environment = var.stage
+    ManagedBy   = "Terraform"
+  }
+}
+
+# --- ECS Cluster --- 
+# Define a cluster for the delegation server workloads.
+# If you have an existing cluster you want to reuse, replace this resource
+# with a data source: data "aws_ecs_cluster" "existing" { name = "your-cluster-name" }
+resource "aws_ecs_cluster" "delegation_server_cluster" {
+  name = "${var.service_prefix}-delegation-cluster-${var.stage}"
+  tags = local.common_tags
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled" # Enable enhanced monitoring
+  }
+}
+
+# Existing VPC Peering Connection (Keep if used, ensure correct vpc_id)
+# data "aws_vpc_peering_connection" "default" {
+#   vpc_id    = module.vpc.vpc_id # Corrected reference
+#   peer_vpc_id = "vpc-0f048363b051a1a62"
+# }
+
+# --- REMOVED: IAM Policy/Attachment for Lambda to access RDS Secret ---
+# This permission is now managed within serverless.yml under provider.iam.role.statements
+# data "aws_iam_policy_document" "lambda_read_rds_secret" { ... }
+# resource "aws_iam_policy" "lambda_read_rds_secret" { ... }
+# resource "aws_iam_role_policy_attachment" "lambda_read_rds_secret" { ... } 

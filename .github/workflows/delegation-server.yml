@@ -30,8 +30,6 @@ jobs:
           cache: 'npm'
           cache-dependency-path: delegation-server/package-lock.json # Adjust if using yarn or pnpm
       - name: Install dependencies
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }} # If needed for private packages
         run: make delegation-server-setup # Runs npm install/ci via setup script
       - name: Run linter
         run: make delegation-server-lint
@@ -49,8 +47,6 @@ jobs:
           cache: 'npm'
           cache-dependency-path: delegation-server/package-lock.json
       - name: Install dependencies
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: make delegation-server-setup
       - name: Run tests
         run: make delegation-server-test
@@ -84,60 +80,67 @@ jobs:
             # Include any other necessary files for deployment (e.g., .env.production template, static assets)
 
   deploy:
-    name: Deploy Delegation Server
-    needs: [build]
+    name: Deploy Delegation Server to ECS Fargate
+    needs: [build] # Depends on the build job succeeding
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
-    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }} # Fix: Use github context directly
+
     steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # No artifact download needed if building Docker image from source
+      # - name: Download build artifact ...
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          name: delegation-server-${{ env.STAGE }}
-          path: delegation-server-deploy # Download to a specific directory
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1 # Match your Terraform region
 
-      # === DEPLOYMENT STEPS (COMMENTED OUT) ===
-      # Deployment strategy depends heavily on where you host the Node.js server
-      # (e.g., EC2, ECS Fargate, Google Cloud Run, Vercel, etc.)
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      # Example for AWS ECS Fargate (replace with your actual deployment):
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #     aws-region: ${{ env.AWS_REGION }} # Use region from env or define here
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          # Construct repository name based on Terraform convention
+          ECR_REPOSITORY: cyphera-delegation-server-${{ env.STAGE }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }} # Use Git SHA for unique image tag
+        run: |
+          echo "Building and pushing image $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          # Build the docker image locally
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f delegation-server/Dockerfile delegation-server/
+          # Push the image to ECR
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          # Set image URI as output for potential use (optional)
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
-      # - name: Login to Amazon ECR
-      #   id: login-ecr
-      #   uses: aws-actions/amazon-ecr-login@v2
+      - name: Update ECS Service to force new deployment
+        id: update-service
+        env:
+          # Construct cluster and service names based on Terraform convention
+          ECS_CLUSTER_NAME: cyphera-delegation-cluster-${{ env.STAGE }}
+          ECS_SERVICE_NAME: cyphera-delegation-server-${{ env.STAGE }}
+          AWS_REGION: us-east-1 # Match your Terraform region
+        run: |
+          echo "Updating ECS service $ECS_SERVICE_NAME in cluster $ECS_CLUSTER_NAME to force new deployment..."
+          # Use AWS CLI v2 to update the service and force a new deployment
+          # This pulls the new image tagged with the Git SHA
+          aws ecs update-service --cluster $ECS_CLUSTER_NAME --service $ECS_SERVICE_NAME --force-new-deployment --region $AWS_REGION
+          echo "ECS service update initiated."
 
-      # - name: Build, tag, and push image to Amazon ECR
-      #   id: build-image
+      # Optional: Add step to wait for service stability if needed
+      # - name: Wait for service stability
       #   env:
-      #     ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-      #     ECR_REPOSITORY: delegation-server-${{ env.STAGE }} # Example ECR repo name
-      #     IMAGE_TAG: ${{ github.sha }}
+      #     ECS_CLUSTER_NAME: cyphera-delegation-cluster-${{ env.STAGE }}
+      #     ECS_SERVICE_NAME: cyphera-delegation-server-${{ env.STAGE }}
+      #     AWS_REGION: us-east-1
       #   run: |
-      #     docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f delegation-server/Dockerfile . # Assuming Dockerfile exists
-      #     docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-      #     echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-      # - name: Fill in the new image ID in the Amazon ECS task definition
-      #   id: task-def
-      #   uses: aws-actions/amazon-ecs-render-task-definition@v1
-      #   with:
-      #     task-definition: delegation-server/ecs-task-definition-${{ env.STAGE }}.json # Path to your task definition file
-      #     container-name: delegation-server-container # Name of the container in the task definition
-      #     image: ${{ steps.build-image.outputs.image }}
-
-      # - name: Deploy Amazon ECS task definition
-      #   uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-      #   with:
-      #     task-definition: ${{ steps.task-def.outputs.task-definition }}
-      #     service: delegation-server-service-${{ env.STAGE }} # Name of your ECS service
-      #     cluster: your-ecs-cluster-name # Name of your ECS cluster
-      #     wait-for-service-stability: true
-
-      - name: Deployment Placeholder
-        run: echo "Deployment steps for stage ${{ env.STAGE }} would go here." 
+      #     echo "Waiting for service $ECS_SERVICE_NAME to become stable..."
+      #     aws ecs wait services-stable --cluster $ECS_CLUSTER_NAME --services $ECS_SERVICE_NAME --region $AWS_REGION
+      #     echo "Service $ECS_SERVICE_NAME is stable." 

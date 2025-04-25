@@ -1,0 +1,17 @@
+node_modules
+dist
+npm-debug.log
+server.log
+coverage/
+.env
+.env.*
+.DS_Store
+Dockerfile
+.dockerignore
+*.tgz
+*.log
+.git
+.github
+test/
+scripts/
+README.md 
