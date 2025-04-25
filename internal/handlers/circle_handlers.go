@@ -930,7 +930,11 @@ func (h *CircleHandler) CreateWallets(c *gin.Context) {
 							zap.Error(err))
 						return
 					}
-					defer tx.Rollback(ctx)
+					defer func() {
+						if rErr := tx.Rollback(ctx); rErr != nil && !errors.Is(rErr, pgx.ErrTxClosed) {
+							logger.Error("Failed to rollback transaction after challenge completion", zap.Error(rErr))
+						}
+					}()
 
 					// Process each wallet and create Cyphera wallet entries
 					walletCount := 0
@@ -1176,7 +1180,11 @@ func (h *CircleHandler) GetWallet(c *gin.Context) {
 		sendError(c, http.StatusInternalServerError, "Failed to begin transaction", err)
 		return
 	}
-	defer tx.Rollback(c.Request.Context())
+	defer func() {
+		if rErr := tx.Rollback(c.Request.Context()); rErr != nil && !errors.Is(rErr, pgx.ErrTxClosed) {
+			logger.Error("Failed to rollback transaction in GetWallet", zap.Error(rErr))
+		}
+	}()
 
 	// Check if wallet already exists in our database
 	var dbWallet db.Wallet
@@ -1425,7 +1433,11 @@ func (h *CircleHandler) GetWalletBalance(c *gin.Context) {
 			sendError(c, http.StatusInternalServerError, "Failed to begin transaction", err)
 			return
 		}
-		defer tx.Rollback(c.Request.Context())
+		defer func() {
+			if rErr := tx.Rollback(c.Request.Context()); rErr != nil && !errors.Is(rErr, pgx.ErrTxClosed) {
+				logger.Error("Failed to rollback transaction in GetWalletBalance", zap.Error(rErr))
+			}
+		}()
 
 		// Create metadata with wallet information
 		metadata := map[string]interface{}{
@@ -1638,7 +1650,11 @@ func (h *CircleHandler) ListWallets(c *gin.Context) {
 		sendError(c, http.StatusInternalServerError, "Failed to begin transaction", err)
 		return
 	}
-	defer tx.Rollback(c.Request.Context())
+	defer func() {
+		if rErr := tx.Rollback(c.Request.Context()); rErr != nil && !errors.Is(rErr, pgx.ErrTxClosed) {
+			logger.Error("Failed to rollback transaction in ListWallets", zap.Error(rErr))
+		}
+	}()
 
 	// Process each wallet and store/update in database
 	for _, walletData := range walletsResponse.Data.Wallets {

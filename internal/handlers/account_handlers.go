@@ -146,17 +146,17 @@ func (h *AccountHandler) GetAccount(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toAccountResponse(account))
 }
 
-// GetCurrentAccountDetails godoc
-// @Summary Get current account
-// @Description Retrieves the details of the currently authenticated user's account
+// GetAccountDetails godoc
+// @Summary Get account details
+// @Description Retrieves the details of the user's account
 // @Tags accounts
 // @Accept json
 // @Produce json
 // @Success 200 {object} FullAccountResponse
 // @Failure 401 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /accounts/me/details [get]
-func (h *AccountHandler) GetCurrentAccountDetails(c *gin.Context) {
+// @Router /accounts/details [get]
+func (h *AccountHandler) GetAccountDetails(c *gin.Context) {
 	access, err := h.getAccountDetails(c)
 	if err != nil {
 		handleDBError(c, err, "Failed to retrieve account details")
@@ -218,8 +218,8 @@ func (h *AccountHandler) getAccountDetails(c *gin.Context) (*AccountAccessRespon
 // @Failure 401 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /accounts/me [put]
-func (h *AccountHandler) UpdateCurrentAccount(c *gin.Context) {
+// @Router /accounts [put]
+func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 	// Check account access
 	access, err := h.CheckAccountAccess(c)
 	if HandleAccountAccessError(c, err) {
@@ -594,60 +594,6 @@ func HandleAccountAccessError(c *gin.Context, err error) bool {
 		sendError(c, http.StatusInternalServerError, "Failed to verify account access", err)
 	}
 	return true
-}
-
-// UpdateAccount godoc
-// @Summary Update an account
-// @Description Updates the specified account by setting the values of the parameters passed
-// @Tags accounts
-// @Accept json
-// @Produce json
-// @Param account body UpdateAccountRequest true "Account update data"
-// @Success 200 {object} AccountResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 401 {object} ErrorResponse
-// @Failure 403 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /accounts/:account_id [put]
-func (h *AccountHandler) UpdateAccount(c *gin.Context) {
-	accountId := c.Param("account_id")
-	parsedUUID, err := uuid.Parse(accountId)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid account ID format", err)
-		return
-	}
-
-	var req UpdateAccountRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid request body", err)
-		return
-	}
-
-	metadata, err := json.Marshal(req.Metadata)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
-		return
-	}
-
-	account, err := h.common.db.UpdateAccount(c.Request.Context(), db.UpdateAccountParams{
-		ID:                 parsedUUID,
-		Name:               req.Name,
-		AccountType:        db.AccountType(req.AccountType),
-		BusinessName:       pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
-		BusinessType:       pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
-		WebsiteUrl:         pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
-		SupportEmail:       pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
-		SupportPhone:       pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
-		FinishedOnboarding: pgtype.Bool{Bool: req.FinishedOnboarding, Valid: true},
-		Metadata:           metadata,
-	})
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to update account", err)
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, toAccountResponse(account))
 }
 
 // DeleteAccount godoc

@@ -74,6 +74,9 @@ func (c *CircleClient) CreateTransferChallenge(ctx context.Context, request Tran
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transfer challenge: %w", err)
 	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 
 	var response TransferChallengeResponse
 	if err := c.httpClient.ProcessJSONResponse(resp, &response); err != nil {
@@ -236,6 +239,9 @@ func (c *CircleClient) ListTransactions(ctx context.Context, userToken string, p
 	if err != nil {
 		return nil, fmt.Errorf("failed to list transactions: %w", err)
 	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 
 	var response TransactionListResponse
 	if err := c.httpClient.ProcessJSONResponse(resp, &response); err != nil {
@@ -270,6 +276,9 @@ func (c *CircleClient) GetTransaction(ctx context.Context, transactionID string,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get transaction: %w", err)
+	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
 	}
 
 	var response TransactionResponse
@@ -350,6 +359,9 @@ func (c *CircleClient) EstimateTransferFee(ctx context.Context, request Estimate
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate transfer fee: %w", err)
 	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 
 	var response EstimateTransferFeeResponse
 	if err := c.httpClient.ProcessJSONResponse(resp, &response); err != nil {
@@ -400,6 +412,9 @@ func (c *CircleClient) ValidateAddress(ctx context.Context, request ValidateAddr
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate address: %w", err)
+	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
 	}
 
 	var response ValidateAddressResponse

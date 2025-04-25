@@ -126,6 +126,9 @@ func (c *CircleClient) GetUserByToken(ctx context.Context, userToken string) (*U
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user by token: %w", err)
 	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 
 	var userResponse UserResponse
 	if err := c.httpClient.ProcessJSONResponse(resp, &userResponse); err != nil {
@@ -144,6 +147,9 @@ func (c *CircleClient) GetUserByID(ctx context.Context, userID string) (*UserByI
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
+	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
 	}
 
 	var userResponse UserByIDResponse
@@ -164,6 +170,9 @@ func (c *CircleClient) GetChallenge(ctx context.Context, challengeID string, use
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get challenge: %w", err)
+	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
 	}
 
 	var challengeResponse ChallengeResponse
@@ -190,6 +199,9 @@ func (c *CircleClient) InitializeUser(ctx context.Context, request InitializeUse
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize user: %w", err)
+	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
 	}
 
 	var response InitializeUserResponse
@@ -220,6 +232,9 @@ func (c *CircleClient) CreateUserToken(ctx context.Context, userID string) (*Use
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user token: %w", err)
+	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
 	}
 
 	var response UserTokenResponse

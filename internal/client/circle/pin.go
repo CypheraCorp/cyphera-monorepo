@@ -35,6 +35,9 @@ func (c *CircleClient) CreatePinChallenge(ctx context.Context, idempotencyKey st
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PIN challenge: %w", err)
 	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 
 	var response PinChallengeResponse
 	if err := c.httpClient.ProcessJSONResponse(resp, &response); err != nil {
@@ -61,6 +64,9 @@ func (c *CircleClient) UpdatePinChallenge(ctx context.Context, idempotencyKey st
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PIN update challenge: %w", err)
 	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 
 	var response PinChallengeResponse
 	if err := c.httpClient.ProcessJSONResponse(resp, &response); err != nil {
@@ -86,6 +92,9 @@ func (c *CircleClient) CreatePinRestoreChallenge(ctx context.Context, idempotenc
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PIN restore challenge: %w", err)
+	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
 	}
 
 	var response PinChallengeResponse

@@ -5,6 +5,7 @@ import (
 	dsClient "cyphera-api/internal/client/delegation_server"
 	"cyphera-api/internal/db"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -828,7 +829,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			}
 		}
 		result.isProcessed = false // Set isProcessed to false since increment failed
-		return result, fmt.Errorf("json marshal error: %w", err)
+		return result, errors.New(errMsg)
 	}
 
 	// Redeem the delegation with retries
@@ -914,7 +915,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			// Decide how to handle this - maybe default to monthly or fail?
 			// For now, let's fail to highlight the issue.
 			// You might choose to default: nextDate := CalculateNextRedemption(db.IntervalTypeMonth, params.now)
-			return result, fmt.Errorf(errMsg)
+			return result, errors.New(errMsg)
 		}
 
 		// Calculate next redemption date using the product interval type
