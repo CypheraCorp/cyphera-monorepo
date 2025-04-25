@@ -150,6 +150,11 @@ func (h *GetProductHandler) Handle(c *gin.Context) {
 		return
 	}
 
+	var intervalTypeStr string
+	if product.IntervalType.Valid {
+		intervalTypeStr = string(product.IntervalType.IntervalType)
+	}
+
 	response := TestProductResponse{
 		ID:              product.ID.String(),
 		Object:          "product",
@@ -158,7 +163,7 @@ func (h *GetProductHandler) Handle(c *gin.Context) {
 		Name:            product.Name,
 		Description:     product.Description.String,
 		ProductType:     string(product.ProductType),
-		IntervalType:    string(product.IntervalType),
+		IntervalType:    intervalTypeStr,
 		TermLength:      product.TermLength.Int32,
 		PriceInPennies:  product.PriceInPennies,
 		ImageURL:        product.ImageUrl.String,
@@ -252,6 +257,11 @@ func (h *GetPublicProductHandler) Handle(c *gin.Context) {
 		publicProductTokens[i].TokenAddress = token.ContractAddress
 	}
 
+	var intervalTypeStr string
+	if product.IntervalType.Valid {
+		intervalTypeStr = string(product.IntervalType.IntervalType)
+	}
+
 	response := TestPublicProductResponse{
 		ProductID:       product.ID.String(),
 		AccountID:       workspace.AccountID.String(),
@@ -260,7 +270,7 @@ func (h *GetPublicProductHandler) Handle(c *gin.Context) {
 		Name:            product.Name,
 		Description:     product.Description.String,
 		ProductType:     string(product.ProductType),
-		IntervalType:    string(product.IntervalType),
+		IntervalType:    intervalTypeStr,
 		TermLength:      product.TermLength.Int32,
 		PriceInPennies:  product.PriceInPennies,
 		ImageURL:        product.ImageUrl.String,
@@ -293,8 +303,11 @@ func TestGetProduct_Success(t *testing.T) {
 			String: "A test product description",
 			Valid:  true,
 		},
-		ProductType:    "recurring",
-		IntervalType:   "month",
+		ProductType: "recurring",
+		IntervalType: db.NullIntervalType{
+			IntervalType: db.IntervalTypeMonth,
+			Valid:        true,
+		},
 		TermLength:     pgtype.Int4{Int32: 12, Valid: true},
 		PriceInPennies: 1999,
 		ImageUrl: pgtype.Text{
@@ -472,8 +485,11 @@ func TestGetPublicProductByID_Success(t *testing.T) {
 			String: "A test product description",
 			Valid:  true,
 		},
-		ProductType:    "recurring",
-		IntervalType:   "month",
+		ProductType: "recurring",
+		IntervalType: db.NullIntervalType{
+			IntervalType: db.IntervalTypeMonth,
+			Valid:        true,
+		},
 		TermLength:     pgtype.Int4{Int32: 12, Valid: true},
 		PriceInPennies: 1999,
 		ImageUrl: pgtype.Text{
@@ -486,7 +502,7 @@ func TestGetPublicProductByID_Success(t *testing.T) {
 
 	wallet := db.Wallet{
 		ID:            walletID,
-		AccountID:     accountID,
+		WorkspaceID:   workspaceID,
 		WalletAddress: "0xabcdef1234567890",
 	}
 
@@ -554,7 +570,7 @@ func TestGetPublicProductByID_Success(t *testing.T) {
 	assert.Equal(t, product.Name, response.Name)
 	assert.Equal(t, product.Description.String, response.Description)
 	assert.Equal(t, string(product.ProductType), response.ProductType)
-	assert.Equal(t, string(product.IntervalType), response.IntervalType)
+	assert.Equal(t, "month", response.IntervalType)
 	assert.Equal(t, product.TermLength.Int32, response.TermLength)
 	assert.Equal(t, product.PriceInPennies, response.PriceInPennies)
 	assert.Equal(t, product.ImageUrl.String, response.ImageURL)
@@ -654,7 +670,7 @@ func TestGetPublicProductByID_TokenError(t *testing.T) {
 
 	wallet := db.Wallet{
 		ID:            walletID,
-		AccountID:     accountID,
+		WorkspaceID:   workspaceID,
 		WalletAddress: "0xabcdef1234567890",
 	}
 
@@ -960,6 +976,10 @@ func (h *TestSubscriptionHandler) SubscribeToProduct(c *gin.Context) {
 	h.db.On("CreateDelegationDatum", ctx, mock.Anything).Return(delegationData, nil)
 
 	// Create subscription
+	now := time.Now()
+	nextRedemption := CalculateNextRedemption(db.IntervalTypeMonth, now)
+	periodEnd := CalculatePeriodEnd(now, db.IntervalTypeMonth, 1)
+
 	subscription := db.Subscription{
 		ID:                 uuid.New(),
 		CustomerID:         customer.ID,
@@ -967,9 +987,9 @@ func (h *TestSubscriptionHandler) SubscribeToProduct(c *gin.Context) {
 		ProductTokenID:     parsedProductTokenID,
 		Status:             db.SubscriptionStatusActive,
 		DelegationID:       delegationData.ID,
-		CurrentPeriodStart: pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		CurrentPeriodEnd:   pgtype.Timestamptz{Time: time.Now().Add(30 * 24 * time.Hour), Valid: true},
-		NextRedemptionDate: pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour), Valid: true},
+		CurrentPeriodStart: pgtype.Timestamptz{Time: now, Valid: true},
+		CurrentPeriodEnd:   pgtype.Timestamptz{Time: periodEnd, Valid: true},
+		NextRedemptionDate: pgtype.Timestamptz{Time: nextRedemption, Valid: true},
 		CreatedAt:          pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		UpdatedAt:          pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
@@ -1018,12 +1038,15 @@ func TestSubscribeToProduct_Success(t *testing.T) {
 	periodEnd := CalculatePeriodEnd(now, db.IntervalTypeMonth, 1)
 
 	product := db.Product{
-		ID:             productID,
-		WorkspaceID:    workspaceID,
-		WalletID:       walletID,
-		Name:           "Test Product",
-		ProductType:    "recurring",
-		IntervalType:   "month",
+		ID:          productID,
+		WorkspaceID: workspaceID,
+		WalletID:    walletID,
+		Name:        "Test Product",
+		ProductType: "recurring",
+		IntervalType: db.NullIntervalType{
+			IntervalType: db.IntervalTypeMonth,
+			Valid:        true,
+		},
 		PriceInPennies: 1999,
 		Active:         true,
 	}
@@ -1064,8 +1087,8 @@ func TestSubscribeToProduct_Success(t *testing.T) {
 		CustomerID:         customerID,
 		ProductID:          productID,
 		ProductTokenID:     productTokenID,
-		DelegationID:       delegationID,
 		Status:             db.SubscriptionStatusActive,
+		DelegationID:       delegationID,
 		CurrentPeriodStart: pgtype.Timestamptz{Time: now, Valid: true},
 		CurrentPeriodEnd:   pgtype.Timestamptz{Time: periodEnd, Valid: true},
 		NextRedemptionDate: pgtype.Timestamptz{Time: nextRedemption, Valid: true},
@@ -1384,12 +1407,15 @@ func TestSubscribeToProduct_InactiveProduct(t *testing.T) {
 
 	// Create inactive product
 	product := db.Product{
-		ID:             productID,
-		WorkspaceID:    workspaceID,
-		WalletID:       walletID,
-		Name:           "Test Product",
-		ProductType:    "recurring",
-		IntervalType:   "month",
+		ID:          productID,
+		WorkspaceID: workspaceID,
+		WalletID:    walletID,
+		Name:        "Test Product",
+		ProductType: "recurring",
+		IntervalType: db.NullIntervalType{
+			IntervalType: db.IntervalTypeMonth,
+			Valid:        true,
+		},
 		PriceInPennies: 1999,
 		Active:         false, // Inactive product
 	}

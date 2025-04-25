@@ -1,7 +1,7 @@
 -- name: CreateCircleUser :one
 INSERT INTO circle_users (
     id,
-    account_id,
+    workspace_id,
     circle_create_date,
     pin_status,
     status,
@@ -14,9 +14,9 @@ INSERT INTO circle_users (
 SELECT * FROM circle_users
 WHERE id = $1;
 
--- name: GetCircleUserByAccountID :one
+-- name: GetCircleUserByWorkspaceID :one
 SELECT * FROM circle_users
-WHERE account_id = $1;
+WHERE workspace_id = $1;
 
 -- name: ListCircleUsers :many
 SELECT * FROM circle_users
@@ -32,23 +32,23 @@ SET
 WHERE id = $4
 RETURNING *;
 
--- name: UpdateCircleUserByAccountID :one
+-- name: UpdateCircleUserByWorkspaceID :one
 UPDATE circle_users
 SET 
     pin_status = COALESCE($1, pin_status),
     status = COALESCE($2, status),
     security_question_status = COALESCE($3, security_question_status),
     updated_at = CURRENT_TIMESTAMP
-WHERE account_id = $4
+WHERE workspace_id = $4
 RETURNING *;
 
 -- name: DeleteCircleUser :exec
 DELETE FROM circle_users
 WHERE id = $1;
 
--- name: DeleteCircleUserByAccountID :exec
+-- name: DeleteCircleUserByWorkspaceID :exec
 DELETE FROM circle_users
-WHERE account_id = $1;
+WHERE workspace_id = $1;
 
 -- name: GetCircleUserWithWallets :one
 SELECT 
@@ -63,7 +63,7 @@ WHERE
 GROUP BY 
     cu.id;
 
--- name: GetCircleUserWithWalletsByAccountID :one
+-- name: GetCircleUserWithWalletsByWorkspaceID :one
 SELECT 
     cu.*,
     COUNT(cw.id) as wallet_count
@@ -72,6 +72,6 @@ FROM
 LEFT JOIN 
     circle_wallets cw ON cu.id = cw.circle_user_id
 WHERE 
-    cu.account_id = $1
+    cu.workspace_id = $1
 GROUP BY 
     cu.id; 

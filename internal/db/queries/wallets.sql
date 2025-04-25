@@ -1,6 +1,6 @@
 -- name: CreateWallet :one
 INSERT INTO wallets (
-    account_id,
+    workspace_id,
     wallet_type,
     wallet_address,
     network_type,
@@ -46,12 +46,12 @@ FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
 WHERE w.wallet_address = $1 AND w.network_type = $2 AND w.deleted_at IS NULL;
 
--- name: ListWalletsByAccountID :many
+-- name: ListWalletsByWorkspaceID :many
 SELECT * FROM wallets
-WHERE account_id = $1 AND deleted_at IS NULL
+WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
--- name: ListWalletsWithCircleDataByAccountID :many
+-- name: ListWalletsWithCircleDataByWorkspaceID :many
 SELECT 
     w.*,
     cw.id as circle_wallet_id,
@@ -61,10 +61,10 @@ SELECT
     cw.state as circle_state
 FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
-WHERE w.account_id = $1 AND w.deleted_at IS NULL
+WHERE w.workspace_id = $1 AND w.deleted_at IS NULL
 ORDER BY w.created_at DESC;
 
--- name: ListCircleWalletsByAccountID :many
+-- name: ListCircleWalletsByWorkspaceID :many
 SELECT 
     w.*,
     cw.id as circle_wallet_id,
@@ -74,7 +74,7 @@ SELECT
     cw.state as circle_state
 FROM wallets w
 JOIN circle_wallets cw ON w.id = cw.wallet_id
-WHERE w.account_id = $1 AND w.wallet_type = 'circle_wallet' AND w.deleted_at IS NULL
+WHERE w.workspace_id = $1 AND w.wallet_type = 'circle_wallet' AND w.deleted_at IS NULL
 ORDER BY w.created_at DESC;
 
 -- name: ListCircleWalletsByCircleUserID :many
@@ -90,12 +90,12 @@ JOIN circle_wallets cw ON w.id = cw.wallet_id
 WHERE cw.circle_user_id = $1 AND w.wallet_type = 'circle_wallet' AND w.deleted_at IS NULL
 ORDER BY w.created_at DESC;
 
--- name: ListPrimaryWalletsByAccountID :many
+-- name: ListPrimaryWalletsByWorkspaceID :many
 SELECT * FROM wallets
-WHERE account_id = $1 AND is_primary = true AND deleted_at IS NULL
+WHERE workspace_id = $1 AND is_primary = true AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
--- name: ListPrimaryWalletsWithCircleDataByAccountID :many
+-- name: ListPrimaryWalletsWithCircleDataByWorkspaceID :many
 SELECT 
     w.*,
     cw.id as circle_wallet_id,
@@ -105,12 +105,12 @@ SELECT
     cw.state as circle_state
 FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
-WHERE w.account_id = $1 AND w.is_primary = true AND w.deleted_at IS NULL
+WHERE w.workspace_id = $1 AND w.is_primary = true AND w.deleted_at IS NULL
 ORDER BY w.created_at DESC;
 
 -- name: ListWalletsByNetworkType :many
 SELECT * FROM wallets
-WHERE account_id = $1 AND network_type = $2 AND deleted_at IS NULL
+WHERE workspace_id = $1 AND network_type = $2 AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
 -- name: ListWalletsWithCircleDataByNetworkType :many
@@ -123,12 +123,12 @@ SELECT
     cw.state as circle_state
 FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
-WHERE w.account_id = $1 AND w.network_type = $2 AND w.deleted_at IS NULL
+WHERE w.workspace_id = $1 AND w.network_type = $2 AND w.deleted_at IS NULL
 ORDER BY w.created_at DESC;
 
 -- name: ListWalletsByWalletType :many
 SELECT * FROM wallets
-WHERE account_id = $1 AND wallet_type = $2 AND deleted_at IS NULL
+WHERE workspace_id = $1 AND wallet_type = $2 AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
 -- name: UpdateWallet :one
@@ -155,7 +155,7 @@ RETURNING *;
 WITH updated_wallets AS (
     UPDATE wallets w
     SET is_primary = false
-    WHERE w.account_id = $1 
+    WHERE w.workspace_id = $1
     AND w.network_type = $2 
     AND w.is_primary = true 
     AND w.deleted_at IS NULL
@@ -189,11 +189,11 @@ SELECT
     COUNT(*) FILTER (WHERE wallet_type = 'wallet') as standard_wallets_count,
     COUNT(*) FILTER (WHERE wallet_type = 'circle_wallet') as circle_wallets_count
 FROM wallets
-WHERE account_id = $1 AND deleted_at IS NULL;
+WHERE workspace_id = $1 AND deleted_at IS NULL;
 
 -- name: SearchWallets :many
 SELECT * FROM wallets
-WHERE account_id = $1 
+WHERE workspace_id = $1
 AND deleted_at IS NULL
 AND (
     wallet_address ILIKE $2 
@@ -213,7 +213,7 @@ SELECT
     cw.state as circle_state
 FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
-WHERE w.account_id = $1 
+WHERE w.workspace_id = $1
 AND w.deleted_at IS NULL
 AND (
     w.wallet_address ILIKE $2 
@@ -226,14 +226,14 @@ LIMIT $3 OFFSET $4;
 
 -- name: GetWalletsByENS :many
 SELECT * FROM wallets
-WHERE account_id = $1 
+WHERE workspace_id = $1
 AND ens IS NOT NULL 
 AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
 -- name: GetRecentlyUsedWallets :many
 SELECT * FROM wallets
-WHERE account_id = $1 
+WHERE workspace_id = $1
 AND last_used_at IS NOT NULL 
 AND deleted_at IS NULL
 ORDER BY last_used_at DESC
@@ -249,7 +249,7 @@ SELECT
     cw.state as circle_state
 FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
-WHERE w.account_id = $1 
+WHERE w.workspace_id = $1
 AND w.last_used_at IS NOT NULL 
 AND w.deleted_at IS NULL
 ORDER BY w.last_used_at DESC

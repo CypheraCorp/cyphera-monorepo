@@ -1,32 +1,36 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Enum for API key access levels
+-- Enum definitions (order doesn't matter here)
 CREATE TYPE api_key_level AS ENUM ('read', 'write', 'admin');
-
--- Enum for account types
 CREATE TYPE account_type AS ENUM ('admin', 'merchant');
-
--- Enum for user roles within an account
 CREATE TYPE user_role AS ENUM ('admin', 'support', 'developer');
-
--- Enum for user status
 CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended', 'pending');
-
--- Create product type enum
 CREATE TYPE product_type AS ENUM ('recurring', 'one_off');
-
--- Create interval type enum
 CREATE TYPE interval_type AS ENUM ('1min', '5mins', 'daily', 'week', 'month', 'year');
-
--- Create network type enum
 CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkadot');
-
--- Create wallet type enum
 CREATE TYPE wallet_type AS ENUM ('wallet', 'circle_wallet');
-
--- Create circle network type enum
 CREATE TYPE circle_network_type AS ENUM ('ARB', 'ARB-SEPOLIA', 'ETH', 'ETH-SEPOLIA', 'MATIC', 'MATIC-AMOY', 'BASE', 'BASE-SEPOLIA', 'UNICHAIN', 'UNICHAIN-SEPOLIA', 'SOL', 'SOL-DEVNET');
+CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'suspended', 'failed', 'completed');
+CREATE TYPE subscription_event_type AS ENUM (
+    'created', 
+    'redeemed', 
+    'renewed', 
+    'canceled', 
+    'expired',
+    'completed',
+    'failed',
+    'failed_validation',
+    'failed_customer_creation',
+    'failed_wallet_creation',
+    'failed_delegation_storage',
+    'failed_subscription_db',
+    'failed_redemption',
+    'failed_transaction',
+    'failed_duplicate'
+);
+
+-- Create Tables in dependency order
 
 -- Accounts table (top level organization)
 CREATE TABLE IF NOT EXISTS accounts (
@@ -46,28 +50,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
--- Circle Users Table
--- Stores Circle user data
-CREATE TABLE IF NOT EXISTS circle_users (
-    id UUID PRIMARY KEY,                      -- Circle User ID
-    account_id UUID NOT NULL REFERENCES accounts(id), -- Our Account ID
-    circle_create_date TIMESTAMP WITH TIME ZONE NOT NULL,
-    pin_status TEXT NOT NULL DEFAULT 'UNSET',
-    status TEXT NOT NULL DEFAULT 'ENABLED',
-    security_question_status TEXT NOT NULL DEFAULT 'UNSET',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Index for fast lookups by account_id
-    UNIQUE(account_id),
-    
-    -- Constraints for enum-like fields
-    CONSTRAINT valid_pin_status CHECK (pin_status IN ('ENABLED', 'UNSET', 'LOCKED')),
-    CONSTRAINT valid_status CHECK (status IN ('ENABLED', 'DISABLED')),
-    CONSTRAINT valid_security_question_status CHECK (security_question_status IN ('ENABLED', 'UNSET', 'LOCKED'))
-);
-
--- Users table
+-- Users table (depends on accounts)
 CREATE TABLE IF NOT EXISTS users (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     supabase_id VARCHAR(255) NOT NULL UNIQUE,
@@ -99,7 +82,7 @@ CREATE TABLE IF NOT EXISTS users (
     CONSTRAINT one_owner_per_account EXCLUDE (account_id WITH =) WHERE (is_account_owner = true AND deleted_at IS NULL)
 );
 
--- Workspaces table
+-- Workspaces table (depends on accounts)
 CREATE TABLE IF NOT EXISTS workspaces (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     account_id UUID NOT NULL REFERENCES accounts(id),
@@ -117,7 +100,27 @@ CREATE TABLE IF NOT EXISTS workspaces (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
--- Customers table
+-- Circle Users Table (depends on workspaces)
+CREATE TABLE IF NOT EXISTS circle_users (
+    id UUID PRIMARY KEY,                      -- Circle User ID
+    workspace_id UUID NOT NULL REFERENCES workspaces(id), -- Our Workspace ID
+    circle_create_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    pin_status TEXT NOT NULL DEFAULT 'UNSET',
+    status TEXT NOT NULL DEFAULT 'ENABLED',
+    security_question_status TEXT NOT NULL DEFAULT 'UNSET',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Index for fast lookups by workspace_id
+    UNIQUE(workspace_id),
+    
+    -- Constraints for enum-like fields
+    CONSTRAINT valid_pin_status CHECK (pin_status IN ('ENABLED', 'UNSET', 'LOCKED')),
+    CONSTRAINT valid_status CHECK (status IN ('ENABLED', 'DISABLED')),
+    CONSTRAINT valid_security_question_status CHECK (security_question_status IN ('ENABLED', 'UNSET', 'LOCKED'))
+);
+
+-- Customers table (depends on workspaces)
 CREATE TABLE IF NOT EXISTS customers (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
@@ -141,7 +144,7 @@ CREATE TABLE IF NOT EXISTS customers (
     UNIQUE(workspace_id, external_id)
 );
 
--- API Keys table
+-- API Keys table (depends on workspaces)
 CREATE TABLE IF NOT EXISTS api_keys (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
@@ -156,7 +159,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
--- Create networks table
+-- Networks table (no dependencies)
 CREATE TABLE networks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
@@ -171,10 +174,10 @@ CREATE TABLE networks (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
--- Wallets table
+-- Wallets table (depends on workspaces, networks)
 CREATE TABLE IF NOT EXISTS wallets (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    account_id UUID NOT NULL REFERENCES accounts(id),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id), -- Changed from account_id
     wallet_type TEXT NOT NULL,                -- 'wallet' or 'circle_wallet'
     wallet_address TEXT NOT NULL,
     network_type network_type NOT NULL,
@@ -191,11 +194,7 @@ CREATE TABLE IF NOT EXISTS wallets (
     CONSTRAINT check_wallet_type CHECK (wallet_type IN ('wallet', 'circle_wallet'))
 );
 
--- Add partial unique index that only applies to non-deleted wallets
-CREATE UNIQUE INDEX wallets_account_wallet_network_unique_idx ON wallets(account_id, wallet_address, network_type) WHERE deleted_at IS NULL;
-
--- Circle Wallets Table
--- Stores Circle-specific wallet data
+-- Circle Wallets Table (depends on wallets, circle_users)
 CREATE TABLE IF NOT EXISTS circle_wallets (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     wallet_id UUID NOT NULL REFERENCES wallets(id),
@@ -212,7 +211,7 @@ CREATE TABLE IF NOT EXISTS circle_wallets (
     UNIQUE(circle_wallet_id)
 );
 
--- Create customer_wallets table
+-- Customer Wallets table (depends on customers)
 CREATE TABLE customer_wallets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES customers(id),
@@ -229,10 +228,7 @@ CREATE TABLE customer_wallets (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
--- Add partial unique index that only applies to non-deleted customer wallets
-CREATE UNIQUE INDEX customer_wallets_customer_address_network_unique_idx ON customer_wallets(customer_id, wallet_address, network_type) WHERE deleted_at IS NULL;
-
--- Create products table
+-- Products table (depends on workspaces, wallets)
 CREATE TABLE products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
@@ -240,8 +236,8 @@ CREATE TABLE products (
     name TEXT NOT NULL,
     description TEXT,
     product_type product_type NOT NULL,
-    interval_type interval_type NOT NULL,
-    term_length INTEGER, -- number of intervals
+    interval_type interval_type, -- Made nullable for one_off products
+    term_length INTEGER, -- number of intervals, nullable for one_off
     price_in_pennies INTEGER NOT NULL,
     image_url TEXT,
     url TEXT,
@@ -261,7 +257,7 @@ CREATE TABLE products (
     )
 );
 
--- Create tokens table
+-- Tokens table (depends on networks)
 CREATE TABLE tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     network_id UUID NOT NULL REFERENCES networks(id),
@@ -276,7 +272,7 @@ CREATE TABLE tokens (
     UNIQUE(network_id, contract_address)
 );
 
--- Create products_tokens table
+-- Products Tokens table (depends on products, networks, tokens)
 CREATE TABLE products_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id UUID NOT NULL REFERENCES products(id),
@@ -289,33 +285,7 @@ CREATE TABLE products_tokens (
     UNIQUE(product_id, network_id, token_id)
 );
 
--- Create subscription status enum
-CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'suspended', 'failed', 'completed');
-
--- Create subscription event type enum with expanded error types
-CREATE TYPE subscription_event_type AS ENUM (
-    -- Success events
-    'created', 
-    'redeemed', 
-    'renewed', 
-    'canceled', 
-    'expired',
-    'completed',
-    -- General failure
-    'failed',
-    
-    -- Specific error types
-    'failed_validation',         -- Input validation errors
-    'failed_customer_creation',  -- Customer creation failed
-    'failed_wallet_creation',    -- Wallet creation failed
-    'failed_delegation_storage', -- Delegation data storage failed
-    'failed_subscription_db',    -- Database error during subscription creation
-    'failed_redemption',         -- Initial redemption failed
-    'failed_transaction',        -- Transaction commit failed
-    'failed_duplicate'           -- Subscription already exists
-);
-
--- Create delegation data table to store delegation information
+-- Delegation Data table (no dependencies)
 CREATE TABLE delegation_data (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     delegate TEXT NOT NULL,
@@ -329,7 +299,7 @@ CREATE TABLE delegation_data (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
--- Create subscriptions table
+-- Subscriptions table (depends on customers, products, products_tokens, delegation_data, customer_wallets)
 CREATE TABLE subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES customers(id),
@@ -349,7 +319,7 @@ CREATE TABLE subscriptions (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
--- Create subscription events table
+-- Subscription Events table (depends on subscriptions)
 CREATE TABLE subscription_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     subscription_id UUID NOT NULL REFERENCES subscriptions(id),
@@ -363,7 +333,7 @@ CREATE TABLE subscription_events (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create failed subscription attempts table (no subscription ID required)
+-- Failed Subscription Attempts table (depends on customers, products, products_tokens, customer_wallets)
 CREATE TABLE failed_subscription_attempts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID REFERENCES customers(id),
@@ -403,42 +373,78 @@ CREATE TRIGGER validate_token_network_trigger
     EXECUTE FUNCTION validate_token_network();
 
 -- Create indexes
-CREATE INDEX idx_workspaces_account_id ON workspaces(account_id);
+-- (Order doesn't matter as much, but group by table for readability)
 
-CREATE INDEX idx_customers_workspace_id ON customers(workspace_id);
+-- accounts
+-- (Primary key index created automatically)
 
-CREATE INDEX idx_api_keys_workspace_id ON api_keys(workspace_id);
-
+-- users
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_supabase_id ON users(supabase_id);
 CREATE INDEX idx_users_account_id ON users(account_id);
 
-CREATE INDEX idx_wallets_account_id ON wallets(account_id);
+-- workspaces
+CREATE INDEX idx_workspaces_account_id ON workspaces(account_id);
+
+-- circle_users
+CREATE INDEX idx_circle_users_workspace_id ON circle_users(workspace_id);
+
+-- customers
+CREATE INDEX idx_customers_workspace_id ON customers(workspace_id);
+
+-- api_keys
+CREATE INDEX idx_api_keys_workspace_id ON api_keys(workspace_id);
+
+-- networks
+CREATE INDEX idx_networks_chain_id ON networks(chain_id);
+CREATE INDEX idx_networks_active ON networks(active) WHERE deleted_at IS NULL;
+
+-- wallets
+CREATE INDEX idx_wallets_workspace_id ON wallets(workspace_id);
 CREATE INDEX idx_wallets_address ON wallets(wallet_address);
 CREATE INDEX idx_wallets_network_type ON wallets(network_type);
 CREATE INDEX idx_wallets_is_primary ON wallets(is_primary) WHERE deleted_at IS NULL;
 CREATE INDEX idx_wallets_network_id ON wallets(network_id);
 CREATE INDEX idx_wallets_wallet_type ON wallets(wallet_type);
+CREATE UNIQUE INDEX wallets_workspace_wallet_network_unique_idx ON wallets(workspace_id, wallet_address, network_type) WHERE deleted_at IS NULL;
 
+-- circle_wallets
+CREATE INDEX idx_circle_wallets_wallet_id ON circle_wallets(wallet_id);
+CREATE INDEX idx_circle_wallets_circle_user_id ON circle_wallets(circle_user_id);
+CREATE INDEX idx_circle_wallets_circle_wallet_id ON circle_wallets(circle_wallet_id);
+CREATE INDEX idx_circle_wallets_state ON circle_wallets(state);
+
+-- customer_wallets
+CREATE INDEX idx_customer_wallets_customer_id ON customer_wallets(customer_id);
+CREATE INDEX idx_customer_wallets_wallet_address ON customer_wallets(wallet_address);
+CREATE INDEX idx_customer_wallets_network_type ON customer_wallets(network_type);
+CREATE INDEX idx_customer_wallets_is_primary ON customer_wallets(is_primary) WHERE deleted_at IS NULL;
+CREATE INDEX idx_customer_wallets_verified ON customer_wallets(verified) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX customer_wallets_customer_address_network_unique_idx ON customer_wallets(customer_id, wallet_address, network_type) WHERE deleted_at IS NULL;
+
+-- products
 CREATE INDEX idx_products_workspace_id ON products(workspace_id);
 CREATE INDEX idx_products_wallet_id ON products(wallet_id);
 CREATE INDEX idx_products_active ON products(active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_created_at ON products(created_at);
 
-CREATE INDEX idx_networks_chain_id ON networks(chain_id);
-CREATE INDEX idx_networks_active ON networks(active) WHERE deleted_at IS NULL;
-
+-- tokens
 CREATE INDEX idx_tokens_network_id ON tokens(network_id);
 CREATE INDEX idx_tokens_active ON tokens(active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_tokens_contract_address ON tokens(contract_address);
 
+-- products_tokens
 CREATE INDEX idx_products_tokens_product_id ON products_tokens(product_id);
 CREATE INDEX idx_products_tokens_network_id ON products_tokens(network_id);
 CREATE INDEX idx_products_tokens_token_id ON products_tokens(token_id);
 CREATE INDEX idx_products_tokens_active ON products_tokens(active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_tokens_composite ON products_tokens(product_id, network_id, active) WHERE deleted_at IS NULL;
 
--- Indexes for subscription-related tables
+-- delegation_data
+CREATE INDEX idx_delegation_data_delegator ON delegation_data(delegator);
+CREATE INDEX idx_delegation_data_delegate ON delegation_data(delegate);
+
+-- subscriptions
 CREATE INDEX idx_subscriptions_customer_id ON subscriptions(customer_id);
 CREATE INDEX idx_subscriptions_product_id ON subscriptions(product_id);
 CREATE INDEX idx_subscriptions_product_token_id ON subscriptions(product_token_id);
@@ -447,37 +453,22 @@ CREATE INDEX idx_subscriptions_customer_wallet_id ON subscriptions(customer_wall
 CREATE INDEX idx_subscriptions_status ON subscriptions(status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_subscriptions_next_redemption_date ON subscriptions(next_redemption_date) WHERE status = 'active' AND deleted_at IS NULL;
 
+-- subscription_events
 CREATE INDEX idx_subscription_events_subscription_id ON subscription_events(subscription_id);
 CREATE INDEX idx_subscription_events_event_type ON subscription_events(event_type);
 CREATE INDEX idx_subscription_events_transaction_hash ON subscription_events(transaction_hash);
 CREATE INDEX idx_subscription_events_occurred_at ON subscription_events(occurred_at);
 
-CREATE INDEX idx_delegation_data_delegator ON delegation_data(delegator);
-CREATE INDEX idx_delegation_data_delegate ON delegation_data(delegate);
-
--- Indexes for customer_wallets table
-CREATE INDEX idx_customer_wallets_customer_id ON customer_wallets(customer_id);
-CREATE INDEX idx_customer_wallets_wallet_address ON customer_wallets(wallet_address);
-CREATE INDEX idx_customer_wallets_network_type ON customer_wallets(network_type);
-CREATE INDEX idx_customer_wallets_is_primary ON customer_wallets(is_primary) WHERE deleted_at IS NULL;
-CREATE INDEX idx_customer_wallets_verified ON customer_wallets(verified) WHERE deleted_at IS NULL;
-
--- Indexes for failed_subscription_attempts table
+-- failed_subscription_attempts
 CREATE INDEX idx_failed_subscription_attempts_customer_id ON failed_subscription_attempts(customer_id);
 CREATE INDEX idx_failed_subscription_attempts_product_id ON failed_subscription_attempts(product_id);
 CREATE INDEX idx_failed_subscription_attempts_error_type ON failed_subscription_attempts(error_type);
 CREATE INDEX idx_failed_subscription_attempts_wallet_address ON failed_subscription_attempts(wallet_address);
 CREATE INDEX idx_failed_subscription_attempts_occurred_at ON failed_subscription_attempts(occurred_at);
 
--- Indexes for circle tables
-CREATE INDEX idx_circle_users_account_id ON circle_users(account_id);
 
-CREATE INDEX idx_circle_wallets_wallet_id ON circle_wallets(wallet_id);
-CREATE INDEX idx_circle_wallets_circle_user_id ON circle_wallets(circle_user_id);
-CREATE INDEX idx_circle_wallets_circle_wallet_id ON circle_wallets(circle_wallet_id);
-CREATE INDEX idx_circle_wallets_state ON circle_wallets(state);
+-- Insert test data for development (Order matters!)
 
--- Insert test data for development
 INSERT INTO accounts (name, account_type, business_name, business_type)
 VALUES 
     (
@@ -494,80 +485,6 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
--- Insert some initial networks
-INSERT INTO networks (name, type, network_type, circle_network_type, chain_id, is_testnet, active)
-VALUES 
-    ('Ethereum Sepolia', 'Sepolia', 'evm', 'ETH-SEPOLIA', 11155111, true, true),
-    ('Ethereum Mainnet', 'Mainnet', 'evm', 'ETH', 1, false, false),
-    ('Polygon Amoy', 'Amoy', 'evm', 'MATIC-AMOY', 80002, true, false),
-    ('Polygon Mainnet', 'Mainnet', 'evm', 'MATIC', 137, false, false),
-    ('Arbitrum Sepolia', 'Sepolia', 'evm', 'ARB-SEPOLIA', 421614, true, false),
-    ('Arbitrum One', 'Mainnet', 'evm', 'ARB', 42161, false, false),
-    ('Base Sepolia', 'Sepolia', 'evm', 'BASE-SEPOLIA', 84532, true, false),
-    ('Base Mainnet', 'Mainnet', 'evm', 'BASE', 8453, false, false),
-    ('Solana Devnet', 'Devnet', 'solana', 'SOL-DEVNET', 103, true, false),
-    ('Solana Mainnet', 'Mainnet', 'solana', 'SOL', 101, false, false)
-ON CONFLICT DO NOTHING;
-
--- Insert test wallets
-INSERT INTO wallets (
-    account_id,
-    wallet_type,
-    wallet_address,
-    network_type,
-    nickname,
-    ens,
-    is_primary,
-    verified,
-    metadata
-)
-VALUES 
-    (
-        (SELECT id FROM accounts WHERE name = 'Test Account'),
-        'wallet',
-        '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
-        'evm',
-        'Main Payment Wallet',
-        'test-merchant.eth',
-        true,
-        true,
-        '{"chain": "ethereum", "tags": ["payments"]}'::jsonb
-    ),
-    (
-        (SELECT id FROM accounts WHERE name = 'Test Account'),
-        'wallet',
-        '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
-        'polkadot',
-        'DOT Wallet',
-        null,
-        false,
-        true,
-        '{"chain": "polkadot", "tags": ["staking"]}'::jsonb
-    ),
-    (
-        (SELECT id FROM accounts WHERE name = 'Admin Account'),
-        'wallet',
-        '0x8894e0a0c962cb723c1976a4421c95949be2d4e3',
-        'evm',
-        'Admin ETH Wallet',
-        'cyphera-admin.eth',
-        true,
-        true,
-        '{"chain": "ethereum", "tags": ["admin", "treasury"]}'::jsonb
-    ),
-    (
-        (SELECT id FROM accounts WHERE name = 'Admin Account'),
-        'wallet',
-        '6fYU3gaCuDGK7HLqsMW2nwpBJqecxLmLDBo5Hc3YzKf5',
-        'solana',
-        'Admin SOL Wallet',
-        null,
-        false,
-        true,
-        '{"chain": "solana", "tags": ["admin"]}'::jsonb
-    )
-ON CONFLICT DO NOTHING;
-
 INSERT INTO users (supabase_id, email, first_name, last_name, display_name, account_id, role, is_account_owner)
 VALUES 
     ('supabase|admin', 'admin@cyphera.com', 'Admin', 'User', 'Admin User',
@@ -576,7 +493,6 @@ VALUES
      (SELECT id FROM accounts WHERE name = 'Test Account'), 'admin', true)
 ON CONFLICT DO NOTHING;
 
--- Insert test workspaces
 INSERT INTO workspaces (account_id, name, description, business_name)
 VALUES 
     (
@@ -593,7 +509,6 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
--- Insert test API keys
 INSERT INTO api_keys (workspace_id, name, key_hash, access_level)
 VALUES 
     (
@@ -610,7 +525,6 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
--- Insert test customers
 INSERT INTO customers (workspace_id, external_id, email, name, description, balance_in_pennies)
 VALUES 
     (
@@ -631,7 +545,6 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
--- Insert test customer wallets
 INSERT INTO customer_wallets (
     customer_id,
     wallet_address,
@@ -685,14 +598,85 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
--- Insert some test tokens
+INSERT INTO networks (name, type, network_type, circle_network_type, chain_id, is_testnet, active)
+VALUES 
+    ('Ethereum Sepolia', 'Sepolia', 'evm', 'ETH-SEPOLIA', 11155111, true, true),
+    ('Ethereum Mainnet', 'Mainnet', 'evm', 'ETH', 1, false, false),
+    ('Polygon Amoy', 'Amoy', 'evm', 'MATIC-AMOY', 80002, true, false),
+    ('Polygon Mainnet', 'Mainnet', 'evm', 'MATIC', 137, false, false),
+    ('Arbitrum Sepolia', 'Sepolia', 'evm', 'ARB-SEPOLIA', 421614, true, false),
+    ('Arbitrum One', 'Mainnet', 'evm', 'ARB', 42161, false, false),
+    ('Base Sepolia', 'Sepolia', 'evm', 'BASE-SEPOLIA', 84532, true, false),
+    ('Base Mainnet', 'Mainnet', 'evm', 'BASE', 8453, false, false),
+    ('Solana Devnet', 'Devnet', 'solana', 'SOL-DEVNET', 103, true, false),
+    ('Solana Mainnet', 'Mainnet', 'solana', 'SOL', 101, false, false)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO wallets (
+    workspace_id,
+    wallet_type,
+    wallet_address,
+    network_type,
+    nickname,
+    ens,
+    is_primary,
+    verified,
+    metadata
+)
+VALUES 
+    (
+        (SELECT id FROM workspaces WHERE name = 'Test Workspace'),
+        'wallet',
+        '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+        'evm',
+        'Main Payment Wallet',
+        'test-merchant.eth',
+        true,
+        true,
+        '{"chain": "ethereum", "tags": ["payments"]}'::jsonb
+    ),
+    (
+        (SELECT id FROM workspaces WHERE name = 'Test Workspace'),
+        'wallet',
+        '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
+        'polkadot',
+        'DOT Wallet',
+        null,
+        false,
+        true,
+        '{"chain": "polkadot", "tags": ["staking"]}'::jsonb
+    ),
+    (
+        (SELECT id FROM workspaces WHERE name = 'Admin Workspace'),
+        'wallet',
+        '0x8894e0a0c962cb723c1976a4421c95949be2d4e3',
+        'evm',
+        'Admin ETH Wallet',
+        'cyphera-admin.eth',
+        true,
+        true,
+        '{"chain": "ethereum", "tags": ["admin", "treasury"]}'::jsonb
+    ),
+    (
+        (SELECT id FROM workspaces WHERE name = 'Admin Workspace'),
+        'wallet',
+        '6fYU3gaCuDGK7HLqsMW2nwpBJqecxLmLDBo5Hc3YzKf5',
+        'solana',
+        'Admin SOL Wallet',
+        null,
+        false,
+        true,
+        '{"chain": "solana", "tags": ["admin"]}'::jsonb
+    )
+ON CONFLICT DO NOTHING;
+
 INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token, active)
 VALUES 
     -- Ethereum Sepolia tokens
-    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'USD Coin', 'USDC', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', false, true)
+    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'USD Coin', 'USDC', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', false, true),
+    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'Ethereum', 'ETH', '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', true, true) -- Represent native token
 ON CONFLICT DO NOTHING;
 
--- Insert test products
 INSERT INTO products (
     workspace_id,
     wallet_id,
@@ -740,7 +724,6 @@ INSERT INTO products (
     )
 ON CONFLICT DO NOTHING;
 
--- Insert test product tokens (enabling specific tokens for products)
 INSERT INTO products_tokens (
     product_id,
     network_id,
@@ -775,7 +758,7 @@ AND t.symbol = 'ETH'
 
 UNION ALL
 
--- Enable only ETH on Ethereum Sepolia for Annual Pro Plan
+-- Enable only USDC on Ethereum Sepolia for Annual Pro Plan (Example of adding another token)
 SELECT 
     p.id as product_id,
     t.network_id,
@@ -785,7 +768,7 @@ FROM products p
 CROSS JOIN tokens t
 WHERE p.name = 'Annual Pro Plan'
 AND t.network_id = (SELECT id FROM networks WHERE chain_id = 11155111)
-AND t.symbol = 'ETH'
+AND t.symbol = 'USDC'
 ON CONFLICT DO NOTHING;
 
 -- Create function for updating updated_at timestamp
@@ -833,7 +816,6 @@ CREATE TRIGGER set_products_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 
--- Add triggers for updated_at
 CREATE TRIGGER set_networks_updated_at
     BEFORE UPDATE ON networks
     FOR EACH ROW
@@ -849,7 +831,6 @@ CREATE TRIGGER set_products_tokens_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 
--- Add triggers for subscription-related tables
 CREATE TRIGGER set_delegation_data_updated_at
     BEFORE UPDATE ON delegation_data
     FOR EACH ROW
@@ -875,7 +856,6 @@ CREATE TRIGGER set_failed_subscription_attempts_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 
--- Add triggers for circle tables
 CREATE TRIGGER set_circle_users_updated_at
     BEFORE UPDATE ON circle_users
     FOR EACH ROW

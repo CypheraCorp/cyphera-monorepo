@@ -896,8 +896,20 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		// Update next redemption date based on product interval
 		var nextRedemptionDate pgtype.Timestamptz
 
+		// Ensure IntervalType is valid before using it
+		if !params.product.IntervalType.Valid {
+			// Handle case where IntervalType is null for a recurring product (should not happen based on constraints)
+			errMsg := fmt.Sprintf("IntervalType is null for recurring product %s (subscription %s)",
+				params.product.ID, subscription.ID)
+			log.Println(errMsg)
+			// Decide how to handle this - maybe default to monthly or fail?
+			// For now, let's fail to highlight the issue.
+			// You might choose to default: nextDate := CalculateNextRedemption(db.IntervalTypeMonth, params.now)
+			return result, fmt.Errorf(errMsg)
+		}
+
 		// Calculate next redemption date using the product interval type
-		nextDate := CalculateNextRedemption(params.product.IntervalType, params.now)
+		nextDate := CalculateNextRedemption(params.product.IntervalType.IntervalType, params.now) // Access inner enum
 		nextRedemptionDate = pgtype.Timestamptz{
 			Time:  nextDate,
 			Valid: true,

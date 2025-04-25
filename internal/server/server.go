@@ -213,6 +213,37 @@ func InitializeRoutes(router *gin.Engine) {
 				admin.POST("/tokens", tokenHandler.CreateToken)
 				admin.PUT("/tokens/:token_id", tokenHandler.UpdateToken)
 				admin.DELETE("/tokens/:token_id", tokenHandler.DeleteToken)
+
+				// Circle API endpoints
+				circle := admin.Group("/circle")
+				{
+					// Circle user endpoints
+					circleUser := circle.Group("/users")
+					{
+						circleUser.POST("/:workspace_id", circleHandler.CreateUser)
+						circleUser.POST("/:workspace_id/token", circleHandler.CreateUserToken)
+						circleUser.GET("/:workspace_id/token", circleHandler.GetUserByToken)
+						circleUser.GET("/:workspace_id", circleHandler.GetUserByID)
+						circleUser.POST("/:workspace_id/initialize", circleHandler.InitializeUser)
+
+						// PIN management
+						circleUser.POST("/:workspace_id/pin/create", circleHandler.CreatePinChallenge)
+						circleUser.PUT("/:workspace_id/pin/update", circleHandler.UpdatePinChallenge)
+						circleUser.POST("/:workspace_id/pin/restore", circleHandler.CreatePinRestoreChallenge)
+					}
+
+					// Circle wallet endpoints
+					circleWallet := circle.Group("/wallets")
+					{
+						circleWallet.POST("/:workspace_id", circleHandler.CreateWallets)
+						circleWallet.GET("/:workspace_id", circleHandler.ListWallets)
+						circleWallet.GET("/get/:wallet_id", circleHandler.GetWallet)
+						circleWallet.GET("/balances/:wallet_id", circleHandler.GetWalletBalance)
+					}
+
+					// Circle challenge endpoints
+					circle.GET("/:workspace_id/challenges/:challenge_id", circleHandler.GetChallenge)
+				}
 			}
 
 			// Current Account routes
@@ -314,54 +345,13 @@ func InitializeRoutes(router *gin.Engine) {
 				workspaces.DELETE("/:workspace_id", workspaceHandler.DeleteWorkspace)
 				workspaces.DELETE("/:workspace_id/hard", workspaceHandler.HardDeleteWorkspace)
 				workspaces.GET("/:workspace_id/customers", workspaceHandler.ListWorkspaceCustomers)
-
-				// Workspace Products
 				workspaces.GET("/:workspace_id/products/active", productHandler.ListActiveProducts)
 			}
 
 			// Wallets
-			wallets := protected.Group("/wallets")
-			{
-				// Basic CRUD operations
-				wallets.POST("", walletHandler.CreateWallet)
-				wallets.GET("", walletHandler.ListWallets)
-				wallets.GET("/:wallet_id", walletHandler.GetWallet)
-				wallets.PATCH("/:wallet_id", walletHandler.UpdateWallet)
-				wallets.DELETE("/:wallet_id", walletHandler.DeleteWallet)
-				wallets.GET("/address/:wallet_address", walletHandler.GetWalletByAddress)
-				wallets.POST("/:wallet_id/primary", walletHandler.SetWalletAsPrimary)
-			}
-
-			// Circle API endpoints
-			circle := protected.Group("/circle")
-			{
-				// Circle user endpoints
-				circleUser := circle.Group("/users")
-				{
-					circleUser.POST("/", circleHandler.CreateUser)
-					circleUser.POST("/:user_id/token", circleHandler.CreateUserToken)
-					circleUser.GET("/token", circleHandler.GetUserByToken)
-					circleUser.GET("/:user_id", circleHandler.GetUserByID)
-					circleUser.POST("/initialize", circleHandler.InitializeUser)
-
-					// PIN management
-					circleUser.POST("/pin/create", circleHandler.CreatePinChallenge)
-					circleUser.PUT("/pin/update", circleHandler.UpdatePinChallenge)
-					circleUser.POST("/pin/restore", circleHandler.CreatePinRestoreChallenge)
-				}
-
-				// Circle wallet endpoints
-				circleWallet := circle.Group("/wallets")
-				{
-					circleWallet.POST("", circleHandler.CreateWallets)
-					circleWallet.GET("", circleHandler.ListWallets)
-					circleWallet.GET("/:wallet_id", circleHandler.GetWallet)
-					circleWallet.GET("/:wallet_id/balances", circleHandler.GetWalletBalance)
-				}
-
-				// Circle challenge endpoints
-				circle.GET("/challenges/:challenge_id", circleHandler.GetChallenge)
-			}
+			protected.GET("/wallets", walletHandler.ListWallets)
+			protected.GET("/wallets/:wallet_id", walletHandler.GetWallet)
+			protected.POST("/wallets", walletHandler.CreateWallet)
 
 			// Subscriptions
 			subscriptions := protected.Group("/subscriptions")
