@@ -13,7 +13,7 @@ output "rds_arn" {
 # --- SSM Parameter for Lambda Security Group ID ---
 # Store the Lambda SG ID in SSM for lookup by Serverless Framework
 resource "aws_ssm_parameter" "lambda_sg_id" {
-  name        = "/cyphera/lambda-security-group-id" # Match serverless.yml expectation
+  name        = "/cyphera/lambda-security-group-id-${var.stage}"
   description = "The Security Group ID for the Lambda functions for stage ${var.stage}"
   type        = "String"
   value       = aws_security_group.lambda.id # Reference the SG created in main.tf
@@ -24,7 +24,7 @@ resource "aws_ssm_parameter" "lambda_sg_id" {
 # Store the Private Subnet IDs used by Lambda for lookup by Serverless Framework
 # Assumes module.vpc.private_subnets provides at least two subnets consistently.
 resource "aws_ssm_parameter" "private_subnet_1" {
-  name        = "/cyphera/private-subnet-1" # Match serverless.yml expectation
+  name        = "/cyphera/private-subnet-1-${var.stage}"
   description = "The ID of the first private subnet for stage ${var.stage}"
   type        = "String"
   value       = module.vpc.private_subnets[0] # Reference the first private subnet
@@ -32,7 +32,7 @@ resource "aws_ssm_parameter" "private_subnet_1" {
 }
 
 resource "aws_ssm_parameter" "private_subnet_2" {
-  name        = "/cyphera/private-subnet-2" # Match serverless.yml expectation
+  name        = "/cyphera/private-subnet-2-${var.stage}"
   description = "The ID of the second private subnet for stage ${var.stage}"
   type        = "String"
   value       = module.vpc.private_subnets[1] # Reference the second private subnet
