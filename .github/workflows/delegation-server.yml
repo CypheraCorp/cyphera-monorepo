@@ -49,8 +49,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          # cache: 'npm'
-          # cache-dependency-path: delegation-server/package-lock.json
+          cache: 'npm'
+          cache-dependency-path: delegation-server/package-lock.json
       - name: Install dependencies
         run: make delegation-server-setup
       - name: Run tests
