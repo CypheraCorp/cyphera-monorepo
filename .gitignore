@@ -55,3 +55,4 @@ cookies.txt
 # Delegation server
 delegation-server/coverage/*
 delegation-server/server.log
+cmd/delegation-integration-test/integration-test
