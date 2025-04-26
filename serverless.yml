@@ -16,7 +16,7 @@ provider:
     metrics: true
   environment:
     GIN_MODE: release
-    DELEGATION_SERVER_URL: ${ssm:/cyphera/delegation-server-alb-dns-${self:provider.stage}}:50051
+    DELEGATION_SERVER_URL: https://${ssm:/cyphera/delegation-server-alb-dns-${self:provider.stage}}
     RDS_SECRET_ARN: ${ssm:/cyphera/rds-secret-arn-${self:provider.stage}}
     DB_HOST: ${ssm:/cyphera/rds-endpoint-${self:provider.stage}}
     DB_NAME: cyphera
@@ -36,10 +36,8 @@ provider:
     role:
       statements:
         - Effect: Allow
-          Action:
-            - secretsmanager:GetSecretValue
-          Resource:
-            - ${ssm:/cyphera/rds-secret-arn-${self:provider.stage}}
+          Action: [secretsmanager:GetSecretValue]
+          Resource: ${ssm:/cyphera/rds-secret-arn-${self:provider.stage}}
         - Effect: "Allow"
           Action:
             - "ec2:CreateNetworkInterface"

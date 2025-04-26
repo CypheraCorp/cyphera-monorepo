@@ -9,6 +9,7 @@ terraform {
     bucket = "cyphera-terraform-state"
     key    = "cyphera-api/terraform.tfstate"
     region = "us-east-1"
+    encrypt = true # Enable server-side encryption for the state file
   }
   required_version = ">= 1.0"
 } 

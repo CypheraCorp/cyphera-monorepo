@@ -13,7 +13,7 @@ on:
       - '.github/workflows/delegation-server.yml'
 
 env:
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
   # Define stage based on branch, similar to the API workflow
   STAGE: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
 

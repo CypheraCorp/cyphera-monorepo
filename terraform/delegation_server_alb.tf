@@ -111,8 +111,12 @@ resource "aws_lb_target_group" "delegation_server" {
 # --- ALB Listener --- 
 resource "aws_lb_listener" "delegation_server_grpc" {
   load_balancer_arn = aws_lb.delegation_server.arn
-  port              = 50051  # Port ALB listens on for incoming gRPC traffic from Lambda
-  protocol          = "HTTP"   # Listener uses HTTP for gRPC
+  # Use standard HTTPS port
+  port              = 443
+  # Use HTTPS protocol for gRPC via ALB
+  protocol          = "HTTPS"
+  # Attach the wildcard certificate managed in acm.tf
+  certificate_arn   = aws_acm_certificate.wildcard_api.arn 
 
   default_action {
     type             = "forward"

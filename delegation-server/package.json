@@ -20,6 +20,7 @@
   "dependencies": {
     "@metamask/delegation-toolkit": "^0.10.0",
     "dotenv": "16.4.7",
+    "grpc-health-check": "^2.0.2",
     "permissionless": "0.2.36",
     "viem": "2.23.9"
   },
@@ -37,7 +38,7 @@
     "typescript": "^5.3.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "overrides": {
     "ox": "0.6.9"

@@ -1,6 +1,8 @@
 import * as grpc from '@grpc/grpc-js'
 import * as path from 'path'
 import * as protoLoader from '@grpc/proto-loader'
+import { HealthImplementation, ServingStatusMap } from 'grpc-health-check'
+
 import { delegationService } from './services/service'
 import { logger } from './utils/utils'
 import config from './config'
@@ -63,6 +65,27 @@ server.addService(
   delegationPackage.DelegationService.service,
   delegationService
 )
+
+// --- Setup and Register Health Check Service --- 
+// Define service status map. Key is the service name (empty string for overall server status)
+const statusMap: ServingStatusMap = {
+  // We can add 'delegation.DelegationService': 'SERVING' if needed, but ALB checks ''
+  '': 'SERVING', // Indicates the overall server is serving
+};
+
+// Construct the health service implementation
+const healthImpl = new HealthImplementation(statusMap);
+
+// Add the health service to the server
+// This internally loads the health proto and adds the service definition
+healthImpl.addToServer(server);
+
+// Example: If you needed to dynamically update status (not strictly required for basic ALB check):
+// setTimeout(() => {
+//   healthImpl.setStatus('', 'NOT_SERVING');
+//   logger.info('Set overall server status to NOT_SERVING');
+// }, 5000); 
+// --- Done Setting up Health Check --- 
 
 // Function to start the server - exported for backward compatibility
 export function startServer() {

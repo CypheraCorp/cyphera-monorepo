@@ -44,8 +44,9 @@ resource "aws_ssm_parameter" "rds_secret_arn" {
   name        = "/cyphera/rds-secret-arn-${var.stage}"
   description = "The ARN of the Secrets Manager secret for RDS credentials for stage ${var.stage}"
   type        = "String"
-  value       = aws_secretsmanager_secret.rds_master_password.arn # From rds.tf
+  value       = aws_db_instance.main.master_user_secret[0].secret_arn
   tags        = local.common_tags
+  overwrite   = true
 }
 
 # --- SSM Parameter for RDS Endpoint ---
