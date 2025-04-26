@@ -163,7 +163,7 @@ jobs:
 
       run: |
         echo "Deploying Go API for stage: ${{ env.STAGE }}"
-        serverless create-domain --stage ${{ env.STAGE }} --verbose || true
+        serverless create_domain --stage ${{ env.STAGE }} --verbose || true
         sleep 30
         serverless deploy --stage ${{ env.STAGE }} --verbose
 
