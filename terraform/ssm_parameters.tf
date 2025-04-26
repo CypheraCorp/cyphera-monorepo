@@ -6,6 +6,10 @@ resource "aws_ssm_parameter" "supabase_url" {
   type        = "SecureString" # Store as SecureString
   value       = "dummy-value-update-manually" # Placeholder - **MUST BE UPDATED MANUALLY IN AWS CONSOLE**
   tags        = local.common_tags
+  # Ignore subsequent changes to value, allow manual updates
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "aws_ssm_parameter" "smart_wallet_address" {
@@ -14,6 +18,10 @@ resource "aws_ssm_parameter" "smart_wallet_address" {
   type        = "SecureString" # Store as SecureString
   value       = "dummy-value-update-manually" # Placeholder - **MUST BE UPDATED MANUALLY IN AWS CONSOLE**
   tags        = local.common_tags
+  # Ignore subsequent changes to value, allow manual updates
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "aws_ssm_parameter" "cors_allowed_origins" {
@@ -65,6 +73,10 @@ resource "aws_ssm_parameter" "delegation_rpc_url" {
   type        = "SecureString"
   value       = "dummy-value-update-manually" # Placeholder - **MUST BE UPDATED MANUALLY IN AWS CONSOLE**
   tags        = local.common_tags
+  # Ignore subsequent changes to value, allow manual updates
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "aws_ssm_parameter" "delegation_bundler_url" {
@@ -73,6 +85,10 @@ resource "aws_ssm_parameter" "delegation_bundler_url" {
   type        = "SecureString"
   value       = "dummy-value-update-manually" # Placeholder - **MUST BE UPDATED MANUALLY IN AWS CONSOLE**
   tags        = local.common_tags
+  # Ignore subsequent changes to value, allow manual updates
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 resource "aws_ssm_parameter" "delegation_chain_id" {

@@ -129,6 +129,14 @@ resource "aws_ecs_task_definition" "delegation_server" {
     }
   ])
 
+  # Add lifecycle block to ignore future diffs on container_definitions
+  lifecycle {
+    ignore_changes = [
+      container_definitions
+    ]
+  }
+
+  # Tags should only include common_tags now
   tags = local.common_tags
 }
 

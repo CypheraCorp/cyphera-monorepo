@@ -2,7 +2,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "5.96.0" # Pin to the specific v5 version we are targeting
+      version = "~> 5.40"
     }
   }
   backend "s3" {
