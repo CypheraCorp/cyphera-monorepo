@@ -40,12 +40,17 @@ jobs:
     # Add services if needed (e.g., localstack for AWS S3/SQS interaction tests)
     steps:
       - uses: actions/checkout@v3
+
+      # Add this debug step
+      - name: List files in workspace
+        run: ls -R
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: delegation-server/package-lock.json
+          # cache: 'npm'
+          # cache-dependency-path: delegation-server/package-lock.json
       - name: Install dependencies
         run: make delegation-server-setup
       - name: Run tests
