@@ -20,6 +20,23 @@ import (
 	"go.uber.org/zap"
 )
 
+// Define constants for Circle blockchain identifiers to satisfy goconst
+const (
+	circleEthSepolia = "ETH-SEPOLIA"
+	circleSol        = "SOL"
+
+	circleEth             = "ETH"
+	circleArb             = "ARB"
+	circleArbSepolia      = "ARB-SEPOLIA"
+	circleMatic           = "MATIC"
+	circleMaticAmoy       = "MATIC-AMOY"
+	circleBase            = "BASE"
+	circleBaseSepolia     = "BASE-SEPOLIA"
+	circleUnichain        = "UNICHAIN"
+	circleUnichainSepolia = "UNICHAIN-SEPOLIA"
+	circleSolDevnet       = "SOL-DEVNET"
+)
+
 // CircleHandler handles API requests related to Circle's wallet and user management features.
 // It manages user initialization, wallet creation, and token management through Circle's API.
 type CircleHandler struct {
@@ -1290,9 +1307,9 @@ func (h *CircleHandler) GetWallet(c *gin.Context) {
 // It returns NetworkTypeEvm for Ethereum-based chains and NetworkTypeSolana for Solana chains.
 func getNetworkType(blockchain string) db.NetworkType {
 	switch blockchain {
-	case "ETH", "ETH-SEPOLIA", "ARB", "ARB-SEPOLIA", "MATIC", "MATIC-AMOY", "BASE", "BASE-SEPOLIA", "UNICHAIN", "UNICHAIN-SEPOLIA":
+	case circleEth, circleEthSepolia, circleArb, circleArbSepolia, circleMatic, circleMaticAmoy, circleBase, circleBaseSepolia, circleUnichain, circleUnichainSepolia:
 		return db.NetworkTypeEvm
-	case "SOL", "SOL-DEVNET":
+	case circleSol, circleSolDevnet:
 		return db.NetworkTypeSolana
 	default:
 		return db.NetworkTypeEvm // Default to EVM
@@ -1303,29 +1320,29 @@ func getNetworkType(blockchain string) db.NetworkType {
 // It returns an error if the blockchain is not supported.
 func getCircleNetworkType(blockchain string) (db.CircleNetworkType, error) {
 	switch blockchain {
-	case "ETH":
+	case circleEth:
 		return db.CircleNetworkTypeETH, nil
-	case "ETH-SEPOLIA":
+	case circleEthSepolia:
 		return db.CircleNetworkTypeETHSEPOLIA, nil
-	case "ARB":
+	case circleArb:
 		return db.CircleNetworkTypeARB, nil
-	case "ARB-SEPOLIA":
+	case circleArbSepolia:
 		return db.CircleNetworkTypeARBSEPOLIA, nil
-	case "MATIC":
+	case circleMatic:
 		return db.CircleNetworkTypeMATIC, nil
-	case "MATIC-AMOY":
+	case circleMaticAmoy:
 		return db.CircleNetworkTypeMATICAMOY, nil
-	case "BASE":
+	case circleBase:
 		return db.CircleNetworkTypeBASE, nil
-	case "BASE-SEPOLIA":
+	case circleBaseSepolia:
 		return db.CircleNetworkTypeBASESEPOLIA, nil
-	case "UNICHAIN":
+	case circleUnichain:
 		return db.CircleNetworkTypeUNICHAIN, nil
-	case "UNICHAIN-SEPOLIA":
+	case circleUnichainSepolia:
 		return db.CircleNetworkTypeUNICHAINSEPOLIA, nil
-	case "SOL":
+	case circleSol:
 		return db.CircleNetworkTypeSOL, nil
-	case "SOL-DEVNET":
+	case circleSolDevnet:
 		return db.CircleNetworkTypeSOLDEVNET, nil
 	default:
 		return "", fmt.Errorf("unsupported blockchain: %s", blockchain)

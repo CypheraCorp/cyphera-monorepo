@@ -61,6 +61,7 @@ clean:
 
 lint:
 	$(GO) vet ./...
+	golangci-lint run ./...
 	gofmt -l .
 
 run:
