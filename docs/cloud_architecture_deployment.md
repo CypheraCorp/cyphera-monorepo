@@ -25,20 +25,23 @@ Terraform defines the foundational cloud infrastructure required by the applicat
 *   **Compute:**
     *   **ECS Cluster** (`main.tf`): A cluster (`cyphera-delegation-cluster-${stage}`) to host the Delegation Server tasks.
     *   **ECS Task Definition** (`delegation_server_ecs.tf`): Defines the Delegation Server container (image, CPU/Memory, ports, environment variables, secrets). CPU/Memory are conditionally sized based on stage (`dev`/`prod`).
+        *   **Workaround Note:** Due to a persistent issue in the Terraform AWS provider (tested up to v5.40) where changes to SSM Parameter Store values referenced via `valueFrom` in `container_definitions` incorrectly trigger a resource replacement plan, a `lifecycle { ignore_changes = [container_definitions] }` block is applied to this resource. This prevents Terraform from repeatedly trying to replace the task definition unnecessarily.
+        *   **Consequence:** While changes to the *values* stored in the referenced SSM parameters or Secrets Manager secrets will be picked up by new tasks automatically, any *structural* changes made to the `container_definitions` block within `terraform/delegation_server_ecs.tf` (e.g., updating the image tag, adding/removing ports, adding/removing environment variables or secrets) **will NOT be applied by `terraform apply`**. These structural changes must be manually applied by creating a new task definition revision in the AWS ECS console and updating the ECS service to use it.
+        *   **Future:** Periodically check Terraform AWS provider release notes for fixes related to planning `container_definitions` with `valueFrom`. If fixed, this `lifecycle` block can potentially be removed.
     *   **ECS Service** (`delegation_server_ecs.tf`): Manages running instances (tasks) of the Delegation Server Task Definition on Fargate, ensuring the desired count (conditional based on stage) is running and registers them with the ALB Target Group.
 *   **Data Store:**
     *   **RDS PostgreSQL Instance** (`rds.tf`): Managed relational database. Instance size, storage, Multi-AZ, backups, and performance insights are conditionally configured based on stage for cost optimization and production readiness.
-    *   **Secrets Manager Secret** (`rds.tf`): Securely stores the RDS master password, automatically managed and rotated by AWS.
+    *   **Secrets Manager Secret Link:** Terraform ensures RDS manages the master password in its own automatically created secret and makes the ARN available via an SSM Parameter (`/cyphera/rds-secret-arn-${stage}`).
 *   **Load Balancing:**
-    *   **Application Load Balancer (ALB)** (`delegation_server_alb.tf`): Internal ALB distributing gRPC traffic to the Delegation Server ECS tasks.
+    *   **Application Load Balancer (ALB)** (`delegation_server_alb.tf`): Internal ALB distributing gRPC traffic (via HTTPS listener on port 443) to the Delegation Server ECS tasks.
     *   **Target Group** (`delegation_server_alb.tf`): Configured for GRPC protocol, routing traffic to ECS task IPs on port 50051. Includes gRPC-compatible health checks.
-    *   **Listener** (`delegation_server_alb.tf`): Listens on port 50051 for internal gRPC traffic.
+    *   **Listener** (`delegation_server_alb.tf`): Listens on port 443 (HTTPS) and uses the imported wildcard ACM certificate for TLS termination before forwarding to the target group.
 *   **Container Registry:**
     *   **ECR Repository** (`delegation_server_ecr.tf`): Private Docker image registry (`cyphera-delegation-server-${stage}`) for the Delegation Server images built by CI/CD.
 *   **Identity & Access Management (IAM):**
     *   **ECS Task Execution Role** (`delegation_server_ecs.tf`): Grants permissions necessary for ECS agent and Fargate to pull images, send logs, and fetch secrets/parameters for injection into the container.
 *   **Configuration & Secrets References:**
-    *   **SSM Parameters** (`ssm_parameters.tf`, `outputs.tf`): Creates parameters to store configuration values (CORS, URLs, wallet address) and outputs from other resources (RDS endpoint/secret ARN, ALB DNS, Lambda networking IDs), making them available for Serverless and applications. Stage-specific naming is used where appropriate.
+    *   **SSM Parameters** (`ssm_parameters.tf`, `outputs.tf`): Creates parameters to store configuration values (CORS, URLs, wallet address) and outputs from other resources (RDS secret ARN, ALB DNS, Lambda networking IDs), making them available for Serverless and applications. Stage-specific naming is used where appropriate. Placeholders are used for values requiring manual updates post-apply, using `lifecycle { ignore_changes = [value] }` to prevent Terraform overwrites.
     *   **Secrets Manager References** (`delegation_server_ecs.tf`): Data sources reference Secrets Manager secrets for injection into ECS tasks.
 *   **DNS / Certificates:**
     *   **ACM Certificate Resources** (`acm.tf`): Manages the state of existing ACM certificates (imported manually).
@@ -138,7 +141,7 @@ Defines the Go API deployment on AWS Lambda.
 1.  **Infrastructure Changes:** Modify Terraform code (`*.tf` files).
 2.  **Terraform Plan:** Run `TF_LOG=debug GODEBUG=asyncpreemptoff=1 terraform plan -var="stage=[dev|prod]"` to review changes.
 3.  **Terraform Apply:** Run `TF_LOG=debug GODEBUG=asyncpreemptoff=1 terraform apply -var="stage=[dev|prod]"` to provision/update infrastructure.
-4.  **(If Necessary) Manual Config Update:** Update placeholder values in SSM Parameter Store via AWS Console.
+4.  **(If Necessary) Manual Config Update:** Update placeholder values in SSM Parameter Store via AWS Console (ensure `lifecycle { ignore_changes = [value] }` is set in TF for parameters updated manually).
 5.  **Application Code Changes:** Modify Go API or Delegation Server code.
 6.  **Push to GitHub:** Push changes to `dev` or `main` branch.
 7.  **CI/CD Execution:** GitHub Actions trigger automatically:
@@ -146,4 +149,4 @@ Defines the Go API deployment on AWS Lambda.
     *   Deploy Go API via Serverless Framework (reading config from AWS).
     *   Build and push Delegation Server Docker image to ECR, then update ECS service.
 
-This structured approach ensures infrastructure and application deployments are automated, repeatable, secure, and manageable across different environments. 
+This structured approach ensures infrastructure and application deployments are automated, repeatable, secure, and manageable across different environments.
