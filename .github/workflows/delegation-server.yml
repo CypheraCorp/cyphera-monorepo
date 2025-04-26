@@ -34,7 +34,6 @@ jobs:
       - name: Run linter
         run: make delegation-server-lint
 
-        
   test:
     name: Test Delegation Server
     runs-on: ubuntu-latest
