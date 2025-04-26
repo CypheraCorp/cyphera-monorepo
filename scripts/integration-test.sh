@@ -188,8 +188,18 @@ if [ "$MOCK" = "true" ]; then
     npm install
   fi
 
+  # Try running the command directly first to catch immediate errors
+  echo "Attempting direct execution of start:mock for initial error check..."
+  if ! MOCK_MODE=true ts-node src/index.ts --version; then # Use a quick flag like --version or similar if available, otherwise just run it
+      echo "ERROR: Direct execution command failed immediately."
+      # Consider exiting here if this fails
+      # exit 1
+  else
+      echo "Direct execution check passed (or command doesn't support quick check)."
+  fi
+
   # Start the server in mock mode (for testing)
-  echo "Starting server..."
+  echo "Starting server in background..."
   npm run start:mock > server.log 2>&1 &
   SERVER_PID=$!
 
