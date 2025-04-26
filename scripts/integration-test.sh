@@ -195,6 +195,8 @@ if [ "$MOCK" = "true" ]; then
 
   # Wait for server to start
   echo "Waiting for server to start up (PID: $SERVER_PID)..."
+  # Give the server a few seconds to fully bind the port
+  echo "Adding a 5-second delay for server binding..."
   sleep 5
 
   # Verify server is running
