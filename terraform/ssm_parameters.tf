@@ -81,4 +81,13 @@ resource "aws_ssm_parameter" "delegation_chain_id" {
   type        = "String"
   value       = "11155111" # Sepolia default, adjust if needed per stage
   tags        = local.common_tags
+}
+
+# Parameter for the manually created wildcard API certificate ARN
+resource "aws_ssm_parameter" "wildcard_cert_arn" {
+  name        = "/cyphera/wildcard-api-cert-arn"
+  description = "ARN of the wildcard certificate for api.cypherapay.com (Managed outside this TF state initially)"
+  type        = "String"
+  value       = "arn:aws:acm:us-east-1:699475955358:certificate/6f8bb8d4-4200-4128-a680-d9854890993b"
+  tags        = local.common_tags # Apply common tags if desired
 } 

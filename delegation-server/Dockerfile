@@ -1,6 +1,6 @@
 # Use an official Node.js runtime as a parent image
-# Choose a version compatible with your code (e.g., 18) and consider Alpine for smaller images
-FROM node:18-alpine AS base
+# Use Node 20 Alpine for consistency and smaller image size
+FROM node:20-alpine AS base
 
 # Set the working directory in the container
 WORKDIR /usr/src/app

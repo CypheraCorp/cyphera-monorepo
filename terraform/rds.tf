@@ -58,7 +58,7 @@ resource "aws_db_instance" "main" {
   username = var.db_master_username
 
   manage_master_user_password = true
-  master_user_secret_kms_key_id = null
+  # master_user_secret_kms_key_id = null # Keep if you have it
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
@@ -84,21 +84,8 @@ resource "aws_db_instance" "main" {
     Name = "${var.service_prefix}-rds-${var.stage}"
   })
 
-  # Ignore changes to password attributes when managed by Secrets Manager
+  # Remove depends_on as the secret resource is being removed
   lifecycle {
     ignore_changes = [password]
   }
-
-  depends_on = [aws_secretsmanager_secret.rds_master_password]
-}
-
-resource "aws_secretsmanager_secret" "rds_master_password" {
-  name        = "${var.service_prefix}-rds-master-password-${var.stage}"
-  description = "RDS master password managed by RDS for stage ${var.stage}"
-  tags        = local.common_tags
-}
-
-output "rds_master_password_secret_arn" {
-  description = "ARN of the Secrets Manager secret containing the RDS master password"
-  value       = aws_secretsmanager_secret.rds_master_password.arn
 } 
