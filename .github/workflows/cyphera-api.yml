@@ -80,10 +80,10 @@ jobs:
         cache: true
         cache-dependency-path: go.sum
 
-    - name: golangci-lint
+    - name: Run golangci-lint
       uses: golangci/golangci-lint-action@v6
       with:
-        version: v1.59.1
+        version: v1.60.1
         skip-cache: true
         args: -v --concurrency=4
 
