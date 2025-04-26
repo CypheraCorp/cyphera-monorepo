@@ -247,8 +247,8 @@ if [ "$MODE" = "server" ]; then
   wait $HTTP_SERVER_PID
 else
   echo "Running in CLI mode..."
-  # Also set the DELEGATION_GRPC_ADDR for the client to use the correct port
-  export DELEGATION_GRPC_ADDR="localhost:${GRPC_PORT}"
+  # Also set the DELEGATION_GRPC_ADDR for the client to use the correct port (forcing IPv4)
+  export DELEGATION_GRPC_ADDR="127.0.0.1:${GRPC_PORT}"
   ./cmd/delegation-integration-test/integration-test -verbose
   
   # Print test result
