@@ -207,6 +207,22 @@ if [ "$MOCK" = "true" ]; then
   fi
 
   echo "Server is running!"
+
+  # Print server log for debugging
+  echo "--- Server Log Start ---"
+  cat server.log || echo "server.log not found or empty"
+  echo "--- Server Log End ---"
+
+  # Check if the port is actually listening
+  echo "Checking listener on port ${GRPC_PORT}..."
+  if ss -tlpn | grep -q ":${GRPC_PORT}\s"; then
+    echo "Port ${GRPC_PORT} is listening."
+  else
+    echo "ERROR: Port ${GRPC_PORT} is NOT listening."
+    # Optionally exit here if listening is critical before proceeding
+    # exit 1 
+  fi
+
 else
   echo "Using live gRPC delegation server..."
   # Set env variable for the client to connect to the correct server
