@@ -1,6 +1,11 @@
 # Manages core ECS resources for the Delegation Server (Role, Logging)
 # Cluster, Task Definition, and Service will be added in later steps.
 
+# --- Data sources to get ARNs for Secrets/Parameters ---
+data "aws_secretsmanager_secret" "delegation_private_key" {
+  name = "cyphera/delegation-server/private-key-${var.stage}"
+}
+
 # --- IAM Role for ECS Task Execution ---
 data "aws_iam_policy_document" "ecs_task_assume_role" {
   statement {
@@ -24,6 +29,38 @@ resource "aws_iam_role_policy_attachment" "delegation_server_task_execution_poli
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Add inline policy to allow fetching specific secrets/parameters
+resource "aws_iam_role_policy" "delegation_server_fetch_config" {
+  name = "${var.service_prefix}-delegation-fetch-config-${var.stage}"
+  role = aws_iam_role.delegation_server_task_execution_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = [data.aws_secretsmanager_secret.delegation_private_key.arn]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameters",
+          "ssm:GetParameter"
+        ]
+        # Reference the specific parameter ARNs using resource attributes
+        Resource = [
+          aws_ssm_parameter.delegation_rpc_url.arn,
+          aws_ssm_parameter.delegation_bundler_url.arn,
+          aws_ssm_parameter.delegation_chain_id.arn
+        ]
+      }
+    ]
+  })
+}
+
 # --- CloudWatch Log Group ---
 resource "aws_cloudwatch_log_group" "delegation_server" {
   name              = "/ecs/${var.service_prefix}-delegation-server-${var.stage}"
@@ -36,8 +73,9 @@ resource "aws_ecs_task_definition" "delegation_server" {
   family                   = "${var.service_prefix}-delegation-server-${var.stage}"
   network_mode             = "awsvpc"         # Required for Fargate
   requires_compatibilities = ["FARGATE"]      # Specify Fargate compatibility
-  cpu                      = "256"            # 0.25 vCPU - Adjust as needed
-  memory                   = "512"            # 512 MiB - Adjust as needed
+  # Use minimal resources for dev
+  cpu                      = var.stage == "dev" ? "256" : "1024" # Example prod: 1 vCPU
+  memory                   = var.stage == "dev" ? "512" : "2048" # Example prod: 2GB Memory
   execution_role_arn       = aws_iam_role.delegation_server_task_execution_role.arn
   # task_role_arn          = Optional: Define if the application itself needs AWS permissions
 
@@ -64,15 +102,30 @@ resource "aws_ecs_task_definition" "delegation_server" {
           "awslogs-stream-prefix" = "ecs" # Prefix for log streams
         }
       }
-      # Define environment variables if your app needs them
-      # Use secrets manager for sensitive data
-      # environment = [
-      #   { name = "GRPC_PORT", value = "50051" },
-      #   { name = "NODE_ENV", value = "production" } # Example
-      # ]
-      # secrets = [
-      #   { name = "API_KEY", valueFrom = "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:SECRET_NAME-AbCdEf" }
-      # ]
+      secrets = [ # Inject sensitive secrets
+        {
+          name      = "PRIVATE_KEY" # Env var name inside container
+          valueFrom = data.aws_secretsmanager_secret.delegation_private_key.arn
+        }
+      ],
+      environment = [ # Inject less sensitive config and non-secrets
+        {
+          name      = "RPC_URL"
+          valueFrom = aws_ssm_parameter.delegation_rpc_url.arn
+        },
+        {
+          name      = "BUNDLER_URL"
+          valueFrom = aws_ssm_parameter.delegation_bundler_url.arn
+        },
+        {
+          name      = "CHAIN_ID"
+          valueFrom = aws_ssm_parameter.delegation_chain_id.arn
+        },
+        # Non-secret plain values
+        { name = "GRPC_PORT", value = "50051" },
+        { name = "GRPC_HOST", value = "0.0.0.0" },
+        { name = "LOG_LEVEL", value = var.stage == "dev" ? "debug" : "info" }
+      ]
     }
   ])
 
@@ -85,7 +138,8 @@ resource "aws_ecs_service" "delegation_server" {
   cluster         = aws_ecs_cluster.delegation_server_cluster.id
   task_definition = aws_ecs_task_definition.delegation_server.arn
   launch_type     = "FARGATE"
-  desired_count   = 1 # Start with one task, can be adjusted or auto-scaled
+  # Run only one task for dev
+  desired_count   = var.stage == "dev" ? 1 : 2 # Example prod: 2 tasks for HA
 
   # Configure networking to place tasks in private subnets
   network_configuration {

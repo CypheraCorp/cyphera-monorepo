@@ -46,10 +46,13 @@ resource "aws_db_instance" "main" {
   identifier        = "${var.app_name}-db-${var.stage}"
   engine           = "postgres"
   engine_version   = "15.10"
-  instance_class   = "db.t4g.micro"
-  allocated_storage = 20
+  # Use smaller instance for dev
+  instance_class   = var.stage == "dev" ? "db.t3.micro" : "db.t4g.micro" 
+  # Use minimal storage for dev
+  allocated_storage = var.stage == "dev" ? 20 : 50 # Example prod size: 50GB
   storage_type      = "gp3"
-  max_allocated_storage = 20
+  # Prevent auto-scaling for dev to cap costs
+  max_allocated_storage = var.stage == "dev" ? 20 : 100 # Example prod max: 100GB
 
   db_name  = var.db_name
   username = var.db_master_username
@@ -70,8 +73,10 @@ resource "aws_db_instance" "main" {
 
   publicly_accessible    = false
   storage_encrypted     = true
-  performance_insights_enabled = true
-  performance_insights_retention_period = 7
+  # Disable Performance Insights for dev
+  performance_insights_enabled = var.stage == "dev" ? false : true
+  # Conditionally set retention period (only relevant if enabled)
+  performance_insights_retention_period = var.stage == "dev" ? null : 7 
   auto_minor_version_upgrade = true
   maintenance_window = "Sun:03:00-Sun:04:00"
 
