@@ -189,7 +189,7 @@ if [ "$MOCK" = "true" ]; then
   fi
 
   # Start the server in mock mode (for testing)
-  echo "Starting server..."
+  echo "Starting server in background..."
   npm run start:mock > server.log 2>&1 &
   SERVER_PID=$!
 
