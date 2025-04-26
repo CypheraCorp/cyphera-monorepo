@@ -188,20 +188,6 @@ if [ "$MOCK" = "true" ]; then
     npm install
   fi
 
-  # Try running the command directly first to catch immediate errors
-  echo "Attempting direct execution of start:mock for initial error check..."
-  # Execute the command using npx and capture stderr if it fails
-  if ! output=$(MOCK_MODE=true npx ts-node src/index.ts 2>&1); then 
-      echo "ERROR: Direct execution command failed immediately. Output/Error below:"
-      echo "----------------------------------------------------"
-      echo "$output"
-      echo "----------------------------------------------------"
-      # Exit now because the server cannot start
-      exit 1 
-  else
-      echo "Direct execution check passed (or command produced no output and exited successfully)."
-  fi
-
   # Start the server in mock mode (for testing)
   echo "Starting server in background..."
   npm run start:mock > server.log 2>&1 &
