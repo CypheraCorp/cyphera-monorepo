@@ -173,3 +173,4 @@ jobs:
       run: |
         echo "Deployed Go API to AWS Lambda for stage ${{ env.STAGE }}"
         serverless info --stage ${{ env.STAGE }} --verbose 
+        
