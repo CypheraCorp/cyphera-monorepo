@@ -49,8 +49,6 @@ Resources:
   # --- Lambda Function ---
   MainFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: go1.x # Tell SAM how to build Go, even for provided runtime
     Properties:
       FunctionName: !Sub "cyphera-api-${Stage}"
       Handler: bootstrap # Your Go binary
