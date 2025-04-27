@@ -1,0 +1,126 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Cyphera API - Deployed via SAM
+
+Parameters:
+  Stage:
+    Type: String
+    Description: Deployment stage (e.g., dev, prod)
+    Default: dev
+  DeploymentBucketName:
+    Type: String
+    Description: S3 bucket name for SAM deployment artifacts
+
+Globals:
+  Function:
+    Timeout: 29
+    MemorySize: 256
+    Runtime: provided.al2
+    Architectures:
+      - x86_64 # Assuming your build script targets this
+    Environment:
+      Variables:
+        GIN_MODE: release
+        STAGE: !Ref Stage
+        # --- Fetching values using SAM/CloudFormation syntax ---
+        DELEGATION_SERVER_URL: !Sub "https://${{resolve:ssm:/cyphera/delegation-server-alb-dns-${Stage}}}"
+        RDS_SECRET_ARN: !Sub "{{resolve:ssm:/cyphera/rds-secret-arn-${Stage}}}"
+        DB_HOST: !Sub "{{resolve:ssm:/cyphera/rds-endpoint-${Stage}}}"
+        DB_NAME: cyphera
+        DB_PORT: "5432" # Ensure port is a string if needed by your app
+        DB_SSLMODE: require
+        SUPABASE_URL: !Sub "{{resolve:ssm-secure:/cyphera/supabase/url-${Stage}}}" # Use ssm-secure for SecureString
+        SUPABASE_JWT_SECRET: !Sub "{{resolve:secretsmanager:cyphera/cyphera-api/supabase/jwt-secret-${Stage}}}" # Use resolve:secretsmanager
+        CIRCLE_API_KEY: !Sub "{{resolve:secretsmanager:cyphera/delegation-server/circle/api-key-${Stage}}}"
+        CYPHERA_SMART_WALLET_ADDRESS: !Sub "{{resolve:ssm-secure:/cyphera/wallet/smart-wallet-address-${Stage}}}" # Use ssm-secure
+        CORS_ALLOWED_ORIGINS: !Sub "{{resolve:ssm:/cyphera/cors/allowed-origins-${Stage}}}"
+        CORS_ALLOWED_METHODS: !Sub "{{resolve:ssm:/cyphera/cors/allowed-methods-${Stage}}}"
+        CORS_ALLOWED_HEADERS: !Sub "{{resolve:ssm:/cyphera/cors/allowed-headers-${Stage}}}"
+        CORS_EXPOSED_HEADERS: !Sub "{{resolve:ssm:/cyphera/cors/exposed-headers-${Stage}}}"
+        CORS_ALLOW_CREDENTIALS: !Sub "{{resolve:ssm:/cyphera/cors/allow-credentials-${Stage}}}"
+    VpcConfig:
+      SecurityGroupIds:
+        - !Sub "{{resolve:ssm:/cyphera/lambda-security-group-id-${Stage}}}"
+      SubnetIds:
+        - !Sub "{{resolve:ssm:/cyphera/private-subnet-1-${Stage}}}"
+        - !Sub "{{resolve:ssm:/cyphera/private-subnet-2-${Stage}}}"
+
+Resources:
+  # --- Lambda Function ---
+  MainFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "cyphera-api-${Stage}"
+      Handler: bootstrap # Your Go binary
+      CodeUri: . # Points to the root - SAM build/deploy will handle packaging
+      Policies:
+        # Base policies
+        - AWSLambdaBasicExecutionRole
+        - AWSLambdaVPCAccessExecutionRole
+        # Policy to read the RDS secret (referenced by ARN)
+        - SecretsManagerReadWrite: # Or a more granular custom policy
+            SecretArn: !Sub "{{resolve:ssm:/cyphera/rds-secret-arn-${Stage}}}"
+        # Policy to read specific Secrets Manager secrets
+        - SecretsManagerReadWrite: # Or a more granular custom policy
+            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:cyphera/cyphera-api/supabase/jwt-secret-${Stage}*"
+        - SecretsManagerReadWrite: # Or a more granular custom policy
+            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:cyphera/delegation-server/circle/api-key-${Stage}*"
+        # Policy to read SSM parameters
+        - SSMParameterReadPolicy:
+            ParameterName: !Sub "/cyphera/*-${Stage}" # Grant access to relevant parameters
+      Events:
+        HealthCheck:
+          Type: HttpApi
+          Properties:
+            Path: /health
+            Method: GET
+            ApiId: !Ref HttpApi
+        CatchAll:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+            ApiId: !Ref HttpApi
+
+  # --- HTTP API Gateway ---
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Stage # Use the Stage parameter
+      CorsConfiguration:
+        AllowOrigins: !Sub '{{resolve:ssm:/cyphera/cors/allowed-origins-${Stage}}}' # Example - adjust as needed
+        AllowMethods: !Sub '{{resolve:ssm:/cyphera/cors/allowed-methods-${Stage}}}'
+        AllowHeaders: !Sub '{{resolve:ssm:/cyphera/cors/allowed-headers-${Stage}}}'
+        ExposeHeaders: !Sub '{{resolve:ssm:/cyphera/cors/exposed-headers-${Stage}}}'
+        AllowCredentials: !Sub '{{resolve:ssm:/cyphera/cors/allow-credentials-${Stage}}}'
+      # MetricsEnabled: true # REMOVED - Likely misplaced or enable via MethodSettings if needed
+
+  # --- Custom Domain Name ---
+  # Replaces serverless-domain-manager functionality
+  # Ensure the Route53 Hosted Zone for cypherapay.com exists
+  ApiDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: !Sub "${Stage}.api.cypherapay.com"
+      DomainNameConfigurations:
+        - CertificateArn: !Sub "{{resolve:ssm:/cyphera/wildcard-api-cert-arn}}" # Fetch cert ARN
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Properties:
+      ApiId: !Ref HttpApi
+      DomainName: !Ref ApiDomainName
+      Stage: !Ref Stage
+
+Outputs:
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+  FunctionArn:
+    Description: "Main Lambda Function ARN"
+    Value: !GetAtt MainFunction.Arn
+  HttpApiId:
+    Description: "HTTP API ID"
+    Value: !Ref HttpApi 

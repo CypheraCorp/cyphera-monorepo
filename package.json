@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "serverless-domain-manager": "^8.0.0"
+  }
+}
