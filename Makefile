@@ -145,3 +145,14 @@ help:
 	@echo "  make proto-build-all - Generate both Go and Node.js gRPC code"
 gen:
 	sqlc generate
+
+# Makefile for AWS SAM build with provided.al2 runtime
+
+# The SAM build process for a function with logical ID 'MainFunction'
+# will look for a target named 'build-MainFunction'.
+# This target should place the built artifact (our 'bootstrap' binary)
+# into the directory specified by the ARTIFACTS_DIR environment variable provided by SAM.
+build-MainFunction:
+	# Copy the pre-compiled bootstrap binary (downloaded in previous workflow step)
+	# into the SAM artifact directory.
+	cp bootstrap $(ARTIFACTS_DIR)/
