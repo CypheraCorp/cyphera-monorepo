@@ -57,9 +57,6 @@ Resources:
         # Base policies
         - AWSLambdaBasicExecutionRole
         - AWSLambdaVPCAccessExecutionRole
-        # Policy to read the RDS secret (referenced by ARN)
-        - SecretsManagerReadWrite: # Or a more granular custom policy
-            SecretArn: !Sub "{{resolve:ssm:/cyphera/rds-secret-arn-${Stage}}}"
         # Policy to read specific Secrets Manager secrets
         - SecretsManagerReadWrite: # Or a more granular custom policy
             SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:cyphera/cyphera-api/supabase/jwt-secret-${Stage}*"
