@@ -137,7 +137,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: bootstrap-${{ env.STAGE }}
-        path: .
+        path: . # Downloads bootstrap binary to the root
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -146,31 +146,33 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
-    - name: Set up Node.js # For Serverless Framework
-      uses: actions/setup-node@v3
+    - name: Setup SAM CLI
+      uses: aws-actions/setup-sam@v2
       with:
-        node-version: '20'
+        use-installer: true # Installs/Ensures latest SAM CLI
 
-    - name: Install Serverless Framework
-      run: |
-        npm install -g serverless@3.33.0
-        npm install -g serverless-domain-manager
+    # SAM Build: Packages the application. --use-container is recommended.
+    - name: SAM Build
+      run: sam build --template template.yaml --use-container
 
-    - name: Deploy with Serverless
+    # SAM Deploy: Deploys the application using CloudFormation.
+    # Requires an S3 bucket (defined in secrets) and capabilities for IAM.
+    - name: SAM Deploy
       env:
-        STAGE: ${{ env.STAGE }} # Only STAGE is needed now
-        # Removed other env vars - they are pulled from AWS by serverless.yml
-
+        SAM_DEPLOYMENT_BUCKET: ${{ secrets.SAM_DEPLOYMENT_BUCKET }} # Get bucket name from secrets
       run: |
-        echo "Deploying Go API for stage: ${{ env.STAGE }}"
-        serverless create_domain --stage ${{ env.STAGE }} --verbose || true
-        sleep 30
-        serverless deploy --stage ${{ env.STAGE }} --verbose
+        echo "Deploying Go API using SAM for stage: ${{ env.STAGE }}"
+        sam deploy \
+          --template-file .aws-sam/build/template.yaml \
+          --stack-name cyphera-api-${{ env.STAGE }} \
+          --s3-bucket $SAM_DEPLOYMENT_BUCKET \
+          --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+          --region ${{ env.AWS_REGION }} \
+          --no-confirm-changeset \
+          --no-fail-on-empty-changeset \
+          --parameter-overrides Stage=${{ env.STAGE }} DeploymentBucketName=$SAM_DEPLOYMENT_BUCKET
 
-    - name: Log deployment info
-      env:
-        STAGE: ${{ env.STAGE }}
-      run: |
-        echo "Deployed Go API to AWS Lambda for stage ${{ env.STAGE }}"
-        serverless info --stage ${{ env.STAGE }} --verbose 
+    # Deployment logging can be added here if needed, e.g.:
+    # - name: Show SAM Stack Outputs
+    #   run: aws cloudformation describe-stacks --stack-name cyphera-api-${{ env.STAGE }} --query 'Stacks[0].Outputs'
         

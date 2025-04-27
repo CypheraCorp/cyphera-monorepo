@@ -101,4 +101,38 @@ resource "aws_ecs_cluster" "delegation_server_cluster" {
 # This permission is now managed within serverless.yml under provider.iam.role.statements
 # data "aws_iam_policy_document" "lambda_read_rds_secret" { ... }
 # resource "aws_iam_policy" "lambda_read_rds_secret" { ... }
-# resource "aws_iam_role_policy_attachment" "lambda_read_rds_secret" { ... } 
+# resource "aws_iam_role_policy_attachment" "lambda_read_rds_secret" { ... }
+
+# --- S3 Bucket for SAM Deployments ---
+# Bucket to store SAM deployment artifacts (e.g., packaged Lambda code)
+resource "aws_s3_bucket" "sam_deployment_bucket" {
+  bucket = "cyphera-api-sam-deployments-${var.stage}" # Using stage variable for uniqueness per env
+
+  tags = local.common_tags
+}
+
+resource "aws_s3_bucket_versioning" "sam_deployment_bucket_versioning" {
+  bucket = aws_s3_bucket.sam_deployment_bucket.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "sam_deployment_bucket_sse" {
+  bucket = aws_s3_bucket.sam_deployment_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "sam_deployment_bucket_public_access" {
+  bucket = aws_s3_bucket.sam_deployment_bucket.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+} 
