@@ -193,34 +193,47 @@ if [ "$MOCK" = "true" ]; then
   npm run start:mock > server.log 2>&1 &
   SERVER_PID=$!
 
-  # Wait for server to start
-  echo "Waiting for server to start up (PID: $SERVER_PID)..."
-  # Give the server a few seconds to fully bind the port
-  echo "Adding a 5-second delay for server binding..."
-  sleep 5
+  # Wait actively for server to start listening
+  echo "Waiting for server (PID: $SERVER_PID) to listen on port ${GRPC_PORT}..."
+  MAX_WAIT=30 # Maximum wait time in seconds
+  WAIT_INTERVAL=1 # Check interval in seconds
+  ELAPSED_WAIT=0
+  LISTENING=false
+  while [ $ELAPSED_WAIT -lt $MAX_WAIT ]; do
+    if ss -tlpn | grep -q ":${GRPC_PORT}\s"; then
+      echo "Server is listening on port ${GRPC_PORT} after ${ELAPSED_WAIT} seconds."
+      LISTENING=true
+      break
+    fi
+    sleep $WAIT_INTERVAL
+    ELAPSED_WAIT=$((ELAPSED_WAIT + WAIT_INTERVAL))
+    echo "Waited ${ELAPSED_WAIT}s..."
+  done
 
-  # Verify server is running
+  if [ "$LISTENING" = false ]; then
+    echo "ERROR: Server did not start listening on port ${GRPC_PORT} within ${MAX_WAIT} seconds."
+    echo "--- Last known server log --- "
+    cat server.log || echo "server.log not found or empty"
+    echo "--- End of log --- "
+    exit 1
+  fi
+
+  # Verify server process still exists (sanity check)
   if ! kill -0 $SERVER_PID 2>/dev/null; then
-    echo "Error: Server failed to start"
-    cat server.log
+    echo "Error: Server process disappeared after starting to listen."
     exit 1
   fi
 
   echo "Server is running!"
 
-  # Print server log for debugging
-  echo "--- Server Log Start ---"
-  cat server.log || echo "server.log not found or empty"
-  echo "--- Server Log End ---"
-
-  # Check if the port is actually listening
-  echo "Checking listener on port ${GRPC_PORT}..."
+  # Final check if the port is actually listening (redundant after loop, but safe)
+  echo "Final check listener on port ${GRPC_PORT}..."
   if ss -tlpn | grep -q ":${GRPC_PORT}\s"; then
-    echo "Port ${GRPC_PORT} is listening."
+    echo "Port ${GRPC_PORT} is confirmed listening."
   else
-    echo "ERROR: Port ${GRPC_PORT} is NOT listening."
-    # Optionally exit here if listening is critical before proceeding
-    # exit 1 
+    # This should ideally not be reached if the loop worked
+    echo "ERROR: Port ${GRPC_PORT} is NOT listening despite earlier check."
+    exit 1 
   fi
 
 else
