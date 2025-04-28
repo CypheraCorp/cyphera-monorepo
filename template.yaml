@@ -149,21 +149,21 @@ Resources:
 
   # --- Custom Domain Name --- (Adding back)
   # Ensure the Route53 Hosted Zone for cypherapay.com exists and the certificate ARN is correct
-  # ApiDomainName:
-  #   Type: AWS::ApiGatewayV2::DomainName
-  #   Properties:
-  #     DomainName: !Sub "${Stage}.api.cypherapay.com"
-  #     DomainNameConfigurations:
-  #       - CertificateArn: '{{resolve:ssm:/cyphera/wildcard-api-cert-arn}}' # Keeping resolve here as it might work
-  #         EndpointType: REGIONAL
-  #         SecurityPolicy: TLS_1_2
+  ApiDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: !Sub "${Stage}.api.cypherapay.com" # e.g., dev.api.cypherapay.com
+      DomainNameConfigurations:
+        - CertificateArn: arn:aws:acm:us-east-1:699475955358:certificate/6f8bb8d4-4200-4128-a680-d9854890993b # Use actual ARN
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
 
-  # ApiMapping:
-  #   Type: AWS::ApiGatewayV2::ApiMapping
-  #   Properties:
-  #     ApiId: !Ref HttpApi
-  #     DomainName: !Ref ApiDomainName
-  #     Stage: !Ref Stage
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Properties:
+      ApiId: !Ref HttpApi
+      DomainName: !Ref ApiDomainName # Link to the custom domain resource above
+      Stage: !Ref Stage             # Link to the 'dev' or 'prod' stage
 
   # --- Explicit Log Group ---
   MainFunctionLogGroup:
