@@ -18,77 +18,77 @@ env:
   STAGE: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
 
 jobs:
-  # test:
-  #   name: Test Go API
-  #   runs-on: ubuntu-latest
+  test:
+    name: Test Go API
+    runs-on: ubuntu-latest
 
-  #   services:
-  #     postgres:
-  #       image: postgres:15
-  #       env:
-  #         POSTGRES_USER: postgres
-  #         POSTGRES_PASSWORD: postgres
-  #         POSTGRES_DB: cyphera_test
-  #       ports:
-  #         - 5432:5432
-  #       options: >-
-  #         --health-cmd pg_isready
-  #         --health-interval 10s
-  #         --health-timeout 5s
-  #         --health-retries 5
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cyphera_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
-  #   steps:
-  #   - uses: actions/checkout@v3
+    steps:
+    - uses: actions/checkout@v3
 
-  #   - name: Set up Go
-  #     uses: actions/setup-go@v4
-  #     with:
-  #       go-version: ${{ env.GO_VERSION }}
-  #       cache: true
-  #       cache-dependency-path: go.sum
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        cache-dependency-path: go.sum
 
-  #   - name: Install Go dependencies
-  #     run: go mod download
+    - name: Install Go dependencies
+      run: go mod download
 
-  #   - name: Run Go tests
-  #     run: go test -v ./...
+    - name: Run Go tests
+      run: go test -v ./...
 
-  #   - name: Run integration tests
-  #     env:
-  #       DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
-  #       DELEGATION_LOCAL_MODE: true # Keep true if tests mock the server or run it locally
-  #       DELEGATION_SERVER_URL: localhost:50051 # Assumes test setup might start a mock/local server
-  #       DELEGATION_GRPC_ADDR: localhost:50051
-  #       GRPC_PORT: 50051 # Go API's gRPC port (if any)
-  #       GRPC_HOST: 0.0.0.0 # Go API's gRPC host (if any)
-  #       PORT: 8000 # Go API's HTTP port
-  #     run: |
-  #       chmod +x scripts/integration-test.sh
-  #       make test-integration # This script might need Node if it interacts with the mock server setup
+    - name: Run integration tests
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
+        DELEGATION_LOCAL_MODE: true # Keep true if tests mock the server or run it locally
+        DELEGATION_SERVER_URL: localhost:50051 # Assumes test setup might start a mock/local server
+        DELEGATION_GRPC_ADDR: localhost:50051
+        GRPC_PORT: 50051 # Go API's gRPC port (if any)
+        GRPC_HOST: 0.0.0.0 # Go API's gRPC host (if any)
+        PORT: 8000 # Go API's HTTP port
+      run: |
+        chmod +x scripts/integration-test.sh
+        make test-integration # This script might need Node if it interacts with the mock server setup
 
-  # lint:
-  #   name: Lint Go API
-  #   runs-on: ubuntu-latest
+  lint:
+    name: Lint Go API
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #   - uses: actions/checkout@v3
+    steps:
+    - uses: actions/checkout@v3
 
-  #   - name: Set up Go
-  #     uses: actions/setup-go@v4
-  #     with:
-  #       go-version: ${{ env.GO_VERSION }}
-  #       cache: true
-  #       cache-dependency-path: go.sum
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        cache-dependency-path: go.sum
 
-  #   - name: Run golangci-lint
-  #     uses: golangci/golangci-lint-action@v5
-  #     with:
-  #       version: v1.60.1
-  #       args: --concurrency=4
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v5
+      with:
+        version: v1.60.1
+        args: --concurrency=4
 
   build:
     name: Build Go API
-    # needs: [test, lint]
+    needs: [test, lint]
     runs-on: ubuntu-latest
 
     steps:

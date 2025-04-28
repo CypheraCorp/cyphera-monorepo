@@ -139,13 +139,13 @@ jobs:
           aws ecs update-service --cluster $ECS_CLUSTER_NAME --service $ECS_SERVICE_NAME --force-new-deployment --region $AWS_REGION
           echo "ECS service update initiated."
 
-      # Optional: Add step to wait for service stability if needed
-      # - name: Wait for service stability
-      #   env:
-      #     ECS_CLUSTER_NAME: cyphera-delegation-cluster-${{ env.STAGE }}
-      #     ECS_SERVICE_NAME: cyphera-delegation-server-${{ env.STAGE }}
-      #     AWS_REGION: us-east-1
-      #   run: |
-      #     echo "Waiting for service $ECS_SERVICE_NAME to become stable..."
-      #     aws ecs wait services-stable --cluster $ECS_CLUSTER_NAME --services $ECS_SERVICE_NAME --region $AWS_REGION
-      #     echo "Service $ECS_SERVICE_NAME is stable." 
+      # Add step to wait for service stability if needed
+      - name: Wait for service stability
+        env:
+          ECS_CLUSTER_NAME: cyphera-delegation-cluster-${{ env.STAGE }}
+          ECS_SERVICE_NAME: cyphera-delegation-server-${{ env.STAGE }}
+          AWS_REGION: us-east-1
+        run: |
+          echo "Waiting for service $ECS_SERVICE_NAME to become stable..."
+          aws ecs wait services-stable --cluster $ECS_CLUSTER_NAME --services $ECS_SERVICE_NAME --region $AWS_REGION
+          echo "Service $ECS_SERVICE_NAME is stable." 
