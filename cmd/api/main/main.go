@@ -14,6 +14,8 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	"github.com/davecgh/go-spew/spew"
+
+	// "github.com/davecgh/go-spew/spew" // Remove if not needed
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -53,6 +55,8 @@ func init() {
 	// Initialize routes
 	server.InitializeRoutes(r)
 
+	// Use the standard New function; it typically handles path stripping automatically
+	// based on the API Gateway request context.
 	ginLambda = ginadapter.New(r)
 }
 
