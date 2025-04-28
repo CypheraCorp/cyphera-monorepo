@@ -126,12 +126,14 @@ Resources:
             Path: /health
             Method: GET
             ApiId: !Ref HttpApi
+            PayloadFormatVersion: "1.0"
         CatchAll:
           Type: HttpApi
           Properties:
             Path: /{proxy+}
             Method: ANY
             ApiId: !Ref HttpApi
+            PayloadFormatVersion: "1.0"
 
   # --- HTTP API Gateway --- (Adding back)
   HttpApi:
