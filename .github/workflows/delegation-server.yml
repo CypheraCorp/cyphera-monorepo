@@ -117,12 +117,16 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }} # Use Git SHA for unique image tag
         run: |
-          echo "Building and pushing image $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "Building and pushing image $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG and :latest"
           # Build the docker image locally
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f delegation-server/Dockerfile delegation-server/
-          # Push the image to ECR
+          # Also tag as latest
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          # Push the image with Git SHA tag to ECR
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          # Set image URI as output for potential use (optional)
+          # Push the image with 'latest' tag to ECR
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          # Set image URI as output for potential use (optional) - keeping SHA tag for reference
           echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
       - name: Update ECS Service to force new deployment
@@ -141,11 +145,14 @@ jobs:
 
       # Add step to wait for service stability if needed
       - name: Wait for service stability
+        timeout-minutes: 15 # Add timeout
         env:
           ECS_CLUSTER_NAME: cyphera-delegation-cluster-${{ env.STAGE }}
           ECS_SERVICE_NAME: cyphera-delegation-server-${{ env.STAGE }}
-          AWS_REGION: us-east-1
+          AWS_REGION: us-east-1 # Match your Terraform region
         run: |
           echo "Waiting for service $ECS_SERVICE_NAME to become stable..."
+          # Use AWS CLI v2 to update the service and force a new deployment
+          # This pulls the new image tagged with the Git SHA
           aws ecs wait services-stable --cluster $ECS_CLUSTER_NAME --services $ECS_SERVICE_NAME --region $AWS_REGION
           echo "Service $ECS_SERVICE_NAME is stable." 
