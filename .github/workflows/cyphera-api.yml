@@ -155,24 +155,25 @@ jobs:
     - name: SAM Build
       run: sam build --template template.yaml --use-container
 
-    # SAM Deploy: Deploys the application using CloudFormation.
-    # Requires an S3 bucket (defined in secrets) and capabilities for IAM.
-    - name: SAM Deploy
-      env:
-        SAM_DEPLOYMENT_BUCKET: ${{ secrets.SAM_DEPLOYMENT_BUCKET }} # Get bucket name from secrets
-      run: |
-        echo "Deploying Go API using SAM for stage: ${{ env.STAGE }}"
-        sam deploy \
-          --template-file .aws-sam/build/template.yaml \
-          --stack-name cyphera-api-${{ env.STAGE }} \
-          --s3-bucket $SAM_DEPLOYMENT_BUCKET \
-          --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
-          --region ${{ env.AWS_REGION }} \
-          --no-confirm-changeset \
-          --no-fail-on-empty-changeset \
-          --parameter-overrides Stage=${{ env.STAGE }} DeploymentBucketName=$SAM_DEPLOYMENT_BUCKET
+    # --- NEW DEPLOY STEPS ---
+    - name: Make deploy script executable
+      run: chmod +x scripts/deploy_lambda.sh
 
-    # Deployment logging can be added here if needed, e.g.:
+    - name: Run Deployment Script
+      env:
+        # Pass secrets/variables needed by the script
+        # Assumes AWS keys are already configured above
+        STAGE: ${{ env.STAGE }}
+        AWS_REGION: ${{ env.AWS_REGION }}
+        SAM_DEPLOYMENT_BUCKET: ${{ secrets.SAM_DEPLOYMENT_BUCKET }} # From Environment secrets
+        LAMBDA_SG_ID: ${{ secrets.LAMBDA_SG_ID }}               # From Environment secrets
+        PRIVATE_SUBNET_1_ID: ${{ secrets.PRIVATE_SUBNET_1_ID }} # From Environment secrets
+        PRIVATE_SUBNET_2_ID: ${{ secrets.PRIVATE_SUBNET_2_ID }} # From Environment secrets
+      run: ./scripts/deploy_lambda.sh
+    # --- END NEW DEPLOY STEPS ---
+
+    # Optional: Show stack outputs after successful deployment
     # - name: Show SAM Stack Outputs
-    #   run: aws cloudformation describe-stacks --stack-name cyphera-api-${{ env.STAGE }} --query 'Stacks[0].Outputs'
+    #   if: success() # Only run if deploy script succeeded
+    #   run: aws cloudformation describe-stacks --stack-name cyphera-api-${{ env.STAGE }} --query 'Stacks[0].Outputs' --region ${{ env.AWS_REGION }}
         
