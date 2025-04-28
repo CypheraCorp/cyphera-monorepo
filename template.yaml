@@ -135,7 +135,7 @@ Resources:
             ApiId: !Ref HttpApi
             PayloadFormatVersion: "1.0"
 
-  # --- HTTP API Gateway --- (Adding back)
+  # --- HTTP API Gateway --- (Adding back) 
   HttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
