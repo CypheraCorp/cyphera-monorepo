@@ -183,7 +183,7 @@ func InitializeHandlers() {
 	productHandler = handlers.NewProductHandler(commonServices, delegationClient)
 	walletHandler = handlers.NewWalletHandler(commonServices)
 
-	// Initialize subscription handlers
+	// Initialize subscription handler and event handler
 	subscriptionHandler = handlers.NewSubscriptionHandler(commonServices, delegationClient)
 	subscriptionEventHandler = handlers.NewSubscriptionEventHandler(commonServices)
 
