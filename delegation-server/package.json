@@ -24,7 +24,8 @@
     "permissionless": "0.2.36",
     "viem": "2.23.9",
     "@grpc/grpc-js": "1.13.0",
-    "@grpc/proto-loader": "0.7.13"
+    "@grpc/proto-loader": "0.7.13",
+    "node-fetch": "^2.7.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
