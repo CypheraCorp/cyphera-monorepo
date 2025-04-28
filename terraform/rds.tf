@@ -7,6 +7,15 @@ resource "aws_db_subnet_group" "main" {
   }
 }
 
+resource "aws_db_subnet_group" "public" {
+  name       = "${var.app_name}-db-subnet-public"
+  subnet_ids = module.vpc.public_subnets
+
+  tags = {
+    Name = "${var.app_name}-db-subnet-public"
+  }
+}
+
 resource "aws_security_group" "rds" {
   name        = "${var.app_name}-rds-sg"
   description = "RDS security group"
@@ -17,15 +26,7 @@ resource "aws_security_group" "rds" {
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.lambda.id]
-  }
-
-  # Allow access from development machine
-  ingress {
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = [var.nate_machine_ip]
-    description = "PostgreSQL access from development machine"
+    description     = "PostgreSQL access from Lambda"
   }
 
   egress {
@@ -42,40 +43,47 @@ resource "aws_security_group" "rds" {
   }
 }
 
+resource "aws_security_group_rule" "rds_public_ingress_dev" {
+  count = var.stage == "dev" ? 1 : 0
+
+  type              = "ingress"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.rds.id
+  description       = "Public PostgreSQL access for dev"
+}
+
 resource "aws_db_instance" "main" {
   identifier        = "${var.app_name}-db-${var.stage}"
   engine           = "postgres"
   engine_version   = "15.10"
-  # Use smaller instance for dev
   instance_class   = var.stage == "dev" ? "db.t3.micro" : "db.t4g.micro" 
-  # Use minimal storage for dev
-  allocated_storage = var.stage == "dev" ? 20 : 50 # Example prod size: 50GB
+  allocated_storage = var.stage == "dev" ? 20 : 50
   storage_type      = "gp3"
-  # Prevent auto-scaling for dev to cap costs
-  max_allocated_storage = var.stage == "dev" ? 20 : 100 # Example prod max: 100GB
+  max_allocated_storage = var.stage == "dev" ? 20 : 100
 
   db_name  = var.db_name
   username = var.db_master_username
 
   manage_master_user_password = true
-  # master_user_secret_kms_key_id = null # Keep if you have it
 
-  db_subnet_group_name   = aws_db_subnet_group.main.name
+  # STEP 2: Uncomment the subnet group assignment
+  db_subnet_group_name   = var.stage == "dev" ? aws_db_subnet_group.public.name : aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
   # --- Production vs Non-Production Settings ---
-  # Apply production settings only if var.stage is "prod"
   backup_retention_period = var.stage == "prod" ? var.prod_backup_retention_period : 0
   multi_az              = var.stage == "prod" ? true : false
   skip_final_snapshot    = var.stage == "prod" ? false : true
   deletion_protection = var.stage == "prod" ? true : false
   # ---------------------------------------------
 
-  publicly_accessible    = false
+  # Set public access based on stage (This is the only change we want in Step 1)
+  publicly_accessible    = var.stage == "dev" ? true : false
   storage_encrypted     = true
-  # Disable Performance Insights for dev
   performance_insights_enabled = var.stage == "dev" ? false : true
-  # Conditionally set retention period (only relevant if enabled)
   performance_insights_retention_period = var.stage == "dev" ? null : 7 
   auto_minor_version_upgrade = true
   maintenance_window = "Sun:03:00-Sun:04:00"
@@ -84,7 +92,6 @@ resource "aws_db_instance" "main" {
     Name = "${var.service_prefix}-rds-${var.stage}"
   })
 
-  # Remove depends_on as the secret resource is being removed
   lifecycle {
     ignore_changes = [password]
   }
