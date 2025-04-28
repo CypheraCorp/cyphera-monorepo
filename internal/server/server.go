@@ -192,7 +192,7 @@ func InitializeHandlers() {
 }
 
 func InitializeRoutes(router *gin.Engine) {
-	// Initialize logger first
+	// Initialize logger  first
 	logger.InitLogger()
 
 	// Configure and apply CORS middleware
