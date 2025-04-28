@@ -46,7 +46,6 @@ resource "aws_ssm_parameter" "rds_secret_arn" {
   type        = "String"
   value       = aws_db_instance.main.master_user_secret[0].secret_arn
   tags        = local.common_tags
-  overwrite   = true
 }
 
 # --- SSM Parameter for RDS Endpoint ---
