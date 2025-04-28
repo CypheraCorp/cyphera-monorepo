@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -107,7 +108,9 @@ func InitializeHandlers() {
 		// Construct DSN for deployed environment
 		// DB_HOST already contains host:port from RDS endpoint
 		dsn = fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=%s",
-			dbUser, dbPassword, dbEndpoint, dbName, dbSSLMode)
+			url.QueryEscape(dbUser),     // URL-encode username
+			url.QueryEscape(dbPassword), // URL-encode password
+			dbEndpoint, dbName, dbSSLMode)
 		logger.Info("Constructed DSN from Secrets Manager credentials")
 
 	} else {
