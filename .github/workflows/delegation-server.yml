@@ -79,10 +79,9 @@ jobs:
         with:
           name: delegation-server-${{ env.STAGE }}
           path: |
-            delegation-server/dist
             delegation-server/package.json
-            delegation-server/package-lock.json # Include lock file for consistent deployment installs
-            # Include any other necessary files for deployment (e.g., .env.production template, static assets)
+            delegation-server/package-lock.json # Include lock file
+            # dist is no longer needed here as build happens in Dockerfile
 
   deploy:
     name: Deploy Delegation Server to ECS Fargate

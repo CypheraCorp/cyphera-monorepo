@@ -10,8 +10,8 @@ WORKDIR /usr/src/app
 COPY package.json package-lock.json* ./
 
 # Use npm ci for clean, reproducible installs based on lockfile
-# Only install production dependencies - crucial for smaller final image
-RUN npm ci --omit=dev
+# Install all dependencies (including dev) needed for the build step
+RUN npm ci
 
 # Copy the rest of your application code
 # Ensure build artifacts (dist folder) are included if needed by the CMD
@@ -20,7 +20,10 @@ COPY . .
 # If your build step (`npm run build`) needs to be run inside the container
 # uncomment the following line. This is often needed if the build generates
 # JS files from TS that are needed by the CMD step.
-# RUN npm run build
+RUN npm run build
+
+# Prune development dependencies after build to keep image smaller
+RUN npm prune --omit=dev
 
 # Expose the port the gRPC server listens on (Verify this port in your code)
 EXPOSE 50051
