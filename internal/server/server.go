@@ -202,6 +202,12 @@ func InitializeRoutes(router *gin.Engine) {
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Health check
+	router.GET("/:stage/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+		})
+	})
+
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "ok",
@@ -229,7 +235,7 @@ func InitializeRoutes(router *gin.Engine) {
 	}
 
 	// API v1 routes
-	v1 := router.Group("/api/v1")
+	v1 := router.Group("/:stage/api/v1")
 	{
 		// No Public routes for now
 
