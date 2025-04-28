@@ -152,7 +152,18 @@ gen:
 # will look for a target named 'build-MainFunction'.
 # This target should place the built artifact (our 'bootstrap' binary)
 # into the directory specified by the ARTIFACTS_DIR environment variable provided by SAM.
+
+# --- Target for GitHub Actions (expects pre-built bootstrap) ---
 build-MainFunction:
 	# Copy the pre-compiled bootstrap binary (downloaded in previous workflow step)
 	# into the SAM artifact directory.
 	cp bootstrap $(ARTIFACTS_DIR)/
+
+# --- Target for Local SAM Builds ---
+# Use this target *before* running 'sam build' locally.
+.PHONY: build-sam-local
+build-sam-local:
+	@echo "Executing build script (scripts/build.sh) to create bootstrap binary..."
+	chmod +x scripts/build.sh # Ensure script is executable
+	./scripts/build.sh
+	@echo "Build script finished. Bootstrap binary should be ready."
