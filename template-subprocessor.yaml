@@ -96,23 +96,18 @@ Resources:
                 - logs:CreateLogStream
                 - logs:PutLogEvents
               Resource: 'arn:aws:logs:*:*:*' # Basic logging permissions
-            - Effect: Allow
-              Action:
-                - ssm:GetParameter
-                - ssm:GetParameters
-              Resource: [] # Empty list - no SSM parameters needed by code anymore for these values
+            # Removed empty SSM permission block
+            # - Effect: Allow
+            #   Action:
+            #     - ssm:GetParameter
+            #     - ssm:GetParameters
+            #   Resource: []
+            # Grant permission to get the specific RDS secret value using the ARN passed as a parameter
             - Effect: Allow
               Action:
                 - secretsmanager:GetSecretValue
               Resource:
-                 # - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${ParamRdsSecretArnName}-* # REMOVED invalid reference
-                 - !Ref RdsSecretArnValue # Correct reference if uncommenting permissions
-            # Remove SecretsManager permissions - RDS secret ARN is passed directly now
-            # - Effect: Allow
-            #   Action:
-            #     - secretsmanager:GetSecretValue
-            #   Resource:
-            #     - !Ref RdsSecretArnValue # Grant access ONLY to the specific Secret ARN passed in
+                 - !Ref RdsSecretArnValue # Reference the ARN passed in
             # VPC Access Permissions (if using VPC)
             - VPCAccessPolicy: {}
             # Add permissions needed for delegation client (e.g., connect to gRPC endpoint)
