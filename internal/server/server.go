@@ -561,12 +561,3 @@ func configureCORS() gin.HandlerFunc {
 
 	return cors.New(corsConfig)
 }
-
-// Helper function to get map keys for logging
-func getMapKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
