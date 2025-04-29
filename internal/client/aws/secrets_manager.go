@@ -39,6 +39,8 @@ func NewSecretsManagerClient(ctx context.Context) (*SecretsManagerClient, error)
 // GetSecretString fetches a secret string from AWS Secrets Manager using an ARN specified by an environment variable.
 // If the ARN environment variable (secretArnEnvVar) is not set or fetching fails,
 // it falls back to reading the secret directly from another environment variable (fallbackEnvVar).
+// It intelligently handles secrets stored as plain text OR as a JSON object with a single key
+// (where the value associated with that key is the desired secret).
 // It returns the secret value or an error if both methods fail.
 func (c *SecretsManagerClient) GetSecretString(ctx context.Context, secretArnEnvVar string, fallbackEnvVar string) (string, error) {
 	secretArn := os.Getenv(secretArnEnvVar)
@@ -51,15 +53,41 @@ func (c *SecretsManagerClient) GetSecretString(ctx context.Context, secretArnEnv
 		}
 
 		result, err := c.svc.GetSecretValue(ctx, input)
+		// Process if fetch was successful AND secret string is not nil/empty
 		if err == nil && result.SecretString != nil && *result.SecretString != "" {
-			logger.Log.Info("Successfully fetched secret from Secrets Manager", zap.String("secretArn", secretArn))
-			// Check if the secret is JSON and needs parsing (common for username/password pairs)
-			// For single string secrets like API keys or JWT secrets, return directly.
-			// This logic might need adjustment based on how *all* secrets are stored.
-			// Assuming simple secrets are stored as plain text.
-			return *result.SecretString, nil
+			fetchedSecretString := *result.SecretString
+
+			// --- Try parsing as JSON with a single key ---
+			var secretJSON map[string]string
+			jsonErr := json.Unmarshal([]byte(fetchedSecretString), &secretJSON)
+
+			// If JSON parsing worked AND there's exactly one key
+			if jsonErr == nil && len(secretJSON) == 1 {
+				// Extract the value from the single key
+				for key, value := range secretJSON {
+					logger.Log.Info("Successfully fetched secret from Secrets Manager (extracted from single-key JSON)",
+						zap.String("secretArn", secretArn),
+						zap.String("jsonKey", key),
+					)
+					return value, nil // Return the extracted value
+				}
+			}
+			// --- End JSON parsing attempt ---
+
+			// If it wasn't single-key JSON or parsing failed, assume it's plain text
+			if jsonErr != nil {
+				logger.Log.Info("Successfully fetched secret from Secrets Manager (treated as plain text)", zap.String("secretArn", secretArn))
+			} else {
+				// JSON parsing succeeded but wasn't single-key format
+				logger.Log.Warn("Fetched secret from Secrets Manager was JSON but not single-key format, returning raw JSON string",
+					zap.String("secretArn", secretArn),
+					zap.Int("keyCount", len(secretJSON)),
+				)
+			}
+			return fetchedSecretString, nil // Return the raw fetched string
+
 		}
-		// Log the error but continue to fallback
+		// Log the Secrets Manager fetch error but continue to fallback
 		logger.Log.Warn("Failed to retrieve secret from Secrets Manager, falling back to env var",
 			zap.String("secretArnEnvVar", secretArnEnvVar),
 			zap.String("secretArn", secretArn),
