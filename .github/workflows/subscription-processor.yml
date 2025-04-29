@@ -67,32 +67,10 @@ jobs:
         version: v1.60.1
         args: --concurrency=4 # Adjust args if needed
 
-  # --- Build Job --- (Simplified - main build happens during 'sam build')
-  build:
-    name: Build Subscription Processor (Verify Only)
-    needs: [lint]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v3
-
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
-        cache-dependency-path: go.sum
-
-    - name: Check Go Modules (Optional verification)
-      run: go mod verify
-
-    # Removed 'make build-subprocessor' and 'Verify binary' steps
-    # The actual compilation now happens within the 'sam build' step in the 'deploy' job
-
   # --- Deploy Job ---
   deploy:
     name: Deploy Subscription Processor
-    needs: [build]
+    needs: [lint]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
     environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
