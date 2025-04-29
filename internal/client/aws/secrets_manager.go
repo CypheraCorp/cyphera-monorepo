@@ -144,12 +144,3 @@ func (c *SecretsManagerClient) GetSecretJSON(ctx context.Context, secretArnEnvVa
 	)
 	return fmt.Errorf("secret not found or parsable using ARN env var '%s' or direct env var '%s'", secretArnEnvVar, fallbackEnvVar)
 }
-
-// Helper function to get map keys (useful for logging)
-func getMapKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
