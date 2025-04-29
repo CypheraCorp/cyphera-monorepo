@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	_ "cyphera-api/docs" // This will be generated
 	"cyphera-api/internal/logger"
@@ -68,6 +69,12 @@ func Handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.API
 }
 
 func main() {
-	defer logger.Sync()
+	// Wrap logger.Sync in a deferred function to handle potential errors
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			// Use fmt.Printf or a basic log here since the main logger might be failing
+			fmt.Printf("ERROR: Failed to sync logger: %v\n", err)
+		}
+	}()
 	lambda.Start(Handler)
 }
