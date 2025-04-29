@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -22,6 +21,16 @@ var (
 	ErrInvalidToken = errors.New("invalid token")
 )
 
+type AuthClient struct {
+	SupabaseJWTToken string
+}
+
+func NewAuthClient(supabaseJWTToken string) *AuthClient {
+	return &AuthClient{
+		SupabaseJWTToken: supabaseJWTToken,
+	}
+}
+
 // SupabaseClaims represents the expected structure of the Supabase JWT claims
 type SupabaseClaims struct {
 	jwt.RegisteredClaims
@@ -33,7 +42,7 @@ type SupabaseClaims struct {
 }
 
 // EnsureValidAPIKeyOrToken is a middleware that checks for either a valid API key or JWT token
-func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
+func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// First check for API key in header
 		apiKey := c.GetHeader("X-API-Key")
@@ -49,7 +58,7 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 				zap.String("key_preview", keyPreview),
 			)
 
-			workspace, account, key, err := validateAPIKey(c, queries, apiKey)
+			workspace, account, key, err := ac.validateAPIKey(c, queries, apiKey)
 			if err != nil {
 				logger.Log.Debug("API key validation failed",
 					zap.Error(err),
@@ -78,7 +87,7 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 			return
 		}
 
-		user, account, err := validateJWTToken(c, queries, authHeader)
+		user, account, err := ac.validateJWTToken(c, queries, authHeader)
 		if err != nil {
 			logger.Log.Debug("JWT token validation failed",
 				zap.Error(err),
@@ -108,7 +117,7 @@ func EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 }
 
 // validateAPIKey validates the API key and returns workspace and account information
-func validateAPIKey(c *gin.Context, queries *db.Queries, apiKey string) (db.Workspace, db.Account, db.ApiKey, error) {
+func (ac *AuthClient) validateAPIKey(c *gin.Context, queries *db.Queries, apiKey string) (db.Workspace, db.Account, db.ApiKey, error) {
 	// Log the API key being validated (first few characters for security)
 	keyPreview := ""
 	if len(apiKey) > 4 {
@@ -189,8 +198,8 @@ func validateAPIKey(c *gin.Context, queries *db.Queries, apiKey string) (db.Work
 }
 
 // validateJWTToken validates the Supabase JWT token and returns user information
-func validateJWTToken(c *gin.Context, queries *db.Queries, authHeader string) (db.User, db.Account, error) {
-	claims, err := validateSupabaseToken(authHeader)
+func (ac *AuthClient) validateJWTToken(c *gin.Context, queries *db.Queries, authHeader string) (db.User, db.Account, error) {
+	claims, err := ac.validateSupabaseToken(authHeader)
 	if err != nil {
 		log.Printf("Token validation failed: %v", err)
 		return db.User{}, db.Account{}, ErrInvalidToken
@@ -211,13 +220,12 @@ func validateJWTToken(c *gin.Context, queries *db.Queries, authHeader string) (d
 	return user, account, nil
 }
 
-func validateSupabaseToken(tokenString string) (*SupabaseClaims, error) {
+func (ac *AuthClient) validateSupabaseToken(tokenString string) (*SupabaseClaims, error) {
 	// Remove "Bearer " prefix if present
 	tokenString = strings.TrimPrefix(tokenString, "Bearer ")
 
 	// Get JWT secret from environment
-	jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
-	if jwtSecret == "" {
+	if ac.SupabaseJWTToken == "" {
 		return nil, fmt.Errorf("SUPABASE_JWT_SECRET not set")
 	}
 
@@ -228,7 +236,7 @@ func validateSupabaseToken(tokenString string) (*SupabaseClaims, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
-		return []byte(jwtSecret), nil
+		return []byte(ac.SupabaseJWTToken), nil
 	})
 
 	if err != nil {
@@ -249,7 +257,7 @@ func validateSupabaseToken(tokenString string) (*SupabaseClaims, error) {
 }
 
 // RequireRoles is a middleware that checks if the user has the required  roles
-func RequireRoles(roles ...string) gin.HandlerFunc {
+func (ac *AuthClient) RequireRoles(roles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		accountType := c.GetString("accountType")
 		apiKeyLevel := c.GetString("apiKeyLevel")
