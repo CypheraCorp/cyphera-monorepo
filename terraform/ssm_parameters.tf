@@ -106,4 +106,42 @@ resource "aws_ssm_parameter" "wildcard_cert_arn" {
   type        = "String"
   value       = "arn:aws:acm:us-east-1:699475955358:certificate/6f8bb8d4-4200-4128-a680-d9854890993b"
   tags        = local.common_tags # Apply common tags if desired
+}
+
+# --- Secrets Manager Secret ARNs ---
+
+# Assume you have data sources or resources for your secrets, like:
+data "aws_secretsmanager_secret" "supabase_jwt" {
+  name = "cyphera/cyphera-api/supabase/jwt-secret-${var.stage}"
+}
+
+data "aws_secretsmanager_secret" "circle_api_key" {
+  # NOTE: Using the NEW intended name here.
+  # Ensure the secret exists in AWS Secrets Manager with this name.
+  # Renaming an existing secret might require manual steps or specific TF handling.
+  name = "cyphera/cyphera-api/circle/api-key-${var.stage}"
+}
+
+# Store the Supabase JWT Secret ARN in SSM Parameter Store
+resource "aws_ssm_parameter" "supabase_jwt_secret_arn" {
+  name  = "/cyphera/cyphera-api/supabase-jwt-secret-arn-${var.stage}"
+  type  = "String"
+  value = data.aws_secretsmanager_secret.supabase_jwt.arn
+  tags  = local.common_tags
+
+  lifecycle {
+    ignore_changes = [value] # Avoid unnecessary updates if ARN doesn't change
+  }
+}
+
+# Store the Circle API Key Secret ARN in SSM Parameter Store
+resource "aws_ssm_parameter" "circle_api_key_arn" {
+  name  = "/cyphera/cyphera-api/circle-api-key-arn-${var.stage}"
+  type  = "String"
+  value = data.aws_secretsmanager_secret.circle_api_key.arn
+  tags  = local.common_tags
+
+  lifecycle {
+    ignore_changes = [value] # Avoid unnecessary updates if ARN doesn't change
+  }
 } 

@@ -25,8 +25,8 @@ PARAM_DELEGATION_DNS_NAME="/cyphera/delegation-server-alb-dns-${STAGE}"
 PARAM_RDS_SECRET_ARN_NAME="/cyphera/rds-secret-arn-${STAGE}"
 PARAM_RDS_ENDPOINT_NAME="/cyphera/rds-endpoint-${STAGE}"
 PARAM_SUPABASE_URL_NAME="/cyphera/supabase/url-${STAGE}"
-SECRET_SUPABASE_JWT_NAME="cyphera/cyphera-api/supabase/jwt-secret-${STAGE}"
-SECRET_CIRCLE_API_KEY_NAME="cyphera/delegation-server/circle/api-key-${STAGE}"
+PARAM_SUPABASE_JWT_SECRET_ARN_NAME="/cyphera/cyphera-api/supabase-jwt-secret-arn-${STAGE}"
+PARAM_CIRCLE_API_KEY_ARN_NAME="/cyphera/cyphera-api/circle-api-key-arn-${STAGE}"
 PARAM_SMART_WALLET_NAME="/cyphera/wallet/smart-wallet-address-${STAGE}"
 PARAM_CORS_ORIGINS_NAME="/cyphera/cors/allowed-origins-${STAGE}"
 PARAM_CORS_METHODS_NAME="/cyphera/cors/allowed-methods-${STAGE}"
@@ -43,18 +43,13 @@ fetch_ssm_param() {
     aws ssm get-parameter --name "${param_name}" --query "Parameter.Value" --output text --region "${AWS_REGION}" "${with_decryption_flag}" || { echo "ERROR: Failed to fetch SSM parameter ${param_name}" >&2; exit 1; }
 }
 
-fetch_secret() {
-    local secret_name="$1"
-    aws secretsmanager get-secret-value --secret-id "${secret_name}" --query SecretString --output text --region "${AWS_REGION}" || { echo "ERROR: Failed to fetch Secret ${secret_name}" >&2; exit 1; }
-}
-
 # Fetch values - exit script if any fetch fails
 PARAM_DELEGATION_DNS_VALUE=$(fetch_ssm_param "${PARAM_DELEGATION_DNS_NAME}")
 PARAM_RDS_SECRET_ARN_VALUE=$(fetch_ssm_param "${PARAM_RDS_SECRET_ARN_NAME}")
 PARAM_RDS_ENDPOINT_VALUE=$(fetch_ssm_param "${PARAM_RDS_ENDPOINT_NAME}")
 PARAM_SUPABASE_URL_VALUE=$(fetch_ssm_param "${PARAM_SUPABASE_URL_NAME}" "--with-decryption")
-SECRET_SUPABASE_JWT_VALUE=$(fetch_secret "${SECRET_SUPABASE_JWT_NAME}")
-SECRET_CIRCLE_API_KEY_VALUE=$(fetch_secret "${SECRET_CIRCLE_API_KEY_NAME}")
+PARAM_SUPABASE_JWT_SECRET_ARN_VALUE=$(fetch_ssm_param "${PARAM_SUPABASE_JWT_SECRET_ARN_NAME}")
+PARAM_CIRCLE_API_KEY_ARN_VALUE=$(fetch_ssm_param "${PARAM_CIRCLE_API_KEY_ARN_NAME}")
 PARAM_SMART_WALLET_VALUE=$(fetch_ssm_param "${PARAM_SMART_WALLET_NAME}" "--with-decryption")
 PARAM_CORS_ORIGINS_VALUE=$(fetch_ssm_param "${PARAM_CORS_ORIGINS_NAME}")
 PARAM_CORS_METHODS_VALUE=$(fetch_ssm_param "${PARAM_CORS_METHODS_NAME}")
@@ -65,8 +60,6 @@ PARAM_CORS_CREDENTIALS_VALUE=$(fetch_ssm_param "${PARAM_CORS_CREDENTIALS_NAME}")
 echo "Successfully fetched all parameters."
 
 # 5. Construct Parameter Overrides String
-# Note: Careful with quoting, especially for values that might contain spaces or special chars.
-#       Secrets are fetched raw, CloudFormation handles them appropriately.
 OVERRIDES="Stage=${STAGE}"
 OVERRIDES="${OVERRIDES} LambdaSecurityGroupId=${LAMBDA_SG_ID}"
 OVERRIDES="${OVERRIDES} PrivateSubnet1Id=${PRIVATE_SUBNET_1_ID}"
@@ -75,8 +68,8 @@ OVERRIDES="${OVERRIDES} ParamDelegationServerAlbDns=${PARAM_DELEGATION_DNS_VALUE
 OVERRIDES="${OVERRIDES} ParamRdsSecretArn=${PARAM_RDS_SECRET_ARN_VALUE}"
 OVERRIDES="${OVERRIDES} ParamRdsEndpoint=${PARAM_RDS_ENDPOINT_VALUE}"
 OVERRIDES="${OVERRIDES} ParamSupabaseUrl=${PARAM_SUPABASE_URL_VALUE}"
-OVERRIDES="${OVERRIDES} ParamSupabaseJwtSecret=${SECRET_SUPABASE_JWT_VALUE}"
-OVERRIDES="${OVERRIDES} ParamCircleApiKey=${SECRET_CIRCLE_API_KEY_VALUE}"
+OVERRIDES="${OVERRIDES} ParamSupabaseJwtSecretArn=${PARAM_SUPABASE_JWT_SECRET_ARN_VALUE}"
+OVERRIDES="${OVERRIDES} ParamCircleApiKeyArn=${PARAM_CIRCLE_API_KEY_ARN_VALUE}"
 OVERRIDES="${OVERRIDES} ParamSmartWalletAddress=${PARAM_SMART_WALLET_VALUE}"
 OVERRIDES="${OVERRIDES} ParamCorsAllowedOrigins=${PARAM_CORS_ORIGINS_VALUE}"
 OVERRIDES="${OVERRIDES} ParamCorsAllowedMethods=${PARAM_CORS_METHODS_VALUE}"
@@ -86,9 +79,8 @@ OVERRIDES="${OVERRIDES} ParamCorsAllowCredentials=${PARAM_CORS_CREDENTIALS_VALUE
 # DeploymentBucketName is passed via --s3-bucket, not parameter override
 
 echo "Constructed Parameter Overrides."
-# Use placeholder for sensitive values in log
-OVERRIDES_LOG=$(echo "$OVERRIDES" | sed -e 's/ParamSupabaseJwtSecret=[^ ]*/ParamSupabaseJwtSecret=*****/g' -e 's/ParamCircleApiKey=[^ ]*/ParamCircleApiKey=*****/g')
-echo "Overrides (Secrets Masked): ${OVERRIDES_LOG}"
+# Use placeholder for sensitive values in log - Removed masking as secrets aren't passed directly
+echo "Overrides: ${OVERRIDES}"
 
 
 # 6. Execute SAM Deploy

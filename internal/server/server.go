@@ -3,14 +3,13 @@ package server
 import (
 	"context"
 	_ "cyphera-api/docs" // This will be generated
-	"cyphera-api/internal/auth"
+	"cyphera-api/internal/client/auth"
+	awsclient "cyphera-api/internal/client/aws"
 	"cyphera-api/internal/client/circle"
-	client "cyphera-api/internal/client/delegation_server"
 	dsClient "cyphera-api/internal/client/delegation_server"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
 	"cyphera-api/internal/logger"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -18,13 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
-
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
@@ -49,80 +45,107 @@ var (
 
 	// Database
 	dbQueries *db.Queries
+
+	// Clients
+	authClient *auth.AuthClient
 )
 
 func InitializeHandlers() {
 	var dsn string // Database Source Name (connection string)
 
-	// Determine environment and construct DSN accordingly
+	// Load environment variables from .env file for local development
+	err := godotenv.Load()
+	if err != nil && !os.IsNotExist(err) {
+		// Only log a warning if .env exists but couldn't be loaded. Don't fail if it doesn't exist.
+		logger.Warn("Error loading .env file, proceeding with environment variables", zap.Error(err))
+	}
+
+	ctx := context.Background()
+
+	// --- Initialize AWS Secrets Manager Client ---
+	secretsClient, err := awsclient.NewSecretsManagerClient(ctx)
+	if err != nil {
+		logger.Fatal("Failed to initialize AWS Secrets Manager client", zap.Error(err))
+	}
+
+	// --- Database Connection Setup ---
+	// var dsn string // REMOVED: Already declared above
 	// Use GIN_MODE=release as indicator for deployed environment
 	if os.Getenv("GIN_MODE") == "release" {
 		logger.Info("Running in deployed environment (GIN_MODE=release), fetching DB credentials from Secrets Manager")
 
-		secretArn := os.Getenv("RDS_SECRET_ARN")
 		dbEndpoint := os.Getenv("DB_HOST") // This contains host:port
 		dbName := os.Getenv("DB_NAME")
 		dbSSLMode := os.Getenv("DB_SSLMODE")
 
-		if secretArn == "" || dbEndpoint == "" || dbName == "" {
-			logger.Fatal("Missing required environment variables for DB connection in deployed environment (RDS_SECRET_ARN, DB_HOST, DB_NAME)")
+		if dbEndpoint == "" || dbName == "" {
+			logger.Fatal("Missing required environment variables for DB connection in deployed environment (DB_HOST, DB_NAME)")
 		}
 		if dbSSLMode == "" {
 			dbSSLMode = "require" // Sensible default for RDS
 			logger.Warn("DB_SSLMODE not set, defaulting to 'require'")
 		}
 
-		// Fetch secret from Secrets Manager
-		cfg, err := config.LoadDefaultConfig(context.TODO())
+		// Define structure for RDS secret JSON
+		type RdsSecret struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+		var secretData RdsSecret
+
+		// Fetch secret using the new client
+		// Note: Using GetSecretJSON assumes the secret is JSON.
+		// Using RDS_SECRET_ARN env var. Fallback not needed as we are using the ARN in release mode
+		err = secretsClient.GetSecretJSON(ctx, "RDS_SECRET_ARN", "", &secretData)
 		if err != nil {
-			logger.Fatal("Unable to load AWS SDK config", zap.Error(err))
-		}
-		svc := secretsmanager.NewFromConfig(cfg)
-		input := &secretsmanager.GetSecretValueInput{
-			SecretId: aws.String(secretArn),
-		}
-		logger.Info("Fetching secret from Secrets Manager", zap.String("secretArn", secretArn))
-		result, err := svc.GetSecretValue(context.TODO(), input)
-		if err != nil {
-			logger.Fatal("Failed to retrieve secret from Secrets Manager", zap.Error(err), zap.String("secretArn", secretArn))
+			logger.Fatal("Failed to retrieve or parse RDS secret", zap.Error(err))
 		}
 
-		if result.SecretString == nil {
-			logger.Fatal("Secret string is nil", zap.String("secretArn", secretArn))
-		}
-
-		// Parse the secret string (it's JSON)
-		var secretData map[string]interface{} // Use interface{} for flexibility
-		err = json.Unmarshal([]byte(*result.SecretString), &secretData)
-		if err != nil {
-			logger.Fatal("Failed to unmarshal secret JSON", zap.Error(err))
-		}
-
-		dbUser, okUser := secretData["username"].(string)
-		dbPassword, okPassword := secretData["password"].(string)
-
-		if !okUser || !okPassword || dbUser == "" || dbPassword == "" {
-			logger.Fatal("Username or password not found or not a string in secret data", zap.Any("secretKeysFound", getMapKeys(secretData)))
+		if secretData.Username == "" || secretData.Password == "" {
+			logger.Fatal("Username or password not found in RDS secret data")
 		}
 
 		// Construct DSN for deployed environment
-		// DB_HOST already contains host:port from RDS endpoint
 		dsn = fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=%s",
-			url.QueryEscape(dbUser),     // URL-encode username
-			url.QueryEscape(dbPassword), // URL-encode password
+			url.QueryEscape(secretData.Username), // URL-encode username
+			url.QueryEscape(secretData.Password), // URL-encode password
 			dbEndpoint, dbName, dbSSLMode)
 		logger.Info("Constructed DSN from Secrets Manager credentials")
 
 	} else {
 		// --- Local Development Environment ---
-		logger.Info("Running in local environment (GIN_MODE != release), using DATABASE_URL from .env")
-		dsn = os.Getenv("DATABASE_URL")
+		logger.Info("Running in local environment (GIN_MODE != release), using DATABASE_URL from env")
+		// Use GetSecretString for DATABASE_URL as it might be set directly or via an ARN (less common locally)
+		dsn, err = secretsClient.GetSecretString(ctx, "DATABASE_URL_ARN", "DATABASE_URL")
+		if err != nil {
+			logger.Fatal("Failed to get DATABASE_URL", zap.Error(err))
+		}
 		if dsn == "" {
-			logger.Fatal("DATABASE_URL environment variable is required for local development")
+			// This check might be redundant if GetSecretString returns an error when empty, but good for clarity
+			logger.Fatal("DATABASE_URL is required for local development")
 		}
 	}
 
-	// Create a connection pool using the determined DSN
+	// --- Supabase JWT Secret ---
+	supabaseJwtSecret, err := secretsClient.GetSecretString(ctx, "SUPABASE_JWT_SECRET_ARN", "SUPABASE_JWT_SECRET")
+	if err != nil || supabaseJwtSecret == "" {
+		logger.Fatal("Failed to get Supabase JWT Secret", zap.Error(err))
+	}
+
+	// --- Auth Client ---
+	authClient = auth.NewAuthClient(supabaseJwtSecret)
+
+	// --- Circle API Key ---
+	circleApiKey, err := secretsClient.GetSecretString(ctx, "CIRCLE_API_KEY_ARN", "CIRCLE_API_KEY")
+	if err != nil || circleApiKey == "" {
+		logger.Fatal("Failed to get Circle API Key", zap.Error(err))
+	}
+
+	// --- Circle Client ---
+	circleClient := circle.NewCircleClient(circleApiKey)
+
+	// --- Database Pool Initialization ---
+	// Parse the DSN configuration first
 	poolConfig, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		logger.Fatal("Unable to parse database DSN", zap.Error(err), zap.String("dsnUsed", dsn)) // Log the DSN used
@@ -134,14 +157,14 @@ func InitializeHandlers() {
 	poolConfig.MaxConnLifetime = time.Hour
 	poolConfig.MaxConnIdleTime = time.Minute * 30
 
-	// Create the connection pool
-	connPool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
+	// Create the connection pool using the config
+	dbpool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
-		logger.Fatal("Unable to create connection pool", zap.Error(err))
+		logger.Fatal("Unable to create connection pool with config", zap.Error(err))
 	}
 
 	// Create queries instance with the connection pool
-	dbQueries = db.New(connPool)
+	dbQueries = db.New(dbpool)
 
 	cypheraSmartWalletAddress := os.Getenv("CYPHERA_SMART_WALLET_ADDRESS")
 	if cypheraSmartWalletAddress == "" {
@@ -154,18 +177,10 @@ func InitializeHandlers() {
 	}
 
 	// Initialize the delegation client
-	delegationClient, err = client.NewDelegationClient()
+	delegationClient, err = dsClient.NewDelegationClient()
 	if err != nil {
 		logger.Fatal("Unable to create delegation client", zap.Error(err))
 	}
-
-	// validate the circle api key
-	if os.Getenv("CIRCLE_API_KEY") == "" {
-		logger.Fatal("CIRCLE_API_KEY environment variable is required")
-	}
-
-	// Initialize the circle client
-	circleClient := circle.NewCircleClient(os.Getenv("CIRCLE_API_KEY"))
 
 	commonServices := handlers.NewCommonServices(
 		dbQueries,
@@ -241,11 +256,11 @@ func InitializeRoutes(router *gin.Engine) {
 
 		// Protected routes (authentication required)
 		protected := v1.Group("/")
-		protected.Use(auth.EnsureValidAPIKeyOrToken(dbQueries))
+		protected.Use(authClient.EnsureValidAPIKeyOrToken(dbQueries))
 		{
 			// Admin-only routes
 			admin := protected.Group("/admin")
-			admin.Use(auth.RequireRoles("admin"))
+			admin.Use(authClient.RequireRoles("admin"))
 			{
 				// public routes
 				admin.GET("/public/products/:product_id", productHandler.GetPublicProductByID)
