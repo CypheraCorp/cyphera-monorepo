@@ -132,6 +132,15 @@ func InitializeHandlers() {
 		logger.Fatal("Failed to get Supabase JWT Secret", zap.Error(err))
 	}
 
+	// --- DEBUG: Log first half of the fetched Supabase JWT Secret ---
+	if len(supabaseJwtSecret) > 0 {
+		halfLen := len(supabaseJwtSecret) / 2
+		logger.Log.Debug("Fetched Supabase JWT Secret (First Half)", zap.String("secret_start", supabaseJwtSecret[:halfLen]+"..."))
+	} else {
+		logger.Log.Debug("Fetched Supabase JWT Secret is empty")
+	}
+	// --- END DEBUG ---
+
 	// --- Auth Client ---
 	authClient = auth.NewAuthClient(supabaseJwtSecret)
 
