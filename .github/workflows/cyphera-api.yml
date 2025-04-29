@@ -120,8 +120,15 @@ jobs:
       with:
         use-installer: true # Installs/Ensures latest SAM CLI
 
-    # SAM Build: Packages the application. --use-container is recommended.
-    - name: SAM Build
+    # ADDED: Verify the content of the template file just before building
+    - name: Verify template.yaml content
+      run: |
+        echo "--- Contents of template.yaml --- "
+        cat template.yaml
+        echo "--- End of template.yaml --- "
+
+    # SAM Build: Use the specific template and build inside container
+    - name: SAM Build for Main API
       run: sam build --template template.yaml --use-container
 
     # --- NEW DEPLOY STEPS ---
