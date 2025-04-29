@@ -248,7 +248,7 @@ func validateSupabaseToken(tokenString string) (*SupabaseClaims, error) {
 	return claims, nil
 }
 
-// RequireRoles is a middleware that checks if the user has the required roles
+// RequireRoles is a middleware that checks if the user has the required  roles
 func RequireRoles(roles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		accountType := c.GetString("accountType")
