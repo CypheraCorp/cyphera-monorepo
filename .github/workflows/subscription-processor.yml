@@ -67,10 +67,9 @@ jobs:
         version: v1.60.1
         args: --concurrency=4 # Adjust args if needed
 
-  # --- Build Job ---
+  # --- Build Job --- (Simplified - main build happens during 'sam build')
   build:
-    name: Build Subscription Processor
-    # needs: [test, lint] # Add 'test' if test job is implemented
+    name: Build Subscription Processor (Verify Only)
     needs: [lint]
     runs-on: ubuntu-latest
 
@@ -84,33 +83,11 @@ jobs:
         cache: true
         cache-dependency-path: go.sum
 
-    - name: Build Lambda package for Subscription Processor
-      # Assumes Makefile has 'build-subprocessor' target
-      # This target should place the binary in a predictable location (e.g., bin/subprocessor)
-      run: make build-subprocessor # Ensure this target exists and outputs to bin/subprocessor
+    - name: Check Go Modules (Optional verification)
+      run: go mod verify
 
-    - name: Verify binary (Optional but good practice)
-      # Check the output location defined in the build-subprocessor target
-      run: |
-        ARTIFACT_PATH="bin/subprocessor" # UPDATED: Check the actual output path
-        echo "Verifying binary at: $ARTIFACT_PATH"
-        if [ ! -f "$ARTIFACT_PATH" ]; then
-          echo "Error: Binary not found at $ARTIFACT_PATH"
-          exit 1
-        fi
-        file "$ARTIFACT_PATH"
-        ls -lh "$ARTIFACT_PATH"
-        if ! file "$ARTIFACT_PATH" | grep -q "x86-64"; then
-          echo "Error: Binary is not compiled for x86_64"
-          exit 1
-        fi
-
-    # Uploading artifact is often handled implicitly by SAM build/deploy now
-    # - name: Upload artifact
-    #   uses: actions/upload-artifact@v4
-    #   with:
-    #     name: subprocessor-bootstrap-${{ env.STAGE }}
-    #     path: .aws-sam/build/SubscriptionProcessorFunction/bootstrap # Adjust path as needed
+    # Removed 'make build-subprocessor' and 'Verify binary' steps
+    # The actual compilation now happens within the 'sam build' step in the 'deploy' job
 
   # --- Deploy Job ---
   deploy:

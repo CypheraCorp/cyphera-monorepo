@@ -86,8 +86,9 @@ jobs:
         version: v1.60.1
         args: --concurrency=4
 
+  # --- Build Job --- (Simplified - main build happens during 'sam build')
   build:
-    name: Build Go API
+    name: Build Go API (Verify Only)
     needs: [test, lint]
     runs-on: ubuntu-latest
 
@@ -101,27 +102,11 @@ jobs:
         cache: true
         cache-dependency-path: go.sum
 
-    - name: Build Lambda package
-      run: |
-        chmod +x scripts/build.sh
-        ./scripts/build.sh
+    - name: Check Go Modules (Optional verification)
+      run: go mod verify
 
-    - name: Verify binary
-      run: |
-        echo "Binary details:"
-        file bootstrap
-        ls -lh bootstrap
-        echo "Checking binary architecture..."
-        if ! file bootstrap | grep -q "x86-64"; then
-          echo "Error: Binary is not compiled for x86_64"
-          exit 1
-        fi
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: bootstrap-${{ env.STAGE }}
-        path: bootstrap
+    # Removed previous build/verify steps for the binary
+    # Actual build happens during 'sam build' in the deploy job
 
   deploy:
     name: Deploy Go API

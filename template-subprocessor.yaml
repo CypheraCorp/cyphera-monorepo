@@ -64,9 +64,9 @@ Resources:
         ScheduledRun:
           Type: Schedule
           Properties:
-            Schedule: rate(5 minutes) # Cron expression (e.g., cron(0/5 * * * ? *))
+            Schedule: rate(60 minutes) # trigger every 1 hour
             Name: !Sub subscription-processor-trigger-${Stage}
-            Description: Trigger subscription processor every 5 minutes
+            Description: Trigger subscription processor every 1 hour
             Enabled: true # Set to false to disable trigger
       Environment:
         Variables:
