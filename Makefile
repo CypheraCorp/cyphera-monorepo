@@ -115,11 +115,13 @@ build-subprocessor-sam-local:
 	@echo "Subscription processor SAM local bootstrap built at bin/bootstrap-subprocessor"
 
 # Target for SAM Build Process (SubscriptionProcessorFunction matches template Logical ID)
-# Copies the pre-built binary (built by build-subprocessor target in CI) into SAM artifacts dir
+# This target is called by 'sam build' when BuildMethod: makefile is specified.
+# It compiles the code directly into the SAM artifacts directory.
 build-SubscriptionProcessorFunction:
-	@echo "Copying subscription processor binary to SAM artifacts dir: $(ARTIFACTS_DIR)"
-	mkdir -p $(ARTIFACTS_DIR)
-	cp bin/$(SUBSCRIPTION_PROCESSOR_BINARY_NAME) $(ARTIFACTS_DIR)/bootstrap
+	@echo "Building subscription processor directly into SAM artifacts dir: $(ARTIFACTS_DIR)"
+	mkdir -p $(ARTIFACTS_DIR) # Ensure the directory exists
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o $(ARTIFACTS_DIR)/bootstrap $(SUBSCRIPTION_PROCESSOR_PACKAGE)
+	@echo "Subscription processor bootstrap built successfully in $(ARTIFACTS_DIR)"
 
 api-server-air:
 	air
@@ -179,11 +181,14 @@ gen:
 # This target should place the built artifact (our 'bootstrap' binary)
 # into the directory specified by the ARTIFACTS_DIR environment variable provided by SAM.
 
-# --- Target for GitHub Actions (expects pre-built bootstrap) ---
+# --- Target for SAM Build (Main API) ---
+# This target is called by 'sam build' when BuildMethod: makefile is specified.
+# It compiles the main API code directly into the SAM artifacts directory.
 build-MainFunction:
-	# Copy the pre-compiled bootstrap binary (downloaded in previous workflow step)
-	# into the SAM artifact directory.
-	cp bootstrap $(ARTIFACTS_DIR)/
+	@echo "Building main API directly into SAM artifacts dir: $(ARTIFACTS_DIR)"
+	mkdir -p $(ARTIFACTS_DIR) # Ensure the directory exists
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o $(ARTIFACTS_DIR)/bootstrap $(MAIN_PACKAGE)
+	@echo "Main API bootstrap built successfully in $(ARTIFACTS_DIR)"
 
 # --- Target for Local SAM Builds ---
 # Use this target *before* running 'sam build' locally.
