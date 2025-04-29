@@ -66,7 +66,7 @@ func NewDelegationClient() (*DelegationClient, error) {
 	}
 
 	// Check if we're in local development mode
-	// Set DELEGATION_LOCAL_MODE=true for dev/test environments
+	// set DELEGATION_LOCAL_MODE=true for dev/test environments default is false
 	useLocalMode := os.Getenv("DELEGATION_LOCAL_MODE") == "true"
 
 	var conn *grpc.ClientConn

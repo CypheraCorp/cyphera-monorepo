@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  cyphera-subprocessor
+
+  SAM Template for the Cyphera Subscription Processor Lambda
+
+# Global settings for all functions
+Globals:
+  Function:
+    Timeout: 60 # Timeout in seconds (adjust as needed, max 900 for Lambda)
+    MemorySize: 512 # Memory in MB (adjust based on need)
+    Runtime: provided.al2 # Using custom runtime for Go compiled binary
+    Architectures:
+      - x86_64
+    Environment: # Environment variables common to all functions
+      Variables:
+        GIN_MODE: release # Set Gin to release mode for production
+        DELEGATION_RPC_TIMEOUT: 3m # Timeout for gRPC calls to delegation server
+
+Parameters:
+  Stage:
+    Type: String
+    Description: The deployment stage (e.g., dev, prod)
+    Default: dev
+  LambdaSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security Group ID for the Lambda function (must allow egress to DB, Secrets Manager, SSM, Delegation Server)
+  PrivateSubnet1Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: Private Subnet ID 1 for Lambda VPC configuration
+  PrivateSubnet2Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: Private Subnet ID 2 for Lambda VPC configuration
+  # Parameters to receive *actual values* from deploy script
+  RdsSecretArnValue:
+    Type: String
+    Description: Actual ARN of the RDS Secret containing user/pass
+    NoEcho: true
+  DbHostValue:
+    Type: String
+    Description: Actual DB Endpoint (host:port)
+  DbNameValue:
+    Type: String
+    Description: Actual Database Name
+  SmartWalletAddressValue:
+    Type: String
+    Description: Actual Cyphera Smart Wallet Address
+    NoEcho: true
+  DelegationGrpcAddrValue:
+    Type: String
+    Description: Actual Delegation Server gRPC Address (host:port)
+    NoEcho: true
+
+Resources:
+  SubscriptionProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub cyphera-subprocessor-${Stage}
+      CodeUri: . # Root directory, SAM build process handles finding the code/binary
+      Handler: bootstrap # Standard handler for Go custom runtime
+      # Event Source: Scheduled trigger (e.g., every 5 minutes)
+      Events:
+        ScheduledRun:
+          Type: Schedule
+          Properties:
+            Schedule: rate(5 minutes) # Cron expression (e.g., cron(0/5 * * * ? *))
+            Name: !Sub subscription-processor-trigger-${Stage}
+            Description: Trigger subscription processor every 5 minutes
+            Enabled: true # Set to false to disable trigger
+      Environment:
+        Variables:
+          STAGE: !Ref Stage
+          # Set environment variables directly using the passed-in values
+          RDS_SECRET_ARN: !Ref RdsSecretArnValue
+          DB_HOST: !Ref DbHostValue
+          DB_NAME: !Ref DbNameValue
+          CYPHERA_SMART_WALLET_ADDRESS: !Ref SmartWalletAddressValue
+          DELEGATION_GRPC_ADDR: !Ref DelegationGrpcAddrValue
+          DB_SSLMODE: require # Set directly, or add another parameter if it needs to vary
+
+          # Note: The function code now expects these exact environment variables
+      # VPC Configuration (Required for accessing private resources like RDS)
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroupId
+        SubnetIds:
+          - !Ref PrivateSubnet1Id
+          - !Ref PrivateSubnet2Id
+      # IAM Permissions
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: 'arn:aws:logs:*:*:*' # Basic logging permissions
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+                - ssm:GetParameters
+              Resource: [] # Empty list - no SSM parameters needed by code anymore for these values
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: # Grant access ONLY to the RDS secret ARN fetched via parameter
+                # This requires the Lambda code to first fetch the ARN from SSM,
+                # then use that ARN to fetch the secret.
+                # Alternatively, pass the ARN directly as an environment variable from the deploy script.
+                - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${ParamRdsSecretArnName}-* # Broad access based on name prefix, refine if possible
+            # Remove SecretsManager permissions - RDS secret ARN is passed directly now
+            # - Effect: Allow
+            #   Action:
+            #     - secretsmanager:GetSecretValue
+            #   Resource:
+            #     - !Ref RdsSecretArnValue # Grant access ONLY to the specific Secret ARN passed in
+            # VPC Access Permissions (if using VPC)
+            - VPCAccessPolicy: {}
+            # Add permissions needed for delegation client (e.g., connect to gRPC endpoint)
+            # This might involve allowing egress traffic in the Security Group
+    Metadata:
+      BuildMethod: makefile # Instruct SAM build to use the Makefile
+      # BuildArchitecture should match Globals, but can be specified here too
+
+Outputs:
+  SubscriptionProcessorFunctionName:
+    Description: "Subscription Processor Lambda Function Name"
+    Value: !Ref SubscriptionProcessorFunction
+  SubscriptionProcessorFunctionArn:
+    Description: "Subscription Processor Lambda Function ARN"
+    Value: !GetAtt SubscriptionProcessorFunction.Arn 

@@ -21,6 +21,18 @@ resource "aws_security_group" "rds" {
   description = "RDS security group"
   vpc_id      = module.vpc.vpc_id
 
+  # Ingress rules should be managed by separate aws_security_group_rule resources
+  # to allow for conditional logic (like dev-only public access).
+  # Therefore, we ignore changes to the inline ingress block here.
+  lifecycle {
+    ignore_changes = [
+      ingress, # Ignore inline ingress rules
+    ]
+  }
+
+  # This ingress rule (allowing Lambda access) should also be moved
+  # to a separate aws_security_group_rule resource for consistency.
+  # Keeping it here temporarily might work, but moving it is cleaner.
   ingress {
     from_port       = 5432
     to_port         = 5432

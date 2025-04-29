@@ -1,0 +1,161 @@
+name: Cyphera Subscription Processor CI/CD
+
+on:
+  push:
+    branches: [ dev, main ]
+    paths: # Trigger more specifically
+      - 'cmd/subscription-processor/**'
+      - 'internal/client/delegation_server/**'
+      - 'internal/proto/**'
+      - 'internal/**' # Trigger on shared internal changes
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - 'template-subprocessor.yaml'
+      - '.github/workflows/subscription-processor.yml'
+      - 'scripts/deploy_subprocessor.sh'
+  pull_request:
+    branches: [ dev, main ]
+    paths: # Trigger more specifically
+      - 'cmd/subscription-processor/**'
+      - 'internal/**' # Trigger on shared internal changes
+      - 'go.mod'
+      - 'go.sum'
+      - 'Makefile'
+      - 'template-subprocessor.yaml'
+      - '.github/workflows/subscription-processor.yml'
+      - 'scripts/deploy_subprocessor.sh'
+
+env:
+  GO_VERSION: '1.23'
+  AWS_REGION: us-east-1
+  STAGE: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+  TEMPLATE_FILE: template-subprocessor.yaml
+
+jobs:
+  # --- Test Job (Optional but Recommended) ---
+  # Include tests relevant to the subscription processor if possible
+  # test:
+  #   name: Test Subscription Processor
+  #   runs-on: ubuntu-latest
+  #   # ... (Similar setup as API test job, potentially different test commands/db setup)
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - name: Set up Go
+  #     uses: actions/setup-go@v4
+  #     # ... (go setup)
+  #   - name: Run tests for subprocessor
+  #     run: echo "Implement specific tests for subprocessor" # Placeholder
+
+  # --- Lint Job (Can reuse if config is same) ---
+  lint:
+    name: Lint Subscription Processor Code
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        cache-dependency-path: go.sum
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v5
+      with:
+        version: v1.60.1
+        args: --concurrency=4 # Adjust args if needed
+
+  # --- Build Job ---
+  build:
+    name: Build Subscription Processor
+    # needs: [test, lint] # Add 'test' if test job is implemented
+    needs: [lint]
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        cache-dependency-path: go.sum
+
+    - name: Build Lambda package for Subscription Processor
+      # Assumes Makefile has 'build-subprocessor' target
+      # This target should place 'bootstrap' in the correct location for SAM build,
+      # typically inside .aws-sam/build/<FunctionName>/ where FunctionName matches template.yaml
+      run: make build-subprocessor # Ensure this target exists and works
+
+    - name: Verify binary (Optional but good practice)
+      # Adjust path if make target outputs elsewhere
+      run: |
+        ARTIFACT_PATH=$(ls .aws-sam/build/*/bootstrap | head -n 1) # Find the bootstrap file
+        echo "Verifying binary at: $ARTIFACT_PATH"
+        file "$ARTIFACT_PATH"
+        ls -lh "$ARTIFACT_PATH"
+        if ! file "$ARTIFACT_PATH" | grep -q "x86-64"; then
+          echo "Error: Binary is not compiled for x86_64"
+          exit 1
+        fi
+
+    # Uploading artifact is often handled implicitly by SAM build/deploy now
+    # - name: Upload artifact
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: subprocessor-bootstrap-${{ env.STAGE }}
+    #     path: .aws-sam/build/SubscriptionProcessorFunction/bootstrap # Adjust path as needed
+
+  # --- Deploy Job ---
+  deploy:
+    name: Deploy Subscription Processor
+    needs: [build]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+
+    steps:
+    - uses: actions/checkout@v3
+
+    # Download artifact is not needed if SAM Build handles it within the runner
+    # - name: Download build artifact
+    #   uses: actions/download-artifact@v4
+    #   with:
+    #     name: subprocessor-bootstrap-${{ env.STAGE }}
+    #     path: . # Or specific path required by SAM
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup SAM CLI
+      uses: aws-actions/setup-sam@v2
+      with:
+        use-installer: true
+
+    # SAM Build: Use the specific template and build inside container
+    - name: SAM Build for Subscription Processor
+      run: sam build --template ${{ env.TEMPLATE_FILE }} --use-container
+
+    - name: Make deployment script executable
+      run: chmod +x scripts/deploy_subprocessor.sh
+
+    - name: Run Deployment Script for Subscription Processor
+      env:
+        STAGE: ${{ env.STAGE }}
+        AWS_REGION: ${{ env.AWS_REGION }}
+        SAM_DEPLOYMENT_BUCKET: ${{ secrets.SAM_DEPLOYMENT_BUCKET }}
+        LAMBDA_SG_ID: ${{ secrets.LAMBDA_SG_ID }}
+        PRIVATE_SUBNET_1_ID: ${{ secrets.PRIVATE_SUBNET_1_ID }}
+        PRIVATE_SUBNET_2_ID: ${{ secrets.PRIVATE_SUBNET_2_ID }}
+        # Pass any other secrets needed by deploy_subprocessor.sh
+      run: ./scripts/deploy_subprocessor.sh
+
+    # Optional: Show stack outputs after successful deployment
+    # - name: Show SAM Stack Outputs
+    #   if: success()
+    #   run: aws cloudformation describe-stacks --stack-name cyphera-subprocessor-${{ env.STAGE }} --query 'Stacks[0].Outputs' --region ${{ env.AWS_REGION }} 
