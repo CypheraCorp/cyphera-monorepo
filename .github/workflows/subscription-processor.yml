@@ -18,6 +18,8 @@ on:
     branches: [ dev, main ]
     paths: # Trigger more specifically
       - 'cmd/subscription-processor/**'
+      - 'internal/client/delegation_server/**'
+      - 'internal/proto/**'
       - 'internal/**' # Trigger on shared internal changes
       - 'go.mod'
       - 'go.sum'
@@ -84,15 +86,18 @@ jobs:
 
     - name: Build Lambda package for Subscription Processor
       # Assumes Makefile has 'build-subprocessor' target
-      # This target should place 'bootstrap' in the correct location for SAM build,
-      # typically inside .aws-sam/build/<FunctionName>/ where FunctionName matches template.yaml
-      run: make build-subprocessor # Ensure this target exists and works
+      # This target should place the binary in a predictable location (e.g., bin/subprocessor)
+      run: make build-subprocessor # Ensure this target exists and outputs to bin/subprocessor
 
     - name: Verify binary (Optional but good practice)
-      # Adjust path if make target outputs elsewhere
+      # Check the output location defined in the build-subprocessor target
       run: |
-        ARTIFACT_PATH=$(ls .aws-sam/build/*/bootstrap | head -n 1) # Find the bootstrap file
+        ARTIFACT_PATH="bin/subprocessor" # UPDATED: Check the actual output path
         echo "Verifying binary at: $ARTIFACT_PATH"
+        if [ ! -f "$ARTIFACT_PATH" ]; then
+          echo "Error: Binary not found at $ARTIFACT_PATH"
+          exit 1
+        fi
         file "$ARTIFACT_PATH"
         ls -lh "$ARTIFACT_PATH"
         if ! file "$ARTIFACT_PATH" | grep -q "x86-64"; then
