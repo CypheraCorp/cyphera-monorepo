@@ -104,11 +104,9 @@ Resources:
             - Effect: Allow
               Action:
                 - secretsmanager:GetSecretValue
-              Resource: # Grant access ONLY to the RDS secret ARN fetched via parameter
-                # This requires the Lambda code to first fetch the ARN from SSM,
-                # then use that ARN to fetch the secret.
-                # Alternatively, pass the ARN directly as an environment variable from the deploy script.
-                - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${ParamRdsSecretArnName}-* # Broad access based on name prefix, refine if possible
+              Resource:
+                 # - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${ParamRdsSecretArnName}-* # REMOVED invalid reference
+                 - !Ref RdsSecretArnValue # Correct reference if uncommenting permissions
             # Remove SecretsManager permissions - RDS secret ARN is passed directly now
             # - Effect: Allow
             #   Action:

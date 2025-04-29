@@ -86,31 +86,14 @@ jobs:
         version: v1.60.1
         args: --concurrency=4
 
-  # --- Build Job --- (Simplified - main build happens during 'sam build')
-  build:
-    name: Build Go API (Verify Only)
-    needs: [test, lint]
-    runs-on: ubuntu-latest
 
-    steps:
-    - uses: actions/checkout@v3
-
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
-        cache-dependency-path: go.sum
-
-    - name: Check Go Modules (Optional verification)
-      run: go mod verify
 
     # Removed previous build/verify steps for the binary
     # Actual build happens during 'sam build' in the deploy job
 
   deploy:
     name: Deploy Go API
-    needs: [build]
+    needs: [lint, test]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
     environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
@@ -118,11 +101,12 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Download build artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: bootstrap-${{ env.STAGE }}
-        path: . # Downloads bootstrap binary to the root
+    # Download artifact is not needed if SAM Build handles it within the runner
+    # - name: Download build artifact
+    #   uses: actions/download-artifact@v4
+    #   with:
+    #     name: bootstrap-${{ env.STAGE }}
+    #     path: . # Or specific path required by SAM
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
