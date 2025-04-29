@@ -19,10 +19,6 @@ Parameters:
   PrivateSubnet2Id:
     Type: AWS::EC2::Subnet::Id
     Description: Private Subnet 2 ID
-  # --- Renamed/Removed Parameters ---
-  # ParamSupabaseJwtSecret: (Removed - Passing ARN instead)
-  # ParamCircleApiKey: (Removed - Passing ARN instead)
-
   # --- Existing Parameters ---
   ParamDelegationServerAlbDns:
     Type: String
@@ -54,14 +50,18 @@ Parameters:
   ParamCorsAllowCredentials:
     Type: String # CloudFormation expects boolean as string 'true'/'false' for parameters
     Description: CORS Allow Credentials (from SSM)
-
-  # --- NEW Parameters for Secret ARNs ---
   ParamSupabaseJwtSecretArn:
     Type: String
     Description: ARN of the Supabase JWT Secret in Secrets Manager
   ParamCircleApiKeyArn:
     Type: String
     Description: ARN of the Circle API Key Secret in Secrets Manager
+
+# ADDED: New parameter to receive constructed gRPC address
+DelegationGrpcAddrValue:
+  Type: String
+  Description: Constructed Delegation Server gRPC Address (host:port)
+  NoEcho: true
 
 Globals:
   Function:
@@ -83,14 +83,11 @@ Globals:
         DB_PORT: '5432' # Static value
         DB_SSLMODE: require # Static value
         SUPABASE_URL: !Ref ParamSupabaseUrl
-        # --- REMOVED Direct Secret Refs ---
-        # SUPABASE_JWT_SECRET: !Ref ParamSupabaseJwtSecret
-        # CIRCLE_API_KEY: !Ref ParamCircleApiKey
-        # --- ADDED Secret ARN Refs ---
         SUPABASE_JWT_SECRET_ARN: !Ref ParamSupabaseJwtSecretArn
         CIRCLE_API_KEY_ARN: !Ref ParamCircleApiKeyArn
-        # --- Continue with other variables ---
         CYPHERA_SMART_WALLET_ADDRESS: !Ref ParamSmartWalletAddress
+        # ADDED: Set DELEGATION_GRPC_ADDR env var from the new parameter
+        DELEGATION_GRPC_ADDR: !Ref DelegationGrpcAddrValue
         CORS_ALLOWED_ORIGINS: !Ref ParamCorsAllowedOrigins
         CORS_ALLOWED_METHODS: !Ref ParamCorsAllowedMethods
         CORS_ALLOWED_HEADERS: !Ref ParamCorsAllowedHeaders
@@ -127,7 +124,7 @@ Resources:
                 - !Ref ParamRdsSecretArn        # Use ARN passed as parameter
         # Policy to read SSM parameters (Ensure this covers the ARN params too)
         - SSMParameterReadPolicy:
-            ParameterName: !Sub "/cyphera/*-${Stage}" # This should cover the ARN parameters
+            ParameterName: !Sub "/cyphera/*-${Stage}"
       Events:
         HealthCheck:
           Type: HttpApi

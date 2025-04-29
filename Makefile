@@ -97,6 +97,30 @@ proto-build-all: proto-build-go proto-build-js
 api-server:
 	$(GO) run $(MAIN_PACKAGE)
 
+# --- Subscription Processor --- #
+SUBSCRIPTION_PROCESSOR_PACKAGE=./cmd/subscription-processor
+SUBSCRIPTION_PROCESSOR_BINARY_NAME=subprocessor
+
+# Build target for Subscription Processor (general)
+build-subprocessor:
+	@echo "Building subscription processor binary..."
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o bin/$(SUBSCRIPTION_PROCESSOR_BINARY_NAME) $(SUBSCRIPTION_PROCESSOR_PACKAGE)
+	@echo "Subscription processor binary built at bin/$(SUBSCRIPTION_PROCESSOR_BINARY_NAME)"
+
+# Target for building Subscription Processor specifically for SAM local build
+.PHONY: build-subprocessor-sam-local
+build-subprocessor-sam-local:
+	@echo "Building subscription processor for SAM local..."
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o bin/bootstrap-subprocessor $(SUBSCRIPTION_PROCESSOR_PACKAGE)
+	@echo "Subscription processor SAM local bootstrap built at bin/bootstrap-subprocessor"
+
+# Target for SAM Build Process (SubscriptionProcessorFunction matches template Logical ID)
+# Copies the pre-built binary (built by build-subprocessor target in CI) into SAM artifacts dir
+build-SubscriptionProcessorFunction:
+	@echo "Copying subscription processor binary to SAM artifacts dir: $(ARTIFACTS_DIR)"
+	mkdir -p $(ARTIFACTS_DIR)
+	cp bin/$(SUBSCRIPTION_PROCESSOR_BINARY_NAME) $(ARTIFACTS_DIR)/bootstrap
+
 api-server-air:
 	air
 	
@@ -139,6 +163,8 @@ help:
 	@echo "  make api-server-air - Run the API server with air for live reload"
 	@echo "  make delegation-server - Run the delegation server" 
 	@echo "  make subscription-processor - Run the subscription processor"
+	@echo "  make build-subprocessor - Build the subscription processor binary for Linux/AMD64"
+	@echo "  make build-subprocessor-sam-local - Build bootstrap for SAM local testing (subprocessor)"
 	@echo "  make gen            - Generate SQLC code"
 	@echo "  make proto-build-go - Generate Go gRPC code from proto definitions"
 	@echo "  make proto-build-js - Generate Node.js gRPC code from proto definitions"
@@ -163,7 +189,15 @@ build-MainFunction:
 # Use this target *before* running 'sam build' locally.
 .PHONY: build-sam-local
 build-sam-local:
+	@echo "DEPRECATED: Use specific targets like build-api-sam-local or build-subprocessor-sam-local"
 	@echo "Executing build script (scripts/build.sh) to create bootstrap binary..."
 	chmod +x scripts/build.sh # Ensure script is executable
 	./scripts/build.sh
 	@echo "Build script finished. Bootstrap binary should be ready."
+
+# Target for building main API specifically for SAM local build
+.PHONY: build-api-sam-local
+build-api-sam-local:
+	@echo "Building main API for SAM local..."
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o bin/bootstrap-api $(MAIN_PACKAGE)
+	@echo "Main API SAM local bootstrap built at bin/bootstrap-api"
