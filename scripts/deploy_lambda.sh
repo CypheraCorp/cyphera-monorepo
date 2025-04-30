@@ -58,8 +58,8 @@ PARAM_CORS_EXPOSED_HEADERS_VALUE=$(fetch_ssm_param "${PARAM_CORS_EXPOSED_HEADERS
 PARAM_CORS_CREDENTIALS_VALUE=$(fetch_ssm_param "${PARAM_CORS_CREDENTIALS_NAME}")
 
 # Construct gRPC address for Main API
-DELEGATION_GRPC_ADDR_VALUE="${PARAM_DELEGATION_DNS_VALUE}:50051"
-echo "Constructed Delegation gRPC Address for Main API: ${DELEGATION_GRPC_ADDR_VALUE}"
+# DELEGATION_GRPC_ADDR_VALUE="${PARAM_DELEGATION_DNS_VALUE}:50051"
+# echo "Constructed Delegation gRPC Address for Main API: ${DELEGATION_GRPC_ADDR_VALUE}"
 
 echo "Successfully fetched all parameters."
 
@@ -80,7 +80,9 @@ OVERRIDES="${OVERRIDES} ParamCorsAllowedMethods=${PARAM_CORS_METHODS_VALUE}"
 OVERRIDES="${OVERRIDES} ParamCorsAllowedHeaders=${PARAM_CORS_HEADERS_VALUE}"
 OVERRIDES="${OVERRIDES} ParamCorsExposedHeaders=${PARAM_CORS_EXPOSED_HEADERS_VALUE}"
 OVERRIDES="${OVERRIDES} ParamCorsAllowCredentials=${PARAM_CORS_CREDENTIALS_VALUE}"
-OVERRIDES="${OVERRIDES} paramDelegationGrpcAddr=${DELEGATION_GRPC_ADDR_VALUE}"
+# REMOVED override for paramDelegationGrpcAddr
+# OVERRIDES="${OVERRIDES} paramDelegationGrpcAddr=${DELEGATION_GRPC_ADDR_VALUE}"
+
 # DeploymentBucketName is passed via --s3-bucket, not parameter override
 
 echo "Constructed Parameter Overrides."
