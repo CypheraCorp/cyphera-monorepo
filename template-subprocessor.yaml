@@ -47,10 +47,10 @@ Parameters:
     Type: String
     Description: Actual Cyphera Smart Wallet Address
     NoEcho: true
-  DelegationGrpcAddrValue:
+  # ADDED: Parameter for ALB DNS Name
+  ParamDelegationServerAlbDns:
     Type: String
-    Description: Actual Delegation Server gRPC Address (host:port)
-    NoEcho: true
+    Description: DNS Name of the Delegation Server ALB (from SSM)
 
 Resources:
   SubscriptionProcessorFunction:
@@ -76,7 +76,8 @@ Resources:
           DB_HOST: !Ref DbHostValue
           DB_NAME: !Ref DbNameValue
           CYPHERA_SMART_WALLET_ADDRESS: !Ref SmartWalletAddressValue
-          DELEGATION_GRPC_ADDR: !Ref DelegationGrpcAddrValue
+          # Construct DELEGATION_GRPC_ADDR directly from ALB DNS parameter
+          DELEGATION_GRPC_ADDR: !Sub "${ParamDelegationServerAlbDns}:50051"
           DB_SSLMODE: require # Set directly, or add another parameter if it needs to vary
 
           # Note: The function code now expects these exact environment variables

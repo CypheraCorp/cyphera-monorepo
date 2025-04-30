@@ -53,11 +53,7 @@ PARAM_RDS_SECRET_ARN_VALUE=$(fetch_ssm_param "${PARAM_RDS_SECRET_ARN_NAME}")
 PARAM_RDS_ENDPOINT_VALUE=$(fetch_ssm_param "${PARAM_RDS_ENDPOINT_NAME}")
 PARAM_DB_NAME_VALUE=$(fetch_ssm_param "${PARAM_DB_NAME_NAME}")
 PARAM_SMART_WALLET_VALUE=$(fetch_ssm_param "${PARAM_SMART_WALLET_NAME}" "--with-decryption")
-PARAM_DELEGATION_DNS_VALUE=$(fetch_ssm_param "${PARAM_DELEGATION_DNS_NAME}") # ADDED
-
-# Construct gRPC address
-DELEGATION_GRPC_ADDR_VALUE="${PARAM_DELEGATION_DNS_VALUE}:50051" # ADDED
-echo "Constructed Delegation gRPC Address: ${DELEGATION_GRPC_ADDR_VALUE}"
+PARAM_DELEGATION_DNS_VALUE=$(fetch_ssm_param "${PARAM_DELEGATION_DNS_NAME}")
 
 echo "Successfully fetched all parameters for Subscription Processor."
 
@@ -71,7 +67,8 @@ OVERRIDES="${OVERRIDES} RdsSecretArnValue=${PARAM_RDS_SECRET_ARN_VALUE}"
 OVERRIDES="${OVERRIDES} DbHostValue=${PARAM_RDS_ENDPOINT_VALUE}"
 OVERRIDES="${OVERRIDES} DbNameValue=${PARAM_DB_NAME_VALUE}"
 OVERRIDES="${OVERRIDES} SmartWalletAddressValue=${PARAM_SMART_WALLET_VALUE}"
-OVERRIDES="${OVERRIDES} DelegationGrpcAddrValue=${DELEGATION_GRPC_ADDR_VALUE}" # UPDATED to use constructed value
+# Pass the ALB DNS name parameter instead of the constructed address
+OVERRIDES="${OVERRIDES} ParamDelegationServerAlbDns=${PARAM_DELEGATION_DNS_VALUE}"
 
 # Add other parameters required by template-subprocessor.yaml if any
 
