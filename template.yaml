@@ -57,8 +57,8 @@ Parameters:
     Type: String
     Description: ARN of the Circle API Key Secret in Secrets Manager
 
-# Ensure this parameter is defined
-DelegationGrpcAddrValue:
+# Renamed parameter for debugging
+paramDelegationGrpcAddr:
   Type: String
   Description: Constructed Delegation Server gRPC Address (host:port)
   NoEcho: true
@@ -86,8 +86,8 @@ Globals:
         SUPABASE_JWT_SECRET_ARN: !Ref ParamSupabaseJwtSecretArn
         CIRCLE_API_KEY_ARN: !Ref ParamCircleApiKeyArn
         CYPHERA_SMART_WALLET_ADDRESS: !Ref ParamSmartWalletAddress
-        # Ensure this environment variable is set using the parameter
-        DELEGATION_GRPC_ADDR: !Ref DelegationGrpcAddrValue
+        # Ensure this environment variable is set using the renamed parameter
+        DELEGATION_GRPC_ADDR: !Ref paramDelegationGrpcAddr
         CORS_ALLOWED_ORIGINS: !Ref ParamCorsAllowedOrigins
         CORS_ALLOWED_METHODS: !Ref ParamCorsAllowedMethods
         CORS_ALLOWED_HEADERS: !Ref ParamCorsAllowedHeaders
