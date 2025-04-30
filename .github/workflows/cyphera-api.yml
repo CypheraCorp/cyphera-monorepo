@@ -16,6 +16,7 @@ env:
   GO_VERSION: '1.23'
   AWS_REGION: us-east-1
   STAGE: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+  TEMPLATE_FILE: deployment/template-cyphera-api.yaml
 
 jobs:
   test:
@@ -121,7 +122,7 @@ jobs:
 
     # SAM Build: Use the specific template and build inside container
     - name: SAM Build for Main API
-      run: sam build --template template.yaml --use-container --no-cached
+      run: sam build --template ${{ env.TEMPLATE_FILE }} --use-container --no-cached
 
     # ADDED: Verify the content of the *generated* template after build
     - name: Verify generated template content
@@ -132,7 +133,7 @@ jobs:
 
     # --- NEW DEPLOY STEPS ---
     - name: Make deploy script executable
-      run: chmod +x scripts/deploy_lambda.sh
+      run: chmod +x scripts/deploy_cyphera_api.sh
 
     - name: Run Deployment Script
       env:
@@ -144,7 +145,7 @@ jobs:
         LAMBDA_SG_ID: ${{ secrets.LAMBDA_SG_ID }}               # From Environment secrets
         PRIVATE_SUBNET_1_ID: ${{ secrets.PRIVATE_SUBNET_1_ID }} # From Environment secrets
         PRIVATE_SUBNET_2_ID: ${{ secrets.PRIVATE_SUBNET_2_ID }} # From Environment secrets
-      run: ./scripts/deploy_lambda.sh
+      run: ./scripts/deploy_cyphera_api.sh
     # --- END NEW DEPLOY STEPS ---
 
     # Optional: Show stack outputs after successful deployment
