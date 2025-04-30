@@ -131,6 +131,13 @@ jobs:
     - name: SAM Build for Main API
       run: sam build --template template.yaml --use-container --no-cached
 
+    # ADDED: Verify the content of the *generated* template after build
+    - name: Verify generated template content
+      run: |
+        echo "--- Contents of .aws-sam/build/template.yaml --- "
+        cat .aws-sam/build/template.yaml
+        echo "--- End of .aws-sam/build/template.yaml --- "
+
     # --- NEW DEPLOY STEPS ---
     - name: Make deploy script executable
       run: chmod +x scripts/deploy_lambda.sh

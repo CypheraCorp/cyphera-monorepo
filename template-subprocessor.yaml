@@ -89,29 +89,18 @@ Resources:
           - !Ref PrivateSubnet2Id
       # IAM Permissions
       Policies:
+        # Use standard managed policies + specific permissions
+        - AWSLambdaBasicExecutionRole # Includes basic logging permissions (CloudWatch Logs)
+        - AWSLambdaVPCAccessExecutionRole # Includes permissions for ENI management in VPC
+        # Add specific permission for the RDS Secret
         - Statement:
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: 'arn:aws:logs:*:*:*' # Basic logging permissions
-            # Removed empty SSM permission block
-            # - Effect: Allow
-            #   Action:
-            #     - ssm:GetParameter
-            #     - ssm:GetParameters
-            #   Resource: []
-            # Grant permission to get the specific RDS secret value using the ARN passed as a parameter
             - Effect: Allow
               Action:
                 - secretsmanager:GetSecretValue
               Resource:
-                 - !Ref RdsSecretArnValue # Reference the ARN passed in
-            # VPC Access Permissions (if using VPC)
-            - VPCAccessPolicy: {}
-            # Add permissions needed for delegation client (e.g., connect to gRPC endpoint)
-            # This might involve allowing egress traffic in the Security Group
+                - !Ref RdsSecretArnValue # Reference the ARN passed in
+            # Add any other specific permissions needed here
+
     Metadata:
       BuildMethod: makefile # Instruct SAM build to use the Makefile
       # BuildArchitecture should match Globals, but can be specified here too
