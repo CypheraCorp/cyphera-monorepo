@@ -129,7 +129,7 @@ jobs:
 
     # SAM Build: Use the specific template and build inside container
     - name: SAM Build for Main API
-      run: sam build --template template.yaml --use-container
+      run: sam build --template template.yaml --use-container --no-cached
 
     # --- NEW DEPLOY STEPS ---
     - name: Make deploy script executable
