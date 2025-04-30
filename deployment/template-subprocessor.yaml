@@ -40,9 +40,6 @@ Parameters:
   DbHostValue:
     Type: String
     Description: Actual DB Endpoint (host:port)
-  DbNameValue:
-    Type: String
-    Description: Actual Database Name
   SmartWalletAddressValue:
     Type: String
     Description: Actual Cyphera Smart Wallet Address
@@ -74,7 +71,7 @@ Resources:
           # Set environment variables directly using the passed-in values
           RDS_SECRET_ARN: !Ref RdsSecretArnValue
           DB_HOST: !Ref DbHostValue
-          DB_NAME: !Ref DbNameValue
+          DB_NAME: cyphera
           CYPHERA_SMART_WALLET_ADDRESS: !Ref SmartWalletAddressValue
           # Construct DELEGATION_GRPC_ADDR directly from ALB DNS parameter
           DELEGATION_GRPC_ADDR: !Sub "${ParamDelegationServerAlbDns}:50051"
