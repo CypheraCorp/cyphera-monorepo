@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"os"
+	"cyphera-api/internal/helpers"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -13,22 +13,16 @@ var (
 )
 
 // InitLogger initializes the logger with the appropriate configuration
-// based on the environment (development or production)
-func InitLogger() {
-	// Get environment from GIN_MODE, default to "development"
-	env := os.Getenv("GIN_MODE")
-	if env == "" {
-		env = "development"
-	}
-
+// based on the provided stage.
+func InitLogger(stage string) {
 	var config zap.Config
-	if env == "release" {
+	if stage == helpers.StageProd {
 		// Production config
 		config = zap.NewProductionConfig()
 		config.EncoderConfig.TimeKey = "timestamp"
 		config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	} else {
-		// Development config
+		// Development config (for dev and local)
 		config = zap.NewDevelopmentConfig()
 		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	}

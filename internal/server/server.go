@@ -9,8 +9,10 @@ import (
 	dsClient "cyphera-api/internal/client/delegation_server"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
+	"cyphera-api/internal/helpers" // Import helpers
 	"cyphera-api/internal/logger"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -54,11 +56,26 @@ func InitializeHandlers() {
 	var dsn string // Database Source Name (connection string)
 
 	// Load environment variables from .env file for local development
+	// Note: .env might still set STAGE=local, which is now the preferred way
 	err := godotenv.Load()
 	if err != nil && !os.IsNotExist(err) {
-		// Only log a warning if .env exists but couldn't be loaded. Don't fail if it doesn't exist.
-		logger.Warn("Error loading .env file, proceeding with environment variables", zap.Error(err))
+		log.Printf("Warning: Error loading .env file: %v", err) // Use basic log before logger init
 	}
+
+	// --- Determine and Validate Stage ---
+	stage := os.Getenv("STAGE")
+	if stage == "" {
+		stage = helpers.StageLocal // Default to local if not set
+		log.Printf("Warning: STAGE environment variable not set, defaulting to '%s'", stage)
+	}
+	if !helpers.IsValidStage(stage) {
+		log.Fatalf("Invalid STAGE environment variable: '%s'. Must be one of: %s, %s, %s",
+			stage, helpers.StageProd, helpers.StageDev, helpers.StageLocal)
+	}
+
+	// --- Initialize Logger (AFTER stage validation) ---
+	logger.InitLogger(stage)
+	logger.Info("Initializing handlers for stage", zap.String("stage", stage))
 
 	ctx := context.Background()
 
@@ -69,53 +86,51 @@ func InitializeHandlers() {
 	}
 
 	// --- Database Connection Setup ---
-	// var dsn string // REMOVED: Already declared above
-	// Use GIN_MODE=release as indicator for deployed environment
-	if os.Getenv("GIN_MODE") == "release" {
-		logger.Info("Running in deployed environment (GIN_MODE=release), fetching DB credentials from Secrets Manager")
+	// Use stage variable to determine connection method
+	if stage == helpers.StageProd || stage == helpers.StageDev {
+		// Deployed environment logic (prod or dev)
+		logger.Info("Running in deployed stage, fetching DB credentials from Secrets Manager", zap.String("stage", stage))
 
-		dbEndpoint := os.Getenv("DB_HOST") // This contains host:port
+		// This code block remains largely the same as before...
+		// It reads DB_HOST, DB_NAME, RDS_SECRET_ARN from env (set by SAM template)
+		dbEndpoint := os.Getenv("DB_HOST")
 		dbName := os.Getenv("DB_NAME")
+		dbSecretArn := os.Getenv("RDS_SECRET_ARN") // Renamed from dbUserSecretArn
 		dbSSLMode := os.Getenv("DB_SSLMODE")
 
-		if dbEndpoint == "" || dbName == "" {
-			logger.Fatal("Missing required environment variables for DB connection in deployed environment (DB_HOST, DB_NAME)")
+		if dbEndpoint == "" || dbName == "" || dbSecretArn == "" {
+			logger.Fatal("Missing required DB environment variables for deployed stage (DB_HOST, DB_NAME, RDS_SECRET_ARN)")
 		}
 		if dbSSLMode == "" {
-			dbSSLMode = "require" // Sensible default for RDS
+			dbSSLMode = "require"
 			logger.Warn("DB_SSLMODE not set, defaulting to 'require'")
 		}
 
-		// Define structure for RDS secret JSON
 		type RdsSecret struct {
 			Username string `json:"username"`
 			Password string `json:"password"`
 		}
 		var secretData RdsSecret
 
-		// Fetch secret using the new client
-		// Note: Using GetSecretJSON assumes the secret is JSON.
-		// Using RDS_SECRET_ARN env var. Fallback not needed as we are using the ARN in release mode
-		err = secretsClient.GetSecretJSON(ctx, "RDS_SECRET_ARN", "", &secretData)
+		err = secretsClient.GetSecretJSON(ctx, dbSecretArn, "", &secretData)
 		if err != nil {
-			logger.Fatal("Failed to retrieve or parse RDS secret", zap.Error(err))
+			logger.Fatal("Failed to retrieve or parse RDS secret", zap.Error(err), zap.String("secretArn", dbSecretArn))
 		}
 
 		if secretData.Username == "" || secretData.Password == "" {
-			logger.Fatal("Username or password not found in RDS secret data")
+			logger.Fatal("Username or password not found in RDS secret data", zap.String("secretArn", dbSecretArn))
 		}
 
-		// Construct DSN for deployed environment
 		dsn = fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=%s",
-			url.QueryEscape(secretData.Username), // URL-encode username
-			url.QueryEscape(secretData.Password), // URL-encode password
+			url.QueryEscape(secretData.Username),
+			url.QueryEscape(secretData.Password),
 			dbEndpoint, dbName, dbSSLMode)
 		logger.Info("Constructed DSN from Secrets Manager credentials")
 
 	} else {
-		// --- Local Development Environment ---
-		logger.Info("Running in local environment (GIN_MODE != release), using DATABASE_URL from env")
-		// Use GetSecretString for DATABASE_URL as it might be set directly or via an ARN (less common locally)
+		// --- Local Development Environment (stage == helpers.StageLocal) ---
+		logger.Info("Running in local stage, using DATABASE_URL from env/secrets")
+		// Use GetSecretString for DATABASE_URL as it might be set directly or via an ARN
 		dsn, err = secretsClient.GetSecretString(ctx, "DATABASE_URL_ARN", "DATABASE_URL")
 		if err != nil {
 			logger.Fatal("Failed to get DATABASE_URL", zap.Error(err))
@@ -207,8 +222,7 @@ func InitializeHandlers() {
 }
 
 func InitializeRoutes(router *gin.Engine) {
-	// Initialize logger  first
-	logger.InitLogger()
+	// Logger is now initialized in InitializeHandlers
 
 	// Configure and apply CORS middleware
 	router.Use(configureCORS())

@@ -41,8 +41,6 @@ import (
 var ginLambda *ginadapter.GinLambda
 
 func init() {
-	// Initialize logger
-	logger.InitLogger()
 
 	// Initialize your Gin router
 	r := gin.Default()
