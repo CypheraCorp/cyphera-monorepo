@@ -88,9 +88,8 @@ jobs:
 
 
 
-    # Removed previous build/verify steps for the binary
-    # Actual build happens during 'sam build' in the deploy job
 
+  # --- Deploy Job ---
   deploy:
     name: Deploy Go API
     needs: [lint, test]
@@ -100,13 +99,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-
-    # Download artifact is not needed if SAM Build handles it within the runner
-    # - name: Download build artifact
-    #   uses: actions/download-artifact@v4
-    #   with:
-    #     name: bootstrap-${{ env.STAGE }}
-    #     path: . # Or specific path required by SAM
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4

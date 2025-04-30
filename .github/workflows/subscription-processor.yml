@@ -35,19 +35,6 @@ env:
   TEMPLATE_FILE: template-subprocessor.yaml
 
 jobs:
-  # --- Test Job (Optional but Recommended) ---
-  # Include tests relevant to the subscription processor if possible
-  # test:
-  #   name: Test Subscription Processor
-  #   runs-on: ubuntu-latest
-  #   # ... (Similar setup as API test job, potentially different test commands/db setup)
-  #   steps:
-  #   - uses: actions/checkout@v3
-  #   - name: Set up Go
-  #     uses: actions/setup-go@v4
-  #     # ... (go setup)
-  #   - name: Run tests for subprocessor
-  #     run: echo "Implement specific tests for subprocessor" # Placeholder
 
   # --- Lint Job (Can reuse if config is same) ---
   lint:
@@ -77,13 +64,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-
-    # Download artifact is not needed if SAM Build handles it within the runner
-    # - name: Download build artifact
-    #   uses: actions/download-artifact@v4
-    #   with:
-    #     name: subprocessor-bootstrap-${{ env.STAGE }}
-    #     path: . # Or specific path required by SAM
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
