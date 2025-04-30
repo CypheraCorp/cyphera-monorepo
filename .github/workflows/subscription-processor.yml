@@ -11,7 +11,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'Makefile'
-      - 'template-subprocessor.yaml'
+      - 'deployment/template-subprocessor.yaml'
       - '.github/workflows/subscription-processor.yml'
       - 'scripts/deploy_subprocessor.sh'
   pull_request:
@@ -24,7 +24,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'Makefile'
-      - 'template-subprocessor.yaml'
+      - 'deployment/template-subprocessor.yaml'
       - '.github/workflows/subscription-processor.yml'
       - 'scripts/deploy_subprocessor.sh'
 
