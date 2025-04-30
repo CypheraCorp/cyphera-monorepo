@@ -32,7 +32,7 @@ env:
   GO_VERSION: '1.23'
   AWS_REGION: us-east-1
   STAGE: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
-  TEMPLATE_FILE: template-subprocessor.yaml
+  TEMPLATE_FILE: deployment/template-subprocessor.yaml
 
 jobs:
 
