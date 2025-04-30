@@ -78,7 +78,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    # Download artifact is not needed if SAM Build handles it within the  runner
+    # Download artifact is not needed if SAM Build handles it within the runner
     # - name: Download build artifact
     #   uses: actions/download-artifact@v4
     #   with:
