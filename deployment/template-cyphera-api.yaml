@@ -101,7 +101,7 @@ Resources:
     Properties:
       FunctionName: !Sub "cyphera-api-${Stage}"
       Handler: bootstrap # Your Go binary
-      CodeUri: . # Points to the root - SAM build/deploy will handle packaging
+      CodeUri: ../ # UPDATED: Point to project root relative to template location
       Policies:
         # Base policies
         - AWSLambdaBasicExecutionRole
