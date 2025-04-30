@@ -80,7 +80,7 @@ OVERRIDES="${OVERRIDES} ParamCorsAllowedMethods=${PARAM_CORS_METHODS_VALUE}"
 OVERRIDES="${OVERRIDES} ParamCorsAllowedHeaders=${PARAM_CORS_HEADERS_VALUE}"
 OVERRIDES="${OVERRIDES} ParamCorsExposedHeaders=${PARAM_CORS_EXPOSED_HEADERS_VALUE}"
 OVERRIDES="${OVERRIDES} ParamCorsAllowCredentials=${PARAM_CORS_CREDENTIALS_VALUE}"
-OVERRIDES="${OVERRIDES} DelegationGrpcAddrValue=${DELEGATION_GRPC_ADDR_VALUE}"
+OVERRIDES="${OVERRIDES} paramDelegationGrpcAddr=${DELEGATION_GRPC_ADDR_VALUE}"
 # DeploymentBucketName is passed via --s3-bucket, not parameter override
 
 echo "Constructed Parameter Overrides."
