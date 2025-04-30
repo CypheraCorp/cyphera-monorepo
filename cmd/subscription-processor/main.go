@@ -85,14 +85,14 @@ func main() {
 		}
 		var secretData RdsSecret
 
-		// Fetch secret using the ARN (matching server.go)
-		err = secretsClient.GetSecretJSON(ctx, dbSecretArn, "", &secretData)
+		// Pass the *name* of the environment variable holding the ARN
+		err = secretsClient.GetSecretJSON(ctx, "RDS_SECRET_ARN", "", &secretData)
 		if err != nil {
-			logger.Fatal("Failed to retrieve or parse RDS secret", zap.Error(err), zap.String("secretArn", dbSecretArn))
+			logger.Fatal("Failed to retrieve or parse RDS secret", zap.Error(err), zap.String("secretArnEnvVar", "RDS_SECRET_ARN")) // Log the env var name used
 		}
 
 		if secretData.Username == "" || secretData.Password == "" {
-			logger.Fatal("Username or password not found in RDS secret data", zap.String("secretArn", dbSecretArn))
+			logger.Fatal("Username or password not found in RDS secret data", zap.String("secretArnEnvVar", "RDS_SECRET_ARN"))
 		}
 
 		// Construct DSN for deployed environment (matching server.go)

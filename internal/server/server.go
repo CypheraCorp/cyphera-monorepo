@@ -95,11 +95,10 @@ func InitializeHandlers() {
 		// It reads DB_HOST, DB_NAME, RDS_SECRET_ARN from env (set by SAM template)
 		dbEndpoint := os.Getenv("DB_HOST")
 		dbName := os.Getenv("DB_NAME")
-		dbSecretArn := os.Getenv("RDS_SECRET_ARN") // Renamed from dbUserSecretArn
 		dbSSLMode := os.Getenv("DB_SSLMODE")
 
-		if dbEndpoint == "" || dbName == "" || dbSecretArn == "" {
-			logger.Fatal("Missing required DB environment variables for deployed stage (DB_HOST, DB_NAME, RDS_SECRET_ARN)")
+		if dbEndpoint == "" || dbName == "" {
+			logger.Fatal("Missing required DB environment variables for deployed stage (DB_HOST, DB_NAME)")
 		}
 		if dbSSLMode == "" {
 			dbSSLMode = "require"
@@ -112,13 +111,13 @@ func InitializeHandlers() {
 		}
 		var secretData RdsSecret
 
-		err = secretsClient.GetSecretJSON(ctx, dbSecretArn, "", &secretData)
+		err = secretsClient.GetSecretJSON(ctx, "RDS_SECRET_ARN", "", &secretData)
 		if err != nil {
-			logger.Fatal("Failed to retrieve or parse RDS secret", zap.Error(err), zap.String("secretArn", dbSecretArn))
+			logger.Fatal("Failed to retrieve or parse RDS secret", zap.Error(err), zap.String("secretArnEnvVar", "RDS_SECRET_ARN"))
 		}
 
 		if secretData.Username == "" || secretData.Password == "" {
-			logger.Fatal("Username or password not found in RDS secret data", zap.String("secretArn", dbSecretArn))
+			logger.Fatal("Username or password not found in RDS secret data", zap.String("secretArnEnvVar", "RDS_SECRET_ARN"))
 		}
 
 		dsn = fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=%s",
