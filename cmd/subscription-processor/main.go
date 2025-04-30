@@ -12,6 +12,7 @@ import (
 	dsClient "cyphera-api/internal/client/delegation_server"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
+	"cyphera-api/internal/helpers"
 	"cyphera-api/internal/logger"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -26,8 +27,20 @@ func main() {
 		log.Printf("Warning: Error loading .env file: %v. Proceeding with environment variables/secrets.", err)
 	}
 
-	// Initialize logger
-	logger.InitLogger()
+	// --- Determine and Validate Stage ---
+	stage := os.Getenv("STAGE")
+	if stage == "" {
+		stage = helpers.StageLocal // Default to local if not set
+		log.Printf("Warning: STAGE environment variable not set, defaulting to '%s'", stage)
+	}
+	if !helpers.IsValidStage(stage) {
+		log.Fatalf("Invalid STAGE environment variable: '%s'. Must be one of: %s, %s, %s",
+			stage, helpers.StageProd, helpers.StageDev, helpers.StageLocal)
+	}
+
+	// Initialize logger (AFTER stage validation)
+	logger.InitLogger(stage)
+	logger.Info("Starting subscription processor for stage", zap.String("stage", stage))
 	defer func() {
 		if err := logger.Sync(); err != nil {
 			fmt.Printf("Failed to sync logger: %v\n", err)
@@ -42,20 +55,12 @@ func main() {
 		logger.Fatal("Failed to initialize AWS Secrets Manager client", zap.Error(err))
 	}
 
-	// Determine Stage (needed for parameter names)
-	// Lambda environment variables should set STAGE
-	stage := os.Getenv("STAGE")
-	if stage == "" {
-		stage = "dev" // Default to dev if not set (adjust as needed)
-		logger.Warn("STAGE environment variable not set, defaulting to 'dev'")
-	}
-	logger.Info("Running for stage", zap.String("stage", stage))
-
 	// --- Database Connection Setup ---
 	var dsn string
-	// Use GIN_MODE=release as indicator for deployed environment (set this in Lambda env)
-	if os.Getenv("GIN_MODE") == "release" {
-		logger.Info("Running in deployed environment (GIN_MODE=release), fetching DB credentials from Secrets Manager")
+	// Use stage variable to determine connection method
+	if stage == helpers.StageProd || stage == helpers.StageDev {
+		// Deployed environment logic (prod or dev)
+		logger.Info("Running in deployed stage, fetching DB credentials from Secrets Manager", zap.String("stage", stage))
 
 		// Use direct environment variables set by Lambda
 		// Note: Using dbEndpoint variable name like in server.go
@@ -99,8 +104,8 @@ func main() {
 		logger.Info("Constructed DSN from Secrets Manager credentials")
 
 	} else {
-		// --- Local Development Environment --- (matching server.go)
-		logger.Info("Running in local environment (GIN_MODE != release), using DATABASE_URL from env/secrets")
+		// --- Local Development Environment (stage == helpers.StageLocal) ---
+		logger.Info("Running in local stage, using DATABASE_URL from env/secrets")
 		// Try fetching DATABASE_URL from Secrets Manager first (using ARN), fallback to direct env var
 		dsn, err = secretsClient.GetSecretString(ctx, "DATABASE_URL_ARN", "DATABASE_URL")
 		if err != nil {
