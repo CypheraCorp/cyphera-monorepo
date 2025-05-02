@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const activateNetwork = `-- name: ActivateNetwork :one
@@ -17,7 +18,7 @@ SET
     active = true,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, name, type, network_type, circle_network_type, chain_id, is_testnet, active, created_at, updated_at, deleted_at
+RETURNING id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) ActivateNetwork(ctx context.Context, id uuid.UUID) (Network, error) {
@@ -29,6 +30,7 @@ func (q *Queries) ActivateNetwork(ctx context.Context, id uuid.UUID) (Network, e
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,
 		&i.Active,
@@ -45,13 +47,14 @@ INSERT INTO networks (
     type,
     network_type,
     circle_network_type,
+    block_explorer_url,
     chain_id,
     is_testnet,
     active
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, $8
 )
-RETURNING id, name, type, network_type, circle_network_type, chain_id, is_testnet, active, created_at, updated_at, deleted_at
+RETURNING id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, created_at, updated_at, deleted_at
 `
 
 type CreateNetworkParams struct {
@@ -59,6 +62,7 @@ type CreateNetworkParams struct {
 	Type              string            `json:"type"`
 	NetworkType       NetworkType       `json:"network_type"`
 	CircleNetworkType CircleNetworkType `json:"circle_network_type"`
+	BlockExplorerUrl  pgtype.Text       `json:"block_explorer_url"`
 	ChainID           int32             `json:"chain_id"`
 	IsTestnet         bool              `json:"is_testnet"`
 	Active            bool              `json:"active"`
@@ -70,6 +74,7 @@ func (q *Queries) CreateNetwork(ctx context.Context, arg CreateNetworkParams) (N
 		arg.Type,
 		arg.NetworkType,
 		arg.CircleNetworkType,
+		arg.BlockExplorerUrl,
 		arg.ChainID,
 		arg.IsTestnet,
 		arg.Active,
@@ -81,6 +86,7 @@ func (q *Queries) CreateNetwork(ctx context.Context, arg CreateNetworkParams) (N
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,
 		&i.Active,
@@ -97,7 +103,7 @@ SET
     active = false,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, name, type, network_type, circle_network_type, chain_id, is_testnet, active, created_at, updated_at, deleted_at
+RETURNING id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) DeactivateNetwork(ctx context.Context, id uuid.UUID) (Network, error) {
@@ -109,6 +115,7 @@ func (q *Queries) DeactivateNetwork(ctx context.Context, id uuid.UUID) (Network,
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,
 		&i.Active,
@@ -131,7 +138,7 @@ func (q *Queries) DeleteNetwork(ctx context.Context, id uuid.UUID) error {
 }
 
 const getNetwork = `-- name: GetNetwork :one
-SELECT id, name, type, network_type, circle_network_type, chain_id, is_testnet, active, created_at, updated_at, deleted_at FROM networks
+SELECT id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, created_at, updated_at, deleted_at FROM networks
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -144,6 +151,7 @@ func (q *Queries) GetNetwork(ctx context.Context, id uuid.UUID) (Network, error)
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,
 		&i.Active,
@@ -155,7 +163,7 @@ func (q *Queries) GetNetwork(ctx context.Context, id uuid.UUID) (Network, error)
 }
 
 const getNetworkByChainID = `-- name: GetNetworkByChainID :one
-SELECT id, name, type, network_type, circle_network_type, chain_id, is_testnet, active, created_at, updated_at, deleted_at FROM networks
+SELECT id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, created_at, updated_at, deleted_at FROM networks
 WHERE chain_id = $1 AND deleted_at IS NULL
 `
 
@@ -168,6 +176,7 @@ func (q *Queries) GetNetworkByChainID(ctx context.Context, chainID int32) (Netwo
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,
 		&i.Active,
@@ -179,7 +188,7 @@ func (q *Queries) GetNetworkByChainID(ctx context.Context, chainID int32) (Netwo
 }
 
 const getNetworkByCircleNetworkType = `-- name: GetNetworkByCircleNetworkType :one
-SELECT id, name, type, network_type, circle_network_type, chain_id, is_testnet, active, created_at, updated_at, deleted_at FROM networks
+SELECT id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, created_at, updated_at, deleted_at FROM networks
 WHERE circle_network_type = $1 AND deleted_at IS NULL
 LIMIT 1
 `
@@ -193,6 +202,7 @@ func (q *Queries) GetNetworkByCircleNetworkType(ctx context.Context, circleNetwo
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,
 		&i.Active,
@@ -203,52 +213,21 @@ func (q *Queries) GetNetworkByCircleNetworkType(ctx context.Context, circleNetwo
 	return i, err
 }
 
-const listActiveNetworks = `-- name: ListActiveNetworks :many
-SELECT id, name, type, network_type, circle_network_type, chain_id, is_testnet, active, created_at, updated_at, deleted_at FROM networks
-WHERE active = true AND deleted_at IS NULL
+const listNetworks = `-- name: ListNetworks :many
+SELECT id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, created_at, updated_at, deleted_at FROM networks
+WHERE deleted_at IS NULL
+    AND CASE WHEN $1::boolean IS NOT NULL THEN is_testnet = $1::boolean ELSE TRUE END
+    AND CASE WHEN $2::boolean IS NOT NULL THEN active = $2::boolean ELSE TRUE END
 ORDER BY chain_id ASC
 `
 
-func (q *Queries) ListActiveNetworks(ctx context.Context) ([]Network, error) {
-	rows, err := q.db.Query(ctx, listActiveNetworks)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Network{}
-	for rows.Next() {
-		var i Network
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Type,
-			&i.NetworkType,
-			&i.CircleNetworkType,
-			&i.ChainID,
-			&i.IsTestnet,
-			&i.Active,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type ListNetworksParams struct {
+	IsTestnet pgtype.Bool `json:"is_testnet"`
+	IsActive  pgtype.Bool `json:"is_active"`
 }
 
-const listNetworks = `-- name: ListNetworks :many
-SELECT id, name, type, network_type, circle_network_type, chain_id, is_testnet, active, created_at, updated_at, deleted_at FROM networks
-WHERE deleted_at IS NULL
-ORDER BY chain_id ASC
-`
-
-func (q *Queries) ListNetworks(ctx context.Context) ([]Network, error) {
-	rows, err := q.db.Query(ctx, listNetworks)
+func (q *Queries) ListNetworks(ctx context.Context, arg ListNetworksParams) ([]Network, error) {
+	rows, err := q.db.Query(ctx, listNetworks, arg.IsTestnet, arg.IsActive)
 	if err != nil {
 		return nil, err
 	}
@@ -262,6 +241,7 @@ func (q *Queries) ListNetworks(ctx context.Context) ([]Network, error) {
 			&i.Type,
 			&i.NetworkType,
 			&i.CircleNetworkType,
+			&i.BlockExplorerUrl,
 			&i.ChainID,
 			&i.IsTestnet,
 			&i.Active,
@@ -286,12 +266,13 @@ SET
     type = COALESCE($3, type),
     network_type = COALESCE($4, network_type),
     circle_network_type = COALESCE($5, circle_network_type),
-    chain_id = COALESCE($6, chain_id),
-    is_testnet = COALESCE($7, is_testnet),
-    active = COALESCE($8, active),
+    block_explorer_url = COALESCE($6, block_explorer_url),
+    chain_id = COALESCE($7, chain_id),
+    is_testnet = COALESCE($8, is_testnet),
+    active = COALESCE($9, active),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, name, type, network_type, circle_network_type, chain_id, is_testnet, active, created_at, updated_at, deleted_at
+RETURNING id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, created_at, updated_at, deleted_at
 `
 
 type UpdateNetworkParams struct {
@@ -300,6 +281,7 @@ type UpdateNetworkParams struct {
 	Type              string            `json:"type"`
 	NetworkType       NetworkType       `json:"network_type"`
 	CircleNetworkType CircleNetworkType `json:"circle_network_type"`
+	BlockExplorerUrl  pgtype.Text       `json:"block_explorer_url"`
 	ChainID           int32             `json:"chain_id"`
 	IsTestnet         bool              `json:"is_testnet"`
 	Active            bool              `json:"active"`
@@ -312,6 +294,7 @@ func (q *Queries) UpdateNetwork(ctx context.Context, arg UpdateNetworkParams) (N
 		arg.Type,
 		arg.NetworkType,
 		arg.CircleNetworkType,
+		arg.BlockExplorerUrl,
 		arg.ChainID,
 		arg.IsTestnet,
 		arg.Active,
@@ -323,6 +306,7 @@ func (q *Queries) UpdateNetwork(ctx context.Context, arg UpdateNetworkParams) (N
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,
 		&i.Active,

@@ -641,6 +641,7 @@ type Network struct {
 	Type              string             `json:"type"`
 	NetworkType       NetworkType        `json:"network_type"`
 	CircleNetworkType CircleNetworkType  `json:"circle_network_type"`
+	BlockExplorerUrl  pgtype.Text        `json:"block_explorer_url"`
 	ChainID           int32              `json:"chain_id"`
 	IsTestnet         bool               `json:"is_testnet"`
 	Active            bool               `json:"active"`

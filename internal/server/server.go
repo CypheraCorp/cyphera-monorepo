@@ -364,10 +364,8 @@ func InitializeRoutes(router *gin.Engine) {
 				networks := protected.Group("/networks")
 				{
 					networks.GET("", networkHandler.ListNetworks)
-					networks.GET("/active", networkHandler.ListActiveNetworks)
 					networks.GET("/:network_id", networkHandler.GetNetwork)
 					networks.GET("/chain/:chain_id", networkHandler.GetNetworkByChainID)
-					networks.GET("/tokens", networkHandler.ListNetworksWithTokens)
 				}
 
 				// Tokens

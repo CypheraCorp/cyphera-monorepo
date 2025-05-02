@@ -9,11 +9,8 @@ WHERE chain_id = $1 AND deleted_at IS NULL;
 -- name: ListNetworks :many
 SELECT * FROM networks
 WHERE deleted_at IS NULL
-ORDER BY chain_id ASC;
-
--- name: ListActiveNetworks :many
-SELECT * FROM networks
-WHERE active = true AND deleted_at IS NULL
+    AND CASE WHEN sqlc.narg('is_testnet')::boolean IS NOT NULL THEN is_testnet = sqlc.narg('is_testnet')::boolean ELSE TRUE END
+    AND CASE WHEN sqlc.narg('is_active')::boolean IS NOT NULL THEN active = sqlc.narg('is_active')::boolean ELSE TRUE END
 ORDER BY chain_id ASC;
 
 -- name: CreateNetwork :one
@@ -22,11 +19,12 @@ INSERT INTO networks (
     type,
     network_type,
     circle_network_type,
+    block_explorer_url,
     chain_id,
     is_testnet,
     active
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, $8
 )
 RETURNING *;
 
@@ -37,9 +35,10 @@ SET
     type = COALESCE($3, type),
     network_type = COALESCE($4, network_type),
     circle_network_type = COALESCE($5, circle_network_type),
-    chain_id = COALESCE($6, chain_id),
-    is_testnet = COALESCE($7, is_testnet),
-    active = COALESCE($8, active),
+    block_explorer_url = COALESCE($6, block_explorer_url),
+    chain_id = COALESCE($7, chain_id),
+    is_testnet = COALESCE($8, is_testnet),
+    active = COALESCE($9, active),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;

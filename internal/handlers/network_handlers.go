@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // NetworkHandler handles network related operations
@@ -27,6 +28,7 @@ type NetworkResponse struct {
 	ChainID           int32  `json:"chain_id"`
 	NetworkType       string `json:"network_type"`
 	CircleNetworkType string `json:"circle_network_type"`
+	BlockExplorerURL  string `json:"block_explorer_url,omitempty"`
 	IsTestnet         bool   `json:"is_testnet"`
 	Active            bool   `json:"active"`
 	CreatedAt         int64  `json:"created_at"`
@@ -39,6 +41,7 @@ type CreateNetworkRequest struct {
 	Type              string `json:"type" binding:"required"`
 	NetworkType       string `json:"network_type" binding:"required"`
 	CircleNetworkType string `json:"circle_network_type" binding:"required"`
+	BlockExplorerURL  string `json:"block_explorer_url,omitempty"`
 	ChainID           int32  `json:"chain_id" binding:"required"`
 	IsTestnet         bool   `json:"is_testnet"`
 	Active            bool   `json:"active"`
@@ -50,6 +53,7 @@ type UpdateNetworkRequest struct {
 	Type              string `json:"type,omitempty"`
 	NetworkType       string `json:"network_type,omitempty"`
 	CircleNetworkType string `json:"circle_network_type,omitempty"`
+	BlockExplorerURL  string `json:"block_explorer_url,omitempty"`
 	ChainID           int32  `json:"chain_id,omitempty"`
 	IsTestnet         *bool  `json:"is_testnet,omitempty"`
 	Active            *bool  `json:"active,omitempty"`
@@ -131,56 +135,6 @@ func (h *NetworkHandler) GetNetworkByChainID(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toNetworkResponse(network))
 }
 
-// ListNetworks godoc
-// @Summary List networks
-// @Description Retrieves all networks
-// @Tags networks
-// @Accept json
-// @Produce json
-// @Success 200 {object} ListNetworksResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /networks [get]
-func (h *NetworkHandler) ListNetworks(c *gin.Context) {
-	networks, err := h.common.db.ListNetworks(c.Request.Context())
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve networks", err)
-		return
-	}
-
-	response := make([]NetworkResponse, len(networks))
-	for i, network := range networks {
-		response[i] = toNetworkResponse(network)
-	}
-
-	sendList(c, response)
-}
-
-// ListActiveNetworks godoc
-// @Summary List active networks
-// @Description Retrieves all active networks
-// @Tags networks
-// @Accept json
-// @Produce json
-// @Success 200 {object} ListNetworksResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /networks/active [get]
-func (h *NetworkHandler) ListActiveNetworks(c *gin.Context) {
-	networks, err := h.common.db.ListActiveNetworks(c.Request.Context())
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve active networks", err)
-		return
-	}
-
-	response := make([]NetworkResponse, len(networks))
-	for i, network := range networks {
-		response[i] = toNetworkResponse(network)
-	}
-
-	sendList(c, response)
-}
-
 // CreateNetwork godoc
 // @Summary Create network
 // @Description Creates a new network
@@ -205,6 +159,7 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 		Type:              req.Type,
 		NetworkType:       db.NetworkType(req.NetworkType),
 		CircleNetworkType: db.CircleNetworkType(req.CircleNetworkType),
+		BlockExplorerUrl:  nullableString(req.BlockExplorerURL),
 		ChainID:           req.ChainID,
 		IsTestnet:         req.IsTestnet,
 		Active:            req.Active,
@@ -251,6 +206,7 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 		Type:              req.Type,
 		NetworkType:       db.NetworkType(req.NetworkType),
 		CircleNetworkType: db.CircleNetworkType(req.CircleNetworkType),
+		BlockExplorerUrl:  nullableString(req.BlockExplorerURL),
 		ChainID:           req.ChainID,
 		IsTestnet:         *req.IsTestnet,
 		Active:            *req.Active,
@@ -292,18 +248,36 @@ func (h *NetworkHandler) DeleteNetwork(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// ListNetworksWithTokens godoc
+// GetNetworks godoc
 // @Summary List networks with tokens
 // @Description Retrieves all networks with their associated tokens
 // @Tags networks
 // @Accept json
 // @Produce json
+// @Param testnet query boolean false "Filter networks by testnet status"
+// @Param active query boolean false "Filter networks by active status"
 // @Success 200 {object} ListNetworksWithTokensResponse
+// @Failure 401 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /networks/tokens [get]
-func (h *NetworkHandler) ListNetworksWithTokens(c *gin.Context) {
-	networks, err := h.common.db.ListActiveNetworks(c.Request.Context())
+// @Router /networks [get]
+func (h *NetworkHandler) ListNetworks(c *gin.Context) {
+	// Parse query parameters
+	testnetStr := c.Query("testnet")
+	activeStr := c.Query("active")
+
+	params := db.ListNetworksParams{}
+
+	if testnetStr != "" {
+		params.IsTestnet.Valid = true
+		params.IsTestnet.Bool = testnetStr == "true"
+	}
+	if activeStr != "" {
+		params.IsActive.Valid = true
+		params.IsActive.Bool = activeStr == "true"
+	}
+
+	networks, err := h.common.db.ListNetworks(c.Request.Context(), params)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve active networks", err)
 		return
@@ -311,7 +285,7 @@ func (h *NetworkHandler) ListNetworksWithTokens(c *gin.Context) {
 
 	response := make([]NetworkWithTokensResponse, len(networks))
 	for i, network := range networks {
-		tokens, err := h.common.db.ListTokensByNetwork(c.Request.Context(), network.ID)
+		tokens, err := h.common.db.ListActiveTokensByNetwork(c.Request.Context(), network.ID)
 		if err != nil {
 			sendError(c, http.StatusInternalServerError, "Failed to retrieve tokens for network", err)
 			return
@@ -333,6 +307,11 @@ func (h *NetworkHandler) ListNetworksWithTokens(c *gin.Context) {
 
 // Helper function to convert database model to API response
 func toNetworkResponse(n db.Network) NetworkResponse {
+	var blockExplorerURL string
+	if n.BlockExplorerUrl.Valid {
+		blockExplorerURL = n.BlockExplorerUrl.String
+	}
+
 	return NetworkResponse{
 		ID:                n.ID.String(),
 		Object:            "network",
@@ -340,10 +319,19 @@ func toNetworkResponse(n db.Network) NetworkResponse {
 		Type:              n.Type,
 		NetworkType:       string(n.NetworkType),
 		CircleNetworkType: string(n.CircleNetworkType),
-		IsTestnet:         n.IsTestnet,
+		BlockExplorerURL:  blockExplorerURL,
 		ChainID:           n.ChainID,
+		IsTestnet:         n.IsTestnet,
 		Active:            n.Active,
 		CreatedAt:         n.CreatedAt.Time.Unix(),
 		UpdatedAt:         n.UpdatedAt.Time.Unix(),
 	}
+}
+
+// Helper functions for nullable types (consider moving to a common place)
+func nullableString(s string) pgtype.Text {
+	if s == "" {
+		return pgtype.Text{Valid: false}
+	}
+	return pgtype.Text{String: s, Valid: true}
 }
