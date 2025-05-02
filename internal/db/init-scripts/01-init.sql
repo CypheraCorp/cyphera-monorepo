@@ -166,6 +166,7 @@ CREATE TABLE networks (
     type TEXT NOT NULL,
     network_type network_type NOT NULL,
     circle_network_type circle_network_type NOT NULL,
+    block_explorer_url TEXT,
     chain_id INTEGER NOT NULL UNIQUE,
     is_testnet BOOLEAN NOT NULL DEFAULT false,
     active BOOLEAN NOT NULL DEFAULT true,
@@ -598,18 +599,18 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
-INSERT INTO networks (name, type, network_type, circle_network_type, chain_id, is_testnet, active)
+INSERT INTO networks (name, type, network_type, circle_network_type, chain_id, is_testnet, active, block_explorer_url)
 VALUES 
-    ('Ethereum Sepolia', 'Sepolia', 'evm', 'ETH-SEPOLIA', 11155111, true, true),
-    ('Ethereum Mainnet', 'Mainnet', 'evm', 'ETH', 1, false, false),
-    ('Polygon Amoy', 'Amoy', 'evm', 'MATIC-AMOY', 80002, true, false),
-    ('Polygon Mainnet', 'Mainnet', 'evm', 'MATIC', 137, false, false),
-    ('Arbitrum Sepolia', 'Sepolia', 'evm', 'ARB-SEPOLIA', 421614, true, false),
-    ('Arbitrum One', 'Mainnet', 'evm', 'ARB', 42161, false, false),
-    ('Base Sepolia', 'Sepolia', 'evm', 'BASE-SEPOLIA', 84532, true, false),
-    ('Base Mainnet', 'Mainnet', 'evm', 'BASE', 8453, false, false),
-    ('Solana Devnet', 'Devnet', 'solana', 'SOL-DEVNET', 103, true, false),
-    ('Solana Mainnet', 'Mainnet', 'solana', 'SOL', 101, false, false)
+    ('Ethereum Sepolia', 'Sepolia', 'evm', 'ETH-SEPOLIA', 11155111, true, true, 'https://sepolia.etherscan.io'),
+    ('Ethereum Mainnet', 'Mainnet', 'evm', 'ETH', 1, false, false, 'https://etherscan.io'),
+    ('Polygon Amoy', 'Amoy', 'evm', 'MATIC-AMOY', 80002, true, false, 'https://www.oklink.com/amoy'), -- Example, replace if official exists
+    ('Polygon Mainnet', 'Mainnet', 'evm', 'MATIC', 137, false, false, 'https://polygonscan.com'),
+    ('Arbitrum Sepolia', 'Sepolia', 'evm', 'ARB-SEPOLIA', 421614, true, false, 'https://sepolia.arbiscan.io'),
+    ('Arbitrum One', 'Mainnet', 'evm', 'ARB', 42161, false, false, 'https://arbiscan.io'),
+    ('Base Sepolia', 'Sepolia', 'evm', 'BASE-SEPOLIA', 84532, true, false, 'https://sepolia.basescan.org'),
+    ('Base Mainnet', 'Mainnet', 'evm', 'BASE', 8453, false, false, 'https://basescan.org'),
+    ('Solana Devnet', 'Devnet', 'solana', 'SOL-DEVNET', 103, true, false, 'https://explorer.solana.com/?cluster=devnet'),
+    ('Solana Mainnet', 'Mainnet', 'solana', 'SOL', 101, false, false, 'https://explorer.solana.com')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO wallets (
