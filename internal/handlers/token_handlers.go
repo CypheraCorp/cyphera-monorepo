@@ -1,11 +1,17 @@
 package handlers
 
 import (
+	"cyphera-api/internal/client/coinmarketcap"
 	"cyphera-api/internal/db"
+	"cyphera-api/internal/logger"
+	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // TokenHandler handles token-related operations
@@ -27,9 +33,11 @@ type TokenResponse struct {
 	Name            string `json:"name"`
 	Symbol          string `json:"symbol"`
 	ContractAddress string `json:"contract_address"`
+	Decimals        int32  `json:"decimals"`
 	Active          bool   `json:"active"`
 	CreatedAt       int64  `json:"created_at"`
 	UpdatedAt       int64  `json:"updated_at"`
+	DeletedAt       *int64 `json:"deleted_at,omitempty"`
 }
 
 // CreateTokenRequest represents the request body for creating a token
@@ -39,6 +47,7 @@ type CreateTokenRequest struct {
 	Name            string `json:"name" binding:"required"`
 	Symbol          string `json:"symbol" binding:"required"`
 	ContractAddress string `json:"contract_address" binding:"required"`
+	Decimals        int32  `json:"decimals" binding:"required,gte=0"`
 	Active          bool   `json:"active"`
 }
 
@@ -47,6 +56,7 @@ type UpdateTokenRequest struct {
 	Name            string `json:"name,omitempty"`
 	Symbol          string `json:"symbol,omitempty"`
 	ContractAddress string `json:"contract_address,omitempty"`
+	Decimals        *int32 `json:"decimals,omitempty,gte=0"`
 	GasToken        *bool  `json:"gas_token,omitempty"`
 	Active          *bool  `json:"active,omitempty"`
 }
@@ -55,6 +65,19 @@ type UpdateTokenRequest struct {
 type ListTokensResponse struct {
 	Object string          `json:"object"`
 	Data   []TokenResponse `json:"data"`
+}
+
+// GetConversionRateRequest mirrors TokenPricePayload
+type GetConversionRateRequest struct {
+	FiatSymbol  string `json:"fiat_symbol" binding:"required"`
+	TokenSymbol string `json:"token_symbol" binding:"required"`
+}
+
+// GetConversionRateResponse mirrors TokenPriceResponse
+type GetConversionRateResponse struct {
+	FiatSymbol       string  `json:"fiat_symbol"`
+	TokenSymbol      string  `json:"token_symbol"`
+	TokenPriceInFiat float64 `json:"token_price_in_fiat"`
 }
 
 // GetToken godoc
@@ -273,6 +296,7 @@ func (h *TokenHandler) CreateToken(c *gin.Context) {
 		Name:            req.Name,
 		Symbol:          req.Symbol,
 		ContractAddress: req.ContractAddress,
+		Decimals:        req.Decimals,
 		Active:          req.Active,
 	})
 	if err != nil {
@@ -311,14 +335,39 @@ func (h *TokenHandler) UpdateToken(c *gin.Context) {
 		return
 	}
 
-	token, err := h.common.db.UpdateToken(c.Request.Context(), db.UpdateTokenParams{
+	// Fetch existing token to get current values for comparison
+	existingToken, err := h.common.db.GetToken(c.Request.Context(), parsedUUID)
+	if err != nil {
+		handleDBError(c, err, "Token not found")
+		return
+	}
+
+	// Prepare params for sqlc query, manually handling nullable fields
+	params := db.UpdateTokenParams{
 		ID:              parsedUUID,
-		Name:            req.Name,
-		Symbol:          req.Symbol,
-		ContractAddress: req.ContractAddress,
-		GasToken:        *req.GasToken,
-		Active:          *req.Active,
-	})
+		Name:            req.Name,            // Rely on COALESCE in SQL
+		Symbol:          req.Symbol,          // Rely on COALESCE in SQL
+		ContractAddress: req.ContractAddress, // Rely on COALESCE in SQL
+		// Assign value from request if provided, otherwise keep existing value
+		// SQL COALESCE will still apply if req field is empty string, but this handles Go types
+		GasToken: existingToken.GasToken, // Start with existing value
+		Decimals: existingToken.Decimals, // Start with existing value
+		Active:   existingToken.Active,   // Start with existing value
+	}
+
+	// Overwrite with request values ONLY if they are not nil
+	if req.GasToken != nil {
+		params.GasToken = *req.GasToken
+	}
+	if req.Decimals != nil {
+		params.Decimals = *req.Decimals
+	}
+	if req.Active != nil {
+		params.Active = *req.Active
+	}
+
+	// Now call the update query
+	token, err := h.common.db.UpdateToken(c.Request.Context(), params)
 	if err != nil {
 		handleDBError(c, err, "Failed to update token")
 		return
@@ -356,8 +405,98 @@ func (h *TokenHandler) DeleteToken(c *gin.Context) {
 	sendSuccess(c, http.StatusNoContent, nil)
 }
 
+// GetConversionRate godoc
+// @Summary Get token conversion rate
+// @Description Retrieves the price of a given token symbol in the specified fiat currency using CoinMarketCap API.
+// @Tags tokens
+// @Accept json
+// @Produce json
+// @Param price body GetConversionRateRequest true "Token and Fiat symbols"
+// @Success 200 {object} GetConversionRateResponse
+// @Failure 400 {object} ErrorResponse "Invalid request body or missing parameters"
+// @Failure 500 {object} ErrorResponse "Internal server error or failed to fetch price from CoinMarketCap"
+// @Security ApiKeyAuth
+// @Router /tokens/price [post]
+func (h *TokenHandler) GetTokenPrice(c *gin.Context) {
+	var req GetConversionRateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	// Use the injected CMC client from CommonServices
+	if h.common.CMCClient == nil {
+		logger.Log.Error("CoinMarketCap client is not initialized in CommonServices")
+		sendError(c, http.StatusInternalServerError, "Price service is unavailable", nil)
+		return
+	}
+
+	tokenSymbols := []string{req.TokenSymbol}
+	fiatSymbols := []string{req.FiatSymbol}
+
+	cmcResponse, err := h.common.CMCClient.GetLatestQuotes(tokenSymbols, fiatSymbols)
+	if err != nil {
+		logger.Log.Error("Failed to get quotes from CoinMarketCap", zap.Error(err))
+
+		// Handle specific CMC client errors if defined (like *coinmarketcap.Error)
+		var cmcErr *coinmarketcap.Error
+		if errors.As(err, &cmcErr) {
+			// Use CMC status code if available, otherwise default
+			statusCode := http.StatusInternalServerError
+			if cmcErr.StatusCode >= 400 && cmcErr.StatusCode < 500 {
+				statusCode = cmcErr.StatusCode // e.g., 400 Bad Request, 401 Unauthorized, 404 Not Found
+			}
+			sendError(c, statusCode, fmt.Sprintf("Failed to get price: %s", cmcErr.Message), err)
+		} else {
+			// Generic error
+			sendError(c, http.StatusInternalServerError, "Failed to fetch price data", err)
+		}
+		return
+	}
+
+	// Extract the price from the structured response
+	upperTokenSymbol := strings.ToUpper(req.TokenSymbol)
+	upperFiatSymbol := strings.ToUpper(req.FiatSymbol)
+
+	var price float64
+	found := false
+
+	if tokenDataList, ok := cmcResponse.Data[upperTokenSymbol]; ok && len(tokenDataList) > 0 {
+		tokenData := tokenDataList[0]
+		if quoteData, ok := tokenData.Quote[upperFiatSymbol]; ok {
+			price = quoteData.Price
+			found = true
+		}
+	}
+
+	if !found {
+		logger.Log.Warn("Price not found in CoinMarketCap response",
+			zap.String("token", upperTokenSymbol),
+			zap.String("fiat", upperFiatSymbol),
+			zap.Any("cmc_response_data", cmcResponse.Data), // Log the data part for debugging
+		)
+		sendError(c, http.StatusNotFound, fmt.Sprintf("Price data not found for %s in %s", upperTokenSymbol, upperFiatSymbol), nil)
+		return
+	}
+
+	// Prepare and send success response
+	response := GetConversionRateResponse{
+		FiatSymbol:       upperFiatSymbol,
+		TokenSymbol:      upperTokenSymbol,
+		TokenPriceInFiat: price,
+	}
+
+	sendSuccess(c, http.StatusOK, response)
+}
+
 // Helper function to convert database model to API response
 func toTokenResponse(t db.Token) TokenResponse {
+	var deletedAt *int64
+	if t.DeletedAt.Valid {
+		unixTime := t.DeletedAt.Time.Unix()
+		deletedAt = &unixTime
+	}
+
 	return TokenResponse{
 		ID:              t.ID.String(),
 		Object:          "token",
@@ -366,8 +505,10 @@ func toTokenResponse(t db.Token) TokenResponse {
 		Name:            t.Name,
 		Symbol:          t.Symbol,
 		ContractAddress: t.ContractAddress,
+		Decimals:        t.Decimals,
 		Active:          t.Active,
 		CreatedAt:       t.CreatedAt.Time.Unix(),
 		UpdatedAt:       t.UpdatedAt.Time.Unix(),
+		DeletedAt:       deletedAt,
 	}
 }

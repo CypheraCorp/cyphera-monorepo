@@ -9,6 +9,7 @@ CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended', 'pending');
 CREATE TYPE product_type AS ENUM ('recurring', 'one_off');
 CREATE TYPE interval_type AS ENUM ('1min', '5mins', 'daily', 'week', 'month', 'year');
 CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkadot');
+CREATE TYPE currency AS ENUM ('USD', 'EUR');
 CREATE TYPE wallet_type AS ENUM ('wallet', 'circle_wallet');
 CREATE TYPE circle_network_type AS ENUM ('ARB', 'ARB-SEPOLIA', 'ETH', 'ETH-SEPOLIA', 'MATIC', 'MATIC-AMOY', 'BASE', 'BASE-SEPOLIA', 'UNICHAIN', 'UNICHAIN-SEPOLIA', 'SOL', 'SOL-DEVNET');
 CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'suspended', 'failed', 'completed');
@@ -240,6 +241,7 @@ CREATE TABLE products (
     interval_type interval_type, -- Made nullable for one_off products
     term_length INTEGER, -- number of intervals, nullable for one_off
     price_in_pennies INTEGER NOT NULL,
+    currency currency NOT NULL,
     image_url TEXT,
     url TEXT,
     merchant_paid_gas BOOLEAN NOT NULL DEFAULT false,
@@ -255,7 +257,9 @@ CREATE TABLE products (
     CONSTRAINT products_interval_type_check CHECK (
         (product_type = 'recurring' AND interval_type IS NOT NULL) OR
         (product_type = 'one_off' AND interval_type IS NULL)
-    )
+    ),
+    -- Add constraint for allowed currency values
+    CONSTRAINT products_currency_check CHECK (currency IN ('USD', 'EUR')) 
 );
 
 -- Tokens table (depends on networks)
@@ -267,6 +271,7 @@ CREATE TABLE tokens (
     symbol TEXT NOT NULL,
     contract_address TEXT NOT NULL,
     active BOOLEAN NOT NULL DEFAULT false,
+    decimals INTEGER NOT NULL DEFAULT 2,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
@@ -306,6 +311,7 @@ CREATE TABLE subscriptions (
     customer_id UUID NOT NULL REFERENCES customers(id),
     product_id UUID NOT NULL REFERENCES products(id),
     product_token_id UUID NOT NULL REFERENCES products_tokens(id),
+    token_price NUMERIC NOT NULL,
     delegation_id UUID NOT NULL REFERENCES delegation_data(id),
     customer_wallet_id UUID REFERENCES customer_wallets(id),
     status subscription_status NOT NULL DEFAULT 'active',
@@ -671,11 +677,11 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
-INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token, active)
+INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token, active, decimals)
 VALUES 
     -- Ethereum Sepolia tokens
-    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'USD Coin', 'USDC', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', false, true),
-    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'Ethereum', 'ETH', '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', true, true) -- Represent native token
+    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'USD Coin', 'USDC', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', false, true, 2),
+    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'Ethereum', 'ETH', '0xd38E5c25935291fFD51C9d66C3B7384494bb099A', true, true, 6)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO products (

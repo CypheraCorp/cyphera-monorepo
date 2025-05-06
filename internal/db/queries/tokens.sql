@@ -33,9 +33,10 @@ INSERT INTO tokens (
     name,
     symbol,
     contract_address,
+    decimals,
     active
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
 RETURNING *;
 
@@ -46,7 +47,8 @@ SET
     symbol = COALESCE($3, symbol),
     contract_address = COALESCE($4, contract_address),
     gas_token = COALESCE($5, gas_token),
-    active = COALESCE($6, active),
+    decimals = COALESCE($6, decimals),
+    active = COALESCE($7, active),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;

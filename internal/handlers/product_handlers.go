@@ -50,6 +50,7 @@ type ProductResponse struct {
 	Description     string                 `json:"description,omitempty"`
 	ProductType     string                 `json:"product_type"`
 	IntervalType    string                 `json:"interval_type,omitempty"`
+	Currency        string                 `json:"currency"`
 	TermLength      int32                  `json:"term_length,omitempty"`
 	PriceInPennies  int32                  `json:"price_in_pennies"`
 	ImageURL        string                 `json:"image_url,omitempty"`
@@ -86,6 +87,7 @@ type UpdateProductRequest struct {
 	Description     string                      `json:"description,omitempty"`
 	ProductType     string                      `json:"product_type,omitempty"`
 	IntervalType    string                      `json:"interval_type,omitempty"`
+	Currency        string                      `json:"currency,omitempty"`
 	TermLength      *int32                      `json:"term_length,omitempty"`
 	PriceInPennies  *int32                      `json:"price_in_pennies,omitempty"`
 	ImageURL        string                      `json:"image_url,omitempty"`
@@ -133,6 +135,11 @@ type SubscribeRequest struct {
 	ProductTokenID    string           `json:"product_token_id"`
 	Delegation        DelegationStruct `json:"delegation"`
 }
+
+const (
+	CurrencyUSD = "USD"
+	CurrencyEUR = "EUR"
+)
 
 // GetProduct godoc
 // @Summary Get product by ID
@@ -313,10 +320,18 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 	// convert price in pennies to float
 	price := float64(product.PriceInPennies) / 100.0
 
+	network, err := h.common.db.GetNetwork(ctx, token.NetworkID)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to get network details", err)
+		return
+	}
+
 	executionObject := dsClient.ExecutionObject{
 		MerchantAddress:      merchantWallet.WalletAddress,
 		TokenContractAddress: token.ContractAddress,
 		Price:                strconv.FormatFloat(price, 'f', -1, 64),
+		ChainID:              uint32(network.ChainID),
+		NetworkName:          network.Name,
 	}
 
 	// Verify product token is associated with product
@@ -960,6 +975,7 @@ func toPublicProductResponse(workspace db.Workspace, product db.Product, product
 			TokenID:        pt.TokenID.String(),
 			TokenName:      pt.TokenName,
 			TokenSymbol:    pt.TokenSymbol,
+			TokenDecimals:  int32(pt.Decimals),
 		}
 	}
 
@@ -977,6 +993,7 @@ func toPublicProductResponse(workspace db.Workspace, product db.Product, product
 		Description:             product.Description.String,
 		ProductType:             string(product.ProductType),
 		IntervalType:            intervalTypeStr,
+		Currency:                string(product.Currency),
 		TermLength:              product.TermLength.Int32,
 		PriceInPennies:          product.PriceInPennies,
 		ImageURL:                product.ImageUrl.String,
@@ -997,6 +1014,7 @@ type PublicProductResponse struct {
 	Description             string                       `json:"description"`
 	ProductType             string                       `json:"product_type"`
 	IntervalType            string                       `json:"interval_type,omitempty"`
+	Currency                string                       `json:"currency"`
 	TermLength              int32                        `json:"term_length,omitempty"`
 	PriceInPennies          int32                        `json:"price_in_pennies"`
 	ImageURL                string                       `json:"image_url,omitempty"`
@@ -1017,6 +1035,7 @@ type PublicProductTokenResponse struct {
 	TokenName      string `json:"token_name"`
 	TokenSymbol    string `json:"token_symbol"`
 	TokenImageURL  string `json:"token_image_url"`
+	TokenDecimals  int32  `json:"token_decimals"`
 }
 
 // validateProductType validates the product type and returns a db.ProductType if valid
@@ -1028,6 +1047,24 @@ func validateProductType(productType string) (db.ProductType, error) {
 		return "", fmt.Errorf("invalid product type. Must be '%s' or '%s'", constants.ProductTypeRecurring, constants.ProductTypeOneOff)
 	}
 	return db.ProductType(productType), nil
+}
+
+// validateCurrency validates the currency and returns a db.Currency if valid
+func validateCurrency(currency string) (db.Currency, error) {
+	if currency == "" {
+		return "", nil
+	}
+
+	validCurrencies := map[string]bool{
+		CurrencyUSD: true,
+		CurrencyEUR: true,
+	}
+
+	if !validCurrencies[currency] {
+		return "", fmt.Errorf("invalid currency. Must be '%s' or '%s'", CurrencyUSD, CurrencyEUR)
+	}
+
+	return db.Currency(currency), nil
 }
 
 // validateIntervalType validates the interval type and returns a db.IntervalType if valid
@@ -1075,6 +1112,7 @@ func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequ
 		Url:             existingProduct.Url,
 		ProductType:     existingProduct.ProductType,
 		IntervalType:    existingProduct.IntervalType,
+		Currency:        existingProduct.Currency,
 		TermLength:      existingProduct.TermLength,
 		PriceInPennies:  existingProduct.PriceInPennies,
 		MerchantPaidGas: existingProduct.MerchantPaidGas,
@@ -1110,6 +1148,15 @@ func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequ
 			return params, err
 		}
 		params.ProductType = productType
+	}
+
+	// Update currency if provided and different
+	if req.Currency != "" && req.Currency != string(existingProduct.Currency) {
+		currency, err := validateCurrency(req.Currency)
+		if err != nil {
+			return params, err
+		}
+		params.Currency = currency
 	}
 
 	// Update interval type if provided and different
@@ -1218,6 +1265,13 @@ func (h *ProductHandler) validateProductUpdate(c *gin.Context, req UpdateProduct
 	if req.Description != "" {
 		if len(req.Description) > 1000 {
 			return fmt.Errorf("description must be less than 1000 characters")
+		}
+	}
+
+	// Validate currency if provided
+	if req.Currency != "" {
+		if _, err := validateCurrency(req.Currency); err != nil {
+			return err
 		}
 	}
 

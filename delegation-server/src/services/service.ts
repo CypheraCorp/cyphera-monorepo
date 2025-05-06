@@ -3,7 +3,14 @@ import { logger } from '../utils/utils'
 import config from '../config'
 
 // Conditionally import real or mock blockchain service based on MOCK_MODE
-let redeemDelegation: (delegationData: Uint8Array, merchantAddress: string, tokenContractAddress: string, price: string) => Promise<string>;
+let redeemDelegation: (
+  delegationData: Uint8Array, 
+  merchantAddress: string, 
+  tokenContractAddress: string, 
+  price: string,
+  chainId: number,
+  networkName: string
+) => Promise<string>;
 
 logger.info('===== SERVICE.TS INITIALIZATION =====');
 logger.info(`MOCK_MODE from environment: "${process.env.MOCK_MODE || 'not set'}"`);
@@ -59,20 +66,34 @@ export const delegationService = {
       const merchantAddress = call.request.merchant_address || call.request.merchantAddress;
       const tokenContractAddress = call.request.token_contract_address || call.request.tokenContractAddress;
       const price = call.request.price;
+      const chainId = call.request.chain_id;
+      const networkName = call.request.network_name;
+
+      // Basic validation for new parameters
+      if (chainId === undefined || chainId === null || chainId <= 0) {
+        throw new Error('Missing or invalid chain_id in request');
+      }
+      if (!networkName) {
+        throw new Error('Missing network_name in request');
+      }
 
       logger.info('Request parameters:', {
         signatureLength: signature ? signature.length : 0,
         merchantAddress,
         tokenContractAddress,
-        price
+        price,
+        chainId,
+        networkName
       });
 
-      // Call the implementation
+      // Call the implementation with new parameters
       const transactionHash = await redeemDelegation(
         signature,
         merchantAddress,
         tokenContractAddress,
-        price
+        price,
+        chainId,
+        networkName
       );
 
       logger.info(`Redemption successful, transaction hash: ${transactionHash}`);

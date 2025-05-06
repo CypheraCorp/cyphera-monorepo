@@ -150,6 +150,48 @@ func (ns NullCircleNetworkType) Value() (driver.Value, error) {
 	return string(ns.CircleNetworkType), nil
 }
 
+type Currency string
+
+const (
+	CurrencyUSD Currency = "USD"
+	CurrencyEUR Currency = "EUR"
+)
+
+func (e *Currency) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = Currency(s)
+	case string:
+		*e = Currency(s)
+	default:
+		return fmt.Errorf("unsupported scan type for Currency: %T", src)
+	}
+	return nil
+}
+
+type NullCurrency struct {
+	Currency Currency `json:"currency"`
+	Valid    bool     `json:"valid"` // Valid is true if Currency is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCurrency) Scan(value interface{}) error {
+	if value == nil {
+		ns.Currency, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.Currency.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCurrency) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.Currency), nil
+}
+
 type IntervalType string
 
 const (
@@ -660,6 +702,7 @@ type Product struct {
 	IntervalType    NullIntervalType   `json:"interval_type"`
 	TermLength      pgtype.Int4        `json:"term_length"`
 	PriceInPennies  int32              `json:"price_in_pennies"`
+	Currency        Currency           `json:"currency"`
 	ImageUrl        pgtype.Text        `json:"image_url"`
 	Url             pgtype.Text        `json:"url"`
 	MerchantPaidGas bool               `json:"merchant_paid_gas"`
@@ -686,6 +729,7 @@ type Subscription struct {
 	CustomerID         uuid.UUID          `json:"customer_id"`
 	ProductID          uuid.UUID          `json:"product_id"`
 	ProductTokenID     uuid.UUID          `json:"product_token_id"`
+	TokenPrice         pgtype.Numeric     `json:"token_price"`
 	DelegationID       uuid.UUID          `json:"delegation_id"`
 	CustomerWalletID   pgtype.UUID        `json:"customer_wallet_id"`
 	Status             SubscriptionStatus `json:"status"`
@@ -721,6 +765,7 @@ type Token struct {
 	Symbol          string             `json:"symbol"`
 	ContractAddress string             `json:"contract_address"`
 	Active          bool               `json:"active"`
+	Decimals        int32              `json:"decimals"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`

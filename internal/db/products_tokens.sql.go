@@ -193,7 +193,8 @@ SELECT
     t.name as token_name,
     t.symbol as token_symbol,
     t.contract_address,
-    t.gas_token
+    t.gas_token,
+    t.decimals
 FROM products_tokens pt
 JOIN tokens t ON t.id = pt.token_id
 WHERE pt.product_id = $1 
@@ -223,6 +224,7 @@ type GetActiveProductTokensByNetworkRow struct {
 	TokenSymbol     string             `json:"token_symbol"`
 	ContractAddress string             `json:"contract_address"`
 	GasToken        bool               `json:"gas_token"`
+	Decimals        int32              `json:"decimals"`
 }
 
 func (q *Queries) GetActiveProductTokensByNetwork(ctx context.Context, arg GetActiveProductTokensByNetworkParams) ([]GetActiveProductTokensByNetworkRow, error) {
@@ -247,6 +249,7 @@ func (q *Queries) GetActiveProductTokensByNetwork(ctx context.Context, arg GetAc
 			&i.TokenSymbol,
 			&i.ContractAddress,
 			&i.GasToken,
+			&i.Decimals,
 		); err != nil {
 			return nil, err
 		}
@@ -265,6 +268,7 @@ SELECT
     t.symbol as token_symbol,
     t.contract_address,
     t.gas_token,
+    t.decimals,
     n.chain_id,
     n.name as network_name,
     n.type as network_type
@@ -294,6 +298,7 @@ type GetActiveProductTokensByProductRow struct {
 	TokenSymbol     string             `json:"token_symbol"`
 	ContractAddress string             `json:"contract_address"`
 	GasToken        bool               `json:"gas_token"`
+	Decimals        int32              `json:"decimals"`
 	ChainID         int32              `json:"chain_id"`
 	NetworkName     string             `json:"network_name"`
 	NetworkType     string             `json:"network_type"`
@@ -321,6 +326,7 @@ func (q *Queries) GetActiveProductTokensByProduct(ctx context.Context, productID
 			&i.TokenSymbol,
 			&i.ContractAddress,
 			&i.GasToken,
+			&i.Decimals,
 			&i.ChainID,
 			&i.NetworkName,
 			&i.NetworkType,
@@ -414,6 +420,7 @@ SELECT
     t.symbol as token_symbol,
     t.contract_address,
     t.gas_token,
+    t.decimals,
     n.chain_id,
     n.name as network_name,
     n.type as network_type
@@ -436,6 +443,7 @@ type GetProductTokenRow struct {
 	TokenSymbol     string             `json:"token_symbol"`
 	ContractAddress string             `json:"contract_address"`
 	GasToken        bool               `json:"gas_token"`
+	Decimals        int32              `json:"decimals"`
 	ChainID         int32              `json:"chain_id"`
 	NetworkName     string             `json:"network_name"`
 	NetworkType     string             `json:"network_type"`
@@ -457,6 +465,7 @@ func (q *Queries) GetProductToken(ctx context.Context, id uuid.UUID) (GetProduct
 		&i.TokenSymbol,
 		&i.ContractAddress,
 		&i.GasToken,
+		&i.Decimals,
 		&i.ChainID,
 		&i.NetworkName,
 		&i.NetworkType,
@@ -470,7 +479,8 @@ SELECT
     t.name as token_name,
     t.symbol as token_symbol,
     t.contract_address,
-    t.gas_token
+    t.gas_token,
+    t.decimals
 FROM products_tokens pt
 JOIN tokens t ON t.id = pt.token_id
 JOIN products p ON pt.product_id = p.id
@@ -501,6 +511,7 @@ type GetProductTokenByIdsRow struct {
 	TokenSymbol     string             `json:"token_symbol"`
 	ContractAddress string             `json:"contract_address"`
 	GasToken        bool               `json:"gas_token"`
+	Decimals        int32              `json:"decimals"`
 }
 
 func (q *Queries) GetProductTokenByIds(ctx context.Context, arg GetProductTokenByIdsParams) (GetProductTokenByIdsRow, error) {
@@ -524,6 +535,7 @@ func (q *Queries) GetProductTokenByIds(ctx context.Context, arg GetProductTokenB
 		&i.TokenSymbol,
 		&i.ContractAddress,
 		&i.GasToken,
+		&i.Decimals,
 	)
 	return i, err
 }
@@ -534,7 +546,8 @@ SELECT
     t.name as token_name,
     t.symbol as token_symbol,
     t.contract_address,
-    t.gas_token
+    t.gas_token,
+    t.decimals
 FROM products_tokens pt
 JOIN tokens t ON t.id = pt.token_id
 WHERE pt.product_id = $1 
@@ -563,6 +576,7 @@ type GetProductTokensByNetworkRow struct {
 	TokenSymbol     string             `json:"token_symbol"`
 	ContractAddress string             `json:"contract_address"`
 	GasToken        bool               `json:"gas_token"`
+	Decimals        int32              `json:"decimals"`
 }
 
 func (q *Queries) GetProductTokensByNetwork(ctx context.Context, arg GetProductTokensByNetworkParams) ([]GetProductTokensByNetworkRow, error) {
@@ -587,6 +601,7 @@ func (q *Queries) GetProductTokensByNetwork(ctx context.Context, arg GetProductT
 			&i.TokenSymbol,
 			&i.ContractAddress,
 			&i.GasToken,
+			&i.Decimals,
 		); err != nil {
 			return nil, err
 		}
@@ -605,6 +620,7 @@ SELECT
     t.symbol as token_symbol,
     t.contract_address,
     t.gas_token,
+    t.decimals,
     n.chain_id,
     n.name as network_name,
     n.type as network_type
@@ -629,6 +645,7 @@ type GetProductTokensByProductRow struct {
 	TokenSymbol     string             `json:"token_symbol"`
 	ContractAddress string             `json:"contract_address"`
 	GasToken        bool               `json:"gas_token"`
+	Decimals        int32              `json:"decimals"`
 	ChainID         int32              `json:"chain_id"`
 	NetworkName     string             `json:"network_name"`
 	NetworkType     string             `json:"network_type"`
@@ -656,6 +673,7 @@ func (q *Queries) GetProductTokensByProduct(ctx context.Context, productID uuid.
 			&i.TokenSymbol,
 			&i.ContractAddress,
 			&i.GasToken,
+			&i.Decimals,
 			&i.ChainID,
 			&i.NetworkName,
 			&i.NetworkType,

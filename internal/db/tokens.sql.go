@@ -17,7 +17,7 @@ SET
     active = true,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, network_id, gas_token, name, symbol, contract_address, active, created_at, updated_at, deleted_at
+RETURNING id, network_id, gas_token, name, symbol, contract_address, active, decimals, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) ActivateToken(ctx context.Context, id uuid.UUID) (Token, error) {
@@ -31,6 +31,7 @@ func (q *Queries) ActivateToken(ctx context.Context, id uuid.UUID) (Token, error
 		&i.Symbol,
 		&i.ContractAddress,
 		&i.Active,
+		&i.Decimals,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -45,11 +46,12 @@ INSERT INTO tokens (
     name,
     symbol,
     contract_address,
+    decimals,
     active
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, network_id, gas_token, name, symbol, contract_address, active, created_at, updated_at, deleted_at
+RETURNING id, network_id, gas_token, name, symbol, contract_address, active, decimals, created_at, updated_at, deleted_at
 `
 
 type CreateTokenParams struct {
@@ -58,6 +60,7 @@ type CreateTokenParams struct {
 	Name            string    `json:"name"`
 	Symbol          string    `json:"symbol"`
 	ContractAddress string    `json:"contract_address"`
+	Decimals        int32     `json:"decimals"`
 	Active          bool      `json:"active"`
 }
 
@@ -68,6 +71,7 @@ func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) (Token
 		arg.Name,
 		arg.Symbol,
 		arg.ContractAddress,
+		arg.Decimals,
 		arg.Active,
 	)
 	var i Token
@@ -79,6 +83,7 @@ func (q *Queries) CreateToken(ctx context.Context, arg CreateTokenParams) (Token
 		&i.Symbol,
 		&i.ContractAddress,
 		&i.Active,
+		&i.Decimals,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -92,7 +97,7 @@ SET
     active = false,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, network_id, gas_token, name, symbol, contract_address, active, created_at, updated_at, deleted_at
+RETURNING id, network_id, gas_token, name, symbol, contract_address, active, decimals, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) DeactivateToken(ctx context.Context, id uuid.UUID) (Token, error) {
@@ -106,6 +111,7 @@ func (q *Queries) DeactivateToken(ctx context.Context, id uuid.UUID) (Token, err
 		&i.Symbol,
 		&i.ContractAddress,
 		&i.Active,
+		&i.Decimals,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -125,7 +131,7 @@ func (q *Queries) DeleteToken(ctx context.Context, id uuid.UUID) error {
 }
 
 const getGasToken = `-- name: GetGasToken :one
-SELECT id, network_id, gas_token, name, symbol, contract_address, active, created_at, updated_at, deleted_at FROM tokens
+SELECT id, network_id, gas_token, name, symbol, contract_address, active, decimals, created_at, updated_at, deleted_at FROM tokens
 WHERE network_id = $1 AND gas_token = true AND deleted_at IS NULL
 LIMIT 1
 `
@@ -141,6 +147,7 @@ func (q *Queries) GetGasToken(ctx context.Context, networkID uuid.UUID) (Token, 
 		&i.Symbol,
 		&i.ContractAddress,
 		&i.Active,
+		&i.Decimals,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -149,7 +156,7 @@ func (q *Queries) GetGasToken(ctx context.Context, networkID uuid.UUID) (Token, 
 }
 
 const getToken = `-- name: GetToken :one
-SELECT id, network_id, gas_token, name, symbol, contract_address, active, created_at, updated_at, deleted_at FROM tokens
+SELECT id, network_id, gas_token, name, symbol, contract_address, active, decimals, created_at, updated_at, deleted_at FROM tokens
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -164,6 +171,7 @@ func (q *Queries) GetToken(ctx context.Context, id uuid.UUID) (Token, error) {
 		&i.Symbol,
 		&i.ContractAddress,
 		&i.Active,
+		&i.Decimals,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -172,7 +180,7 @@ func (q *Queries) GetToken(ctx context.Context, id uuid.UUID) (Token, error) {
 }
 
 const getTokenByAddress = `-- name: GetTokenByAddress :one
-SELECT id, network_id, gas_token, name, symbol, contract_address, active, created_at, updated_at, deleted_at FROM tokens
+SELECT id, network_id, gas_token, name, symbol, contract_address, active, decimals, created_at, updated_at, deleted_at FROM tokens
 WHERE network_id = $1 AND contract_address = $2 AND deleted_at IS NULL
 `
 
@@ -192,6 +200,7 @@ func (q *Queries) GetTokenByAddress(ctx context.Context, arg GetTokenByAddressPa
 		&i.Symbol,
 		&i.ContractAddress,
 		&i.Active,
+		&i.Decimals,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -200,7 +209,7 @@ func (q *Queries) GetTokenByAddress(ctx context.Context, arg GetTokenByAddressPa
 }
 
 const listActiveTokensByNetwork = `-- name: ListActiveTokensByNetwork :many
-SELECT id, network_id, gas_token, name, symbol, contract_address, active, created_at, updated_at, deleted_at FROM tokens
+SELECT id, network_id, gas_token, name, symbol, contract_address, active, decimals, created_at, updated_at, deleted_at FROM tokens
 WHERE network_id = $1 AND active = true AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -222,6 +231,7 @@ func (q *Queries) ListActiveTokensByNetwork(ctx context.Context, networkID uuid.
 			&i.Symbol,
 			&i.ContractAddress,
 			&i.Active,
+			&i.Decimals,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -237,7 +247,7 @@ func (q *Queries) ListActiveTokensByNetwork(ctx context.Context, networkID uuid.
 }
 
 const listTokens = `-- name: ListTokens :many
-SELECT id, network_id, gas_token, name, symbol, contract_address, active, created_at, updated_at, deleted_at FROM tokens
+SELECT id, network_id, gas_token, name, symbol, contract_address, active, decimals, created_at, updated_at, deleted_at FROM tokens
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -259,6 +269,7 @@ func (q *Queries) ListTokens(ctx context.Context) ([]Token, error) {
 			&i.Symbol,
 			&i.ContractAddress,
 			&i.Active,
+			&i.Decimals,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -274,7 +285,7 @@ func (q *Queries) ListTokens(ctx context.Context) ([]Token, error) {
 }
 
 const listTokensByNetwork = `-- name: ListTokensByNetwork :many
-SELECT id, network_id, gas_token, name, symbol, contract_address, active, created_at, updated_at, deleted_at FROM tokens
+SELECT id, network_id, gas_token, name, symbol, contract_address, active, decimals, created_at, updated_at, deleted_at FROM tokens
 WHERE network_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -296,6 +307,7 @@ func (q *Queries) ListTokensByNetwork(ctx context.Context, networkID uuid.UUID) 
 			&i.Symbol,
 			&i.ContractAddress,
 			&i.Active,
+			&i.Decimals,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -317,10 +329,11 @@ SET
     symbol = COALESCE($3, symbol),
     contract_address = COALESCE($4, contract_address),
     gas_token = COALESCE($5, gas_token),
-    active = COALESCE($6, active),
+    decimals = COALESCE($6, decimals),
+    active = COALESCE($7, active),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, network_id, gas_token, name, symbol, contract_address, active, created_at, updated_at, deleted_at
+RETURNING id, network_id, gas_token, name, symbol, contract_address, active, decimals, created_at, updated_at, deleted_at
 `
 
 type UpdateTokenParams struct {
@@ -329,6 +342,7 @@ type UpdateTokenParams struct {
 	Symbol          string    `json:"symbol"`
 	ContractAddress string    `json:"contract_address"`
 	GasToken        bool      `json:"gas_token"`
+	Decimals        int32     `json:"decimals"`
 	Active          bool      `json:"active"`
 }
 
@@ -339,6 +353,7 @@ func (q *Queries) UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token
 		arg.Symbol,
 		arg.ContractAddress,
 		arg.GasToken,
+		arg.Decimals,
 		arg.Active,
 	)
 	var i Token
@@ -350,6 +365,7 @@ func (q *Queries) UpdateToken(ctx context.Context, arg UpdateTokenParams) (Token
 		&i.Symbol,
 		&i.ContractAddress,
 		&i.Active,
+		&i.Decimals,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,

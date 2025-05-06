@@ -6,6 +6,7 @@ import (
 	"cyphera-api/internal/client/auth"
 	awsclient "cyphera-api/internal/client/aws"
 	"cyphera-api/internal/client/circle"
+	"cyphera-api/internal/client/coinmarketcap" // Import CMC client
 	dsClient "cyphera-api/internal/client/delegation_server"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
@@ -158,6 +159,20 @@ func InitializeHandlers() {
 	// --- Circle Client ---
 	circleClient := circle.NewCircleClient(circleApiKey)
 
+	// --- CoinMarketCap API Key --- (Add this section)
+	cmcApiKey, err := secretsClient.GetSecretString(ctx, "COIN_MARKET_CAP_API_KEY_ARN", "COIN_MARKET_CAP_API_KEY") // Use appropriate names
+	if err != nil || cmcApiKey == "" {
+		// Log a warning instead of fatal if price checks are optional
+		logger.Log.Warn("Failed to get CoinMarketCap API Key (COIN_MARKET_CAP_API_KEY_ARN or COIN_MARKET_CAP_API_KEY). Price conversions will fail.", zap.Error(err))
+		// Set cmcApiKey to empty string or handle the error based on requirements
+		cmcApiKey = "" // Allow initialization but calls will fail
+	} else {
+		logger.Log.Info("Successfully retrieved CoinMarketCap API Key")
+	}
+
+	// --- CoinMarketCap Client ---
+	cmcClient := coinmarketcap.NewClient(cmcApiKey)
+
 	// --- Database Pool Initialization ---
 	// Parse the DSN configuration first
 	poolConfig, err := pgxpool.ParseConfig(dsn)
@@ -199,6 +214,7 @@ func InitializeHandlers() {
 	commonServices := handlers.NewCommonServices(
 		dbQueries,
 		cypheraSmartWalletAddress,
+		cmcClient, // Pass CMC client to common services
 	)
 
 	// API Handler initialization
@@ -371,12 +387,13 @@ func InitializeRoutes(router *gin.Engine) {
 				// Tokens
 				tokens := protected.Group("/tokens")
 				{
-					tokens.GET("", tokenHandler.ListTokens)
-					tokens.GET("/:token_id", tokenHandler.GetToken)
-					tokens.GET("/networks/:network_id", tokenHandler.ListTokensByNetwork)
-					tokens.GET("/networks/:network_id/active", tokenHandler.ListActiveTokensByNetwork)
-					tokens.GET("/networks/:network_id/gas", tokenHandler.GetGasToken)
-					tokens.GET("/networks/:network_id/address/:address", tokenHandler.GetTokenByAddress)
+					// tokens.GET("", tokenHandler.ListTokens)
+					// tokens.GET("/:token_id", tokenHandler.GetToken)
+					// tokens.GET("/networks/:network_id", tokenHandler.ListTokensByNetwork)
+					// tokens.GET("/networks/:network_id/active", tokenHandler.ListActiveTokensByNetwork)
+					// tokens.GET("/networks/:network_id/gas", tokenHandler.GetGasToken)
+					// tokens.GET("/networks/:network_id/address/:address", tokenHandler.GetTokenByAddress)
+					tokens.POST("/price", tokenHandler.GetTokenPrice)
 				}
 			}
 
@@ -459,8 +476,9 @@ func InitializeRoutes(router *gin.Engine) {
 			wallets := protected.Group("/wallets")
 			{
 				wallets.GET("", walletHandler.ListWallets)
+				wallets.POST("", walletHandler.CreateWallet)
 				wallets.GET("/:wallet_id", walletHandler.GetWallet)
-				wallets.POST("/:workspace_id", walletHandler.CreateWallet)
+				wallets.DELETE("/:wallet_id", walletHandler.DeleteWallet)
 			}
 
 			// Subscriptions
