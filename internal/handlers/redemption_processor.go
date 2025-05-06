@@ -269,6 +269,16 @@ func (rp *RedemptionProcessor) processRedemption(task RedemptionTask) error {
 		return fmt.Errorf("failed to get token details: %w", err)
 	}
 
+	// get the network details
+	network, err := rp.dbQueries.GetNetwork(ctx, token.NetworkID)
+	if err != nil {
+		logger.Error("Failed to get network details",
+			zap.Error(err),
+			zap.String("network_id", token.NetworkID.String()),
+		)
+		return fmt.Errorf("failed to get network details: %w", err)
+	}
+
 	// convert price in pennies to float
 	price := float64(product.PriceInPennies) / 100.0
 
@@ -276,6 +286,8 @@ func (rp *RedemptionProcessor) processRedemption(task RedemptionTask) error {
 		MerchantAddress:      merchantWallet.WalletAddress,
 		TokenContractAddress: token.ContractAddress,
 		Price:                strconv.FormatFloat(price, 'f', -1, 64),
+		ChainID:              uint32(network.ChainID),
+		NetworkName:          network.Name,
 	}
 
 	// Create the delegation JSON with the required fields

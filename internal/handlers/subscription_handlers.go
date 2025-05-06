@@ -770,6 +770,7 @@ type processSubscriptionParams struct {
 	delegationData db.DelegationDatum
 	merchantWallet db.Wallet
 	token          db.Token
+	network        db.Network
 	isFinalPayment bool
 	now            time.Time
 	queries        db.Querier                     // Database queries interface (could be transaction or regular)
@@ -863,17 +864,19 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 
 		// Attempt redemption
 		// Get token info for redemption
-		merchantAddress := params.merchantWallet.WalletAddress
-		tokenAddress := params.token.ContractAddress
-		price := fmt.Sprintf("%.2f", float64(params.product.PriceInPennies)/100.0)
+		executionObject := dsClient.ExecutionObject{
+			MerchantAddress:      params.merchantWallet.WalletAddress,
+			TokenContractAddress: params.token.ContractAddress,
+			Price:                fmt.Sprintf("%.2f", float64(params.product.PriceInPennies)/100.0),
+			ChainID:              uint32(params.network.ChainID),
+			NetworkName:          params.network.Name,
+		}
 
 		// Call the delegation client to redeem
 		txHash, redemptionErr := h.delegationClient.RedeemDelegationDirectly(
 			params.ctx,
 			delegationBytes,
-			merchantAddress,
-			tokenAddress,
-			price,
+			executionObject,
 		)
 
 		if redemptionErr == nil {
@@ -1334,6 +1337,13 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 			continue
 		}
 
+		network, err := qtx.GetNetwork(ctx, token.NetworkID)
+		if err != nil {
+			log.Printf("Failed to get network for token %s: %v", token.ID, err)
+			results.Failed++
+			continue
+		}
+
 		merchantWallet, err := qtx.GetWalletByID(ctx, db.GetWalletByIDParams{
 			ID:          product.WalletID,
 			WorkspaceID: product.WorkspaceID,
@@ -1363,6 +1373,7 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 			delegationData: delegationData,
 			merchantWallet: merchantWallet,
 			token:          token,
+			network:        network,
 			isFinalPayment: isFinalPayment,
 			now:            now,
 			queries:        qtx,

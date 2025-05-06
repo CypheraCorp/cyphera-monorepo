@@ -15,11 +15,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// ExecutionObject represents the execution details for a delegation
+// ExecutionObject represents the execution details for a delegation,
+// including network information.
 type ExecutionObject struct {
 	MerchantAddress      string
 	TokenContractAddress string
 	Price                string
+	ChainID              uint32
+	NetworkName          string
 }
 
 // DelegationData represents the delegation information stored in the database
@@ -116,25 +119,25 @@ func NewDelegationClient() (*DelegationClient, error) {
 	}, nil
 }
 
-// RedeemDelegation redeems a delegation with the provided signature and execution details
+// RedeemDelegation redeems a delegation using details from the ExecutionObject.
 func (c *DelegationClient) RedeemDelegation(ctx context.Context, signature []byte, executionObject ExecutionObject) (string, error) {
-	// Validate inputs
+	// Validate inputs, now including fields from ExecutionObject
 	if err := c.validateRedemptionInputs(signature, executionObject); err != nil {
 		return "", err
 	}
 
-	// Create a context with the configured timeout (default is now 3 minutes)
-	// Using a longer timeout to accommodate blockchain operations
 	log.Printf("Using timeout of %v for delegation redemption", c.rpcTimeout)
 	ctx, cancel := context.WithTimeout(ctx, c.rpcTimeout)
 	defer cancel()
 
-	// Create the redemption request
+	// Create the redemption request using fields from ExecutionObject
 	req := &proto.RedeemDelegationRequest{
 		Signature:            signature,
 		MerchantAddress:      executionObject.MerchantAddress,
 		TokenContractAddress: executionObject.TokenContractAddress,
 		Price:                executionObject.Price,
+		ChainId:              executionObject.ChainID,     // Use field from struct
+		NetworkName:          executionObject.NetworkName, // Use field from struct
 	}
 
 	// Call the service
@@ -143,31 +146,33 @@ func (c *DelegationClient) RedeemDelegation(ctx context.Context, signature []byt
 		return "", c.formatRPCError(err)
 	}
 
-	// Log the full response for debugging
 	log.Printf("Got response from server: %+v", res)
 
 	// Process the response
 	return c.processRedemptionResponse(res)
 }
 
-// validateRedemptionInputs validates the inputs for redemption
+// validateRedemptionInputs validates the inputs for redemption, including network info
 func (c *DelegationClient) validateRedemptionInputs(signature []byte, executionObject ExecutionObject) error {
 	if len(signature) == 0 {
 		return fmt.Errorf("signature cannot be empty")
 	}
-
 	if executionObject.MerchantAddress == "" || executionObject.MerchantAddress == "0x0000000000000000000000000000000000000000" {
 		return fmt.Errorf("valid merchant address is required")
 	}
-
 	if executionObject.TokenContractAddress == "" || executionObject.TokenContractAddress == "0x0000000000000000000000000000000000000000" {
 		return fmt.Errorf("valid token contract address is required")
 	}
-
 	if executionObject.Price == "" || executionObject.Price == "0" {
 		return fmt.Errorf("valid price is required")
 	}
-
+	// Add validation for new fields
+	if executionObject.ChainID == 0 {
+		return fmt.Errorf("chain ID cannot be zero")
+	}
+	if executionObject.NetworkName == "" {
+		return fmt.Errorf("network name cannot be empty")
+	}
 	return nil
 }
 
@@ -227,19 +232,12 @@ func (c *DelegationClient) extractErrorMessage(res *proto.RedeemDelegationRespon
 }
 
 // RedeemDelegationDirectly attempts to redeem a delegation by calling the delegation service directly
-func (c *DelegationClient) RedeemDelegationDirectly(ctx context.Context, delegationData []byte, merchantAddress, tokenAddress, price string) (string, error) {
-	log.Printf("Attempting to redeem delegation, data size: %d bytes", len(delegationData))
-	log.Printf("Using merchant address: %s, token address: %s, price: %s", merchantAddress, tokenAddress, price)
+// NOTE: This helper function passes default/zero values for chain/network info.
+func (c *DelegationClient) RedeemDelegationDirectly(ctx context.Context, delegationData []byte, executionObject ExecutionObject) (string, error) {
+	log.Printf("Attempting to redeem delegation (DIRECT - NOTE: chainId/networkName defaults used), data size: %d bytes", len(delegationData))
 	log.Printf("Using RPC timeout of %v for delegation redemption", c.rpcTimeout)
 
-	// Create execution object with actual values
-	executionObject := ExecutionObject{
-		MerchantAddress:      merchantAddress,
-		TokenContractAddress: tokenAddress,
-		Price:                price,
-	}
-
-	// Call the client to redeem the delegation
+	// Call the updated RedeemDelegation function
 	txHash, err := c.RedeemDelegation(ctx, delegationData, executionObject)
 	if err != nil {
 		log.Printf("Delegation redemption failed: %v", err)

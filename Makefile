@@ -28,10 +28,17 @@ test-integration: ensure-executable
 	@echo "Running delegation integration tests with mock server..."
 	DELEGATION_LOCAL_MODE=true ./scripts/integration-test.sh --cli
 
+# Interval for the local subscription processor loop (e.g., 60s, 1m, 5m)
+SUB_INTERVAL ?= 10s
+
 # Run the subscription processor
 subscription-processor:
-	@echo "Starting subscription processor with 1-minute interval..."
-	$(GO) run ./cmd/subscription-processor/main.go --interval=1m
+	@echo "Starting subscription processor loop (runs every $(SUB_INTERVAL))... Press Ctrl+C to stop."
+	@while true; do \
+		echo "Running subscription processor at $$(date)..."; \
+		$(GO) run ./cmd/subscription-processor/main.go; \
+		echo "Subscription processor finished. Sleeping for $(SUB_INTERVAL)..."; \
+	done
 
 dev: ensure-executable
 	air

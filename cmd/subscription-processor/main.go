@@ -42,9 +42,9 @@ func main() {
 	logger.InitLogger(stage)
 	logger.Info("Starting subscription processor for stage", zap.String("stage", stage))
 	defer func() {
-		if err := logger.Sync(); err != nil {
-			fmt.Printf("Failed to sync logger: %v\n", err)
-		}
+		// Ignore the error returned by Sync, as it's often non-critical
+		// (e.g., "inappropriate ioctl for device" when stderr is not a TTY).
+		_ = logger.Sync()
 	}()
 
 	ctx := context.Background()
@@ -167,7 +167,7 @@ func main() {
 	defer delegationClient.Close()
 
 	// --- Create Common Services & Handler ---
-	commonServices := handlers.NewCommonServices(dbQueries, cypheraSmartWalletAddress)
+	commonServices := handlers.NewCommonServices(dbQueries, cypheraSmartWalletAddress, nil)
 	subscriptionHandler := handlers.NewSubscriptionHandler(commonServices, delegationClient)
 
 	// --- Process Subscriptions ---

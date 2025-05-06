@@ -5,6 +5,7 @@ SELECT
     t.symbol as token_symbol,
     t.contract_address,
     t.gas_token,
+    t.decimals,
     n.chain_id,
     n.name as network_name,
     n.type as network_type
@@ -19,7 +20,8 @@ SELECT
     t.name as token_name,
     t.symbol as token_symbol,
     t.contract_address,
-    t.gas_token
+    t.gas_token,
+    t.decimals
 FROM products_tokens pt
 JOIN tokens t ON t.id = pt.token_id
 JOIN products p ON pt.product_id = p.id
@@ -36,6 +38,7 @@ SELECT
     t.symbol as token_symbol,
     t.contract_address,
     t.gas_token,
+    t.decimals,
     n.chain_id,
     n.name as network_name,
     n.type as network_type
@@ -53,6 +56,7 @@ SELECT
     t.symbol as token_symbol,
     t.contract_address,
     t.gas_token,
+    t.decimals,
     n.chain_id,
     n.name as network_name,
     n.type as network_type
@@ -95,7 +99,8 @@ SELECT
     t.name as token_name,
     t.symbol as token_symbol,
     t.contract_address,
-    t.gas_token
+    t.gas_token,
+    t.decimals
 FROM products_tokens pt
 JOIN tokens t ON t.id = pt.token_id
 WHERE pt.product_id = $1 
@@ -111,7 +116,8 @@ SELECT
     t.name as token_name,
     t.symbol as token_symbol,
     t.contract_address,
-    t.gas_token
+    t.gas_token,
+    t.decimals
 FROM products_tokens pt
 JOIN tokens t ON t.id = pt.token_id
 WHERE pt.product_id = $1 

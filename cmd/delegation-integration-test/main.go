@@ -34,6 +34,8 @@ type RedeemDelegationRequest struct {
 	MerchantAddress      string `json:"merchant_address"`
 	TokenContractAddress string `json:"token_contract_address"`
 	Price                string `json:"price"`
+	ChainID              uint32 `json:"chain_id"`
+	NetworkName          string `json:"network_name"`
 }
 
 // RedeemDelegationResponse is the response for a delegation redemption
@@ -88,6 +90,8 @@ func (s *DelegationService) RedeemDelegationHandler(w http.ResponseWriter, r *ht
 		MerchantAddress:      req.MerchantAddress,
 		TokenContractAddress: req.TokenContractAddress,
 		Price:                strconv.FormatFloat(price, 'f', -1, 64),
+		ChainID:              req.ChainID,
+		NetworkName:          req.NetworkName,
 	}
 
 	// Call the delegation client to redeem the delegation
@@ -223,6 +227,8 @@ func main() {
 		MerchantAddress:      *merchantFlag,
 		TokenContractAddress: *tokenFlag,
 		Price:                strconv.FormatFloat(price, 'f', -1, 64),
+		ChainID:              1,
+		NetworkName:          "Ethereum Mainnet",
 	}
 
 	// Call the gRPC service to redeem the delegation

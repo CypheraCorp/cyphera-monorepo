@@ -76,6 +76,7 @@ INSERT INTO subscriptions (
     customer_id,
     product_id,
     product_token_id,
+    token_price,
     delegation_id,
     customer_wallet_id,
     status,
@@ -86,7 +87,7 @@ INSERT INTO subscriptions (
     total_amount_in_cents,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 )
 RETURNING *;
 
@@ -96,15 +97,16 @@ SET
     customer_id = COALESCE($2, customer_id),
     product_id = COALESCE($3, product_id),
     product_token_id = COALESCE($4, product_token_id),
-    delegation_id = COALESCE($5, delegation_id),
-    customer_wallet_id = COALESCE($6, customer_wallet_id),
-    status = COALESCE($7, status),
-    current_period_start = COALESCE($8, current_period_start),
-    current_period_end = COALESCE($9, current_period_end),
-    next_redemption_date = COALESCE($10, next_redemption_date),
-    total_redemptions = COALESCE($11, total_redemptions),
-    total_amount_in_cents = COALESCE($12, total_amount_in_cents),
-    metadata = COALESCE($13, metadata),
+    token_price = COALESCE($5, token_price),
+    delegation_id = COALESCE($6, delegation_id),
+    customer_wallet_id = COALESCE($7, customer_wallet_id),
+    status = COALESCE($8, status),
+    current_period_start = COALESCE($9, current_period_start),
+    current_period_end = COALESCE($10, current_period_end),
+    next_redemption_date = COALESCE($11, next_redemption_date),
+    total_redemptions = COALESCE($12, total_redemptions),
+    total_amount_in_cents = COALESCE($13, total_amount_in_cents),
+    metadata = COALESCE($14, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;

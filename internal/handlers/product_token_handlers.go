@@ -16,6 +16,7 @@ type ProductTokenResponse struct {
 	TokenID         string `json:"token_id"`
 	TokenName       string `json:"token_name,omitempty"`
 	TokenSymbol     string `json:"token_symbol,omitempty"`
+	TokenDecimals   int32  `json:"token_decimals,omitempty"`
 	ContractAddress string `json:"contract_address,omitempty"`
 	GasToken        bool   `json:"gas_token,omitempty"`
 	ChainID         int32  `json:"chain_id,omitempty"`
@@ -130,6 +131,7 @@ func toActiveProductTokenByProductResponse(pt db.GetActiveProductTokensByProduct
 		ContractAddress: pt.ContractAddress,
 		GasToken:        pt.GasToken,
 		ChainID:         pt.ChainID,
+		TokenDecimals:   int32(pt.Decimals),
 		NetworkName:     pt.NetworkName,
 		NetworkType:     pt.NetworkType,
 		Active:          pt.Active,

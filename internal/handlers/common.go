@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"cyphera-api/internal/client/coinmarketcap"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/logger"
 	"errors"
@@ -18,6 +19,7 @@ import (
 type CommonServices struct {
 	db                        *db.Queries
 	cypheraSmartWalletAddress string
+	CMCClient                 *coinmarketcap.Client
 	// other shared dependencies
 }
 
@@ -32,10 +34,11 @@ type SuccessResponse struct {
 }
 
 // NewCommonServices creates a new instance of CommonServices
-func NewCommonServices(db *db.Queries, cypheraSmartWalletAddress string) *CommonServices {
+func NewCommonServices(db *db.Queries, cypheraSmartWalletAddress string, cmcClient *coinmarketcap.Client) *CommonServices {
 	return &CommonServices{
 		db:                        db,
 		cypheraSmartWalletAddress: cypheraSmartWalletAddress,
+		CMCClient:                 cmcClient,
 	}
 }
 
