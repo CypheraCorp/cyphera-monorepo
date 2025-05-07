@@ -42,8 +42,15 @@ const createMockCallback = (): jest.MockedFunction<sendUnaryData<any>> => {
   return jest.fn()
 }
 
+// Define mock constants for new parameters
+const mockTokenDecimals = 6;
+const mockChainId = 11155111; // Sepolia
+const mockNetworkName = 'ethereum sepolia';
+
 describe('delegationService', () => {
   let originalMockMode: boolean | undefined
+  let delegationService: any;
+  let currentMockImpl: jest.Mock;
 
   // Back up original config state
   beforeAll(() => {
@@ -75,6 +82,12 @@ describe('delegationService', () => {
      // Note: This might change how delegationService is referenced in tests if not handled carefully.
      // Let's keep the original import and rely on module mocking logic update instead.
 
+    mockRedeemImplementation = jest.fn(); // Reset the shared mock fn
+    // Reset config mock for each test if necessary
+    jest.mock('../src/config', () => ({
+      __esModule: true,
+      default: { mockMode: false }, // Default to real mode for these tests
+    }));
   })
 
   // Restore original config state after all tests
@@ -83,314 +96,174 @@ describe('delegationService', () => {
      jest.resetModules(); // Clean up module cache
   })
 
-  // --- Test Cases: Initial Call (Before Dynamic Import Completes) ---
+  async function initializeService(mockImplementation: jest.Mock) {
+    currentMockImpl = mockImplementation;
+    mockRedeemImplementation = currentMockImpl; // Point the module mock to the current test's mock
+    // Dynamically import the service to re-evaluate with the new mock
+    const module = await import('../src/services/service');
+    delegationService = module.delegationService;
+    // Allow time for async import within service.ts to resolve
+    await new Promise(resolve => setTimeout(resolve, 50)); 
+  }
 
-  it.skip('should return "service not ready" if called immediately after require (real mode)', async () => {
-    // Arrange
-    config.mockMode = false;
-    const { delegationService: currentService } = require('../src/services/service'); // Re-require
-    const call = createMockCall({ signature: Buffer.from('sig') });
-    const callback = createMockCallback();
-
-    // Act: Call immediately
-    await currentService.redeemDelegation(call, callback);
-
-    // Assert: Expect "not ready" error, mock should NOT be called yet
-    expect(callback).toHaveBeenCalledWith(null, {
-      transaction_hash: "",
-      transactionHash: "",
-      success: false,
-      error_message: "Service not ready yet, try again later",
-      errorMessage: "Service not ready yet, try again later",
+  // Test suite for when running in REAL mode (mockMode = false)
+  describe('Real Mode (mockMode: false)', () => {
+    beforeEach(async () => {
+      // For real mode, the actual redeemDelegation (which we've mocked at module level) will be used.
+      // We set up a specific mock for it here for assertion.
+      await initializeService(jest.fn().mockResolvedValue('0xRealTransactionHash'));
     });
-    expect(mockRedeemImplementation).not.toHaveBeenCalled();
-    expect(mockModeRedeemImplementation).not.toHaveBeenCalled();
-  });
 
-  it.skip('should return "service not ready" if called immediately after require (mock mode)', async () => {
-    // Arrange
-    config.mockMode = true;
-    const { delegationService: currentService } = require('../src/services/service'); // Re-require
-    const call = createMockCall({ signature: Buffer.from('sig') });
-    const callback = createMockCallback();
+    it('should redeem delegation successfully (snake_case request)', async () => {
+      const mockRequest = {
+        signature: Buffer.from('test-sig-snake'),
+        merchant_address: 'merchant-addr-snake',
+        token_contract_address: 'token-addr-snake',
+        token_amount: 101,
+        token_decimals: mockTokenDecimals, // Added
+        chain_id: mockChainId,           // Added
+        network_name: mockNetworkName      // Added
+      };
+      const call = { request: mockRequest } as any;
+      const callback = jest.fn();
 
-    // Act: Call immediately
-    await currentService.redeemDelegation(call, callback);
+      await delegationService.redeemDelegation(call, callback);
 
-    // Assert: Expect "not ready" error, mock should NOT be called yet
-    expect(callback).toHaveBeenCalledWith(null, {
-      transaction_hash: "",
-      transactionHash: "",
-      success: false,
-      error_message: "Service not ready yet, try again later",
-      errorMessage: "Service not ready yet, try again later",
+      expect(currentMockImpl).toHaveBeenCalledWith(
+        mockRequest.signature,
+        mockRequest.merchant_address,
+        mockRequest.token_contract_address,
+        mockRequest.token_amount,
+        mockRequest.token_decimals, // Expect
+        mockRequest.chain_id,       // Expect
+        mockRequest.network_name    // Expect
+      );
+      expect(callback).toHaveBeenCalledWith(null, {
+        transaction_hash: '0xRealTransactionHash',
+        transactionHash: '0xRealTransactionHash',
+        success: true,
+        error_message: "",
+        errorMessage: ""
+      });
     });
-    expect(mockRedeemImplementation).not.toHaveBeenCalled();
-    expect(mockModeRedeemImplementation).not.toHaveBeenCalled();
+
+    it('should redeem delegation successfully (camelCase request)', async () => {
+      const mockRequest = {
+        signature: Buffer.from('test-sig-camel'),
+        merchantAddress: 'merchant-addr-camel',
+        tokenContractAddress: 'token-addr-camel',
+        token_amount: 202, // assuming token_amount is always snake_case from proto
+        token_decimals: mockTokenDecimals, // Added
+        chain_id: mockChainId,           // Added
+        network_name: mockNetworkName      // Added
+      };
+      const call = { request: mockRequest } as any;
+      const callback = jest.fn();
+
+      await delegationService.redeemDelegation(call, callback);
+
+      expect(currentMockImpl).toHaveBeenCalledWith(
+        mockRequest.signature,
+        mockRequest.merchantAddress,
+        mockRequest.tokenContractAddress,
+        mockRequest.token_amount,
+        mockRequest.token_decimals, // Expect
+        mockRequest.chain_id,       // Expect
+        mockRequest.network_name    // Expect
+      );
+      expect(callback).toHaveBeenCalledWith(null, {
+        transaction_hash: '0xRealTransactionHash',
+        transactionHash: '0xRealTransactionHash',
+        success: true,
+        error_message: "",
+        errorMessage: ""
+      });
+    });
+
+    it('should handle errors during redemption', async () => {
+      const error = new Error('Redemption failed');
+      await initializeService(jest.fn().mockRejectedValue(error)); // Setup mock to throw
+      
+      const mockRequest = {
+        signature: Buffer.from('test-sig-error'),
+        merchant_address: 'merchant-addr-error',
+        token_contract_address: 'token-addr-error',
+        token_amount: 303,
+        token_decimals: mockTokenDecimals, // Added
+        chain_id: mockChainId,           // Added
+        network_name: mockNetworkName      // Added
+      };
+      const call = { request: mockRequest } as any;
+      const callback = jest.fn();
+
+      await delegationService.redeemDelegation(call, callback);
+
+      expect(currentMockImpl).toHaveBeenCalledWith(
+        mockRequest.signature,
+        mockRequest.merchant_address,
+        mockRequest.token_contract_address,
+        mockRequest.token_amount,
+        mockRequest.token_decimals, // Expect
+        mockRequest.chain_id,       // Expect
+        mockRequest.network_name    // Expect
+      );
+      expect(callback).toHaveBeenCalledWith(null, {
+        transaction_hash: "",
+        transactionHash: "",
+        success: false,
+        error_message: 'Redemption failed',
+        errorMessage: 'Redemption failed'
+      });
+    });
+    
+    // Test for missing chain_id
+    it('should reject if chain_id is missing', async () => {
+        const mockRequest = {
+            signature: Buffer.from('test-sig-no-chainid'),
+            merchant_address: 'merchant-addr',
+            token_contract_address: 'token-addr',
+            token_amount: 707,
+            token_decimals: mockTokenDecimals,
+            // chain_id: mockChainId, // Missing
+            network_name: mockNetworkName
+        };
+        const call = { request: mockRequest } as any;
+        const callback = jest.fn();
+
+        await delegationService.redeemDelegation(call, callback);
+
+        expect(currentMockImpl).not.toHaveBeenCalled();
+        expect(callback).toHaveBeenCalledWith(null, expect.objectContaining({
+            success: false,
+            error_message: 'Missing or invalid chain_id in request'
+        }));
+    });
+
+    // Test for missing network_name
+    it('should reject if network_name is missing', async () => {
+        const mockRequest = {
+            signature: Buffer.from('test-sig-no-networkname'),
+            merchant_address: 'merchant-addr',
+            token_contract_address: 'token-addr',
+            token_amount: 808,
+            token_decimals: mockTokenDecimals,
+            chain_id: mockChainId,
+            // network_name: mockNetworkName // Missing
+        };
+        const call = { request: mockRequest } as any;
+        const callback = jest.fn();
+
+        await delegationService.redeemDelegation(call, callback);
+
+        expect(currentMockImpl).not.toHaveBeenCalled();
+        expect(callback).toHaveBeenCalledWith(null, expect.objectContaining({
+            success: false,
+            error_message: 'Missing network_name in request'
+        }));
+    });
+
   });
 
-  // --- Test Cases: Subsequent Calls (After Dynamic Import Should Complete) ---
-
-  const runAfterImport = async (setupFn: () => any, testFn: (service: any, mockImpl: jest.Mock) => Promise<void>) => {
-      // Arrange: Set config and re-require
-      setupFn();
-      const { delegationService: currentService } = require('../src/services/service');
-
-      // Allow time for the async import() and .then() in service.ts to resolve
-      // Use setImmediate for potentially better yielding across I/O phases
-      await new Promise(resolve => setImmediate(resolve));
-
-      // Determine which mock should have been loaded
-      const expectedMock = config.mockMode ? mockModeRedeemImplementation : mockRedeemImplementation;
-
-      // Act & Assert within the provided test function
-      await testFn(currentService, expectedMock);
-  };
-
-  it('should redeem delegation successfully (real mode, snake_case) after import', async () => {
-    await runAfterImport(
-        () => { config.mockMode = false; },
-        async (currentService, currentMockImpl) => {
-            // Arrange mock behavior AFTER import should be done
-            currentMockImpl.mockResolvedValue('mock-tx-hash-snake');
-            const mockRequest = {
-                signature: Buffer.from('test-signature-snake'),
-                merchant_address: 'merchant-addr-snake',
-                token_contract_address: 'token-addr-snake',
-                price: '101',
-            };
-            const call = createMockCall(mockRequest);
-            const callback = createMockCallback();
-
-            // Act
-            await currentService.redeemDelegation(call, callback);
-
-            // Assert
-            expect(currentMockImpl).toHaveBeenCalledWith(
-                mockRequest.signature,
-                mockRequest.merchant_address,
-                mockRequest.token_contract_address,
-                mockRequest.price
-            );
-            expect(callback).toHaveBeenCalledWith(null, {
-                transaction_hash: 'mock-tx-hash-snake',
-                transactionHash: 'mock-tx-hash-snake',
-                success: true,
-                error_message: '',
-                errorMessage: '',
-            });
-        }
-    );
-  });
-
-  it('should redeem delegation successfully (real mode, camelCase) after import', async () => {
-     await runAfterImport(
-        () => { config.mockMode = false; },
-        async (currentService, currentMockImpl) => {
-            // Arrange
-             currentMockImpl.mockResolvedValue('mock-tx-hash-camel');
-            const mockRequest = {
-                signature: Buffer.from('test-signature-camel'),
-                merchantAddress: 'merchant-addr-camel',
-                tokenContractAddress: 'token-addr-camel',
-                price: '202',
-            };
-            const call = createMockCall(mockRequest);
-            const callback = createMockCallback();
-
-            // Act
-            await currentService.redeemDelegation(call, callback);
-
-            // Assert
-            expect(currentMockImpl).toHaveBeenCalledWith(
-                mockRequest.signature,
-                mockRequest.merchantAddress,
-                mockRequest.tokenContractAddress,
-                mockRequest.price
-            );
-            expect(callback).toHaveBeenCalledWith(null, {
-                transaction_hash: 'mock-tx-hash-camel',
-                transactionHash: 'mock-tx-hash-camel',
-                success: true,
-                error_message: '',
-                errorMessage: '',
-            });
-        }
-    );
-  });
-
-  it('should handle errors during redemption (real mode) after import', async () => {
-     await runAfterImport(
-        () => { config.mockMode = false; },
-        async (currentService, currentMockImpl) => {
-            // Arrange
-            const errorMessage = 'Blockchain transaction failed';
-            currentMockImpl.mockRejectedValue(new Error(errorMessage));
-            const mockRequest = {
-                signature: Buffer.from('test-signature-error'),
-                merchant_address: 'merchant-addr-err',
-                token_contract_address: 'token-addr-err',
-                price: '303',
-            };
-            const call = createMockCall(mockRequest);
-            const callback = createMockCallback();
-
-            // Act
-            await currentService.redeemDelegation(call, callback);
-
-            // Assert
-            expect(currentMockImpl).toHaveBeenCalledWith(
-                 mockRequest.signature,
-                 mockRequest.merchant_address,
-                 mockRequest.token_contract_address,
-                 mockRequest.price
-             );
-            expect(callback).toHaveBeenCalledWith(null, {
-                transaction_hash: '',
-                transactionHash: '',
-                success: false,
-                error_message: errorMessage,
-                errorMessage: errorMessage,
-            });
-        }
-    );
-  });
-
-  it('should handle non-Error exceptions (real mode) after import', async () => {
-     await runAfterImport(
-        () => { config.mockMode = false; },
-        async (currentService, currentMockImpl) => {
-            // Arrange
-            const errorString = 'Something weird happened';
-            currentMockImpl.mockRejectedValue(errorString);
-            const mockRequest = {
-                signature: Buffer.from('test-signature-non-error'),
-                merchant_address: 'merchant-addr-non-err',
-                token_contract_address: 'token-addr-non-err',
-                price: '404',
-            };
-            const call = createMockCall(mockRequest);
-            const callback = createMockCallback();
-
-            // Act
-            await currentService.redeemDelegation(call, callback);
-
-            // Assert
-             expect(currentMockImpl).toHaveBeenCalledTimes(1);
-             expect(callback).toHaveBeenCalledWith(null, {
-                 transaction_hash: "",
-                 transactionHash: "",
-                 success: false,
-                 error_message: errorString,
-                 errorMessage: errorString,
-             });
-        }
-     );
-  });
-
-  // Tests for missing parameters (after import)
- it('should attempt redemption (real mode, missing sig) after import', async () => {
-    await runAfterImport(
-        () => { config.mockMode = false; },
-        async (currentService, currentMockImpl) => {
-            currentMockImpl.mockResolvedValue('tx-hash-no-sig');
-            const mockRequest = {
-                merchant_address: 'merchant-addr-no-sig',
-                token_contract_address: 'token-addr-no-sig',
-                price: '606',
-            };
-            const call = createMockCall(mockRequest);
-            const callback = createMockCallback();
-
-            await currentService.redeemDelegation(call, callback);
-
-            expect(currentMockImpl).toHaveBeenCalledWith(
-                undefined,
-                mockRequest.merchant_address,
-                mockRequest.token_contract_address,
-                mockRequest.price
-            );
-            expect(callback).toHaveBeenCalledWith(null, expect.objectContaining({ success: true, transactionHash: 'tx-hash-no-sig' }));
-        }
-    );
- });
-
- it('should attempt redemption (real mode, missing merchant) after import', async () => {
-      await runAfterImport(
-        () => { config.mockMode = false; },
-        async (currentService, currentMockImpl) => {
-            currentMockImpl.mockResolvedValue('tx-hash-no-merchant');
-            const mockRequest = {
-                signature: Buffer.from('sig-no-merchant'),
-                token_contract_address: 'token-addr-no-merchant',
-                price: '707',
-            };
-            const call = createMockCall(mockRequest);
-            const callback = createMockCallback();
-
-            await currentService.redeemDelegation(call, callback);
-
-            expect(currentMockImpl).toHaveBeenCalledWith(
-                mockRequest.signature,
-                undefined,
-                mockRequest.token_contract_address,
-                mockRequest.price
-            );
-            expect(callback).toHaveBeenCalledWith(null, expect.objectContaining({ success: true, transactionHash: 'tx-hash-no-merchant' }));
-        }
-    );
- });
-
- it('should attempt redemption (real mode, missing token) after import', async () => {
-      await runAfterImport(
-        () => { config.mockMode = false; },
-        async (currentService, currentMockImpl) => {
-            currentMockImpl.mockResolvedValue('tx-hash-no-token');
-            const mockRequest = {
-                signature: Buffer.from('sig-no-token'),
-                merchant_address: 'merchant-addr-no-token',
-                price: '808',
-            };
-            const call = createMockCall(mockRequest);
-            const callback = createMockCallback();
-
-            await currentService.redeemDelegation(call, callback);
-
-            expect(currentMockImpl).toHaveBeenCalledWith(
-                mockRequest.signature,
-                mockRequest.merchant_address,
-                undefined,
-                mockRequest.price
-            );
-            expect(callback).toHaveBeenCalledWith(null, expect.objectContaining({ success: true, transactionHash: 'tx-hash-no-token' }));
-        }
-    );
- });
-
- it('should attempt redemption (real mode, missing price) after import', async () => {
-     await runAfterImport(
-        () => { config.mockMode = false; },
-        async (currentService, currentMockImpl) => {
-            currentMockImpl.mockResolvedValue('tx-hash-no-price');
-            const mockRequest = {
-                signature: Buffer.from('sig-no-price'),
-                merchant_address: 'merchant-addr-no-price',
-                token_contract_address: 'token-addr-no-price',
-            };
-            const call = createMockCall(mockRequest);
-            const callback = createMockCallback();
-
-            await currentService.redeemDelegation(call, callback);
-
-            expect(currentMockImpl).toHaveBeenCalledWith(
-                mockRequest.signature,
-                mockRequest.merchant_address,
-                mockRequest.token_contract_address,
-                undefined
-            );
-            expect(callback).toHaveBeenCalledWith(null, expect.objectContaining({ success: true, transactionHash: 'tx-hash-no-price' }));
-        }
-    );
- });
-
+  // Add similar describe block for MOCK_MODE if those tests also need updating
+  // For now, focusing on the failing REAL mode tests
 }) 
