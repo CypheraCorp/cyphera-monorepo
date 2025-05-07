@@ -73,8 +73,8 @@ Resources:
           DB_HOST: !Ref DbHostValue
           DB_NAME: cyphera
           CYPHERA_SMART_WALLET_ADDRESS: !Ref SmartWalletAddressValue
-          # Construct DELEGATION_GRPC_ADDR directly from ALB DNS parameter
-          DELEGATION_GRPC_ADDR: !Sub "${ParamDelegationServerAlbDns}:50051"
+          # Pass only the ALB DNS name; Go code will append port
+          DELEGATION_GRPC_ADDR: !Ref ParamDelegationServerAlbDns
           DB_SSLMODE: require # Set directly, or add another parameter if it needs to vary
 
           # Note: The function code now expects these exact environment variables
