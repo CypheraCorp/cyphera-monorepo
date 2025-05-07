@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -226,6 +225,14 @@ func (rp *RedemptionProcessor) processRedemption(task RedemptionTask) error {
 		return fmt.Errorf("failed to get delegation data: %w", err)
 	}
 
+	subscription, err := rp.dbQueries.GetSubscription(ctx, task.SubscriptionID)
+	if err != nil {
+		logger.Error("Failed to get subscription details",
+			zap.Error(err),
+			zap.String("subscription_id", task.SubscriptionID.String()),
+		)
+	}
+
 	// get the product details
 	product, err := rp.dbQueries.GetProductWithoutWorkspaceId(ctx, task.ProductID)
 	if err != nil {
@@ -279,13 +286,11 @@ func (rp *RedemptionProcessor) processRedemption(task RedemptionTask) error {
 		return fmt.Errorf("failed to get network details: %w", err)
 	}
 
-	// convert price in pennies to float
-	price := float64(product.PriceInPennies) / 100.0
-
 	executionObject := dsClient.ExecutionObject{
 		MerchantAddress:      merchantWallet.WalletAddress,
 		TokenContractAddress: token.ContractAddress,
-		Price:                strconv.FormatFloat(price, 'f', -1, 64),
+		TokenAmount:          subscription.TokenAmount.Int.Int64(),
+		TokenDecimals:        token.Decimals,
 		ChainID:              uint32(network.ChainID),
 		NetworkName:          network.Name,
 	}

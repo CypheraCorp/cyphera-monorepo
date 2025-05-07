@@ -100,7 +100,10 @@ proto.delegation.RedeemDelegationRequest.toObject = function(includeInstance, ms
     signature: msg.getSignature_asB64(),
     merchantAddress: jspb.Message.getFieldWithDefault(msg, 2, ""),
     tokenContractAddress: jspb.Message.getFieldWithDefault(msg, 3, ""),
-    price: jspb.Message.getFieldWithDefault(msg, 4, "")
+    tokenAmount: jspb.Message.getFieldWithDefault(msg, 4, 0),
+    tokenDecimals: jspb.Message.getFieldWithDefault(msg, 5, 0),
+    chainId: jspb.Message.getFieldWithDefault(msg, 6, 0),
+    networkName: jspb.Message.getFieldWithDefault(msg, 7, "")
   };
 
   if (includeInstance) {
@@ -150,8 +153,20 @@ proto.delegation.RedeemDelegationRequest.deserializeBinaryFromReader = function(
       msg.setTokenContractAddress(value);
       break;
     case 4:
+      var value = /** @type {number} */ (reader.readInt64());
+      msg.setTokenAmount(value);
+      break;
+    case 5:
+      var value = /** @type {number} */ (reader.readInt32());
+      msg.setTokenDecimals(value);
+      break;
+    case 6:
+      var value = /** @type {number} */ (reader.readUint32());
+      msg.setChainId(value);
+      break;
+    case 7:
       var value = /** @type {string} */ (reader.readString());
-      msg.setPrice(value);
+      msg.setNetworkName(value);
       break;
     default:
       reader.skipField();
@@ -203,10 +218,31 @@ proto.delegation.RedeemDelegationRequest.serializeBinaryToWriter = function(mess
       f
     );
   }
-  f = message.getPrice();
+  f = message.getTokenAmount();
+  if (f !== 0) {
+    writer.writeInt64(
+      4,
+      f
+    );
+  }
+  f = message.getTokenDecimals();
+  if (f !== 0) {
+    writer.writeInt32(
+      5,
+      f
+    );
+  }
+  f = message.getChainId();
+  if (f !== 0) {
+    writer.writeUint32(
+      6,
+      f
+    );
+  }
+  f = message.getNetworkName();
   if (f.length > 0) {
     writer.writeString(
-      4,
+      7,
       f
     );
   }
@@ -292,11 +328,65 @@ proto.delegation.RedeemDelegationRequest.prototype.setTokenContractAddress = fun
 
 
 /**
- * optional string price = 4;
+ * optional int64 token_amount = 4;
+ * @return {number}
+ */
+proto.delegation.RedeemDelegationRequest.prototype.getTokenAmount = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 4, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.delegation.RedeemDelegationRequest} returns this
+ */
+proto.delegation.RedeemDelegationRequest.prototype.setTokenAmount = function(value) {
+  return jspb.Message.setProto3IntField(this, 4, value);
+};
+
+
+/**
+ * optional int32 token_decimals = 5;
+ * @return {number}
+ */
+proto.delegation.RedeemDelegationRequest.prototype.getTokenDecimals = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 5, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.delegation.RedeemDelegationRequest} returns this
+ */
+proto.delegation.RedeemDelegationRequest.prototype.setTokenDecimals = function(value) {
+  return jspb.Message.setProto3IntField(this, 5, value);
+};
+
+
+/**
+ * optional uint32 chain_id = 6;
+ * @return {number}
+ */
+proto.delegation.RedeemDelegationRequest.prototype.getChainId = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 6, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.delegation.RedeemDelegationRequest} returns this
+ */
+proto.delegation.RedeemDelegationRequest.prototype.setChainId = function(value) {
+  return jspb.Message.setProto3IntField(this, 6, value);
+};
+
+
+/**
+ * optional string network_name = 7;
  * @return {string}
  */
-proto.delegation.RedeemDelegationRequest.prototype.getPrice = function() {
-  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 4, ""));
+proto.delegation.RedeemDelegationRequest.prototype.getNetworkName = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 7, ""));
 };
 
 
@@ -304,8 +394,8 @@ proto.delegation.RedeemDelegationRequest.prototype.getPrice = function() {
  * @param {string} value
  * @return {!proto.delegation.RedeemDelegationRequest} returns this
  */
-proto.delegation.RedeemDelegationRequest.prototype.setPrice = function(value) {
-  return jspb.Message.setProto3StringField(this, 4, value);
+proto.delegation.RedeemDelegationRequest.prototype.setNetworkName = function(value) {
+  return jspb.Message.setProto3StringField(this, 7, value);
 };
 
 

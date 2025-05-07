@@ -77,7 +77,7 @@ resource "aws_ecs_task_definition" "delegation_server" {
   cpu                      = var.stage == "dev" ? "256" : "1024" # Example prod: 1 vCPU
   memory                   = var.stage == "dev" ? "512" : "2048" # Example prod: 2GB Memory
   execution_role_arn       = aws_iam_role.delegation_server_task_execution_role.arn
-  # task_role_arn          = Optional: Define if the application itself needs AWS permissions
+  task_role_arn            = aws_iam_role.delegation_server_task_role.arn
 
   # Define the container(s) for the task
   container_definitions = jsonencode([
@@ -124,7 +124,27 @@ resource "aws_ecs_task_definition" "delegation_server" {
         # Non-secret plain values
         { name = "GRPC_PORT", value = "50051" },
         { name = "GRPC_HOST", value = "0.0.0.0" },
-        { name = "LOG_LEVEL", value = var.stage == "dev" ? "debug" : "info" }
+        { name = "LOG_LEVEL", value = var.stage == "dev" ? "debug" : "info" },
+        {
+          name  = "NODE_ENV"
+          value = var.stage == "prod" ? "production" : "development"
+        },
+        {
+          name  = "STAGE"
+          value = var.stage
+        },
+        {
+          name  = "DELEGATION_SERVER_ALB_DNS",
+          value = data.aws_ssm_parameter.delegation_server_alb_dns.value
+        },
+        {
+          name  = "INFURA_API_KEY_ARN"
+          value = aws_ssm_parameter.infura_api_key_arn.value
+        },
+        {
+          name  = "PIMLICO_API_KEY_ARN"
+          value = aws_ssm_parameter.pimlico_api_key_arn.value
+        }
       ]
     }
   ])
@@ -181,4 +201,71 @@ resource "aws_ecs_service" "delegation_server" {
   ]
 
   tags = local.common_tags
+}
+
+data "aws_ssm_parameter" "delegation_server_alb_dns" {
+  name = "/cyphera/delegation-server-alb-dns-${var.stage}"
+}
+
+resource "aws_iam_role" "delegation_server_task_role" {
+  name               = "delegation-server-task-role-${var.stage}"
+  assume_role_policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "delegation-server-task-role-${var.stage}"
+    }
+  )
+}
+
+resource "aws_iam_policy" "delegation_server_task_policy" {
+  name        = "delegation-server-task-policy-${var.stage}"
+  description = "Policy for delegation server ECS tasks to access SSM parameters and secrets"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "ssm:GetParameter"
+        ],
+        Resource = [
+          aws_ssm_parameter.infura_api_key_arn.arn,
+          aws_ssm_parameter.pimlico_api_key_arn.arn,
+          data.aws_ssm_parameter.delegation_server_alb_dns.arn
+        ]
+      },
+      {
+        Effect = "Allow",
+        Action = "secretsmanager:GetSecretValue",
+        Resource = [
+          aws_ssm_parameter.infura_api_key_arn.value,
+          aws_ssm_parameter.pimlico_api_key_arn.value
+        ]
+      }
+    ]
+  })
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "delegation-server-task-policy-${var.stage}"
+    }
+  )
+}
+
+resource "aws_iam_role_policy_attachment" "delegation_server_task_policy_attach" {
+  role       = aws_iam_role.delegation_server_task_role.name
+  policy_arn = aws_iam_policy.delegation_server_task_policy.arn
 } 

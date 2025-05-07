@@ -311,7 +311,11 @@ CREATE TABLE subscriptions (
     customer_id UUID NOT NULL REFERENCES customers(id),
     product_id UUID NOT NULL REFERENCES products(id),
     product_token_id UUID NOT NULL REFERENCES products_tokens(id),
-    token_price NUMERIC NOT NULL,
+    token_amount NUMERIC NOT NULL,
+    product_price_in_pennies NUMERIC NOT NULL,
+    currency currency NOT NULL,
+    interval_type interval_type NOT NULL,
+    term_length INTEGER NOT NULL,
     delegation_id UUID NOT NULL REFERENCES delegation_data(id),
     customer_wallet_id UUID REFERENCES customer_wallets(id),
     status subscription_status NOT NULL DEFAULT 'active',
@@ -680,8 +684,8 @@ ON CONFLICT DO NOTHING;
 INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token, active, decimals)
 VALUES 
     -- Ethereum Sepolia tokens
-    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'USD Coin', 'USDC', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', false, true, 2),
-    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'Ethereum', 'ETH', '0xd38E5c25935291fFD51C9d66C3B7384494bb099A', true, true, 6)
+    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'USD Coin', 'USDC', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', false, true, 6),
+    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'Ethereum', 'ETH', '0xd38E5c25935291fFD51C9d66C3B7384494bb099A', true, true, 18)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO products (

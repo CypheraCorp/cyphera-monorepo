@@ -36,41 +36,6 @@ import { createPimlicoClient } from "permissionless/clients/pimlico"
 import fetch from 'node-fetch'
 import * as allChains from "viem/chains"
 
-// Keep createTransport helper function
-const createTransport = (url: string | undefined) => {
-  if (!url) {
-    throw new Error('URL is required for transport')
-  }
-  
-  return custom({
-    async request({ method, params }) {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method,
-          params,
-          id: 1,
-        }),
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      const data = await response.json()
-      if (data.error) {
-        throw new Error(data.error.message)
-      }
-      
-      return data.result
-    }
-  })
-}
-
 /**
  * Finds a viem Chain object by its chain ID.
  */
@@ -88,7 +53,7 @@ function getChainById(chainId: number): Chain {
  * Create a custom viem transport using node-fetch.
  * Renamed from createTransport to createFetchTransport for clarity.
  */
-const createFetchTransport = (url: string | undefined): Transport => {
+const createTransport = (url: string | undefined): Transport => {
   if (!url) {
     throw new Error('URL is required for transport');
   }
@@ -119,14 +84,16 @@ const createFetchTransport = (url: string | undefined): Transport => {
  * @param delegationData - The serialized delegation data
  * @param merchantAddress - The address of the merchant
  * @param tokenContractAddress - The address of the token contract
- * @param price - The price of the token
+ * @param tokenAmount - The amount of tokens to redeem
+ * @param tokenDecimals - The number of decimals of the token
  * @returns The transaction hash of the redemption
  */
 export const redeemDelegation = async (
   delegationData: Uint8Array,
   merchantAddress: string,
   tokenContractAddress: string,
-  price: string,
+  tokenAmount: number,
+  tokenDecimals: number,
   chainId: number,
   networkName: string
 ): Promise<string> => {
@@ -135,7 +102,8 @@ export const redeemDelegation = async (
     if (!delegationData || delegationData.length === 0) throw new Error('Delegation data is required');
     if (!merchantAddress || merchantAddress === '0x0000000000000000000000000000000000000000') throw new Error('Valid merchant address is required');
     if (!tokenContractAddress || tokenContractAddress === '0x0000000000000000000000000000000000000000') throw new Error('Valid token contract address is required');
-    if (!price || price === '0') throw new Error('Valid price is required');
+    if (!tokenAmount || tokenAmount === 0) throw new Error('Valid token amount is required');
+    if (!tokenDecimals || tokenDecimals <= 0) throw new Error('Valid token decimals are required');
     if (!chainId || chainId <= 0) throw new Error('Valid chainId is required');
     if (!networkName) throw new Error('Valid networkName is required');
     if (!config.blockchain.privateKey) throw new Error('Server private key is not configured');
@@ -149,17 +117,17 @@ export const redeemDelegation = async (
     // --- 2. Initialize Clients Dynamically ---
     const publicClient: PublicClient = createPublicClient({
       chain,
-      transport: createFetchTransport(rpcUrl)
+      transport: createTransport(rpcUrl)
     });
 
     // Initialize Paymaster client (needed for bundler client setup, even if not sponsoring)
     const paymasterClient = createPaymasterClient({
-        transport: createFetchTransport(bundlerUrl)
+        transport: createTransport(bundlerUrl)
     });
 
     // Initialize Bundler client
     const bundlerClient = createBundlerClient({
-        transport: createFetchTransport(bundlerUrl),
+        transport: createTransport(bundlerUrl),
         chain,
         // entryPoint // Add if needed
         paymaster: paymasterClient, // Add if sponsoring
@@ -168,7 +136,7 @@ export const redeemDelegation = async (
     // Initialize Pimlico client (for gas price fetching)
     const pimlicoClient = createPimlicoClient({
         chain,
-        transport: createFetchTransport(bundlerUrl),
+        transport: createTransport(bundlerUrl),
     });
 
     // --- Remaining logic (to be refactored step-by-step) ---
@@ -185,7 +153,8 @@ export const redeemDelegation = async (
       delegator: delegation.delegator,
       merchantAddress,
       tokenContractAddress,
-      price,
+      tokenAmount,
+      tokenDecimals,
       chainId,
       networkName
     });
@@ -211,11 +180,22 @@ export const redeemDelegation = async (
       );
     }
 
-    // Create ERC20 transfer calldata (Still hardcoded decimals for now)
+    // Convert tokenAmount (e.g., 499992) and tokenDecimals (e.g., 6)
+    // to a human-readable string representation (e.g., "0.499992")
+    // before parsing to BigInt for the contract call.
+    if (tokenDecimals <= 0) {
+      // Or handle as an error, depending on expected constraints
+      throw new Error('Token decimals must be positive for this parsing logic.');
+    }
+    const humanReadableAmountString = (tokenAmount / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals);
+
+    const tokenAmountBigInt = parseUnits(humanReadableAmountString, tokenDecimals);
+
+    // Create ERC20 transfer calldata
     const transferCalldata = encodeFunctionData({
-      abi: erc20Abi, // Use minimal ABI
+      abi: erc20Abi,
       functionName: 'transfer',
-      args: [merchantAddress as Address, parseUnits(price, 6)] // TODO: Fetch decimals dynamically
+      args: [merchantAddress as Address, tokenAmountBigInt]
     });
     
     const executions: ExecutionStruct[] = [
@@ -246,6 +226,8 @@ export const redeemDelegation = async (
     // Get fee per gas for the transaction (Inline logic from old getFeePerGas)
     // Use the local pimlicoClient instance here
     const feePerGas = (await pimlicoClient.getUserOperationGasPrice()).fast;
+
+    console.log("feePerGas", feePerGas);
 
     logger.info("Sending UserOperation...");
     const overallStartTime = Date.now();

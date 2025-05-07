@@ -393,7 +393,7 @@ func InitializeRoutes(router *gin.Engine) {
 					// tokens.GET("/networks/:network_id/active", tokenHandler.ListActiveTokensByNetwork)
 					// tokens.GET("/networks/:network_id/gas", tokenHandler.GetGasToken)
 					// tokens.GET("/networks/:network_id/address/:address", tokenHandler.GetTokenByAddress)
-					tokens.POST("/price", tokenHandler.GetTokenPrice)
+					tokens.POST("/quote", tokenHandler.GetTokenQuote)
 				}
 			}
 

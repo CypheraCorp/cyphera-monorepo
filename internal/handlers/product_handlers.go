@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -30,6 +31,21 @@ type SwaggerMetadata map[string]interface{}
 type ProductHandler struct {
 	common           *CommonServices
 	delegationClient *dsClient.DelegationClient
+}
+
+type CreateSubscriptionParams struct {
+	Customer       db.Customer
+	CustomerWallet db.CustomerWallet
+	ProductID      uuid.UUID
+	ProductTokenID uuid.UUID
+	TokenAmount    int64
+	Currency       db.Currency
+	PriceInPennies int32
+	IntervalType   db.IntervalType
+	DelegationData db.DelegationDatum
+	PeriodStart    time.Time
+	PeriodEnd      time.Time
+	NextRedemption time.Time
 }
 
 // NewProductHandler creates a new ProductHandler instance
@@ -71,6 +87,7 @@ type CreateProductRequest struct {
 	ProductType     string                      `json:"product_type" binding:"required"`
 	IntervalType    string                      `json:"interval_type"`
 	TermLength      int32                       `json:"term_length"`
+	Currency        string                      `json:"currency"`
 	PriceInPennies  int32                       `json:"price_in_pennies" binding:"required"`
 	ImageURL        string                      `json:"image_url"`
 	URL             string                      `json:"url"`
@@ -131,9 +148,10 @@ type DelegationStruct struct {
 
 // SubscribeRequest represents the request body for subscribing to a product
 type SubscribeRequest struct {
-	SubscriberAddress string           `json:"subscriber_address"`
-	ProductTokenID    string           `json:"product_token_id"`
-	Delegation        DelegationStruct `json:"delegation"`
+	SubscriberAddress string           `json:"subscriber_address" binding:"required"`
+	ProductTokenID    string           `json:"product_token_id" binding:"required"`
+	TokenAmount       string           `json:"token_amount" binding:"required"` // string to avoid precision loss, big ints are not supported by json
+	Delegation        DelegationStruct `json:"delegation" binding:"required"`
 }
 
 const (
@@ -317,8 +335,6 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 		handleDBError(c, err, "Token not found")
 		return
 	}
-	// convert price in pennies to float
-	price := float64(product.PriceInPennies) / 100.0
 
 	network, err := h.common.db.GetNetwork(ctx, token.NetworkID)
 	if err != nil {
@@ -326,10 +342,18 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 		return
 	}
 
+	// parse the token amount
+	tokenAmount, err := strconv.ParseInt(request.TokenAmount, 10, 64)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid token amount format", err)
+		return
+	}
+
 	executionObject := dsClient.ExecutionObject{
 		MerchantAddress:      merchantWallet.WalletAddress,
 		TokenContractAddress: token.ContractAddress,
-		Price:                strconv.FormatFloat(price, 'f', -1, 64),
+		TokenDecimals:        token.Decimals,
+		TokenAmount:          tokenAmount,
 		ChainID:              uint32(network.ChainID),
 		NetworkName:          network.Name,
 	}
@@ -424,8 +448,20 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 	periodStart, periodEnd, nextRedemption := h.calculateSubscriptionPeriods(product)
 
 	// Create the subscription
-	subscription, err := h.createSubscription(ctx, qtx, customer, customerWallet, parsedProductID,
-		parsedProductTokenID, delegationData, periodStart, periodEnd, nextRedemption)
+	subscription, err := h.createSubscription(ctx, qtx, CreateSubscriptionParams{
+		Customer:       customer,
+		CustomerWallet: customerWallet,
+		ProductID:      parsedProductID,
+		ProductTokenID: parsedProductTokenID,
+		TokenAmount:    tokenAmount,
+		Currency:       product.Currency,
+		PriceInPennies: product.PriceInPennies,
+		IntervalType:   product.IntervalType.IntervalType,
+		DelegationData: delegationData,
+		PeriodStart:    periodStart,
+		PeriodEnd:      periodEnd,
+		NextRedemption: nextRedemption,
+	})
 	if err != nil {
 		// Log the failed subscription attempt
 		h.logFailedSubscriptionCreation(ctx, &customer.ID, product, productToken, normalizedAddress, request.Delegation.Signature, err)
@@ -532,6 +568,16 @@ func (h *ProductHandler) validateSubscriptionRequest(request SubscribeRequest, p
 	// Basic validation of product token ID format
 	if _, err := uuid.Parse(request.ProductTokenID); err != nil {
 		return fmt.Errorf("invalid product token ID format")
+	}
+
+	// parse the token amount
+	tokenAmount, err := strconv.ParseInt(request.TokenAmount, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid token amount format")
+	}
+
+	if tokenAmount <= 0 {
+		return fmt.Errorf("token amount must be greater than 0")
 	}
 
 	// check if delegate address matches cyphera wallet address
@@ -785,20 +831,13 @@ func (h *ProductHandler) calculateSubscriptionPeriods(product db.Product) (time.
 func (h *ProductHandler) createSubscription(
 	ctx context.Context,
 	tx *db.Queries,
-	customer db.Customer,
-	customerWallet db.CustomerWallet,
-	productID uuid.UUID,
-	productTokenID uuid.UUID,
-	delegationData db.DelegationDatum,
-	periodStart time.Time,
-	periodEnd time.Time,
-	nextRedemption time.Time,
+	params CreateSubscriptionParams,
 ) (db.Subscription, error) {
 	// Create metadata with important context
 	metadata := map[string]interface{}{
 		"created_at":     time.Now().Format(time.RFC3339),
-		"wallet_address": customerWallet.WalletAddress,
-		"network_type":   customerWallet.NetworkType,
+		"wallet_address": params.CustomerWallet.WalletAddress,
+		"network_type":   params.CustomerWallet.NetworkType,
 	}
 	subscriptionMetadataBytes, err := json.Marshal(metadata)
 	if err != nil {
@@ -807,25 +846,35 @@ func (h *ProductHandler) createSubscription(
 
 	// Create subscription params
 	subscriptionParams := db.CreateSubscriptionParams{
-		CustomerID:     customer.ID,
-		ProductID:      productID,
-		ProductTokenID: productTokenID,
-		DelegationID:   delegationData.ID,
+		CustomerID:     params.Customer.ID,
+		ProductID:      params.ProductID,
+		ProductTokenID: params.ProductTokenID,
+		TokenAmount: pgtype.Numeric{
+			Int:   big.NewInt(int64(params.TokenAmount)),
+			Valid: true,
+		},
+		Currency: params.Currency,
+		ProductPriceInPennies: pgtype.Numeric{
+			Int:   big.NewInt(int64(params.PriceInPennies)),
+			Valid: true,
+		},
+		IntervalType: params.IntervalType,
+		DelegationID: params.DelegationData.ID,
 		CustomerWalletID: pgtype.UUID{
-			Bytes: customerWallet.ID,
+			Bytes: params.CustomerWallet.ID,
 			Valid: true,
 		},
 		Status: db.SubscriptionStatusActive,
 		CurrentPeriodStart: pgtype.Timestamptz{
-			Time:  periodStart,
+			Time:  params.PeriodStart,
 			Valid: true,
 		},
 		CurrentPeriodEnd: pgtype.Timestamptz{
-			Time:  periodEnd,
+			Time:  params.PeriodEnd,
 			Valid: true,
 		},
 		NextRedemptionDate: pgtype.Timestamptz{
-			Time:  nextRedemption,
+			Time:  params.NextRedemption,
 			Valid: true,
 		},
 		TotalRedemptions:   0,
@@ -834,9 +883,9 @@ func (h *ProductHandler) createSubscription(
 	}
 
 	logger.Info("Creating new subscription",
-		zap.String("customer_id", customer.ID.String()),
-		zap.String("product_id", productID.String()),
-		zap.String("customer_wallet_id", customerWallet.ID.String()))
+		zap.String("customer_id", params.Customer.ID.String()),
+		zap.String("product_id", params.ProductID.String()),
+		zap.String("customer_wallet_id", params.CustomerWallet.ID.String()))
 
 	return tx.CreateSubscription(ctx, subscriptionParams)
 }
@@ -1590,6 +1639,12 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
+	// Validate currency
+	currency, err := validateCurrency(req.Currency)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
 	// Create product
 	product, err := h.common.db.CreateProduct(c.Request.Context(), db.CreateProductParams{
 		WorkspaceID:     parsedWorkspaceID,
@@ -1599,6 +1654,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		ProductType:     productType,
 		IntervalType:    intervalTypeValue,
 		TermLength:      pgtype.Int4{Int32: req.TermLength, Valid: req.TermLength != 0},
+		Currency:        currency,
 		PriceInPennies:  req.PriceInPennies,
 		ImageUrl:        pgtype.Text{String: req.ImageURL, Valid: req.ImageURL != ""},
 		Url:             pgtype.Text{String: req.URL, Valid: req.URL != ""},
@@ -1844,6 +1900,7 @@ func toProductResponse(p db.Product) ProductResponse {
 		Description:     p.Description.String,
 		ProductType:     string(p.ProductType),
 		IntervalType:    intervalTypeStr,
+		Currency:        string(p.Currency),
 		TermLength:      p.TermLength.Int32,
 		PriceInPennies:  p.PriceInPennies,
 		ImageURL:        p.ImageUrl.String,

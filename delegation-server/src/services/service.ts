@@ -7,7 +7,8 @@ let redeemDelegation: (
   delegationData: Uint8Array, 
   merchantAddress: string, 
   tokenContractAddress: string, 
-  price: string,
+  tokenAmount: number,
+  tokenDecimals: number,
   chainId: number,
   networkName: string
 ) => Promise<string>;
@@ -65,9 +66,12 @@ export const delegationService = {
       const signature = call.request.signature;
       const merchantAddress = call.request.merchant_address || call.request.merchantAddress;
       const tokenContractAddress = call.request.token_contract_address || call.request.tokenContractAddress;
-      const price = call.request.price;
+      const tokenAmount = call.request.token_amount;
+      const tokenDecimals = call.request.token_decimals;
       const chainId = call.request.chain_id;
       const networkName = call.request.network_name;
+
+      console.log("call.request", call.request);
 
       // Basic validation for new parameters
       if (chainId === undefined || chainId === null || chainId <= 0) {
@@ -76,12 +80,19 @@ export const delegationService = {
       if (!networkName) {
         throw new Error('Missing network_name in request');
       }
+      if (!tokenAmount || tokenAmount <= 0) {
+        throw new Error('Missing or invalid token_amount in request');
+      }
+      if (!tokenDecimals || tokenDecimals <= 0) {
+        throw new Error('Missing or invalid token_decimals in request');
+      }
 
       logger.info('Request parameters:', {
         signatureLength: signature ? signature.length : 0,
         merchantAddress,
         tokenContractAddress,
-        price,
+        tokenAmount,
+        tokenDecimals,
         chainId,
         networkName
       });
@@ -91,7 +102,8 @@ export const delegationService = {
         signature,
         merchantAddress,
         tokenContractAddress,
-        price,
+        tokenAmount,
+        tokenDecimals,
         chainId,
         networkName
       );
