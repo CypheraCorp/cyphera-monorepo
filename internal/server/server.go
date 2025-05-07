@@ -205,8 +205,39 @@ func InitializeHandlers() {
 		logger.Fatal("CYPHERA_SMART_WALLET_ADDRESS is not a valid address")
 	}
 
+	// --- Delegation Client Configuration ---
+	delegationHost := os.Getenv("DELEGATION_GRPC_ADDR")
+	if delegationHost == "" {
+		logger.Fatal("DELEGATION_GRPC_ADDR environment variable is required")
+	}
+
+	var fullDelegationAddr string
+	var useLocalModeForDelegation bool
+
+	// STAGE is already determined and validated earlier in InitializeHandlers
+	if stage == helpers.StageLocal {
+		fullDelegationAddr = delegationHost + ":50051"
+		useLocalModeForDelegation = true
+	} else if stage == helpers.StageDev || stage == helpers.StageProd {
+		fullDelegationAddr = delegationHost + ":443"
+		useLocalModeForDelegation = false
+	} else {
+		// This case should ideally not be reached if STAGE validation is robust
+		logger.Fatal("Invalid STAGE for delegation server connection configuration", zap.String("stage", stage))
+	}
+	logger.Info("Delegation server connection details",
+		zap.String("address", fullDelegationAddr),
+		zap.Bool("useLocalMode", useLocalModeForDelegation),
+	)
+
+	delegationClientConfig := dsClient.DelegationClientConfig{
+		DelegationGRPCAddr: fullDelegationAddr,        // Use the constructed full address
+		RPCTimeout:         3 * time.Minute,           // Existing timeout
+		UseLocalMode:       useLocalModeForDelegation, // Set based on STAGE
+	}
+
 	// Initialize the delegation client
-	delegationClient, err = dsClient.NewDelegationClient()
+	delegationClient, err = dsClient.NewDelegationClient(delegationClientConfig)
 	if err != nil {
 		logger.Fatal("Unable to create delegation client", zap.Error(err))
 	}

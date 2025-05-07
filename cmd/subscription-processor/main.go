@@ -127,13 +127,6 @@ func main() {
 		logger.Fatal("CYPHERA_SMART_WALLET_ADDRESS is not a valid address", zap.String("address", cypheraSmartWalletAddress))
 	}
 
-	// --- Get Delegation Server gRPC Address ---
-	// Get the *value* directly from environment variable set by SAM template/deploy script
-	delegationGrpcAddr := os.Getenv("DELEGATION_GRPC_ADDR")
-	if delegationGrpcAddr == "" {
-		logger.Fatal("DELEGATION_GRPC_ADDR environment variable is required and not set")
-	}
-
 	// --- Set Environment Variable for Delegation Client ---
 	// The delegation client reads DELEGATION_GRPC_ADDR from the environment, which is already set above.
 	// DELEGATION_RPC_TIMEOUT is set directly in the SAM template's environment variables.
@@ -159,8 +152,38 @@ func main() {
 
 	dbQueries := db.New(connPool)
 
+	// --- Get Delegation Server gRPC Address and Configuration ---
+	delegationHost := os.Getenv("DELEGATION_GRPC_ADDR")
+	if delegationHost == "" {
+		logger.Fatal("DELEGATION_GRPC_ADDR environment variable is required and not set")
+	}
+
+	var fullDelegationAddr string
+	var useLocalModeForDelegation bool
+
+	// STAGE is already determined and validated earlier in main
+	if stage == helpers.StageLocal {
+		fullDelegationAddr = delegationHost + ":50051"
+		useLocalModeForDelegation = true
+	} else if stage == helpers.StageDev || stage == helpers.StageProd {
+		fullDelegationAddr = delegationHost + ":443"
+		useLocalModeForDelegation = false
+	} else {
+		logger.Fatal("Invalid STAGE for delegation server connection configuration", zap.String("stage", stage))
+	}
+	logger.Info("Delegation server connection details for subscription processor",
+		zap.String("address", fullDelegationAddr),
+		zap.Bool("useLocalMode", useLocalModeForDelegation),
+	)
+
+	delegationClientConfig := dsClient.DelegationClientConfig{
+		DelegationGRPCAddr: fullDelegationAddr,        // Use the constructed full address
+		RPCTimeout:         3 * time.Minute,           // Existing or default timeout
+		UseLocalMode:       useLocalModeForDelegation, // Set based on STAGE
+	}
+
 	// --- Initialize Delegation Client ---
-	delegationClient, err := dsClient.NewDelegationClient() // Now reads DELEGATION_GRPC_ADDR from env
+	delegationClient, err := dsClient.NewDelegationClient(delegationClientConfig) // Now reads DELEGATION_GRPC_ADDR from env
 	if err != nil {
 		logger.Fatal("Failed to initialize delegation client", zap.Error(err))
 	}

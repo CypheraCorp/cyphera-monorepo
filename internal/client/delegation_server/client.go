@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"cyphera-api/internal/proto"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
@@ -44,6 +44,12 @@ type DelegationClient struct {
 	rpcTimeout time.Duration // Timeout for RPC calls
 }
 
+type DelegationClientConfig struct {
+	DelegationGRPCAddr string
+	RPCTimeout         time.Duration
+	UseLocalMode       bool
+}
+
 // NewDelegationClient creates a new client for the delegation service.
 // It establishes a connection to the gRPC server specified by the DELEGATION_GRPC_ADDR
 // environment variable, or falls back to localhost:50051 if not specified.
@@ -51,34 +57,39 @@ type DelegationClient struct {
 // Returns:
 //   - A fully initialized DelegationClient
 //   - Error if the connection failed
-func NewDelegationClient() (*DelegationClient, error) {
+func NewDelegationClient(config DelegationClientConfig) (*DelegationClient, error) {
 	// Get gRPC server address from environment or use default
-	grpcServerAddr := os.Getenv("DELEGATION_GRPC_ADDR")
+	grpcServerAddr := config.DelegationGRPCAddr
 	if grpcServerAddr == "" {
-		grpcServerAddr = "localhost:50051"
+		return nil, fmt.Errorf("delegation gRPC address is required")
 	}
 
 	// Get timeout from environment or use default (3 minutes)
-	timeoutStr := os.Getenv("DELEGATION_RPC_TIMEOUT")
-	timeout := 3 * time.Minute // Default 3 minutes for blockchain operations
-	if timeoutStr != "" {
-		if parsedTimeout, err := time.ParseDuration(timeoutStr); err == nil {
-			timeout = parsedTimeout
-		} else {
-			log.Printf("Warning: Invalid DELEGATION_RPC_TIMEOUT value: %s, using default", timeoutStr)
-		}
+	timeout := config.RPCTimeout
+	if timeout == 0 {
+		timeout = 3 * time.Minute // Default 3 minutes for blockchain operations
 	}
 
 	// Check if we're in local development mode
-	// set DELEGATION_LOCAL_MODE=true for dev/test environments default is false
-	useLocalMode := os.Getenv("DELEGATION_LOCAL_MODE") == "true"
+	// set default is false
+	useLocalMode := config.UseLocalMode
 
 	var conn *grpc.ClientConn
 	var err error
 
 	// Configure gRPC dial options for better timeout handling
+	var creds grpc.DialOption
+	if useLocalMode {
+		creds = grpc.WithTransportCredentials(insecure.NewCredentials())
+	} else {
+		// For non-local (dev/prod), use secure credentials.
+		// This typically uses the system's CA pool to verify the server's certificate.
+		// Ensure the ALB's certificate is issued by a trusted CA.
+		creds = grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, ""))
+	}
+
 	dialOpts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		creds, // Use dynamically set credentials
 		// grpc.WithBlock(), // Make connection establishment blocking -- DEPRECATED
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(20*1024*1024), // 20MB
@@ -124,7 +135,7 @@ func NewDelegationClient() (*DelegationClient, error) {
 func (c *DelegationClient) RedeemDelegation(ctx context.Context, signature []byte, executionObject ExecutionObject) (string, error) {
 	// Validate inputs, now including fields from ExecutionObject
 	if err := c.validateRedemptionInputs(signature, executionObject); err != nil {
-		return "", err
+		return "error when validating redemption inputs", err
 	}
 
 	log.Printf("Using timeout of %v for delegation redemption", c.rpcTimeout)
@@ -145,7 +156,7 @@ func (c *DelegationClient) RedeemDelegation(ctx context.Context, signature []byt
 	// Call the service
 	res, err := c.client.RedeemDelegation(ctx, req)
 	if err != nil {
-		return "", c.formatRPCError(err)
+		return "error when RedeemDelegation()", c.formatRPCError(err)
 	}
 
 	log.Printf("Got response from server: %+v", res)
