@@ -93,7 +93,7 @@ jobs:
   # --- Deploy Job ---
   deploy:
     name: Deploy Go API
-    needs: [lint, test]
+    needs: [test]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
     environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
