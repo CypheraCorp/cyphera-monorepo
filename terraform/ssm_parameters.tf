@@ -115,19 +115,13 @@ data "aws_secretsmanager_secret" "supabase_jwt" {
   name = "cyphera/cyphera-api/supabase/jwt-secret-${var.stage}"
 }
 
-data "aws_secretsmanager_secret" "circle_api_key" {
-  # NOTE: Using the NEW intended name here.
-  # Ensure the secret exists in AWS Secrets Manager with this name.
-  # Renaming an existing secret might require manual steps or specific TF handling.
-  name = "cyphera/cyphera-api/circle/api-key-${var.stage}"
-}
-
 # Store the Supabase JWT Secret ARN in SSM Parameter Store
 resource "aws_ssm_parameter" "supabase_jwt_secret_arn" {
-  name  = "/cyphera/cyphera-api/supabase-jwt-secret-arn-${var.stage}"
-  type  = "String"
-  value = data.aws_secretsmanager_secret.supabase_jwt.arn
-  tags  = local.common_tags
+  name        = "/cyphera/cyphera-api/supabase-jwt-secret-arn-${var.stage}"
+  description = "ARN of the Supabase JWT secret for Cyphera API - ${var.stage}"
+  type        = "String"
+  value       = data.aws_secretsmanager_secret.supabase_jwt.arn
+  tags        = local.common_tags
 
   lifecycle {
     ignore_changes = [value] # Avoid unnecessary updates if ARN doesn't change
@@ -136,11 +130,46 @@ resource "aws_ssm_parameter" "supabase_jwt_secret_arn" {
 
 # Store the Circle API Key Secret ARN in SSM Parameter Store
 resource "aws_ssm_parameter" "circle_api_key_arn" {
-  name  = "/cyphera/cyphera-api/circle-api-key-arn-${var.stage}"
-  type  = "String"
-  value = data.aws_secretsmanager_secret.circle_api_key.arn
-  tags  = local.common_tags
+  name        = "/cyphera/cyphera-api/circle-api-key-arn-${var.stage}"
+  description = "ARN of the Circle API Key secret for Cyphera API - ${var.stage}"
+  type        = "String"
+  value       = aws_secretsmanager_secret.circle_api_key.arn # Referencing the secret defined in secrets.tf
+  tags        = local.common_tags
+  lifecycle {
+    ignore_changes = [value] # Avoid unnecessary updates if ARN doesn't change
+  }
+}
 
+# SSM Parameters for Secret ARNs
+
+resource "aws_ssm_parameter" "coin_market_cap_api_key_arn" {
+  name        = "/cyphera/cyphera-api/coin-market-cap-api-key-arn-${var.stage}"
+  description = "ARN of the CoinMarketCap API Key secret for Cyphera API - ${var.stage}"
+  type        = "String"
+  value       = aws_secretsmanager_secret.coin_market_cap_api_key.arn
+  tags = local.common_tags
+  lifecycle {
+    ignore_changes = [value] # Avoid unnecessary updates if ARN doesn't change
+  }
+}
+
+resource "aws_ssm_parameter" "infura_api_key_arn" {
+  name        = "/cyphera/delegation-server/infura-api-key-arn-${var.stage}"
+  description = "ARN of the Infura API Key secret for Delegation Server - ${var.stage}"
+  type        = "String"
+  value       = aws_secretsmanager_secret.infura_api_key.arn
+  tags        = local.common_tags
+  lifecycle {
+    ignore_changes = [value] # Avoid unnecessary updates if ARN doesn't change
+  }
+}
+
+resource "aws_ssm_parameter" "pimlico_api_key_arn" {
+  name        = "/cyphera/delegation-server/pimlico-api-key-arn-${var.stage}"
+  description = "ARN of the Pimlico API Key secret for Delegation Server - ${var.stage}"
+  type        = "String"
+  value       = aws_secretsmanager_secret.pimlico_api_key.arn
+  tags        = local.common_tags
   lifecycle {
     ignore_changes = [value] # Avoid unnecessary updates if ARN doesn't change
   }

@@ -72,23 +72,17 @@ export function getNetworkConfig(networkName: string, chainId: number): NetworkC
 
   // --- Bundler URL (Pimlico V2 Format) ---
   const pimlicoApiKey = process.env.PIMLICO_API_KEY;
-  const baseBundlerUrl = process.env.BUNDLER_URL; // Expects base like https://api.pimlico.io/v2/
 
   if (!pimlicoApiKey) {
     throw new Error('PIMLICO_API_KEY environment variable is not set');
   }
-  if (!baseBundlerUrl) {
-    throw new Error('Base BUNDLER_URL environment variable is not set (e.g., https://api.pimlico.io/v2/)');
-  }
 
-  // Ensure base URL ends with a slash
-  const sanitizedBaseBundlerUrl = baseBundlerUrl.endsWith('/') ? baseBundlerUrl : `${baseBundlerUrl}/`;
+  const bundlerBaseUrl = "https://api.pimlico.io/v2/";
 
-  const bundlerUrl = `${sanitizedBaseBundlerUrl}${chainId}/rpc?apikey=${pimlicoApiKey}`;
-
+  const bundlerUrl = `${bundlerBaseUrl}${chainId}/rpc?apikey=${pimlicoApiKey}`;
   logger.debug(`Using configuration for chainId ${chainId} / network ${networkName}:`, {
     rpcUrlSource: `Infura (network: ${formattedNetworkName})`,
-    bundlerUrlSource: `Pimlico (base: ${sanitizedBaseBundlerUrl}, chainId: ${chainId})`,
+    bundlerUrlSource: `Pimlico (base: ${bundlerBaseUrl}, chainId: ${chainId})`,
   })
 
   return { rpcUrl, bundlerUrl }
@@ -100,7 +94,6 @@ export function validateConfig(): void {
     // Check for INFURA_API_KEY and default BUNDLER_URL as baseline requirements
     { key: 'INFURA_API_KEY', value: process.env.INFURA_API_KEY },
     { key: 'PIMLICO_API_KEY', value: process.env.PIMLICO_API_KEY },
-    { key: 'BUNDLER_URL (base)', value: process.env.BUNDLER_URL },
     { key: 'blockchain.privateKey', value: config.blockchain.privateKey },
   ]
   

@@ -67,4 +67,42 @@ resource "aws_ssm_parameter" "delegation_server_alb_dns" {
   tags        = local.common_tags
 }
 
-# Keep existing outputs if needed, and potentially add others (like ECR repo URL) 
+output "circle_api_key_secret_arn" {
+  description = "ARN of the Circle API Key secret"
+  value       = aws_secretsmanager_secret.circle_api_key.arn
+}
+
+output "circle_api_key_ssm_parameter_name" {
+  description = "Name of the SSM parameter storing the Circle API Key secret ARN"
+  value       = aws_ssm_parameter.circle_api_key_arn.name
+}
+
+output "coin_market_cap_api_key_secret_arn" {
+  description = "ARN of the CoinMarketCap API Key secret"
+  value       = aws_secretsmanager_secret.coin_market_cap_api_key.arn
+}
+
+output "coin_market_cap_api_key_ssm_parameter_name" {
+  description = "Name of the SSM parameter storing the CoinMarketCap API Key secret ARN"
+  value       = aws_ssm_parameter.coin_market_cap_api_key_arn.name
+}
+
+output "infura_api_key_secret_arn" {
+  description = "ARN of the Infura API Key secret"
+  value       = aws_secretsmanager_secret.infura_api_key.arn
+}
+
+output "infura_api_key_ssm_parameter_name" {
+  description = "Name of the SSM parameter storing the Infura API Key secret ARN"
+  value       = aws_ssm_parameter.infura_api_key_arn.name
+}
+
+output "pimlico_api_key_secret_arn" {
+  description = "ARN of the Pimlico API Key secret"
+  value       = aws_secretsmanager_secret.pimlico_api_key.arn
+}
+
+output "pimlico_api_key_ssm_parameter_name" {
+  description = "Name of the SSM parameter storing the Pimlico API Key secret ARN"
+  value       = aws_ssm_parameter.pimlico_api_key_arn.name
+} 

@@ -11,14 +11,16 @@ import { parseDelegation, validateDelegation } from '../utils/delegation-helpers
  * @param delegationData The serialized delegation data (signature)
  * @param merchantAddress The address of the merchant
  * @param tokenContractAddress The address of the token contract
- * @param price The price of the token
+ * @param tokenAmount The amount of tokens to redeem
+ * @param tokenDecimals The number of decimals of the token
  * @returns A mock transaction hash
  */
 export const redeemDelegation = async (
   delegationData: Uint8Array,
   merchantAddress: string,
   tokenContractAddress: string,
-  price: string
+  tokenAmount: number,
+  tokenDecimals: number
 ): Promise<string> => {
   try {
     // Validate inputs first to avoid undefined errors
@@ -34,8 +36,12 @@ export const redeemDelegation = async (
       throw new Error("Token contract address is required");
     }
     
-    if (!price) {
-      throw new Error("Price is required");
+    if (!tokenAmount) {
+      throw new Error("Token amount is required");
+    }
+
+    if (!tokenDecimals) {
+      throw new Error("Token decimals are required");
     }
     
     // Parse and validate the delegation - this is real code that will actually check
@@ -49,7 +55,8 @@ export const redeemDelegation = async (
       delegator: delegation.delegator,
       merchantAddress,
       tokenContractAddress,
-      price
+      tokenAmount,
+      tokenDecimals
     })
     
     // Simulate processing time to make the test more realistic

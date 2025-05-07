@@ -725,23 +725,27 @@ type ProductsToken struct {
 }
 
 type Subscription struct {
-	ID                 uuid.UUID          `json:"id"`
-	CustomerID         uuid.UUID          `json:"customer_id"`
-	ProductID          uuid.UUID          `json:"product_id"`
-	ProductTokenID     uuid.UUID          `json:"product_token_id"`
-	TokenPrice         pgtype.Numeric     `json:"token_price"`
-	DelegationID       uuid.UUID          `json:"delegation_id"`
-	CustomerWalletID   pgtype.UUID        `json:"customer_wallet_id"`
-	Status             SubscriptionStatus `json:"status"`
-	CurrentPeriodStart pgtype.Timestamptz `json:"current_period_start"`
-	CurrentPeriodEnd   pgtype.Timestamptz `json:"current_period_end"`
-	NextRedemptionDate pgtype.Timestamptz `json:"next_redemption_date"`
-	TotalRedemptions   int32              `json:"total_redemptions"`
-	TotalAmountInCents int32              `json:"total_amount_in_cents"`
-	Metadata           []byte             `json:"metadata"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	ID                    uuid.UUID          `json:"id"`
+	CustomerID            uuid.UUID          `json:"customer_id"`
+	ProductID             uuid.UUID          `json:"product_id"`
+	ProductTokenID        uuid.UUID          `json:"product_token_id"`
+	TokenAmount           pgtype.Numeric     `json:"token_amount"`
+	ProductPriceInPennies pgtype.Numeric     `json:"product_price_in_pennies"`
+	Currency              Currency           `json:"currency"`
+	IntervalType          IntervalType       `json:"interval_type"`
+	TermLength            int32              `json:"term_length"`
+	DelegationID          uuid.UUID          `json:"delegation_id"`
+	CustomerWalletID      pgtype.UUID        `json:"customer_wallet_id"`
+	Status                SubscriptionStatus `json:"status"`
+	CurrentPeriodStart    pgtype.Timestamptz `json:"current_period_start"`
+	CurrentPeriodEnd      pgtype.Timestamptz `json:"current_period_end"`
+	NextRedemptionDate    pgtype.Timestamptz `json:"next_redemption_date"`
+	TotalRedemptions      int32              `json:"total_redemptions"`
+	TotalAmountInCents    int32              `json:"total_amount_in_cents"`
+	Metadata              []byte             `json:"metadata"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt             pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type SubscriptionEvent struct {

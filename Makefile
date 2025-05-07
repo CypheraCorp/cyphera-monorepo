@@ -38,6 +38,7 @@ subscription-processor:
 		echo "Running subscription processor at $$(date)..."; \
 		$(GO) run ./cmd/subscription-processor/main.go; \
 		echo "Subscription processor finished. Sleeping for $(SUB_INTERVAL)..."; \
+		sleep $(SUB_INTERVAL); \
 	done
 
 dev: ensure-executable

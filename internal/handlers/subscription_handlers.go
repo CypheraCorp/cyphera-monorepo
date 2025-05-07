@@ -867,7 +867,8 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		executionObject := dsClient.ExecutionObject{
 			MerchantAddress:      params.merchantWallet.WalletAddress,
 			TokenContractAddress: params.token.ContractAddress,
-			Price:                fmt.Sprintf("%.2f", float64(params.product.PriceInPennies)/100.0),
+			TokenAmount:          int64(params.product.PriceInPennies),
+			TokenDecimals:        int32(params.token.Decimals),
 			ChainID:              uint32(params.network.ChainID),
 			NetworkName:          params.network.Name,
 		}

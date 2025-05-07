@@ -33,7 +33,8 @@ type RedeemDelegationRequest struct {
 	Signature            []byte `json:"signature"`
 	MerchantAddress      string `json:"merchant_address"`
 	TokenContractAddress string `json:"token_contract_address"`
-	Price                string `json:"price"`
+	TokenAmount          int64  `json:"token_amount"`
+	TokenDecimals        int32  `json:"token_decimals"`
 	ChainID              uint32 `json:"chain_id"`
 	NetworkName          string `json:"network_name"`
 }
@@ -78,18 +79,12 @@ func (s *DelegationService) RedeemDelegationHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Convert price string to float64
-	price, err := strconv.ParseFloat(req.Price, 64)
-	if err != nil {
-		http.Error(w, "Invalid price format", http.StatusBadRequest)
-		return
-	}
-
 	// Create execution object
 	executionObject := dsClient.ExecutionObject{
 		MerchantAddress:      req.MerchantAddress,
 		TokenContractAddress: req.TokenContractAddress,
-		Price:                strconv.FormatFloat(price, 'f', -1, 64),
+		TokenAmount:          req.TokenAmount,
+		TokenDecimals:        req.TokenDecimals,
 		ChainID:              req.ChainID,
 		NetworkName:          req.NetworkName,
 	}
@@ -131,7 +126,8 @@ func main() {
 	saltFlag := flag.String("salt", "0x123456789", "Delegation salt")
 	merchantFlag := flag.String("merchant", "0x1234567890123456789012345678901234567890", "Merchant address")
 	tokenFlag := flag.String("token", "0x1234567890123456789012345678901234567890", "Token contract address")
-	priceFlag := flag.String("price", "1000000", "Price in token decimals")
+	tokenAmountFlag := flag.String("token_amount", "1000000", "Token amount in token decimals")
+	tokenDecimalsFlag := flag.String("token_decimals", "6", "Token decimals")
 	verboseFlag := flag.Bool("verbose", false, "Enable verbose output")
 	flag.Parse()
 
@@ -204,7 +200,8 @@ func main() {
 	log.Printf("Using delegate: %s", delegation.Delegate)
 	log.Printf("Using merchant: %s", *merchantFlag)
 	log.Printf("Using token: %s", *tokenFlag)
-	log.Printf("Using price: %s", *priceFlag)
+	log.Printf("Using token amount: %s", *tokenAmountFlag)
+	log.Printf("Using token decimals: %s", *tokenDecimalsFlag)
 
 	// Convert the delegation to JSON
 	delegationJSON, err := json.Marshal(delegation)
@@ -216,17 +213,24 @@ func main() {
 		log.Printf("Delegation JSON: %s", string(delegationJSON))
 	}
 
-	// Convert price string to float64
-	price, err := strconv.ParseFloat(*priceFlag, 64)
+	// Convert token amount to int64
+	tokenAmount, err := strconv.ParseInt(*tokenAmountFlag, 10, 64)
 	if err != nil {
-		log.Fatalf("Invalid price format: %v", err)
+		log.Fatalf("Invalid token amount format: %v", err)
+	}
+
+	// Convert token decimals to int64
+	tokenDecimals, err := strconv.ParseInt(*tokenDecimalsFlag, 10, 32)
+	if err != nil {
+		log.Fatalf("Invalid token decimals format: %v", err)
 	}
 
 	// Create execution object
 	executionObject := dsClient.ExecutionObject{
 		MerchantAddress:      *merchantFlag,
 		TokenContractAddress: *tokenFlag,
-		Price:                strconv.FormatFloat(price, 'f', -1, 64),
+		TokenAmount:          tokenAmount,
+		TokenDecimals:        int32(tokenDecimals),
 		ChainID:              1,
 		NetworkName:          "Ethereum Mainnet",
 	}

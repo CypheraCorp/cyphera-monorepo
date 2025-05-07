@@ -52,4 +52,30 @@ variable "log_retention_days" {
   description = "Number of days to retain CloudWatch logs"
   type        = number
   default     = 7
-} 
+}
+
+variable "circle_api_key_value" {
+  description = "The value for the Circle API Key"
+  type        = string
+  sensitive   = true
+}
+
+variable "coin_market_cap_api_key_value" {
+  description = "The value for the CoinMarketCap API Key"
+  type        = string
+  sensitive   = true
+}
+
+variable "infura_api_key_value" {
+  description = "The value for the Infura API Key"
+  type        = string
+  sensitive   = true
+}
+
+variable "pimlico_api_key_value" {
+  description = "The value for the Pimlico API Key"
+  type        = string
+  sensitive   = true
+}
+
+# ACM / Route53 Variables 

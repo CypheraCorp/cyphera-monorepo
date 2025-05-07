@@ -56,6 +56,9 @@ Parameters:
   ParamCircleApiKeyArn:
     Type: String
     Description: ARN of the Circle API Key Secret in Secrets Manager
+  ParamCoinMarketCapApiKeyArn:
+    Type: String
+    Description: ARN of the CoinMarketCap API Key Secret in Secrets Manager
 
 Globals:
   Function:
@@ -79,6 +82,7 @@ Globals:
         SUPABASE_URL: !Ref ParamSupabaseUrl
         SUPABASE_JWT_SECRET_ARN: !Ref ParamSupabaseJwtSecretArn
         CIRCLE_API_KEY_ARN: !Ref ParamCircleApiKeyArn
+        COIN_MARKET_CAP_API_KEY_ARN: !Ref ParamCoinMarketCapApiKeyArn
         CYPHERA_SMART_WALLET_ADDRESS: !Ref ParamSmartWalletAddress
         # Construct DELEGATION_GRPC_ADDR directly from ALB DNS parameter
         DELEGATION_GRPC_ADDR: !Sub "${ParamDelegationServerAlbDns}:50051"
@@ -113,9 +117,10 @@ Resources:
               Action:
                 - secretsmanager:GetSecretValue
               Resource:
-                - !Ref ParamSupabaseJwtSecretArn # Use ARN passed as parameter
-                - !Ref ParamCircleApiKeyArn     # Use ARN passed as parameter
-                - !Ref ParamRdsSecretArn        # Use ARN passed as parameter
+                - !Ref ParamSupabaseJwtSecretArn
+                - !Ref ParamCircleApiKeyArn
+                - !Ref ParamCoinMarketCapApiKeyArn
+                - !Ref ParamRdsSecretArn
         # Policy to read SSM parameters (Ensure this covers the ARN params too)
         - SSMParameterReadPolicy:
             ParameterName: !Sub "/cyphera/*-${Stage}"

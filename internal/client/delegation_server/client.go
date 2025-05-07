@@ -20,7 +20,8 @@ import (
 type ExecutionObject struct {
 	MerchantAddress      string
 	TokenContractAddress string
-	Price                string
+	TokenAmount          int64
+	TokenDecimals        int32
 	ChainID              uint32
 	NetworkName          string
 }
@@ -135,7 +136,8 @@ func (c *DelegationClient) RedeemDelegation(ctx context.Context, signature []byt
 		Signature:            signature,
 		MerchantAddress:      executionObject.MerchantAddress,
 		TokenContractAddress: executionObject.TokenContractAddress,
-		Price:                executionObject.Price,
+		TokenAmount:          executionObject.TokenAmount,
+		TokenDecimals:        executionObject.TokenDecimals,
 		ChainId:              executionObject.ChainID,     // Use field from struct
 		NetworkName:          executionObject.NetworkName, // Use field from struct
 	}
@@ -163,8 +165,11 @@ func (c *DelegationClient) validateRedemptionInputs(signature []byte, executionO
 	if executionObject.TokenContractAddress == "" || executionObject.TokenContractAddress == "0x0000000000000000000000000000000000000000" {
 		return fmt.Errorf("valid token contract address is required")
 	}
-	if executionObject.Price == "" || executionObject.Price == "0" {
-		return fmt.Errorf("valid price is required")
+	if executionObject.TokenAmount == 0 {
+		return fmt.Errorf("valid token amount is required")
+	}
+	if executionObject.TokenDecimals == 0 {
+		return fmt.Errorf("valid token decimals is required")
 	}
 	// Add validation for new fields
 	if executionObject.ChainID == 0 {
@@ -269,7 +274,10 @@ func (c *DelegationClient) HealthCheck(ctx context.Context) error {
 		Signature:            []byte{},
 		MerchantAddress:      "0x0000000000000000000000000000000000000000",
 		TokenContractAddress: "0x0000000000000000000000000000000000000000",
-		Price:                "0",
+		TokenAmount:          0,
+		TokenDecimals:        0,
+		ChainId:              0,
+		NetworkName:          "",
 	}
 
 	// Try to call the service

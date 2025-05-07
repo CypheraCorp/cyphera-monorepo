@@ -67,17 +67,17 @@ type ListTokensResponse struct {
 	Data   []TokenResponse `json:"data"`
 }
 
-// GetConversionRateRequest mirrors TokenPricePayload
-type GetConversionRateRequest struct {
+// GetTokenQuoteRequest mirrors TokenAmountPayload
+type GetTokenQuoteRequest struct {
 	FiatSymbol  string `json:"fiat_symbol" binding:"required"`
 	TokenSymbol string `json:"token_symbol" binding:"required"`
 }
 
-// GetConversionRateResponse mirrors TokenPriceResponse
-type GetConversionRateResponse struct {
-	FiatSymbol       string  `json:"fiat_symbol"`
-	TokenSymbol      string  `json:"token_symbol"`
-	TokenPriceInFiat float64 `json:"token_price_in_fiat"`
+// GetTokenQuoteResponse mirrors TokenAmountResponse
+type GetTokenQuoteResponse struct {
+	FiatSymbol        string  `json:"fiat_symbol"`
+	TokenSymbol       string  `json:"token_symbol"`
+	TokenAmountInFiat float64 `json:"token_amount_in_fiat"`
 }
 
 // GetToken godoc
@@ -405,20 +405,20 @@ func (h *TokenHandler) DeleteToken(c *gin.Context) {
 	sendSuccess(c, http.StatusNoContent, nil)
 }
 
-// GetConversionRate godoc
-// @Summary Get token conversion rate
+// GetTokenQuote godoc
+// @Summary Get token quote
 // @Description Retrieves the price of a given token symbol in the specified fiat currency using CoinMarketCap API.
 // @Tags tokens
 // @Accept json
 // @Produce json
-// @Param price body GetConversionRateRequest true "Token and Fiat symbols"
+// @Param quote body GetConversionRateRequest true "Token and Fiat symbols"
 // @Success 200 {object} GetConversionRateResponse
 // @Failure 400 {object} ErrorResponse "Invalid request body or missing parameters"
 // @Failure 500 {object} ErrorResponse "Internal server error or failed to fetch price from CoinMarketCap"
 // @Security ApiKeyAuth
-// @Router /tokens/price [post]
-func (h *TokenHandler) GetTokenPrice(c *gin.Context) {
-	var req GetConversionRateRequest
+// @Router /tokens/quote [post]
+func (h *TokenHandler) GetTokenQuote(c *gin.Context) {
+	var req GetTokenQuoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
@@ -458,13 +458,13 @@ func (h *TokenHandler) GetTokenPrice(c *gin.Context) {
 	upperTokenSymbol := strings.ToUpper(req.TokenSymbol)
 	upperFiatSymbol := strings.ToUpper(req.FiatSymbol)
 
-	var price float64
+	var amount float64
 	found := false
 
 	if tokenDataList, ok := cmcResponse.Data[upperTokenSymbol]; ok && len(tokenDataList) > 0 {
 		tokenData := tokenDataList[0]
 		if quoteData, ok := tokenData.Quote[upperFiatSymbol]; ok {
-			price = quoteData.Price
+			amount = quoteData.Price
 			found = true
 		}
 	}
@@ -480,10 +480,10 @@ func (h *TokenHandler) GetTokenPrice(c *gin.Context) {
 	}
 
 	// Prepare and send success response
-	response := GetConversionRateResponse{
-		FiatSymbol:       upperFiatSymbol,
-		TokenSymbol:      upperTokenSymbol,
-		TokenPriceInFiat: price,
+	response := GetTokenQuoteResponse{
+		FiatSymbol:        upperFiatSymbol,
+		TokenSymbol:       upperTokenSymbol,
+		TokenAmountInFiat: amount,
 	}
 
 	sendSuccess(c, http.StatusOK, response)

@@ -17,8 +17,14 @@ message RedeemDelegationRequest {
   string merchant_address = 2;
   // The token contract address
   string token_contract_address = 3;
-  // The price amount in token decimals
-  string price = 4;
+  // The token amount in token decimals
+  int64 token_amount = 4;
+  // The token decimals
+  int32 token_decimals = 5;
+  // The EVM chain ID for the transaction
+  uint32 chain_id = 6;
+  // The network name for the transaction (e.g. "Ethereum Mainnet", "Polygon Amoy", "Base Sepolia", "Optimism Sepolia", "Arbitrum One Sepolia", "Optimism Sepolia")
+  string network_name = 7;
 }
 
 // Response containing the result of the delegation redemption

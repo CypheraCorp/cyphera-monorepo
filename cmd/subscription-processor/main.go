@@ -175,7 +175,8 @@ func main() {
 	processSubscriptions(ctx, subscriptionHandler) // Run the processing logic once
 	log.Printf("Subscription processing finished.")
 
-	// No loop, ticker, or signal handling needed for Lambda/cron job
+	// end the program
+	os.Exit(0)
 }
 
 // processSubscriptions runs the subscription processor and logs the results

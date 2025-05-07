@@ -27,6 +27,7 @@ PARAM_RDS_ENDPOINT_NAME="/cyphera/rds-endpoint-${STAGE}"
 PARAM_SUPABASE_URL_NAME="/cyphera/supabase/url-${STAGE}"
 PARAM_SUPABASE_JWT_SECRET_ARN_NAME="/cyphera/cyphera-api/supabase-jwt-secret-arn-${STAGE}"
 PARAM_CIRCLE_API_KEY_ARN_NAME="/cyphera/cyphera-api/circle-api-key-arn-${STAGE}"
+PARAM_COIN_MARKET_CAP_API_KEY_ARN_NAME="/cyphera/cyphera-api/coin-market-cap-api-key-arn-${STAGE}"
 PARAM_SMART_WALLET_NAME="/cyphera/wallet/smart-wallet-address-${STAGE}"
 PARAM_CORS_ORIGINS_NAME="/cyphera/cors/allowed-origins-${STAGE}"
 PARAM_CORS_METHODS_NAME="/cyphera/cors/allowed-methods-${STAGE}"
@@ -50,6 +51,7 @@ PARAM_RDS_ENDPOINT_VALUE=$(fetch_ssm_param "${PARAM_RDS_ENDPOINT_NAME}")
 PARAM_SUPABASE_URL_VALUE=$(fetch_ssm_param "${PARAM_SUPABASE_URL_NAME}" "--with-decryption")
 PARAM_SUPABASE_JWT_SECRET_ARN_VALUE=$(fetch_ssm_param "${PARAM_SUPABASE_JWT_SECRET_ARN_NAME}")
 PARAM_CIRCLE_API_KEY_ARN_VALUE=$(fetch_ssm_param "${PARAM_CIRCLE_API_KEY_ARN_NAME}")
+PARAM_COIN_MARKET_CAP_API_KEY_ARN_VALUE=$(fetch_ssm_param "${PARAM_COIN_MARKET_CAP_API_KEY_ARN_NAME}")
 PARAM_SMART_WALLET_VALUE=$(fetch_ssm_param "${PARAM_SMART_WALLET_NAME}" "--with-decryption")
 PARAM_CORS_ORIGINS_VALUE=$(fetch_ssm_param "${PARAM_CORS_ORIGINS_NAME}")
 PARAM_CORS_METHODS_VALUE=$(fetch_ssm_param "${PARAM_CORS_METHODS_NAME}")
@@ -70,6 +72,7 @@ OVERRIDES="${OVERRIDES} ParamRdsEndpoint=${PARAM_RDS_ENDPOINT_VALUE}"
 OVERRIDES="${OVERRIDES} ParamSupabaseUrl=${PARAM_SUPABASE_URL_VALUE}"
 OVERRIDES="${OVERRIDES} ParamSupabaseJwtSecretArn=${PARAM_SUPABASE_JWT_SECRET_ARN_VALUE}"
 OVERRIDES="${OVERRIDES} ParamCircleApiKeyArn=${PARAM_CIRCLE_API_KEY_ARN_VALUE}"
+OVERRIDES="${OVERRIDES} ParamCoinMarketCapApiKeyArn=${PARAM_COIN_MARKET_CAP_API_KEY_ARN_VALUE}"
 OVERRIDES="${OVERRIDES} ParamSmartWalletAddress=${PARAM_SMART_WALLET_VALUE}"
 OVERRIDES="${OVERRIDES} ParamCorsAllowedOrigins=${PARAM_CORS_ORIGINS_VALUE}"
 OVERRIDES="${OVERRIDES} ParamCorsAllowedMethods=${PARAM_CORS_METHODS_VALUE}"

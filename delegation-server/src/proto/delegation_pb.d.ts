@@ -15,8 +15,14 @@ export class RedeemDelegationRequest extends jspb.Message {
     setMerchantAddress(value: string): RedeemDelegationRequest;
     getTokenContractAddress(): string;
     setTokenContractAddress(value: string): RedeemDelegationRequest;
-    getPrice(): string;
-    setPrice(value: string): RedeemDelegationRequest;
+    getTokenAmount(): number;
+    setTokenAmount(value: number): RedeemDelegationRequest;
+    getTokenDecimals(): number;
+    setTokenDecimals(value: number): RedeemDelegationRequest;
+    getChainId(): number;
+    setChainId(value: number): RedeemDelegationRequest;
+    getNetworkName(): string;
+    setNetworkName(value: string): RedeemDelegationRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): RedeemDelegationRequest.AsObject;
@@ -33,7 +39,10 @@ export namespace RedeemDelegationRequest {
         signature: Uint8Array | string,
         merchantAddress: string,
         tokenContractAddress: string,
-        price: string,
+        tokenAmount: number,
+        tokenDecimals: number,
+        chainId: number,
+        networkName: string,
     }
 }
 
