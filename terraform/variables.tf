@@ -55,27 +55,31 @@ variable "log_retention_days" {
 }
 
 variable "circle_api_key_value" {
-  description = "The value for the Circle API Key"
+  description = "The value for the Circle API Key (only used for initial set, then ignored)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "coin_market_cap_api_key_value" {
-  description = "The value for the CoinMarketCap API Key"
+  description = "The value for the CoinMarketCap API Key (only used for initial set, then ignored)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "infura_api_key_value" {
-  description = "The value for the Infura API Key"
+  description = "The value for the Infura API Key (only used for initial set, then ignored)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "pimlico_api_key_value" {
-  description = "The value for the Pimlico API Key"
+  description = "The value for the Pimlico API Key (only used for initial set, then ignored)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 # ACM / Route53 Variables 

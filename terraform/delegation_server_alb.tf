@@ -5,14 +5,15 @@
 # Security Group for the ALB
 resource "aws_security_group" "delegation_server_alb" {
   name        = "${var.service_prefix}-ds-alb-sg-${var.stage}"
-  description = "Allow gRPC traffic from Lambda to Delegation Server ALB"
+  description = "Allow HTTPS traffic from Lambda to Delegation Server ALB"
   vpc_id      = module.vpc.vpc_id # Use VPC module output
 
-  # Allow inbound gRPC (port 50051) from Lambda Security Group
+
+  # Allow inbound HTTPS (port 443) from Lambda Security Group
   ingress {
-    description     = "Allow gRPC from Lambda Functions"
-    from_port       = 50051
-    to_port         = 50051
+    description     = "Allow HTTPS from Lambda Functions"
+    from_port       = 443
+    to_port         = 443
     protocol        = "tcp"
     security_groups = [aws_security_group.lambda.id] # Reference Lambda SG defined in main.tf
   }
