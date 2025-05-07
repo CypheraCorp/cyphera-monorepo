@@ -53,8 +53,14 @@ type DelegationService struct {
 
 // NewDelegationService creates a new DelegationService
 func NewDelegationService() (*DelegationService, error) {
+	delegationClientConfig := dsClient.DelegationClientConfig{
+		DelegationGRPCAddr: "localhost:50051",
+		RPCTimeout:         3 * time.Minute,
+		UseLocalMode:       true,
+	}
+
 	// Initialize the delegation client
-	delegationClient, err := dsClient.NewDelegationClient()
+	delegationClient, err := dsClient.NewDelegationClient(delegationClientConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create delegation client: %w", err)
 	}

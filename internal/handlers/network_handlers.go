@@ -4,7 +4,6 @@ import (
 	"cyphera-api/internal/db"
 	"net/http"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -284,8 +283,6 @@ func (h *NetworkHandler) ListNetworks(c *gin.Context) {
 		return
 	}
 
-	spew.Dump("list networks", networks)
-
 	response := make([]NetworkWithTokensResponse, len(networks))
 	for i, network := range networks {
 		tokens, err := h.common.db.ListActiveTokensByNetwork(c.Request.Context(), network.ID)
@@ -304,8 +301,6 @@ func (h *NetworkHandler) ListNetworks(c *gin.Context) {
 			Tokens:          tokenResponses,
 		}
 	}
-
-	spew.Dump("response", response)
 
 	sendList(c, response)
 }
