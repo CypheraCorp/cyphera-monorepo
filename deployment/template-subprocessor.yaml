@@ -8,7 +8,7 @@ Description: >
 # Global settings for all functions
 Globals:
   Function:
-    Timeout: 60 # Timeout in seconds (adjust as needed, max 900 for Lambda)
+    Timeout: 300 # Timeout in seconds (adjust as needed, max 900 for Lambda)
     MemorySize: 512 # Memory in MB (adjust based on need)
     Runtime: provided.al2 # Using custom runtime for Go compiled binary
     Architectures:
