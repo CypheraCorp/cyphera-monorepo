@@ -16,20 +16,27 @@ const secretsClient = new SecretsManagerClient({}); // Uses default credential c
  * @throws Error if the secret cannot be retrieved from either source.
  */
 export async function getSecretValue(secretArnEnvVar: string, fallbackEnvVar: string): Promise<string> {
+  logger.info("secretArnEnvVar: ", secretArnEnvVar)
   const secretArn = process.env[secretArnEnvVar];
-
+  logger.info("secretArn: ", secretArn)
   // Attempt to fetch from Secrets Manager if ARN is provided
   if (secretArn) {
+    logger.info("secretArn is not empty")
     logger.debug(`Attempting to fetch secret from AWS Secrets Manager for ${secretArnEnvVar}`, { secretArn });
     try {
+      logger.info("Attempting to fetch secret from AWS Secrets Manager")
       const command = new GetSecretValueCommand({ SecretId: secretArn });
+      logger.info("command: ", command)
       const result = await secretsClient.send(command);
+      logger.info("result: ", result)
 
       if (result.SecretString) {
+        logger.info("result.SecretString is not empty")
         const fetchedSecretString = result.SecretString;
 
         // Try parsing as JSON with a single key
         try {
+          logger.info("Attempting to parse as JSON with a single key")
           const secretJSON = JSON.parse(fetchedSecretString);
           if (typeof secretJSON === 'object' && secretJSON !== null) {
             const keys = Object.keys(secretJSON);
@@ -38,7 +45,9 @@ export async function getSecretValue(secretArnEnvVar: string, fallbackEnvVar: st
               return secretJSON[keys[0]];
             }
           }
+          logger.info("Not a JSON or not the expected single-key JSON format, treating as plain text")
         } catch (jsonError) {
+          logger.info("Error parsing JSON: ", jsonError)
           // Not a JSON or not the expected single-key JSON format, treat as plain text
           logger.debug(`Secret for ${secretArnEnvVar} is not single-key JSON, treating as plain text.`);
         }
@@ -47,12 +56,15 @@ export async function getSecretValue(secretArnEnvVar: string, fallbackEnvVar: st
         logger.info(`Successfully fetched secret from Secrets Manager (plain text) for ${secretArnEnvVar}`);
         return fetchedSecretString;
       }
+      logger.info("result.SecretString is empty")
       logger.warn(`SecretString is empty from Secrets Manager for ${secretArnEnvVar}, falling back.`);
     } catch (error) {
+      logger.info("Error fetching secret from Secrets Manager: ", error)
       logger.warn(`Failed to retrieve secret from Secrets Manager for ${secretArnEnvVar}, falling back to env var ${fallbackEnvVar}.`, { error, secretArn });
       // Fall through to fallback
     }
   } else {
+    logger.info("secretArn is empty")
     logger.debug(`Secret ARN environment variable '${secretArnEnvVar}' not set, falling back to direct env var '${fallbackEnvVar}'.`);
   }
 
