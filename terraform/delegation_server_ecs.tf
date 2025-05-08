@@ -2,9 +2,9 @@
 # Cluster, Task Definition, and Service will be added in later steps.
 
 # --- Data sources to get ARNs for Secrets/Parameters ---
-data "aws_secretsmanager_secret" "delegation_private_key" {
-  name = "cyphera/delegation-server/private-key-${var.stage}"
-}
+# data "aws_secretsmanager_secret" "delegation_private_key" {
+#   name = "cyphera/delegation-server/private-key-${var.stage}"
+# }
 
 # --- IAM Role for ECS Task Execution ---
 data "aws_iam_policy_document" "ecs_task_assume_role" {
@@ -42,7 +42,7 @@ resource "aws_iam_role_policy" "delegation_server_fetch_config" {
         Action = [
           "secretsmanager:GetSecretValue"
         ]
-        Resource = [data.aws_secretsmanager_secret.delegation_private_key.arn]
+        Resource = [aws_secretsmanager_secret.delegation_private_key.arn]
       },
       {
         Effect = "Allow"
@@ -52,6 +52,9 @@ resource "aws_iam_role_policy" "delegation_server_fetch_config" {
         ]
         # Reference the specific parameter ARNs using resource attributes
         Resource = [
+          aws_ssm_parameter.infura_api_key_arn.arn,
+          aws_ssm_parameter.pimlico_api_key_arn.arn,
+          aws_ssm_parameter.delegation_private_key_arn.arn
         ]
       }
     ]

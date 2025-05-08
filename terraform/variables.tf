@@ -82,4 +82,11 @@ variable "pimlico_api_key_value" {
   default     = ""
 }
 
+variable "delegation_private_key_value" {
+  description = "The actual private key string for the delegation server. Used to create the secret in AWS Secrets Manager."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 # ACM / Route53 Variables 

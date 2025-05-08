@@ -84,4 +84,25 @@ resource "aws_secretsmanager_secret_version" "pimlico_api_key_version" {
       secret_string,
     ]
   }
+}
+
+resource "aws_secretsmanager_secret" "delegation_private_key" {
+  name        = "cyphera/delegation-server/private-key-${var.stage}"
+  description = "Delegation Server Private Key - ${var.stage} (Managed by Terraform)"
+  tags = {
+    Environment = var.stage
+    Project     = "Cyphera"
+    Service     = "delegation-server"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "delegation_private_key_version" {
+  secret_id     = aws_secretsmanager_secret.delegation_private_key.id
+  secret_string = var.delegation_private_key_value
+
+  lifecycle {
+    ignore_changes = [
+      secret_string,
+    ]
+  }
 } 
