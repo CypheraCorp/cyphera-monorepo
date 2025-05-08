@@ -1270,12 +1270,14 @@ func (h *SubscriptionHandler) RedeemDueSubscriptionsHTTP(c *gin.Context) {
 // ProcessDueSubscriptions finds and processes all subscriptions that are due for redemption
 // It uses a transaction for atomicity and updates subscription status based on the result
 func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (ProcessDueSubscriptionsResult, error) {
+	log.Printf("Entering ProcessDueSubscriptions")
 	results := ProcessDueSubscriptionsResult{}
 	now := time.Now()
 
 	// Start a transaction using the BeginTx helper
 	tx, qtx, err := h.common.BeginTx(ctx)
 	if err != nil {
+		log.Printf("Error in ProcessDueSubscriptions: failed to begin transaction: %v", err)
 		return results, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
@@ -1290,61 +1292,79 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 
 	// Query for subscriptions due for redemption and lock them for processing
 	nowPgType := pgtype.Timestamptz{Time: now, Valid: true}
+	log.Printf("ProcessDueSubscriptions: Querying for subscriptions due before %v", now)
 	subscriptions, err := qtx.ListSubscriptionsDueForRenewal(ctx, nowPgType)
 	if err != nil {
+		log.Printf("Error in ProcessDueSubscriptions: failed to fetch subscriptions due for redemption: %v", err)
 		return results, fmt.Errorf("failed to fetch subscriptions due for redemption: %w", err)
 	}
 
 	// Update result count
 	results.Total = len(subscriptions)
 	if results.Total == 0 {
+		log.Printf("ProcessDueSubscriptions: No subscriptions found due for renewal.")
 		// No subscriptions to process, commit empty transaction
 		if err := tx.Commit(ctx); err != nil {
+			log.Printf("Error in ProcessDueSubscriptions: failed to commit empty transaction: %v", err)
 			return results, fmt.Errorf("failed to commit empty transaction: %w", err)
 		}
 		tx = nil // Set to nil to avoid double rollback
+		log.Printf("Exiting ProcessDueSubscriptions. Total: 0, Succeeded: 0, Failed: 0, Completed: 0")
 		return results, nil
 	}
 
 	log.Printf("Found %d subscriptions due for redemption", results.Total)
 
 	// Process each subscription within the transaction
-	for _, subscription := range subscriptions {
+	for i, subscription := range subscriptions {
+		log.Printf("Processing subscription %d/%d: ID: %s, Status: %s, ProductID: %s, CurrentPeriodEnd: %v",
+			i+1, results.Total, subscription.ID, subscription.Status, subscription.ProductID, subscription.CurrentPeriodEnd.Time)
+
 		// Skip subscriptions that are not active
 		if subscription.Status != db.SubscriptionStatusActive {
 			log.Printf("Skipping non-active subscription %s with status %s", subscription.ID, subscription.Status)
+			// results.Failed++ // Or some other counter for skipped if needed
 			continue
 		}
 
 		// Get required data for processing
+		log.Printf("Fetching product for subscription %s, ProductID: %s", subscription.ID, subscription.ProductID)
 		product, err := qtx.GetProductWithoutWorkspaceId(ctx, subscription.ProductID)
 		if err != nil {
 			log.Printf("Failed to get product for subscription %s: %v", subscription.ID, err)
 			results.Failed++
 			continue
 		}
+		log.Printf("Successfully fetched product %s for subscription %s", product.ID, subscription.ID)
 
+		log.Printf("Fetching product token for subscription %s, ProductTokenID: %s", subscription.ID, subscription.ProductTokenID)
 		productToken, err := qtx.GetProductToken(ctx, subscription.ProductTokenID)
 		if err != nil {
 			log.Printf("Failed to get product token for subscription %s: %v", subscription.ID, err)
 			results.Failed++
 			continue
 		}
+		log.Printf("Successfully fetched product token %s for subscription %s", productToken.ID, subscription.ID)
 
+		log.Printf("Fetching token for subscription %s, TokenID: %s", subscription.ID, productToken.TokenID)
 		token, err := qtx.GetToken(ctx, productToken.TokenID)
 		if err != nil {
 			log.Printf("Failed to get token for subscription %s: %v", subscription.ID, err)
 			results.Failed++
 			continue
 		}
+		log.Printf("Successfully fetched token %s (%s) for subscription %s", token.ID, token.Symbol, subscription.ID)
 
+		log.Printf("Fetching network for token %s, NetworkID: %s", token.ID, token.NetworkID)
 		network, err := qtx.GetNetwork(ctx, token.NetworkID)
 		if err != nil {
 			log.Printf("Failed to get network for token %s: %v", token.ID, err)
 			results.Failed++
 			continue
 		}
+		log.Printf("Successfully fetched network %s (ChainID: %d) for token %s", network.ID, network.ChainID, token.ID)
 
+		log.Printf("Fetching merchant wallet for product %s, WalletID: %s, WorkspaceID: %s", product.ID, product.WalletID, product.WorkspaceID)
 		merchantWallet, err := qtx.GetWalletByID(ctx, db.GetWalletByIDParams{
 			ID:          product.WalletID,
 			WorkspaceID: product.WorkspaceID,
@@ -1354,16 +1374,22 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 			results.Failed++
 			continue
 		}
+		log.Printf("Successfully fetched merchant wallet %s for product %s", merchantWallet.ID, product.ID)
 
+		log.Printf("Fetching delegation data for subscription %s, DelegationID: %s", subscription.ID, subscription.DelegationID)
 		delegationData, err := qtx.GetDelegationData(ctx, subscription.DelegationID)
 		if err != nil {
 			log.Printf("Failed to get delegation data for subscription %s: %v", subscription.ID, err)
 			results.Failed++
 			continue
 		}
+		log.Printf("Successfully fetched delegation data %s for subscription %s. Raw Delegation Data: %+v",
+			delegationData.ID, subscription.ID, delegationData)
 
 		// Check if this is the final payment
 		isFinalPayment := subscription.CurrentPeriodEnd.Time.Before(now)
+		log.Printf("Subscription %s: isFinalPayment determined to be %t (CurrentPeriodEnd: %v, Now: %v)",
+			subscription.ID, isFinalPayment, subscription.CurrentPeriodEnd.Time, now)
 
 		// Process the subscription
 		params := processSubscriptionParams{
@@ -1382,19 +1408,34 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 			results:        &results,
 		}
 
+		log.Printf("Calling h.processSubscription for subscription ID: %s", subscription.ID)
 		_, err = h.processSubscription(params)
 		if err != nil {
-			// Error handling is done in processSubscription, just continue
+			// Error handling is done in processSubscription, which updates results.Failed
+			// and logs the specific error. We just log that we are continuing.
+			log.Printf("Error encountered by h.processSubscription for subscription ID %s (error logged within function): %v. Continuing.", subscription.ID, err)
+			// The 'continue' is already part of the original logic if processSubscription returns an error.
+			// If processSubscription itself handles logging and updates results.Failed,
+			// then this log might be redundant or could be simplified.
+			// For now, keeping it to show the flow.
 			continue
 		}
+		log.Printf("Finished h.processSubscription call for subscription ID: %s. Current results - Succeeded: %d, Failed: %d, Completed: %d",
+			subscription.ID, results.Succeeded, results.Failed, results.Completed)
 	}
 
+	log.Printf("Attempting to commit transaction. Current results - Succeeded: %d, Failed: %d, Completed: %d",
+		results.Succeeded, results.Failed, results.Completed)
 	// Commit the transaction if we got this far
 	if err := tx.Commit(ctx); err != nil {
+		log.Printf("Error in ProcessDueSubscriptions: failed to commit transaction: %v", err)
 		return results, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 	tx = nil // Set to nil to avoid double rollback
+	log.Printf("Transaction committed successfully.")
 
+	log.Printf("Exiting ProcessDueSubscriptions. Total: %d, Succeeded: %d, Failed: %d, Completed: %d",
+		results.Total, results.Succeeded, results.Failed, results.Completed)
 	return results, nil
 }
 
