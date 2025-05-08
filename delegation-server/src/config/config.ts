@@ -35,8 +35,10 @@ interface NetworkConfig {
  * @throws Error if required URLs or API keys are not found
  */
 export async function getNetworkConfig(networkName: string, chainId: number): Promise<NetworkConfig> {
-  logger.info("Infura API Key ARN: ", process.env.INFURA_API_KEY_ARN)
-  logger.info("Pimlico API Key ARN: ", process.env.PIMLICO_API_KEY_ARN)
+  logger.info("Infura API Key ARN (env): ", process.env.INFURA_API_KEY_ARN);
+  logger.info("Pimlico API Key ARN (env): ", process.env.PIMLICO_API_KEY_ARN);
+  logger.info("Private Key ARN (env): ", process.env.PRIVATE_KEY_ARN);
+
   // --- RPC URL (Infura) ---
   const infuraApiKey = await getSecretValue('INFURA_API_KEY_ARN', 'INFURA_API_KEY')
 

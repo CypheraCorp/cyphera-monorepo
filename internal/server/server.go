@@ -206,9 +206,9 @@ func InitializeHandlers() {
 	}
 
 	// --- Delegation Client Configuration ---
-	delegationHost := os.Getenv("DELEGATION_GRPC_ADDR")
+	delegationHost := os.Getenv("DELEGATION_SERVER_URL")
 	if delegationHost == "" {
-		logger.Fatal("DELEGATION_GRPC_ADDR environment variable is required")
+		logger.Fatal("DELEGATION_SERVER_URL environment variable is required")
 	}
 
 	var fullDelegationAddr string

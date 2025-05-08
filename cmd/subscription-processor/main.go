@@ -153,9 +153,9 @@ func main() {
 	dbQueries := db.New(connPool)
 
 	// --- Get Delegation Server gRPC Address and Configuration ---
-	delegationHost := os.Getenv("DELEGATION_GRPC_ADDR")
+	delegationHost := os.Getenv("DELEGATION_SERVER_URL")
 	if delegationHost == "" {
-		logger.Fatal("DELEGATION_GRPC_ADDR environment variable is required and not set")
+		logger.Fatal("DELEGATION_SERVER_URL environment variable is required and not set")
 	}
 
 	var fullDelegationAddr string

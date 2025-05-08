@@ -55,7 +55,7 @@ type DelegationClientConfig struct {
 }
 
 // NewDelegationClient creates a new client for the delegation service.
-// It establishes a connection to the gRPC server specified by the DELEGATION_GRPC_ADDR
+// It establishes a connection to the gRPC server specified by the DELEGATION_SERVER_URL
 // environment variable, or falls back to localhost:50051 if not specified.
 //
 // Returns:
