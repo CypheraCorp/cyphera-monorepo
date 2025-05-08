@@ -61,9 +61,9 @@ Resources:
         ScheduledRun:
           Type: Schedule
           Properties:
-            Schedule: rate(60 minutes) # trigger every 1 hour
+            Schedule: rate(1 minute) # trigger every 1 minute
             Name: !Sub subscription-processor-trigger-${Stage}
-            Description: Trigger subscription processor every 1 hour
+            Description: Trigger subscription processor every 1 minute
             Enabled: true # Set to false to disable trigger
       Environment:
         Variables:
