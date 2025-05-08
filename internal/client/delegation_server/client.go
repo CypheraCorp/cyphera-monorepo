@@ -280,7 +280,6 @@ func (c *DelegationClient) extractErrorMessage(res *proto.RedeemDelegationRespon
 // RedeemDelegationDirectly attempts to redeem a delegation by calling the delegation service directly
 // NOTE: This helper function passes default/zero values for chain/network info.
 func (c *DelegationClient) RedeemDelegationDirectly(ctx context.Context, delegationData []byte, executionObject ExecutionObject) (string, error) {
-	log.Printf("Attempting to redeem delegation (DIRECT - NOTE: chainId/networkName defaults used), data size: %d bytes", len(delegationData))
 	log.Printf("Using RPC timeout of %v for delegation redemption", c.rpcTimeout)
 
 	// Call the updated RedeemDelegation function
