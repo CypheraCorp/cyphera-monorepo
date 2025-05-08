@@ -323,6 +323,7 @@ CREATE TABLE subscriptions (
     current_period_end TIMESTAMP WITH TIME ZONE NOT NULL,
     next_redemption_date TIMESTAMP WITH TIME ZONE,
     total_redemptions INT NOT NULL DEFAULT 0,
+    total_term_length INT NOT NULL DEFAULT 0,
     total_amount_in_cents INT NOT NULL DEFAULT 0,
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

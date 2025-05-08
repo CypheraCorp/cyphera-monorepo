@@ -841,9 +841,11 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 
 	log.Printf("processSubscription: Idempotency checks passed for subscription %s. Proceeding with redemption logic.", currentDBSub.ID)
 
-	// NOTE: Use originalSubscription for data like ProductID, PriceInPennies for *this* processing attempt.
-	// isFinalPayment should be based on originalSubscription.CurrentPeriodEnd
-	isFinalPayment := originalSubscription.CurrentPeriodEnd.Time.Before(params.now)
+	// isFinalPayment should be based on originalSubscription.CurrentPeriodEnd and originalSubscription.TotalTermLength
+	isFinalPayment := false
+	if originalSubscription.CurrentPeriodEnd.Time.Before(params.now) && originalSubscription.TotalTermLength == originalSubscription.TotalRedemptions {
+		isFinalPayment = true
+	}
 
 	// Marshal delegation to JSON bytes for redemption
 	delegationBytes, err := json.Marshal(params.delegationData)
@@ -1405,7 +1407,10 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 		}
 
 		// Check if this is the final payment
-		isFinalPayment := subscription.CurrentPeriodEnd.Time.Before(now)
+		isFinalPayment := false
+		if subscription.CurrentPeriodEnd.Time.Before(now) && subscription.TotalTermLength == subscription.TotalRedemptions {
+			isFinalPayment = true
+		}
 
 		// Process the subscription
 		params := processSubscriptionParams{
