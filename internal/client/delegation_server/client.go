@@ -12,6 +12,7 @@ import (
 
 	"cyphera-api/internal/proto"
 
+	"github.com/davecgh/go-spew/spew"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -107,6 +108,8 @@ func NewDelegationClient(config DelegationClientConfig) (*DelegationClient, erro
 				}
 			}
 		}
+
+		spew.Dump("host", host)
 
 		tlsConfig := &tls.Config{
 			ServerName: host, // Use the extracted host for SNI
