@@ -790,19 +790,74 @@ type processSubscriptionResult struct {
 func (h *SubscriptionHandler) processSubscription(params processSubscriptionParams) (processSubscriptionResult, error) {
 	// Initialize result
 	result := processSubscriptionResult{}
-	subscription := params.subscription
+	originalSubscription := params.subscription // Keep a reference to the initially fetched one
+
+	log.Printf("processSubscription: Re-fetching subscription %s for idempotency check within transaction.", originalSubscription.ID)
+	currentDBSub, err := params.queries.GetSubscription(params.ctx, originalSubscription.ID)
+	if err != nil {
+		errMsg := fmt.Sprintf("processSubscription: Failed to re-fetch subscription %s for idempotency check: %v", originalSubscription.ID, err)
+		log.Println(errMsg)
+		if params.results != nil {
+			params.results.Failed++
+		}
+		return result, errors.New(errMsg)
+	}
+	log.Printf("processSubscription: Fetched current state for %s: Status=%s, NextRedemptionDate=%v",
+		currentDBSub.ID, currentDBSub.Status, currentDBSub.NextRedemptionDate.Time)
+
+	// IDEMPOTENCY CHECKS:
+	// 1. Check for Terminal Status (Completed or Failed by a previous run)
+	if currentDBSub.Status == db.SubscriptionStatusCompleted {
+		log.Printf("processSubscription: Subscription %s already marked as COMPLETED. Skipping.", currentDBSub.ID)
+		if params.results != nil {
+			params.results.Completed++
+		}
+		result.isProcessed = true
+		result.isCompleted = true
+		return result, nil
+	}
+	if currentDBSub.Status == db.SubscriptionStatusFailed {
+		log.Printf("processSubscription: Subscription %s already marked as FAILED. Skipping.", currentDBSub.ID)
+		if params.results != nil {
+			params.results.Failed++
+		}
+		return result, nil
+	}
+
+	// 2. Check if Next Redemption Date has already been advanced past the current processing time
+	if currentDBSub.NextRedemptionDate.Valid && currentDBSub.NextRedemptionDate.Time.After(params.now) {
+		log.Printf("processSubscription: Subscription %s NextRedemptionDate (%v) is already past current processing time (%v). Likely processed by a concurrent/retried run. Skipping.",
+			currentDBSub.ID, currentDBSub.NextRedemptionDate.Time, params.now)
+		if params.results != nil {
+			params.results.Succeeded++
+		}
+		result.isProcessed = true
+		return result, nil
+	}
+
+	// 3. Safeguard: Ensure the subscription fetched for processing is still in a processable state
+	if currentDBSub.Status != db.SubscriptionStatusActive && currentDBSub.Status != db.SubscriptionStatusOverdue {
+		log.Printf("processSubscription: Subscription %s is no longer in a processable status (current: %s). Skipping.", currentDBSub.ID, currentDBSub.Status)
+		return result, nil
+	}
+
+	log.Printf("processSubscription: Idempotency checks passed for subscription %s. Proceeding with redemption logic.", currentDBSub.ID)
+
+	// NOTE: Use originalSubscription for data like ProductID, PriceInPennies for *this* processing attempt.
+	// isFinalPayment should be based on originalSubscription.CurrentPeriodEnd
+	isFinalPayment := originalSubscription.CurrentPeriodEnd.Time.Before(params.now)
 
 	// Marshal delegation to JSON bytes for redemption
 	delegationBytes, err := json.Marshal(params.delegationData)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to marshal delegation data for subscription %s: %v",
-			subscription.ID, err)
+			originalSubscription.ID, err)
 		log.Println(errMsg)
 
 		// Create appropriate event based on transaction mode
 		if params.tx != nil {
 			_, eventErr := params.queries.CreateSubscriptionEvent(params.ctx, db.CreateSubscriptionEventParams{
-				SubscriptionID: subscription.ID,
+				SubscriptionID: originalSubscription.ID,
 				EventType:      db.SubscriptionEventTypeFailedRedemption,
 				ErrorMessage:   pgtype.Text{String: errMsg, Valid: true},
 				AmountInCents:  params.product.PriceInPennies,
@@ -811,7 +866,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			})
 			if eventErr != nil {
 				log.Printf("Failed to record failure event for subscription %s: %v",
-					subscription.ID, eventErr)
+					originalSubscription.ID, eventErr)
 			}
 			// Update counters if tracking results
 			if params.results != nil {
@@ -819,14 +874,14 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			}
 		} else {
 			_, eventErr := params.queries.CreateFailedRedemptionEvent(params.ctx, db.CreateFailedRedemptionEventParams{
-				SubscriptionID: subscription.ID,
+				SubscriptionID: originalSubscription.ID,
 				AmountInCents:  params.product.PriceInPennies,
 				ErrorMessage:   pgtype.Text{String: errMsg, Valid: true},
 				Metadata:       nil,
 			})
 			if eventErr != nil {
 				log.Printf("Failed to record failure event for subscription %s: %v",
-					subscription.ID, eventErr)
+					originalSubscription.ID, eventErr)
 			}
 		}
 		result.isProcessed = false // Set isProcessed to false since increment failed
@@ -857,7 +912,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 
 		if attempt > 0 {
 			log.Printf("Retrying delegation redemption for subscription %s (attempt %d/%d) after %v",
-				subscription.ID, attempt+1, maxRetries, jitter)
+				originalSubscription.ID, attempt+1, maxRetries, jitter) // Use originalSubscription.ID for consistent logging
 			// Wait before retry
 			time.Sleep(jitter)
 		}
@@ -867,42 +922,50 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		executionObject := dsClient.ExecutionObject{
 			MerchantAddress:      params.merchantWallet.WalletAddress,
 			TokenContractAddress: params.token.ContractAddress,
-			TokenAmount:          int64(params.product.PriceInPennies),
+			TokenAmount:          int64(params.product.PriceInPennies), // Use params.product for consistency
 			TokenDecimals:        int32(params.token.Decimals),
 			ChainID:              uint32(params.network.ChainID),
 			NetworkName:          params.network.Name,
 		}
 
 		// Call the delegation client to redeem
-		txHash, redemptionErr := h.delegationClient.RedeemDelegationDirectly(
+		txHash, currentRedemptionErr := h.delegationClient.RedeemDelegationDirectly(
 			params.ctx,
 			delegationBytes,
 			executionObject,
 		)
 
-		if redemptionErr == nil {
-			// Success! Store the transaction hash
+		if currentRedemptionErr == nil {
+			// Success!
 			h.lastRedemptionTxHash = txHash
 			redemptionSuccess = true
 			result.txHash = txHash
-			break
+			redemptionError = nil // Clear error
+			break                 // Exit retry loop
 		}
 
-		// Check if it's a permanent error that shouldn't be retried
-		if isPermanentRedemptionError(redemptionErr) {
-			redemptionError = redemptionErr
+		// Error occurred: Store it, log it, and decide whether to break
+		redemptionError = currentRedemptionErr
+		detailedErr := redemptionError.Error()
+
+		if isPermanentRedemptionError(redemptionError) {
 			log.Printf("Permanent error redeeming delegation for subscription %s, won't retry: %v",
-				subscription.ID, redemptionErr)
-			break
+				originalSubscription.ID, detailedErr)
+			break // Break loop for permanent error
+		} else if strings.Contains(detailedErr, "AA25 invalid account nonce") {
+			log.Printf("Temporary error (Nonce Collision AA25) redeeming delegation for subscription %s (attempt %d/%d): %v. Will retry if attempts remain.",
+				originalSubscription.ID, attempt+1, maxRetries, detailedErr)
+			// Continue loop
+		} else {
+			// Other temporary error
+			log.Printf("Temporary error redeeming delegation for subscription %s (attempt %d/%d): %v. Will retry if attempts remain.",
+				originalSubscription.ID, attempt+1, maxRetries, detailedErr)
+			// Continue loop
 		}
-
-		// Temporary error, we'll retry if we have attempts left
-		redemptionError = redemptionErr
-		log.Printf("Temporary error redeeming delegation for subscription %s (attempt %d/%d): %v",
-			subscription.ID, attempt+1, maxRetries, redemptionErr)
+		// If not broken, the loop continues to the next attempt
 	}
 
-	// Check if redemption was successful
+	// AFTER THE LOOP: Check redemptionSuccess and proceed...
 	if redemptionSuccess {
 		// Successfully redeemed delegation, but we still need to increment
 		// result.isProcessed will be set to true after increment succeeds
@@ -914,7 +977,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		if !params.product.IntervalType.Valid {
 			// Handle case where IntervalType is null for a recurring product (should not happen based on constraints)
 			errMsg := fmt.Sprintf("IntervalType is null for recurring product %s (subscription %s)",
-				params.product.ID, subscription.ID)
+				params.product.ID, originalSubscription.ID) // Use originalSubscription.ID
 			log.Println(errMsg)
 			// Decide how to handle this - maybe default to monthly or fail?
 			// For now, let's fail to highlight the issue.
@@ -931,7 +994,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 
 		// Prepare update parameters for incrementing subscription
 		incrementParams := db.IncrementSubscriptionRedemptionParams{
-			ID:                 subscription.ID,
+			ID:                 originalSubscription.ID, // Use originalSubscription.ID
 			TotalAmountInCents: params.product.PriceInPennies,
 			NextRedemptionDate: nextRedemptionDate,
 		}
@@ -940,13 +1003,13 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		_, err := params.queries.IncrementSubscriptionRedemption(params.ctx, incrementParams)
 		if err != nil {
 			errMsg := fmt.Sprintf("Failed to update subscription %s after successful redemption: %v",
-				subscription.ID, err)
+				originalSubscription.ID, err) // Use originalSubscription.ID
 			log.Println(errMsg)
 
 			// Create failure event
 			if params.tx != nil {
 				_, eventErr := params.queries.CreateSubscriptionEvent(params.ctx, db.CreateSubscriptionEventParams{
-					SubscriptionID: subscription.ID,
+					SubscriptionID: originalSubscription.ID, // Use originalSubscription.ID
 					EventType:      db.SubscriptionEventTypeFailedRedemption,
 					ErrorMessage:   pgtype.Text{String: errMsg, Valid: true},
 					AmountInCents:  params.product.PriceInPennies,
@@ -955,21 +1018,21 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 				})
 				if eventErr != nil {
 					log.Printf("Failed to record failure event for subscription %s: %v",
-						subscription.ID, eventErr)
+						originalSubscription.ID, eventErr) // Use originalSubscription.ID
 				}
 				if params.results != nil {
 					params.results.Failed++
 				}
 			} else {
 				_, eventErr := params.queries.CreateFailedRedemptionEvent(params.ctx, db.CreateFailedRedemptionEventParams{
-					SubscriptionID: subscription.ID,
+					SubscriptionID: originalSubscription.ID, // Use originalSubscription.ID
 					AmountInCents:  params.product.PriceInPennies,
 					ErrorMessage:   pgtype.Text{String: errMsg, Valid: true},
 					Metadata:       nil,
 				})
 				if eventErr != nil {
 					log.Printf("Failed to record failure event for subscription %s: %v",
-						subscription.ID, eventErr)
+						originalSubscription.ID, eventErr) // Use originalSubscription.ID
 				}
 			}
 			result.isProcessed = false
@@ -980,17 +1043,18 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		result.isProcessed = true
 
 		// If this was the final payment and it was successful, mark the subscription as completed
-		if params.isFinalPayment {
+		// Use isFinalPayment calculated from originalSubscription's CurrentPeriodEnd
+		if isFinalPayment {
 			updateParams := db.UpdateSubscriptionStatusParams{
-				ID:     subscription.ID,
+				ID:     originalSubscription.ID, // Use originalSubscription.ID
 				Status: db.SubscriptionStatusCompleted,
 			}
 			if _, updateErr := params.queries.UpdateSubscriptionStatus(params.ctx, updateParams); updateErr != nil {
 				log.Printf("Warning: Failed to mark subscription %s as completed: %v",
-					subscription.ID, updateErr)
+					originalSubscription.ID, updateErr) // Use originalSubscription.ID
 			} else {
 				result.isCompleted = true
-				log.Printf("Marked subscription %s as completed after successful final payment", subscription.ID)
+				log.Printf("Marked subscription %s as completed after successful final payment", originalSubscription.ID) // Use originalSubscription.ID
 			}
 		}
 
@@ -1008,7 +1072,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			})
 
 			_, eventErr := params.queries.CreateSubscriptionEvent(params.ctx, db.CreateSubscriptionEventParams{
-				SubscriptionID:  subscription.ID,
+				SubscriptionID:  originalSubscription.ID, // Use originalSubscription.ID
 				EventType:       eventType,
 				TransactionHash: pgtype.Text{String: result.txHash, Valid: true},
 				AmountInCents:   params.product.PriceInPennies,
@@ -1016,14 +1080,13 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 				Metadata:        metadataBytes,
 			})
 			if eventErr != nil {
-				log.Printf("Warning: Failed to record success event for subscription %s: %v",
-					subscription.ID, eventErr)
-			}
-			if params.results != nil {
-				if result.isCompleted {
-					params.results.Completed++
-				} else {
-					params.results.Succeeded++
+				log.Printf("Warning: Failed to record success event for subscription %s: %v", originalSubscription.ID, eventErr) // Use originalSubscription.ID
+				if params.results != nil {
+					if result.isCompleted {
+						params.results.Completed++
+					} else {
+						params.results.Succeeded++
+					}
 				}
 			}
 		} else {
@@ -1033,44 +1096,45 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			})
 
 			_, eventErr := params.queries.CreateRedemptionEvent(params.ctx, db.CreateRedemptionEventParams{
-				SubscriptionID:  subscription.ID,
+				SubscriptionID:  originalSubscription.ID, // Use originalSubscription.ID
 				TransactionHash: pgtype.Text{String: result.txHash, Valid: true},
 				AmountInCents:   params.product.PriceInPennies,
 				Metadata:        metadataBytes,
 			})
 			if eventErr != nil {
 				log.Printf("Warning: Failed to record success event for subscription %s: %v",
-					subscription.ID, eventErr)
+					originalSubscription.ID, eventErr) // Use originalSubscription.ID
 			}
 		}
 
 		log.Printf("Successfully processed subscription %s, next redemption at %s",
-			subscription.ID, nextRedemptionDate.Time)
+			originalSubscription.ID, nextRedemptionDate.Time) // Use originalSubscription.ID
 	} else {
-		// Redemption failed
-		errMsg := fmt.Sprintf("Failed to redeem delegation for subscription %s: %v",
-			subscription.ID, redemptionError)
+		// Redemption failed (either permanent error or exhausted retries for temporary errors)
+		errMsg := fmt.Sprintf("Failed to redeem delegation for subscription %s after %d attempts: %v",
+			originalSubscription.ID, maxRetries, redemptionError) // Use originalSubscription.ID and the last stored error
 		log.Println(errMsg)
 
-		// If this was the final payment and redemption failed, keep as active but mark as overdue
+		// If this was the final payment and redemption failed, update status
+		// Use isFinalPayment calculated from originalSubscription's CurrentPeriodEnd
 		var updateErr error
-		if params.isFinalPayment {
-			// Update subscription to overdue status
+		if isFinalPayment {
+			// Update subscription to overdue status (or failed, depending on desired logic)
 			updateParams := db.UpdateSubscriptionStatusParams{
-				ID:     subscription.ID,
-				Status: db.SubscriptionStatusOverdue,
+				ID:     originalSubscription.ID,      // Use originalSubscription.ID
+				Status: db.SubscriptionStatusOverdue, // Or db.SubscriptionStatusFailed
 			}
 			if _, updateErr = params.queries.UpdateSubscriptionStatus(params.ctx, updateParams); updateErr != nil {
-				log.Printf("Failed to update subscription %s to overdue status: %v",
-					subscription.ID, updateErr)
+				log.Printf("Failed to update subscription %s to overdue/failed status: %v",
+					originalSubscription.ID, updateErr) // Use originalSubscription.ID
 			} else {
-				log.Printf("Marked subscription %s as overdue due to failed final payment", subscription.ID)
+				log.Printf("Marked subscription %s as %s due to failed final payment", originalSubscription.ID, updateParams.Status) // Use originalSubscription.ID
 			}
 		}
 		// Create failure event
 		if params.tx != nil {
 			_, eventErr := params.queries.CreateSubscriptionEvent(params.ctx, db.CreateSubscriptionEventParams{
-				SubscriptionID: subscription.ID,
+				SubscriptionID: originalSubscription.ID, // Use originalSubscription.ID
 				EventType:      db.SubscriptionEventTypeFailedRedemption,
 				ErrorMessage:   pgtype.Text{String: errMsg, Valid: true},
 				AmountInCents:  params.product.PriceInPennies,
@@ -1079,26 +1143,24 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			})
 			if eventErr != nil {
 				log.Printf("Failed to record failure event for subscription %s: %v",
-					subscription.ID, eventErr)
-			}
-			if params.results != nil {
-				params.results.Failed++
+					originalSubscription.ID, eventErr) // Use originalSubscription.ID
 			}
 		} else {
 			_, eventErr := params.queries.CreateFailedRedemptionEvent(params.ctx, db.CreateFailedRedemptionEventParams{
-				SubscriptionID: subscription.ID,
+				SubscriptionID: originalSubscription.ID, // Use originalSubscription.ID
 				AmountInCents:  params.product.PriceInPennies,
 				ErrorMessage:   pgtype.Text{String: errMsg, Valid: true},
 				Metadata:       nil,
 			})
 			if eventErr != nil {
 				log.Printf("Failed to record failure event for subscription %s: %v",
-					subscription.ID, eventErr)
+					originalSubscription.ID, eventErr) // Use originalSubscription.ID
 			}
 		}
 
-		result.isProcessed = false // Set isProcessed to false since increment failed
-		return result, fmt.Errorf("redemption failed: %w", redemptionError)
+		result.isProcessed = false // Set isProcessed to false since redemption failed
+		// Return the last error encountered during retries
+		return result, fmt.Errorf("redemption failed after %d attempts: %w", maxRetries, redemptionError)
 	}
 
 	return result, nil
@@ -1400,7 +1462,6 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 			delegationData: delegationData,
 			merchantWallet: merchantWallet,
 			token:          token,
-			network:        network,
 			isFinalPayment: isFinalPayment,
 			now:            now,
 			queries:        qtx,
