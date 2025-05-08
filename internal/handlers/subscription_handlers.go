@@ -1208,9 +1208,9 @@ func (h *SubscriptionHandler) RedeemDueSubscriptions(ctx context.Context, subscr
 			continue
 		}
 
-		// Skip subscriptions that are not active
-		if subscription.Status != db.SubscriptionStatusActive {
-			log.Printf("Skipping non-active subscription %s with status %s", subscriptionID, subscription.Status)
+		// Skip subscriptions that are not active or overdue
+		if subscription.Status != db.SubscriptionStatusActive && subscription.Status != db.SubscriptionStatusOverdue {
+			log.Printf("Skipping non-active or overdue subscription %s with status %s", subscriptionID, subscription.Status)
 			continue
 		}
 
