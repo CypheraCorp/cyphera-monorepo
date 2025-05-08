@@ -52,9 +52,6 @@ resource "aws_iam_role_policy" "delegation_server_fetch_config" {
         ]
         # Reference the specific parameter ARNs using resource attributes
         Resource = [
-          aws_ssm_parameter.delegation_rpc_url.arn,
-          aws_ssm_parameter.delegation_bundler_url.arn,
-          aws_ssm_parameter.delegation_chain_id.arn
         ]
       }
     ]
@@ -102,26 +99,9 @@ resource "aws_ecs_task_definition" "delegation_server" {
           "awslogs-stream-prefix" = "ecs" # Prefix for log streams
         }
       }
-      secrets = [ # Inject sensitive secrets
-        {
-          name      = "PRIVATE_KEY" # Env var name inside container
-          valueFrom = data.aws_secretsmanager_secret.delegation_private_key.arn
-        }
+      secrets = [
       ],
-      environment = [ # Inject less sensitive config and non-secrets
-        {
-          name      = "RPC_URL"
-          valueFrom = aws_ssm_parameter.delegation_rpc_url.arn
-        },
-        {
-          name      = "BUNDLER_URL"
-          valueFrom = aws_ssm_parameter.delegation_bundler_url.arn
-        },
-        {
-          name      = "CHAIN_ID"
-          valueFrom = aws_ssm_parameter.delegation_chain_id.arn
-        },
-        # Non-secret plain values
+      environment = [
         { name = "GRPC_PORT", value = "50051" },
         { name = "GRPC_HOST", value = "0.0.0.0" },
         { name = "LOG_LEVEL", value = var.stage == "dev" ? "debug" : "info" },
@@ -138,12 +118,16 @@ resource "aws_ecs_task_definition" "delegation_server" {
           value = data.aws_ssm_parameter.delegation_server_alb_dns.value
         },
         {
-          name  = "INFURA_API_KEY_ARN"
+          name  = "INFURA_API_KEY_ARN",
           value = aws_ssm_parameter.infura_api_key_arn.value
         },
         {
-          name  = "PIMLICO_API_KEY_ARN"
+          name  = "PIMLICO_API_KEY_ARN",
           value = aws_ssm_parameter.pimlico_api_key_arn.value
+        },
+        {
+          name  = "PRIVATE_KEY_ARN",
+          value = aws_ssm_parameter.delegation_private_key_arn.value
         }
       ]
     }
@@ -244,6 +228,7 @@ resource "aws_iam_policy" "delegation_server_task_policy" {
         Resource = [
           aws_ssm_parameter.infura_api_key_arn.arn,
           aws_ssm_parameter.pimlico_api_key_arn.arn,
+          aws_ssm_parameter.delegation_private_key_arn.arn,
           data.aws_ssm_parameter.delegation_server_alb_dns.arn
         ]
       },
@@ -252,7 +237,8 @@ resource "aws_iam_policy" "delegation_server_task_policy" {
         Action = "secretsmanager:GetSecretValue",
         Resource = [
           aws_ssm_parameter.infura_api_key_arn.value,
-          aws_ssm_parameter.pimlico_api_key_arn.value
+          aws_ssm_parameter.pimlico_api_key_arn.value,
+          aws_ssm_parameter.delegation_private_key_arn.value
         ]
       }
     ]

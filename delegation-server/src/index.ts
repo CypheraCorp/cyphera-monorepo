@@ -29,11 +29,12 @@ function logEnvironmentVariables() {
   logger.info(`GRPC_HOST: ${envVars.GRPC_HOST || 'not set'}`);
   logger.info(`GRPC_PORT: ${envVars.GRPC_PORT || 'not set'}`);
   logger.info(`RPC_URL: ${redactUrl(envVars.RPC_URL)}`);
-  logger.info(`BUNDLER_URL: ${redactUrl(envVars.BUNDLER_URL)}`);
-  logger.info(`NPM_TOKEN: ${redactPrivateKey(envVars.NPM_TOKEN)}`);
-
-  logger.info(`CHAIN_ID: ${envVars.CHAIN_ID || 'not set'}`);
-  logger.info(`PRIVATE_KEY: ${redactPrivateKey(envVars.PRIVATE_KEY)}`);
+  logger.info(`INFURA_API_KEY_ARN: ${envVars.INFURA_API_KEY_ARN || 'not set'}`);
+  logger.info(`INFURA_API_KEY: ${redactPrivateKey(envVars.INFURA_API_KEY || 'not set')}`);
+  logger.info(`PIMLICO_API_KEY_ARN: ${envVars.PIMLICO_API_KEY_ARN || 'not set'}`);
+  logger.info(`PIMLICO_API_KEY: ${redactPrivateKey(envVars.PIMLICO_API_KEY || 'not set')}`);
+  logger.info(`PRIVATE_KEY_ARN: ${envVars.PRIVATE_KEY_ARN || 'not set'}`);
+  logger.info(`PRIVATE_KEY: ${redactPrivateKey(envVars.PRIVATE_KEY || 'not set')}`);
   logger.info(`LOG_LEVEL: ${envVars.LOG_LEVEL || 'not set'}`);
   logger.info('==================================');
   

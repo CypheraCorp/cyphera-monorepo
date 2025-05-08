@@ -67,38 +67,6 @@ resource "aws_ssm_parameter" "cors_allow_credentials" {
 
 # SSM Parameters for Delegation Server (ECS)
 
-resource "aws_ssm_parameter" "delegation_rpc_url" {
-  name        = "/cyphera/delegation-server/rpc-url-${var.stage}"
-  description = "Blockchain RPC URL for Delegation Server stage ${var.stage}"
-  type        = "SecureString"
-  value       = "dummy-value-update-manually" # Placeholder - **MUST BE UPDATED MANUALLY IN AWS CONSOLE**
-  tags        = local.common_tags
-  # Ignore subsequent changes to value, allow manual updates
-  lifecycle {
-    ignore_changes = [value]
-  }
-}
-
-resource "aws_ssm_parameter" "delegation_bundler_url" {
-  name        = "/cyphera/delegation-server/bundler-url-${var.stage}"
-  description = "Bundler URL for Delegation Server stage ${var.stage}"
-  type        = "SecureString"
-  value       = "dummy-value-update-manually" # Placeholder - **MUST BE UPDATED MANUALLY IN AWS CONSOLE**
-  tags        = local.common_tags
-  # Ignore subsequent changes to value, allow manual updates
-  lifecycle {
-    ignore_changes = [value]
-  }
-}
-
-resource "aws_ssm_parameter" "delegation_chain_id" {
-  name        = "/cyphera/delegation-server/chain-id-${var.stage}"
-  description = "Blockchain Chain ID for Delegation Server stage ${var.stage}"
-  type        = "String"
-  value       = "11155111" # Sepolia default, adjust if needed per stage
-  tags        = local.common_tags
-}
-
 # Parameter for the manually created wildcard API certificate ARN
 resource "aws_ssm_parameter" "wildcard_cert_arn" {
   name        = "/cyphera/wildcard-api-cert-arn"
@@ -173,4 +141,15 @@ resource "aws_ssm_parameter" "pimlico_api_key_arn" {
   lifecycle {
     ignore_changes = [value] # Avoid unnecessary updates if ARN doesn't change
   }
-} 
+}
+
+resource "aws_ssm_parameter" "delegation_private_key_arn" {
+  name        = "/cyphera/delegation-server/private-key-arn-${var.stage}"
+  description = "ARN of the Private Key secret for Delegation Server - ${var.stage}"
+  type        = "String"
+  value       = aws_secretsmanager_secret.delegation_private_key.arn # Assumes secret is named 'delegation_private_key' in secrets.tf
+  tags        = local.common_tags
+  lifecycle {
+    ignore_changes = [value] # Avoid unnecessary updates if ARN doesn't change
+  }
+}

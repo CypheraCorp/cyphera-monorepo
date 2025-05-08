@@ -1,18 +1,16 @@
 import dotenv from 'dotenv'
 import { resolve } from 'path'
 import { logger } from '../utils/utils'
+import { getSecretValue } from '../utils/secrets_manager'
 
 // Load environment variables from .env file
 dotenv.config({ path: resolve(__dirname, '../../.env') })
 
-// Basic configuration not dependent on chainId or networkName
+// Basic configuration
 export const config = {
   grpc: {
     port: parseInt(process.env.GRPC_PORT || '50051', 10),
     host: process.env.GRPC_HOST || '0.0.0.0'
-  },
-  blockchain: {
-    privateKey: process.env.PRIVATE_KEY
   },
   logging: {
     level: process.env.LOG_LEVEL || 'info'
@@ -28,19 +26,18 @@ interface NetworkConfig {
 /**
  * Retrieves network-specific configuration (RPC URL, Bundler URL)
  * based on the provided network name (for Infura RPC) and chain ID (for Pimlico Bundler).
- * Requires INFURA_API_KEY, PIMLICO_API_KEY, and base BUNDLER_URL to be set.
+ * Requires INFURA_API_KEY_ARN, PIMLICO_API_KEY_ARN to be set for ARN-based fetching,
+ * or INFURA_API_KEY, PIMLICO_API_KEY for direct/fallback fetching.
  * 
  * @param networkName The network name (e.g., "Ethereum Mainnet", "Base Sepolia")
  * @param chainId The EVM chain ID (used for Bundler URL construction)
- * @returns NetworkConfig containing rpcUrl and bundlerUrl
+ * @returns Promise<NetworkConfig> containing rpcUrl and bundlerUrl
  * @throws Error if required URLs or API keys are not found
  */
-export function getNetworkConfig(networkName: string, chainId: number): NetworkConfig {
+export async function getNetworkConfig(networkName: string, chainId: number): Promise<NetworkConfig> {
   // --- RPC URL (Infura) ---
-  const infuraApiKey = process.env.INFURA_API_KEY
-  if (!infuraApiKey) {
-    throw new Error('INFURA_API_KEY environment variable is not set')
-  }
+  const infuraApiKey = await getSecretValue('INFURA_API_KEY_ARN', 'INFURA_API_KEY')
+
   if (!networkName) {
     throw new Error('networkName parameter is required to construct Infura RPC URL')
   }
@@ -71,11 +68,7 @@ export function getNetworkConfig(networkName: string, chainId: number): NetworkC
   const rpcUrl = `https://${formattedNetworkName}.infura.io/v3/${infuraApiKey}`
 
   // --- Bundler URL (Pimlico V2 Format) ---
-  const pimlicoApiKey = process.env.PIMLICO_API_KEY;
-
-  if (!pimlicoApiKey) {
-    throw new Error('PIMLICO_API_KEY environment variable is not set');
-  }
+  const pimlicoApiKey = await getSecretValue('PIMLICO_API_KEY_ARN', 'PIMLICO_API_KEY')
 
   const bundlerBaseUrl = "https://api.pimlico.io/v2/";
 
@@ -87,36 +80,3 @@ export function getNetworkConfig(networkName: string, chainId: number): NetworkC
 
   return { rpcUrl, bundlerUrl }
 }
-
-// Validate required base configuration
-export function validateConfig(): void {
-  const requiredVars = [
-    // Check for INFURA_API_KEY and default BUNDLER_URL as baseline requirements
-    { key: 'INFURA_API_KEY', value: process.env.INFURA_API_KEY },
-    { key: 'PIMLICO_API_KEY', value: process.env.PIMLICO_API_KEY },
-    { key: 'blockchain.privateKey', value: config.blockchain.privateKey },
-  ]
-  
-  const missingVars = requiredVars.filter(v => !v.value)
-  
-  if (missingVars.length > 0) {
-    const missingKeys = missingVars.map(v => v.key).join(', ')
-    throw new Error(`Missing required environment variables: ${missingKeys}`)
-  }
-  
-  // Validate private key format
-  if (config.blockchain.privateKey) {
-    const pkRegex = /^0x[0-9a-fA-F]{64}$/
-    if (!pkRegex.test(config.blockchain.privateKey)) {
-      throw new Error('PRIVATE_KEY must be a valid 32-byte hex string with 0x prefix (66 characters total)')
-    }
-  }
-  // Basic check for Infura key format (doesn't validate the key itself)
-  if (process.env.INFURA_API_KEY && !/^[a-zA-Z0-9]{32,}$/.test(process.env.INFURA_API_KEY)) {
-    logger.warn('INFURA_API_KEY format looks unusual. Ensure it is correct.')
-  }
-  // Optional: Add basic check for Pimlico key format
-  if (process.env.PIMLICO_API_KEY && !/^pim_[a-zA-Z0-9]+$/.test(process.env.PIMLICO_API_KEY)) {
-    logger.warn('PIMLICO_API_KEY format looks unusual. Ensure it starts with \'pim_\'.');
-  }
-} 

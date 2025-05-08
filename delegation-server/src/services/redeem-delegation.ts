@@ -10,17 +10,14 @@ import {
   type Address, 
   isAddressEqual,
   createPublicClient,
-  http,
   encodeFunctionData,
   parseUnits,
-  parseEther,
   type Transport,
   type Chain,
   custom,
   type PublicClient,
 } from "viem"
 import { privateKeyToAccount, type LocalAccount } from "viem/accounts"
-import { sepolia } from "viem/chains"
 import { config, getNetworkConfig } from "../config/config"
 import { logger, formatPrivateKey } from "../utils/utils"
 import { parseDelegation, validateDelegation } from "../utils/delegation-helpers"
@@ -35,6 +32,7 @@ import {
 import { createPimlicoClient } from "permissionless/clients/pimlico"
 import fetch from 'node-fetch'
 import * as allChains from "viem/chains"
+import { getSecretValue } from "../utils/secrets_manager"
 
 /**
  * Finds a viem Chain object by its chain ID.
@@ -106,12 +104,11 @@ export const redeemDelegation = async (
     if (!tokenDecimals || tokenDecimals <= 0) throw new Error('Valid token decimals are required');
     if (!chainId || chainId <= 0) throw new Error('Valid chainId is required');
     if (!networkName) throw new Error('Valid networkName is required');
-    if (!config.blockchain.privateKey) throw new Error('Server private key is not configured');
 
     logger.info(`Starting delegation redemption for chainId: ${chainId}, network: ${networkName}`);
 
     // Get dynamic network configuration
-    const { rpcUrl, bundlerUrl } = getNetworkConfig(networkName, chainId);
+    const { rpcUrl, bundlerUrl } = await getNetworkConfig(networkName, chainId);
     const chain: Chain = getChainById(chainId);
 
     // --- 2. Initialize Clients Dynamically ---
@@ -158,9 +155,13 @@ export const redeemDelegation = async (
       chainId,
       networkName
     });
+
+    // Get private key from AWS Secrets Manager
+    const privateKey = await getSecretValue('PRIVATE_KEY_ARN', "PRIVATE_KEY");
     
     // Create redeemer account from private key (Inline logic from old createMetaMaskAccount)
-    const formattedKey = formatPrivateKey(config.blockchain.privateKey!);
+    const formattedKey = formatPrivateKey(privateKey);
+
     const account = privateKeyToAccount(formattedKey as `0x${string}`);
     logger.info(`Creating MetaMask Smart Account for address: ${account.address} on chain ${chainId}`);
     // Use the local publicClient instance here

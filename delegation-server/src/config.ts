@@ -11,6 +11,7 @@ function getEnvVar(name: string, defaultValue: string): string {
 
 // Read environment variables or use defaults
 const config: Config = {
+  // --- Basic Configuration ---
   mockMode: process.env.MOCK_MODE === 'true',
   serverAddress: `${getEnvVar('GRPC_HOST', '0.0.0.0')}:${getEnvVar('GRPC_PORT', '50051')}`,
   // Add other configuration options as needed
