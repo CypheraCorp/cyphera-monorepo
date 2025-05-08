@@ -34,18 +34,19 @@ type ProductHandler struct {
 }
 
 type CreateSubscriptionParams struct {
-	Customer       db.Customer
-	CustomerWallet db.CustomerWallet
-	ProductID      uuid.UUID
-	ProductTokenID uuid.UUID
-	TokenAmount    int64
-	Currency       db.Currency
-	PriceInPennies int32
-	IntervalType   db.IntervalType
-	DelegationData db.DelegationDatum
-	PeriodStart    time.Time
-	PeriodEnd      time.Time
-	NextRedemption time.Time
+	Customer        db.Customer
+	CustomerWallet  db.CustomerWallet
+	ProductID       uuid.UUID
+	ProductTokenID  uuid.UUID
+	TokenAmount     int64
+	Currency        db.Currency
+	PriceInPennies  int32
+	IntervalType    db.IntervalType
+	TotalTermLength int32
+	DelegationData  db.DelegationDatum
+	PeriodStart     time.Time
+	PeriodEnd       time.Time
+	NextRedemption  time.Time
 }
 
 // NewProductHandler creates a new ProductHandler instance
@@ -449,18 +450,19 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 
 	// Create the subscription
 	subscription, err := h.createSubscription(ctx, qtx, CreateSubscriptionParams{
-		Customer:       customer,
-		CustomerWallet: customerWallet,
-		ProductID:      parsedProductID,
-		ProductTokenID: parsedProductTokenID,
-		TokenAmount:    tokenAmount,
-		Currency:       product.Currency,
-		PriceInPennies: product.PriceInPennies,
-		IntervalType:   product.IntervalType.IntervalType,
-		DelegationData: delegationData,
-		PeriodStart:    periodStart,
-		PeriodEnd:      periodEnd,
-		NextRedemption: nextRedemption,
+		Customer:        customer,
+		CustomerWallet:  customerWallet,
+		ProductID:       parsedProductID,
+		ProductTokenID:  parsedProductTokenID,
+		TokenAmount:     tokenAmount,
+		Currency:        product.Currency,
+		PriceInPennies:  product.PriceInPennies,
+		IntervalType:    product.IntervalType.IntervalType,
+		DelegationData:  delegationData,
+		PeriodStart:     periodStart,
+		PeriodEnd:       periodEnd,
+		NextRedemption:  nextRedemption,
+		TotalTermLength: product.TermLength.Int32,
 	})
 	if err != nil {
 		// Log the failed subscription attempt

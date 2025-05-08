@@ -88,10 +88,11 @@ INSERT INTO subscriptions (
     current_period_end,
     next_redemption_date,
     total_redemptions,
+    total_term_length,
     total_amount_in_cents,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
 )
 RETURNING *;
 
@@ -113,8 +114,9 @@ SET
     current_period_end = COALESCE($14, current_period_end),
     next_redemption_date = COALESCE($15, next_redemption_date),
     total_redemptions = COALESCE($16, total_redemptions),
-    total_amount_in_cents = COALESCE($17, total_amount_in_cents),
-    metadata = COALESCE($18, metadata),
+    total_term_length = COALESCE($17, total_term_length),
+    total_amount_in_cents = COALESCE($18, total_amount_in_cents),
+    metadata = COALESCE($19, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
@@ -185,6 +187,7 @@ SELECT
     s.current_period_end,
     s.next_redemption_date,
     s.total_redemptions,
+    s.total_term_length,
     s.total_amount_in_cents,
     s.token_amount,
     s.product_price_in_pennies,

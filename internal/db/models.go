@@ -742,6 +742,7 @@ type Subscription struct {
 	CurrentPeriodEnd      pgtype.Timestamptz `json:"current_period_end"`
 	NextRedemptionDate    pgtype.Timestamptz `json:"next_redemption_date"`
 	TotalRedemptions      int32              `json:"total_redemptions"`
+	TotalTermLength       int32              `json:"total_term_length"`
 	TotalAmountInCents    int32              `json:"total_amount_in_cents"`
 	Metadata              []byte             `json:"metadata"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
