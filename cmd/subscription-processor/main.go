@@ -45,7 +45,6 @@ func (app *Application) HandleRequest(ctx context.Context /*, event MyEvent - if
 		zap.Int("total", results.Total),
 		zap.Int("succeeded", results.Succeeded),
 		zap.Int("failed", results.Failed),
-		zap.Int("completed", results.Completed),
 	)
 
 	logger.Info("Subscription processing finished successfully in HandleRequest.")
