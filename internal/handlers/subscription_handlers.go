@@ -922,8 +922,8 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		executionObject := dsClient.ExecutionObject{
 			MerchantAddress:      params.merchantWallet.WalletAddress,
 			TokenContractAddress: params.token.ContractAddress,
-			TokenAmount:          int64(params.product.PriceInPennies), // Use params.product for consistency
-			TokenDecimals:        int32(params.token.Decimals),
+			TokenAmount:          params.subscription.TokenAmount.Int.Int64(),
+			TokenDecimals:        params.token.Decimals,
 			ChainID:              uint32(params.network.ChainID),
 			NetworkName:          params.network.Name,
 		}
@@ -1459,6 +1459,7 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 			subscription:   subscription,
 			product:        product,
 			productToken:   productToken,
+			network:        network,
 			delegationData: delegationData,
 			merchantWallet: merchantWallet,
 			token:          token,
