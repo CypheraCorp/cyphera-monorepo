@@ -1382,9 +1382,9 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 		log.Printf("Processing subscription %d/%d: ID: %s, Status: %s, ProductID: %s, CurrentPeriodEnd: %v",
 			i+1, results.Total, subscription.ID, subscription.Status, subscription.ProductID, subscription.CurrentPeriodEnd.Time)
 
-		// Skip subscriptions that are not active
-		if subscription.Status != db.SubscriptionStatusActive {
-			log.Printf("Skipping non-active subscription %s with status %s", subscription.ID, subscription.Status)
+		// Skip subscriptions that are not active or overdue
+		if subscription.Status != db.SubscriptionStatusActive && subscription.Status != db.SubscriptionStatusOverdue {
+			log.Printf("Skipping non-active or overdue subscription %s with status %s", subscription.ID, subscription.Status)
 			// results.Failed++ // Or some other counter for skipped if needed
 			continue
 		}
