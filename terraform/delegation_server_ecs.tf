@@ -138,9 +138,9 @@ resource "aws_ecs_task_definition" "delegation_server" {
 
   # Add lifecycle block to ignore future diffs on container_definitions
   lifecycle {
-    ignore_changes = [
-      container_definitions
-    ]
+    // ignore_changes = [
+    //   container_definitions
+    // ]
   }
 
   # Tags should only include common_tags now
@@ -178,7 +178,7 @@ resource "aws_ecs_service" "delegation_server" {
   # Prevent Terraform from replacing the service just because the task definition changes
   # (CI/CD will handle updating the service with the new task definition revision)
   lifecycle {
-    ignore_changes = [task_definition]
+    // ignore_changes = [task_definition] // Temporarily commented out to apply the latest task definition
   }
 
   # Ensure ALB resources are created before the service
