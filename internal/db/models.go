@@ -386,6 +386,7 @@ const (
 	SubscriptionStatusActive    SubscriptionStatus = "active"
 	SubscriptionStatusCanceled  SubscriptionStatus = "canceled"
 	SubscriptionStatusExpired   SubscriptionStatus = "expired"
+	SubscriptionStatusOverdue   SubscriptionStatus = "overdue"
 	SubscriptionStatusSuspended SubscriptionStatus = "suspended"
 	SubscriptionStatusFailed    SubscriptionStatus = "failed"
 	SubscriptionStatusCompleted SubscriptionStatus = "completed"

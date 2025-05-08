@@ -12,7 +12,7 @@ CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkado
 CREATE TYPE currency AS ENUM ('USD', 'EUR');
 CREATE TYPE wallet_type AS ENUM ('wallet', 'circle_wallet');
 CREATE TYPE circle_network_type AS ENUM ('ARB', 'ARB-SEPOLIA', 'ETH', 'ETH-SEPOLIA', 'MATIC', 'MATIC-AMOY', 'BASE', 'BASE-SEPOLIA', 'UNICHAIN', 'UNICHAIN-SEPOLIA', 'SOL', 'SOL-DEVNET');
-CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'suspended', 'failed', 'completed');
+CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'overdue', 'suspended', 'failed', 'completed');
 CREATE TYPE subscription_event_type AS ENUM (
     'created', 
     'redeemed', 
