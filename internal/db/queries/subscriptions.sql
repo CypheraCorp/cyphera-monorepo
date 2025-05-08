@@ -42,13 +42,13 @@ ORDER BY s.created_at DESC;
 
 -- name: ListActiveSubscriptions :many
 SELECT * FROM subscriptions
-WHERE status = 'active' AND deleted_at IS NULL
+WHERE (status = 'active' OR status = 'overdue') AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
--- name: ListSubscriptionsDueForRenewal :many
+-- name: ListSubscriptionsDueForRedemption :many
 SELECT * FROM subscriptions
 WHERE 
-    status = 'active' 
+    (status = 'active' OR status = 'overdue')
     AND next_redemption_date <= $1
     AND deleted_at IS NULL
 ORDER BY next_redemption_date ASC;
@@ -65,7 +65,7 @@ WHERE deleted_at IS NULL;
 
 -- name: CountActiveSubscriptions :one
 SELECT COUNT(*) FROM subscriptions
-WHERE status = 'active' AND deleted_at IS NULL;
+WHERE (status = 'active' OR status = 'overdue') AND deleted_at IS NULL;
 
 -- name: CountSubscriptionsByStatus :one
 SELECT COUNT(*) FROM subscriptions
@@ -163,18 +163,17 @@ SELECT * FROM subscriptions
 WHERE delegation_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
--- name: GetExpiredSubscriptions :many
+-- name: GetOverdueSubscriptions :many
 SELECT * FROM subscriptions
 WHERE 
-    current_period_end < CURRENT_TIMESTAMP
-    AND status = 'active'
+    (current_period_end < CURRENT_TIMESTAMP OR status = 'overdue')
     AND deleted_at IS NULL
 ORDER BY current_period_end ASC;
 
 -- name: LockSubscriptionForProcessing :one
 SELECT *
 FROM subscriptions
-WHERE id = $1 AND status = 'active' AND deleted_at IS NULL
+WHERE id = $1 AND (status = 'active' OR status = 'overdue') AND deleted_at IS NULL
 FOR UPDATE NOWAIT
 LIMIT 1;
 

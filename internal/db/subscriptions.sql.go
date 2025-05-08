@@ -90,7 +90,7 @@ func (q *Queries) CompleteSubscription(ctx context.Context, id uuid.UUID) (Subsc
 
 const countActiveSubscriptions = `-- name: CountActiveSubscriptions :one
 SELECT COUNT(*) FROM subscriptions
-WHERE status = 'active' AND deleted_at IS NULL
+WHERE (status = 'active' OR status = 'overdue') AND deleted_at IS NULL
 `
 
 func (q *Queries) CountActiveSubscriptions(ctx context.Context) (int64, error) {
@@ -227,17 +227,16 @@ func (q *Queries) DeleteSubscription(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const getExpiredSubscriptions = `-- name: GetExpiredSubscriptions :many
+const getOverdueSubscriptions = `-- name: GetOverdueSubscriptions :many
 SELECT id, customer_id, product_id, product_token_id, token_amount, product_price_in_pennies, currency, interval_type, term_length, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, created_at, updated_at, deleted_at FROM subscriptions
 WHERE 
-    current_period_end < CURRENT_TIMESTAMP
-    AND status = 'active'
+    (current_period_end < CURRENT_TIMESTAMP OR status = 'overdue')
     AND deleted_at IS NULL
 ORDER BY current_period_end ASC
 `
 
-func (q *Queries) GetExpiredSubscriptions(ctx context.Context) ([]Subscription, error) {
-	rows, err := q.db.Query(ctx, getExpiredSubscriptions)
+func (q *Queries) GetOverdueSubscriptions(ctx context.Context) ([]Subscription, error) {
+	rows, err := q.db.Query(ctx, getOverdueSubscriptions)
 	if err != nil {
 		return nil, err
 	}
@@ -504,7 +503,7 @@ func (q *Queries) IncrementSubscriptionRedemption(ctx context.Context, arg Incre
 
 const listActiveSubscriptions = `-- name: ListActiveSubscriptions :many
 SELECT id, customer_id, product_id, product_token_id, token_amount, product_price_in_pennies, currency, interval_type, term_length, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, created_at, updated_at, deleted_at FROM subscriptions
-WHERE status = 'active' AND deleted_at IS NULL
+WHERE (status = 'active' OR status = 'overdue') AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
 
@@ -834,17 +833,17 @@ func (q *Queries) ListSubscriptionsByProduct(ctx context.Context, arg ListSubscr
 	return items, nil
 }
 
-const listSubscriptionsDueForRenewal = `-- name: ListSubscriptionsDueForRenewal :many
+const listSubscriptionsDueForRedemption = `-- name: ListSubscriptionsDueForRedemption :many
 SELECT id, customer_id, product_id, product_token_id, token_amount, product_price_in_pennies, currency, interval_type, term_length, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, created_at, updated_at, deleted_at FROM subscriptions
 WHERE 
-    status = 'active' 
+    (status = 'active' OR status = 'overdue')
     AND next_redemption_date <= $1
     AND deleted_at IS NULL
 ORDER BY next_redemption_date ASC
 `
 
-func (q *Queries) ListSubscriptionsDueForRenewal(ctx context.Context, nextRedemptionDate pgtype.Timestamptz) ([]Subscription, error) {
-	rows, err := q.db.Query(ctx, listSubscriptionsDueForRenewal, nextRedemptionDate)
+func (q *Queries) ListSubscriptionsDueForRedemption(ctx context.Context, nextRedemptionDate pgtype.Timestamptz) ([]Subscription, error) {
+	rows, err := q.db.Query(ctx, listSubscriptionsDueForRedemption, nextRedemptionDate)
 	if err != nil {
 		return nil, err
 	}
@@ -942,7 +941,7 @@ func (q *Queries) ListSubscriptionsWithPagination(ctx context.Context, arg ListS
 const lockSubscriptionForProcessing = `-- name: LockSubscriptionForProcessing :one
 SELECT id, customer_id, product_id, product_token_id, token_amount, product_price_in_pennies, currency, interval_type, term_length, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, created_at, updated_at, deleted_at
 FROM subscriptions
-WHERE id = $1 AND status = 'active' AND deleted_at IS NULL
+WHERE id = $1 AND (status = 'active' OR status = 'overdue') AND deleted_at IS NULL
 FOR UPDATE NOWAIT
 LIMIT 1
 `

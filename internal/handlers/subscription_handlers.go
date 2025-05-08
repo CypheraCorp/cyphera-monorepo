@@ -677,20 +677,20 @@ func (h *SubscriptionHandler) DeleteSubscription(c *gin.Context) {
 	sendSuccessMessage(c, http.StatusOK, "Subscription successfully deleted")
 }
 
-// GetExpiredSubscriptions godoc
-// @Summary Get all expired subscriptions
-// @Description Retrieves all subscriptions that have expired but haven't been marked as expired
+// GetOverdueSubscriptions godoc
+// @Summary Get all overdue subscriptions
+// @Description Retrieves all subscriptions that have overdue but haven't been marked as overdue
 // @Tags subscriptions
 // @Accept json
 // @Produce json
 // @Success 200 {array} db.Subscription
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /subscriptions/expired [get]
-func (h *SubscriptionHandler) GetExpiredSubscriptions(c *gin.Context) {
-	subscriptions, err := h.common.db.GetExpiredSubscriptions(c.Request.Context())
+// @Router /subscriptions/overdue [get]
+func (h *SubscriptionHandler) GetOverdueSubscriptions(c *gin.Context) {
+	subscriptions, err := h.common.db.GetOverdueSubscriptions(c.Request.Context())
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve expired subscriptions", err)
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve overdue subscriptions", err)
 		return
 	}
 
@@ -1055,16 +1055,16 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		// If this was the final payment and redemption failed, keep as active but mark as overdue
 		var updateErr error
 		if params.isFinalPayment {
-			// Update subscription to failed status
+			// Update subscription to overdue status
 			updateParams := db.UpdateSubscriptionStatusParams{
 				ID:     subscription.ID,
-				Status: db.SubscriptionStatusFailed,
+				Status: db.SubscriptionStatusOverdue,
 			}
 			if _, updateErr = params.queries.UpdateSubscriptionStatus(params.ctx, updateParams); updateErr != nil {
-				log.Printf("Failed to update subscription %s to failed status: %v",
+				log.Printf("Failed to update subscription %s to overdue status: %v",
 					subscription.ID, updateErr)
 			} else {
-				log.Printf("Marked subscription %s as failed due to failed final payment", subscription.ID)
+				log.Printf("Marked subscription %s as overdue due to failed final payment", subscription.ID)
 			}
 		}
 		// Create failure event
@@ -1239,7 +1239,7 @@ func (h *SubscriptionHandler) RedeemDueSubscriptionsHTTP(c *gin.Context) {
 	}
 
 	// Get all subscriptions due for renewal
-	subscriptions, err := h.common.db.ListSubscriptionsDueForRenewal(ctx, now)
+	subscriptions, err := h.common.db.ListSubscriptionsDueForRedemption(ctx, now)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve subscriptions due for renewal", err)
 		return
@@ -1293,7 +1293,7 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 	// Query for subscriptions due for redemption and lock them for processing
 	nowPgType := pgtype.Timestamptz{Time: now, Valid: true}
 	log.Printf("ProcessDueSubscriptions: Querying for subscriptions due before %v", now)
-	subscriptions, err := qtx.ListSubscriptionsDueForRenewal(ctx, nowPgType)
+	subscriptions, err := qtx.ListSubscriptionsDueForRedemption(ctx, nowPgType)
 	if err != nil {
 		log.Printf("Error in ProcessDueSubscriptions: failed to fetch subscriptions due for redemption: %v", err)
 		return results, fmt.Errorf("failed to fetch subscriptions due for redemption: %w", err)
