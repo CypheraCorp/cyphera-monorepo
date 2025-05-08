@@ -2028,7 +2028,6 @@ func TestRedeemDueSubscriptions(t *testing.T) {
 							ID:     subscription.ID,
 							Status: db.SubscriptionStatusCompleted,
 						})
-						results.Completed++
 					} else {
 						results.Succeeded++
 					}
@@ -2045,7 +2044,6 @@ func TestRedeemDueSubscriptions(t *testing.T) {
 			assert.Equal(t, tc.expectTotal, results.Total, "Total should match expected value")
 			assert.Equal(t, tc.expectSucceeded, results.Succeeded, "Succeeded should match expected value")
 			assert.Equal(t, tc.expectFailed, results.Failed, "Failed should match expected value")
-			assert.Equal(t, tc.expectCompleted, results.Completed, "Completed should match expected value")
 
 			// Verify function calls
 			assert.Equal(t, len(tc.subscriptionIDs), getSubscriptionCalls, "GetSubscription should be called once per subscription ID")
@@ -2398,7 +2396,6 @@ func (h *testSubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (
 					Metadata:        metadataBytes,
 				})
 
-				results.Completed++
 				continue
 			}
 		}
@@ -2567,7 +2564,6 @@ func TestProcessDueSubscriptions(t *testing.T) {
 				Total:     0,
 				Succeeded: 0,
 				Failed:    0,
-				Completed: 0,
 			},
 			expectedError: false,
 		},
@@ -2642,7 +2638,6 @@ func TestProcessDueSubscriptions(t *testing.T) {
 				Total:     1,
 				Succeeded: 1,
 				Failed:    0,
-				Completed: 0,
 			},
 			expectedError: false,
 		},
@@ -2724,7 +2719,6 @@ func TestProcessDueSubscriptions(t *testing.T) {
 				Total:     1,
 				Succeeded: 0,
 				Failed:    0,
-				Completed: 1,
 			},
 			expectedError: false,
 		},
@@ -2797,7 +2791,6 @@ func TestProcessDueSubscriptions(t *testing.T) {
 				Total:     1,
 				Succeeded: 0,
 				Failed:    1,
-				Completed: 0,
 			},
 			expectedError: false,
 		},
@@ -2828,7 +2821,6 @@ func TestProcessDueSubscriptions(t *testing.T) {
 				Total:     0,
 				Succeeded: 0,
 				Failed:    0,
-				Completed: 0,
 			},
 			expectedError:       true,
 			expectedErrorString: "failed to fetch subscriptions due for redemption: database error",
@@ -2847,7 +2839,6 @@ func TestProcessDueSubscriptions(t *testing.T) {
 				Total:     0,
 				Succeeded: 0,
 				Failed:    0,
-				Completed: 0,
 			},
 			expectedError:       true,
 			expectedErrorString: "failed to begin transaction: tx error",
@@ -2889,7 +2880,6 @@ func TestProcessDueSubscriptions(t *testing.T) {
 			assert.Equal(t, tt.expectedResults.Total, results.Total, "Total count should match")
 			assert.Equal(t, tt.expectedResults.Succeeded, results.Succeeded, "Succeeded count should match")
 			assert.Equal(t, tt.expectedResults.Failed, results.Failed, "Failed count should match")
-			assert.Equal(t, tt.expectedResults.Completed, results.Completed, "Completed count should match")
 		})
 	}
 }
