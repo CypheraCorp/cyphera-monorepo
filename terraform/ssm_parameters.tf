@@ -147,9 +147,9 @@ resource "aws_ssm_parameter" "delegation_private_key_arn" {
   name        = "/cyphera/delegation-server/private-key-arn-${var.stage}"
   description = "ARN of the Private Key secret for Delegation Server - ${var.stage}"
   type        = "String"
-  value       = aws_secretsmanager_secret.delegation_private_key.arn # Assumes secret is named 'delegation_private_key' in secrets.tf
+  value       = aws_secretsmanager_secret.delegation_private_key.arn # Changed to reference the managed resource
   tags        = local.common_tags
-  lifecycle {
-    ignore_changes = [value] # Avoid unnecessary updates if ARN doesn't change
+  lifecycle { 
+    ignore_changes = [value] 
   }
 }
