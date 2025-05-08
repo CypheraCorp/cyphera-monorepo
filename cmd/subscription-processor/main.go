@@ -204,6 +204,7 @@ func main() {
 
 // processSubscriptions runs the subscription processor and logs the results
 func processSubscriptions(ctx context.Context, handler *handlers.SubscriptionHandler) {
+	logger.Info("Entering processSubscriptions")
 	results, err := handler.ProcessDueSubscriptions(ctx)
 	if err != nil {
 		// Use structured logging

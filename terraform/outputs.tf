@@ -65,6 +65,10 @@ resource "aws_ssm_parameter" "delegation_server_alb_dns" {
   type        = "String"
   value       = aws_lb.delegation_server.dns_name # Reference the ALB output
   tags        = local.common_tags
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 output "circle_api_key_secret_arn" {
