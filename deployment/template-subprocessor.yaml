@@ -75,6 +75,7 @@ Resources:
           CYPHERA_SMART_WALLET_ADDRESS: !Ref SmartWalletAddressValue
           # Pass only the ALB DNS name; Go code will append port
           DELEGATION_GRPC_ADDR: !Ref ParamDelegationServerAlbDns
+          DELEGATION_SERVER_URL: !Sub "https://${ParamDelegationServerAlbDns}"
           DB_SSLMODE: require # Set directly, or add another parameter if it needs to vary
 
           # Note: The function code now expects these exact environment variables

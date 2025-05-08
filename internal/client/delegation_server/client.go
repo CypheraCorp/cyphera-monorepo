@@ -2,9 +2,12 @@ package delegation_server
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
+	"strings"
 	"time"
 
 	"cyphera-api/internal/proto"
@@ -85,7 +88,31 @@ func NewDelegationClient(config DelegationClientConfig) (*DelegationClient, erro
 		// For non-local (dev/prod), use secure credentials.
 		// This typically uses the system's CA pool to verify the server's certificate.
 		// Ensure the ALB's certificate is issued by a trusted CA.
-		creds = grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, ""))
+
+		// Extract hostname from grpcServerAddr (e.g., "your-alb.com:443" -> "your-alb.com")
+		host, _, err := net.SplitHostPort(grpcServerAddr)
+		if err != nil {
+			// If SplitHostPort fails, it might be because there's no port (e.g. for testing with a resolver)
+			// In this case, the grpcServerAddr might be the host itself.
+			// However, for ALB, we expect a port. For safety, log and potentially use grpcServerAddr directly
+			// or handle more gracefully. For now, let's assume it contains a port.
+			// A more robust solution might be needed if various address formats are expected.
+			log.Printf("Warning: could not split host and port from gRPC address '%s': %v. Using address as ServerName.", grpcServerAddr, err)
+			host = grpcServerAddr // Fallback, might need adjustment
+			// Remove schema if present (e.g. "dns:///" or "passthrough:///")
+			if strings.Contains(host, ":///") {
+				parts := strings.SplitN(host, ":///", 2)
+				if len(parts) > 1 {
+					host = parts[1]
+				}
+			}
+		}
+
+		tlsConfig := &tls.Config{
+			ServerName: host, // Use the extracted host for SNI
+			// InsecureSkipVerify: true, // TEMPORARY FOR DEBUGGING - REMOVE FOR PRODUCTION
+		}
+		creds = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
 	}
 
 	dialOpts := []grpc.DialOption{
