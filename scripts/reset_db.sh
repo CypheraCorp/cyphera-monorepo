@@ -9,7 +9,6 @@ DB_NAME="cyphera"
 # DB_USER="apiuser"
 # DB_PASSWORD="apipassword"
 
-
 # Path to init SQL script
 INIT_SCRIPT="internal/db/init-scripts/01-init.sql"
 

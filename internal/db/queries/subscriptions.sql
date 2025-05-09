@@ -80,7 +80,6 @@ INSERT INTO subscriptions (
     product_price_in_pennies,
     currency,
     interval_type,
-    term_length,
     delegation_id,
     customer_wallet_id,
     status,
@@ -92,7 +91,7 @@ INSERT INTO subscriptions (
     total_amount_in_cents,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
 )
 RETURNING *;
 
@@ -106,17 +105,16 @@ SET
     product_price_in_pennies = COALESCE($6, product_price_in_pennies),
     currency = COALESCE($7, currency),
     interval_type = COALESCE($8, interval_type),
-    term_length = COALESCE($9, term_length),
-    delegation_id = COALESCE($10, delegation_id),
-    customer_wallet_id = COALESCE($11, customer_wallet_id),
-    status = COALESCE($12, status),
-    current_period_start = COALESCE($13, current_period_start),
-    current_period_end = COALESCE($14, current_period_end),
-    next_redemption_date = COALESCE($15, next_redemption_date),
-    total_redemptions = COALESCE($16, total_redemptions),
-    total_term_length = COALESCE($17, total_term_length),
-    total_amount_in_cents = COALESCE($18, total_amount_in_cents),
-    metadata = COALESCE($19, metadata),
+    delegation_id = COALESCE($9, delegation_id),
+    customer_wallet_id = COALESCE($10, customer_wallet_id),
+    status = COALESCE($11, status),
+    current_period_start = COALESCE($12, current_period_start),
+    current_period_end = COALESCE($13, current_period_end),
+    next_redemption_date = COALESCE($14, next_redemption_date),
+    total_redemptions = COALESCE($15, total_redemptions),
+    total_term_length = COALESCE($16, total_term_length),
+    total_amount_in_cents = COALESCE($17, total_amount_in_cents),
+    metadata = COALESCE($18, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
@@ -192,7 +190,6 @@ SELECT
     s.token_amount,
     s.product_price_in_pennies,
     s.interval_type,
-    s.term_length,
     s.currency,
     -- Customer details
     c.id as customer_id,

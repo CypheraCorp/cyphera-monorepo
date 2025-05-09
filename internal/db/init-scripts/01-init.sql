@@ -315,7 +315,6 @@ CREATE TABLE subscriptions (
     product_price_in_pennies NUMERIC NOT NULL,
     currency currency NOT NULL,
     interval_type interval_type NOT NULL,
-    term_length INTEGER NOT NULL,
     delegation_id UUID NOT NULL REFERENCES delegation_data(id),
     customer_wallet_id UUID REFERENCES customer_wallets(id),
     status subscription_status NOT NULL DEFAULT 'active',
