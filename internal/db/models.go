@@ -734,7 +734,6 @@ type Subscription struct {
 	ProductPriceInPennies pgtype.Numeric     `json:"product_price_in_pennies"`
 	Currency              Currency           `json:"currency"`
 	IntervalType          IntervalType       `json:"interval_type"`
-	TermLength            int32              `json:"term_length"`
 	DelegationID          uuid.UUID          `json:"delegation_id"`
 	CustomerWalletID      pgtype.UUID        `json:"customer_wallet_id"`
 	Status                SubscriptionStatus `json:"status"`

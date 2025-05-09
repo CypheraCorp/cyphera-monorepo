@@ -849,6 +849,9 @@ func (h *ProductHandler) createSubscription(
 		return db.Subscription{}, err
 	}
 
+	spew.Dump(params)
+	spew.Dump(params.TotalTermLength)
+
 	// Create subscription params
 	subscriptionParams := db.CreateSubscriptionParams{
 		CustomerID:     params.Customer.ID,
@@ -887,6 +890,8 @@ func (h *ProductHandler) createSubscription(
 		TotalAmountInCents: 0,
 		Metadata:           subscriptionMetadataBytes,
 	}
+
+	spew.Dump(subscriptionParams)
 
 	logger.Info("Creating new subscription",
 		zap.String("customer_id", params.Customer.ID.String()),
