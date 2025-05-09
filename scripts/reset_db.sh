@@ -2,7 +2,7 @@
 
 # Database connection parameters
 # DB_HOST="localhost"
-DB_HOST="cyphera-db-dev.cjwqc0yo6vzw.us-east-1.rds.amazonaws.com"
+# DB_HOST="cyphera-db-dev.cjwqc0yo6vzw.us-east-1.rds.amazonaws.com"
 DB_PORT="5432"
 DB_NAME="cyphera"
 
