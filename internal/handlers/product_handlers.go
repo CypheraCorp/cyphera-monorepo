@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -448,6 +449,8 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 	// Calculate subscription periods
 	periodStart, periodEnd, nextRedemption := h.calculateSubscriptionPeriods(product)
 
+	spew.Dump(product)
+
 	// Create the subscription
 	subscription, err := h.createSubscription(ctx, qtx, CreateSubscriptionParams{
 		Customer:        customer,
@@ -860,8 +863,9 @@ func (h *ProductHandler) createSubscription(
 			Int:   big.NewInt(int64(params.PriceInPennies)),
 			Valid: true,
 		},
-		IntervalType: params.IntervalType,
-		DelegationID: params.DelegationData.ID,
+		IntervalType:    params.IntervalType,
+		TotalTermLength: params.TotalTermLength,
+		DelegationID:    params.DelegationData.ID,
 		CustomerWalletID: pgtype.UUID{
 			Bytes: params.CustomerWallet.ID,
 			Valid: true,
