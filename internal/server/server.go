@@ -396,16 +396,16 @@ func InitializeRoutes(router *gin.Engine) {
 				}
 
 				// Product Tokens
-				products := protected.Group("/products")
-				{
-					products.GET("/:product_id/tokens", productHandler.GetProductTokensByProduct)
-					products.GET("/:product_id/tokens/active", productHandler.GetActiveProductTokensByProduct)
-					products.POST("/:product_id/tokens", productHandler.CreateProductToken)
-					products.GET("/:product_id/tokens/:token_id", productHandler.GetProductToken)
-					products.GET("/:product_id/networks/:network_id/tokens", productHandler.GetProductTokensByNetwork)
-					products.GET("/:product_id/networks/:network_id/tokens/active", productHandler.GetActiveProductTokensByNetwork)
-					products.DELETE("/:product_id/tokens", productHandler.DeleteProductTokensByProduct)
-				}
+				// products := protected.Group("/products")
+				// {
+				// 	products.GET("/:product_id/tokens", productHandler.GetProductTokensByProduct)
+				// 	products.GET("/:product_id/tokens/active", productHandler.GetActiveProductTokensByProduct)
+				// 	products.POST("/:product_id/tokens", productHandler.CreateProductToken)
+				// 	products.GET("/:product_id/tokens/:token_id", productHandler.GetProductToken)
+				// 	products.GET("/:product_id/networks/:network_id/tokens", productHandler.GetProductTokensByNetwork)
+				// 	products.GET("/:product_id/networks/:network_id/tokens/active", productHandler.GetActiveProductTokensByNetwork)
+				// 	products.DELETE("/:product_id/tokens", productHandler.DeleteProductTokensByProduct)
+				// }
 
 				// Networks
 				networks := protected.Group("/networks")
@@ -477,13 +477,9 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				products.GET("", productHandler.ListProducts)
 				products.POST("", productHandler.CreateProduct)
-				products.POST("/:product_id/publish", productHandler.PublishProduct)
 				products.GET("/:product_id", productHandler.GetProduct)
 				products.PUT("/:product_id", productHandler.UpdateProduct)
 				products.DELETE("/:product_id", productHandler.DeleteProduct)
-				products.GET("/:product_id/networks/:network_id/tokens/:token_id", productHandler.GetProductTokenByIds)
-				products.PUT("/:product_id/networks/:network_id/tokens/:token_id", productHandler.UpdateProductToken)
-				products.DELETE("/:product_id/networks/:network_id/tokens/:token_id", productHandler.DeleteProductToken)
 
 				// Product subscriptions
 				products.GET("/:product_id/subscriptions", subscriptionHandler.ListSubscriptionsByProduct)
@@ -500,7 +496,6 @@ func InitializeRoutes(router *gin.Engine) {
 			// 	workspaces.DELETE("/:workspace_id", workspaceHandler.DeleteWorkspace)
 			// 	workspaces.DELETE("/:workspace_id/hard", workspaceHandler.HardDeleteWorkspace)
 			// 	workspaces.GET("/:workspace_id/customers", workspaceHandler.ListWorkspaceCustomers)
-			// 	workspaces.GET("/:workspace_id/products/active", productHandler.ListActiveProducts)
 			// }
 
 			// Wallets

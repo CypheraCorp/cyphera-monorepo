@@ -32,18 +32,12 @@ INSERT INTO products (
     wallet_id,
     name,
     description,
-    product_type,
-    interval_type,
-    term_length,
-    price_in_pennies,
-    currency,
     image_url,
     url,
-    merchant_paid_gas,
     active,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+    $1, $2, $3, $4, $5, $6, $7, $8
 )
 RETURNING *;
 
@@ -53,16 +47,10 @@ SET
     name = COALESCE($3, name),
     wallet_id = COALESCE($4, wallet_id),
     description = COALESCE($5, description),
-    product_type = COALESCE($6, product_type),
-    interval_type = COALESCE($7, interval_type),
-    term_length = COALESCE($8, term_length),
-    price_in_pennies = COALESCE($9, price_in_pennies),
-    currency = COALESCE($10, currency),
-    image_url = COALESCE($11, image_url),
-    url = COALESCE($12, url),
-    merchant_paid_gas = COALESCE($13, merchant_paid_gas),
-    active = COALESCE($14, active),
-    metadata = COALESCE($15, metadata),
+    image_url = COALESCE($6, image_url),
+    url = COALESCE($7, url),
+    active = COALESCE($8, active),
+    metadata = COALESCE($9, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 RETURNING *;

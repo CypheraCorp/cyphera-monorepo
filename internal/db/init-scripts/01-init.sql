@@ -6,12 +6,12 @@ CREATE TYPE api_key_level AS ENUM ('read', 'write', 'admin');
 CREATE TYPE account_type AS ENUM ('admin', 'merchant');
 CREATE TYPE user_role AS ENUM ('admin', 'support', 'developer');
 CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended', 'pending');
-CREATE TYPE product_type AS ENUM ('recurring', 'one_off');
+CREATE TYPE price_type AS ENUM ('recurring', 'one_off');
 CREATE TYPE interval_type AS ENUM ('1min', '5mins', 'daily', 'week', 'month', 'year');
 CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkadot');
 CREATE TYPE currency AS ENUM ('USD', 'EUR');
 CREATE TYPE wallet_type AS ENUM ('wallet', 'circle_wallet');
-CREATE TYPE circle_network_type AS ENUM ('ARB', 'ARB-SEPOLIA', 'ETH', 'ETH-SEPOLIA', 'MATIC', 'MATIC-AMOY', 'BASE', 'BASE-SEPOLIA', 'UNICHAIN', 'UNICHAIN-SEPOLIA', 'SOL', 'SOL-DEVNET');
+CREATE TYPE circle_network_type AS ENUM ('ARB', 'ARB-SEPOLIA', 'ETH', 'ETH-SEPOLIA', 'MATIC', 'MATIC-AMOY', 'OP', 'OP-SEPOLIA', 'BASE', 'BASE-SEPOLIA', 'UNI', 'UNI-SEPOLIA');
 CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'overdue', 'suspended', 'failed', 'completed');
 CREATE TYPE subscription_event_type AS ENUM (
     'created', 
@@ -237,29 +237,35 @@ CREATE TABLE products (
     wallet_id UUID NOT NULL REFERENCES wallets(id),
     name TEXT NOT NULL,
     description TEXT,
-    product_type product_type NOT NULL,
-    interval_type interval_type, -- Made nullable for one_off products
-    term_length INTEGER, -- number of intervals, nullable for one_off
-    price_in_pennies INTEGER NOT NULL,
-    currency currency NOT NULL,
     image_url TEXT,
     url TEXT,
-    merchant_paid_gas BOOLEAN NOT NULL DEFAULT false,
     active BOOLEAN NOT NULL DEFAULT true,
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Prices table (depends on products)
+CREATE TABLE prices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID NOT NULL REFERENCES products(id),
+    active BOOLEAN NOT NULL DEFAULT true,
+    type price_type NOT NULL, -- 'recurring' or 'one_off'
+    nickname TEXT,
+    currency currency NOT NULL, -- 'USD', 'EUR'
+    unit_amount_in_pennies INTEGER NOT NULL,
+    interval_type interval_type, -- Nullable, for 'recurring' type
+    interval_count INTEGER, -- Nullable, for 'recurring' type
+    term_length INTEGER, -- Nullable, for 'recurring' type, e.g., 12 for 12 months
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
-    CONSTRAINT products_term_length_check CHECK (
-        (product_type = 'recurring' AND term_length IS NOT NULL AND term_length > 0) OR
-        (product_type = 'one_off' AND term_length IS NULL)
-    ),
-    CONSTRAINT products_interval_type_check CHECK (
-        (product_type = 'recurring' AND interval_type IS NOT NULL) OR
-        (product_type = 'one_off' AND interval_type IS NULL)
-    ),
-    -- Add constraint for allowed currency values
-    CONSTRAINT products_currency_check CHECK (currency IN ('USD', 'EUR')) 
+        CONSTRAINT prices_recurring_fields_check CHECK (
+        (type = 'recurring' AND interval_type IS NOT NULL AND interval_count IS NOT NULL AND interval_count > 0 AND term_length IS NOT NULL AND term_length > 0) OR
+        (type = 'one_off' AND interval_type IS NULL AND interval_count IS NULL AND term_length IS NULL)
+    )
 );
 
 -- Tokens table (depends on networks)
@@ -310,11 +316,9 @@ CREATE TABLE subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES customers(id),
     product_id UUID NOT NULL REFERENCES products(id),
+    price_id UUID NOT NULL REFERENCES prices(id),
     product_token_id UUID NOT NULL REFERENCES products_tokens(id),
     token_amount NUMERIC NOT NULL,
-    product_price_in_pennies NUMERIC NOT NULL,
-    currency currency NOT NULL,
-    interval_type interval_type NOT NULL,
     delegation_id UUID NOT NULL REFERENCES delegation_data(id),
     customer_wallet_id UUID REFERENCES customer_wallets(id),
     status subscription_status NOT NULL DEFAULT 'active',
@@ -322,7 +326,6 @@ CREATE TABLE subscriptions (
     current_period_end TIMESTAMP WITH TIME ZONE NOT NULL,
     next_redemption_date TIMESTAMP WITH TIME ZONE,
     total_redemptions INT NOT NULL DEFAULT 0,
-    total_term_length INT NOT NULL DEFAULT 0,
     total_amount_in_cents INT NOT NULL DEFAULT 0,
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -417,7 +420,6 @@ CREATE INDEX idx_wallets_network_type ON wallets(network_type);
 CREATE INDEX idx_wallets_is_primary ON wallets(is_primary) WHERE deleted_at IS NULL;
 CREATE INDEX idx_wallets_network_id ON wallets(network_id);
 CREATE INDEX idx_wallets_wallet_type ON wallets(wallet_type);
-CREATE UNIQUE INDEX wallets_workspace_wallet_network_unique_idx ON wallets(workspace_id, wallet_address, network_type) WHERE deleted_at IS NULL;
 
 -- circle_wallets
 CREATE INDEX idx_circle_wallets_wallet_id ON circle_wallets(wallet_id);
@@ -438,6 +440,12 @@ CREATE INDEX idx_products_workspace_id ON products(workspace_id);
 CREATE INDEX idx_products_wallet_id ON products(wallet_id);
 CREATE INDEX idx_products_active ON products(active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_created_at ON products(created_at);
+
+-- prices
+CREATE INDEX idx_prices_product_id ON prices(product_id);
+CREATE INDEX idx_prices_active ON prices(active) WHERE deleted_at IS NULL;
+CREATE INDEX idx_prices_type ON prices(type);
+CREATE INDEX idx_prices_currency ON prices(currency);
 
 -- tokens
 CREATE INDEX idx_tokens_network_id ON tokens(network_id);
@@ -461,6 +469,7 @@ CREATE INDEX idx_subscriptions_product_id ON subscriptions(product_id);
 CREATE INDEX idx_subscriptions_product_token_id ON subscriptions(product_token_id);
 CREATE INDEX idx_subscriptions_delegation_id ON subscriptions(delegation_id);
 CREATE INDEX idx_subscriptions_customer_wallet_id ON subscriptions(customer_wallet_id);
+CREATE INDEX idx_subscriptions_price_id ON subscriptions(price_id);
 CREATE INDEX idx_subscriptions_status ON subscriptions(status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_subscriptions_next_redemption_date ON subscriptions(next_redemption_date) WHERE status = 'active' AND deleted_at IS NULL;
 
@@ -483,12 +492,6 @@ CREATE INDEX idx_failed_subscription_attempts_occurred_at ON failed_subscription
 INSERT INTO accounts (name, account_type, business_name, business_type)
 VALUES 
     (
-        'Test Account',
-        'merchant',
-        'Test Business LLC',
-        'LLC'
-    ),
-    (
         'Admin Account',
         'admin',
         'Cyphera Admin',
@@ -499,19 +502,11 @@ ON CONFLICT DO NOTHING;
 INSERT INTO users (supabase_id, email, first_name, last_name, display_name, account_id, role, is_account_owner)
 VALUES 
     ('supabase|admin', 'admin@cyphera.com', 'Admin', 'User', 'Admin User',
-     (SELECT id FROM accounts WHERE name = 'Admin Account'), 'admin', true),
-    ('supabase|merchant', 'merchant@example.com', 'Test', 'Merchant', 'Test Merchant',
-     (SELECT id FROM accounts WHERE name = 'Test Account'), 'admin', true)
+     (SELECT id FROM accounts WHERE name = 'Admin Account'), 'admin', true)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO workspaces (account_id, name, description, business_name)
 VALUES 
-    (
-        (SELECT id FROM accounts WHERE name = 'Test Account'),
-        'Test Workspace',
-        'Test merchant workspace for development',
-        'Test Business LLC'
-    ),
     (
         (SELECT id FROM accounts WHERE name = 'Admin Account'),
         'Admin Workspace',
@@ -523,12 +518,6 @@ ON CONFLICT DO NOTHING;
 INSERT INTO api_keys (workspace_id, name, key_hash, access_level)
 VALUES 
     (
-        (SELECT id FROM workspaces WHERE name = 'Test Workspace'),
-        'Test Valid API Key',
-        'test_valid_key_hash',
-        'write'
-    ),
-    (
         (SELECT id FROM workspaces WHERE name = 'Admin Workspace'),
         'Admin API Key',
         'admin_valid_key_hash',
@@ -536,254 +525,31 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
-INSERT INTO customers (workspace_id, external_id, email, name, description, balance_in_pennies)
-VALUES 
-    (
-        (SELECT id FROM workspaces WHERE name = 'Test Workspace'),
-        'CUST_001',
-        'customer1@example.com',
-        'Test Customer One',
-        'First test customer',
-        1000
-    ),
-    (
-        (SELECT id FROM workspaces WHERE name = 'Test Workspace'),
-        'CUST_002',
-        'customer2@example.com',
-        'Test Customer Two',
-        'Second test customer',
-        5000
-    )
-ON CONFLICT DO NOTHING;
-
-INSERT INTO customer_wallets (
-    customer_id,
-    wallet_address,
-    network_type,
-    nickname,
-    ens,
-    is_primary,
-    verified,
-    metadata
-)
-VALUES 
-    (
-        (SELECT id FROM customers WHERE external_id = 'CUST_001'),
-        '0x123F5B4DBe0e4aCb39c8C2d48E75E5da30A4DCF5',
-        'evm',
-        'ETH Wallet',
-        'customer1.eth',
-        true,
-        true,
-        '{"chain": "ethereum", "tags": ["subscription"]}'::jsonb
-    ),
-    (
-        (SELECT id FROM customers WHERE external_id = 'CUST_001'),
-        '0x456F5B4DBe0e4aCb39c8C2d48E75E5da30A4DCF5',
-        'evm',
-        'Polygon Wallet',
-        null,
-        false,
-        true,
-        '{"chain": "polygon", "tags": ["backup"]}'::jsonb
-    ),
-    (
-        (SELECT id FROM customers WHERE external_id = 'CUST_002'),
-        '0x789F5B4DBe0e4aCb39c8C2d48E75E5da30A4DCF5',
-        'evm',
-        'Main Wallet',
-        null,
-        true,
-        true,
-        '{"chain": "ethereum", "tags": ["primary"]}'::jsonb
-    ),
-    (
-        (SELECT id FROM customers WHERE external_id = 'CUST_002'),
-        '8fYU3gaCuDGK7HLqsMW2nwpBJqecxLmLDBo5Hc3YzKf5',
-        'solana',
-        'Solana Wallet',
-        null,
-        false,
-        true,
-        '{"chain": "solana", "tags": ["gaming"]}'::jsonb
-    )
-ON CONFLICT DO NOTHING;
-
 INSERT INTO networks (name, type, network_type, circle_network_type, chain_id, is_testnet, active, block_explorer_url)
 VALUES 
     ('Ethereum Sepolia', 'Sepolia', 'evm', 'ETH-SEPOLIA', 11155111, true, true, 'https://sepolia.etherscan.io'),
     ('Ethereum Mainnet', 'Mainnet', 'evm', 'ETH', 1, false, false, 'https://etherscan.io'),
-    ('Polygon Amoy', 'Amoy', 'evm', 'MATIC-AMOY', 80002, true, false, 'https://www.oklink.com/amoy'), -- Example, replace if official exists
+    ('Polygon Amoy', 'Amoy', 'evm', 'MATIC-AMOY', 80002, true, false, 'https://www.oklink.com/amoy'), 
     ('Polygon Mainnet', 'Mainnet', 'evm', 'MATIC', 137, false, false, 'https://polygonscan.com'),
     ('Arbitrum Sepolia', 'Sepolia', 'evm', 'ARB-SEPOLIA', 421614, true, false, 'https://sepolia.arbiscan.io'),
     ('Arbitrum One', 'Mainnet', 'evm', 'ARB', 42161, false, false, 'https://arbiscan.io'),
-    ('Base Sepolia', 'Sepolia', 'evm', 'BASE-SEPOLIA', 84532, true, false, 'https://sepolia.basescan.org'),
+    ('Base Sepolia', 'Sepolia', 'evm', 'BASE-SEPOLIA', 84532, true, true, 'https://sepolia.basescan.org'),
     ('Base Mainnet', 'Mainnet', 'evm', 'BASE', 8453, false, false, 'https://basescan.org'),
-    ('Solana Devnet', 'Devnet', 'solana', 'SOL-DEVNET', 103, true, false, 'https://explorer.solana.com/?cluster=devnet'),
-    ('Solana Mainnet', 'Mainnet', 'solana', 'SOL', 101, false, false, 'https://explorer.solana.com')
-ON CONFLICT DO NOTHING;
-
-INSERT INTO wallets (
-    workspace_id,
-    wallet_type,
-    wallet_address,
-    network_type,
-    nickname,
-    ens,
-    is_primary,
-    verified,
-    metadata
-)
-VALUES 
-    (
-        (SELECT id FROM workspaces WHERE name = 'Test Workspace'),
-        'wallet',
-        '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
-        'evm',
-        'Main Payment Wallet',
-        'test-merchant.eth',
-        true,
-        true,
-        '{"chain": "ethereum", "tags": ["payments"]}'::jsonb
-    ),
-    (
-        (SELECT id FROM workspaces WHERE name = 'Test Workspace'),
-        'wallet',
-        '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty',
-        'polkadot',
-        'DOT Wallet',
-        null,
-        false,
-        true,
-        '{"chain": "polkadot", "tags": ["staking"]}'::jsonb
-    ),
-    (
-        (SELECT id FROM workspaces WHERE name = 'Admin Workspace'),
-        'wallet',
-        '0x8894e0a0c962cb723c1976a4421c95949be2d4e3',
-        'evm',
-        'Admin ETH Wallet',
-        'cyphera-admin.eth',
-        true,
-        true,
-        '{"chain": "ethereum", "tags": ["admin", "treasury"]}'::jsonb
-    ),
-    (
-        (SELECT id FROM workspaces WHERE name = 'Admin Workspace'),
-        'wallet',
-        '6fYU3gaCuDGK7HLqsMW2nwpBJqecxLmLDBo5Hc3YzKf5',
-        'solana',
-        'Admin SOL Wallet',
-        null,
-        false,
-        true,
-        '{"chain": "solana", "tags": ["admin"]}'::jsonb
-    )
+    ('Optimism Sepolia', 'Sepolia', 'evm', 'OP-SEPOLIA', 11155420, true, false, 'https://sepolia.optimism.io'),
+    ('Optimism Mainnet', 'Mainnet', 'evm', 'OP', 10, false, false, 'https://optimistic.etherscan.io'),
+    ('Unichain Sepolia', 'Sepolia', 'evm', 'UNI-SEPOLIA', 1301, true, false, 'https://sepolia.unichain.io'),
+    ('Unichain Mainnet', 'Mainnet', 'evm', 'UNI', 130, false, false, 'https://unichain.io')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token, active, decimals)
 VALUES 
     -- Ethereum Sepolia tokens
     ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'USD Coin', 'USDC', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', false, true, 6),
-    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'Ethereum', 'ETH', '0xd38E5c25935291fFD51C9d66C3B7384494bb099A', true, true, 18)
+    ((SELECT id FROM networks WHERE chain_id = 11155111 AND deleted_at IS NULL), 'Ethereum', 'ETH', '0xd38E5c25935291fFD51C9d66C3B7384494bb099A', true, true, 18),
+    ((SELECT id FROM networks WHERE chain_id = 84532 AND deleted_at IS NULL), 'USD Coin', 'USDC', '0x036CbD53842c5426634e7929541eC2318f3dCF7e', false, true, 6),
+    ((SELECT id FROM networks WHERE chain_id = 84532 AND deleted_at IS NULL), 'Ethereum', 'ETH', '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', true, true, 18)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO products (
-    workspace_id,
-    wallet_id,
-    name,
-    description,
-    product_type,
-    interval_type,
-    term_length,
-    price_in_pennies,
-    currency,
-    image_url,
-    url,
-    merchant_paid_gas,
-    active,
-    metadata
-) VALUES 
-    (
-        (SELECT id FROM workspaces WHERE name = 'Test Workspace'),
-        (SELECT id FROM wallets WHERE nickname = 'Main Payment Wallet' AND deleted_at IS NULL LIMIT 1),
-        'Basic Subscription',
-        'Monthly subscription plan with basic features, ends in 12 months',
-        'recurring',
-        'month',
-        12,
-        1000,
-        'USD',
-        'https://example.com/basic.png',
-        'https://example.com/basic',
-        true,
-        true,
-        '{"features": ["basic_support", "standard_limits"]}'::jsonb
-    ),
-    (
-        (SELECT id FROM workspaces WHERE name = 'Test Workspace'),
-        (SELECT id FROM wallets WHERE nickname = 'Main Payment Wallet' AND deleted_at IS NULL LIMIT 1),
-        'Annual Pro Plan',
-        'Annual subscription with all features, ends in 3 years',
-        'recurring',
-        'year',
-        2,
-        10000,
-        'USD',
-        'https://example.com/pro.png',
-        'https://example.com/pro',
-        true,
-        true,
-        '{"features": ["priority_support", "advanced_features"]}'::jsonb
-    )
-ON CONFLICT DO NOTHING;
-
-INSERT INTO products_tokens (
-    product_id,
-    network_id,
-    token_id,
-    active
-) 
--- Enable ETH on Ethereum Sepolia for Basic Subscription
-SELECT 
-    p.id as product_id,
-    t.network_id,
-    t.id as token_id,
-    true as active
-FROM products p
-CROSS JOIN tokens t
-WHERE p.name = 'Basic Subscription'
-AND t.network_id = (SELECT id FROM networks WHERE chain_id = 11155111)
-AND t.symbol IN ('ETH')
-
-UNION ALL
-
--- Enable only ETH on Ethereum Sepolia for Annual Pro Plan
-SELECT 
-    p.id as product_id,
-    t.network_id,
-    t.id as token_id,
-    true as active
-FROM products p
-CROSS JOIN tokens t
-WHERE p.name = 'Annual Pro Plan'
-AND t.network_id = (SELECT id FROM networks WHERE chain_id = 11155111)
-AND t.symbol = 'ETH'
-
-UNION ALL
-
--- Enable only USDC on Ethereum Sepolia for Annual Pro Plan (Example of adding another token)
-SELECT 
-    p.id as product_id,
-    t.network_id,
-    t.id as token_id,
-    true as active
-FROM products p
-CROSS JOIN tokens t
-WHERE p.name = 'Annual Pro Plan'
-AND t.network_id = (SELECT id FROM networks WHERE chain_id = 11155111)
-AND t.symbol = 'USDC'
-ON CONFLICT DO NOTHING;
 
 -- Create function for updating updated_at timestamp
 CREATE OR REPLACE FUNCTION trigger_set_updated_at()
@@ -877,6 +643,11 @@ CREATE TRIGGER set_circle_users_updated_at
 
 CREATE TRIGGER set_circle_wallets_updated_at
     BEFORE UPDATE ON circle_wallets
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_prices_updated_at
+    BEFORE UPDATE ON prices
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 

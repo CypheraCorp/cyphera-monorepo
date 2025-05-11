@@ -6,17 +6,22 @@ WHERE id = $1 AND deleted_at IS NULL LIMIT 1;
 SELECT 
     s.*,
     p.name as product_name,
-    p.product_type,
-    p.interval_type,
     c.name as customer_name,
     c.email as customer_email,
     cw.wallet_address as subscriber_wallet_address,
     cw.network_type as subscriber_network_type,
     t.symbol as token_symbol,
     n.name as network_name,
-    n.chain_id
+    n.chain_id,
+    pr.type AS price_type,
+    pr.currency AS price_currency,
+    pr.unit_amount_in_pennies AS price_unit_amount_in_pennies,
+    pr.interval_type AS price_interval_type,
+    pr.interval_count AS price_interval_count,
+    pr.term_length AS price_term_length
 FROM subscriptions s
 JOIN products p ON p.id = s.product_id
+JOIN prices pr ON pr.id = s.price_id
 JOIN customers c ON c.id = s.customer_id
 LEFT JOIN customer_wallets cw ON cw.id = s.customer_wallet_id
 JOIN products_tokens pt ON pt.id = s.product_token_id
@@ -75,11 +80,9 @@ WHERE status = $1 AND deleted_at IS NULL;
 INSERT INTO subscriptions (
     customer_id,
     product_id,
+    price_id,
     product_token_id,
     token_amount,
-    product_price_in_pennies,
-    currency,
-    interval_type,
     delegation_id,
     customer_wallet_id,
     status,
@@ -87,11 +90,10 @@ INSERT INTO subscriptions (
     current_period_end,
     next_redemption_date,
     total_redemptions,
-    total_term_length,
     total_amount_in_cents,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 )
 RETURNING *;
 
@@ -100,21 +102,18 @@ UPDATE subscriptions
 SET
     customer_id = COALESCE($2, customer_id),
     product_id = COALESCE($3, product_id),
-    product_token_id = COALESCE($4, product_token_id),
-    token_amount = COALESCE($5, token_amount),
-    product_price_in_pennies = COALESCE($6, product_price_in_pennies),
-    currency = COALESCE($7, currency),
-    interval_type = COALESCE($8, interval_type),
-    delegation_id = COALESCE($9, delegation_id),
-    customer_wallet_id = COALESCE($10, customer_wallet_id),
-    status = COALESCE($11, status),
-    current_period_start = COALESCE($12, current_period_start),
-    current_period_end = COALESCE($13, current_period_end),
-    next_redemption_date = COALESCE($14, next_redemption_date),
-    total_redemptions = COALESCE($15, total_redemptions),
-    total_term_length = COALESCE($16, total_term_length),
-    total_amount_in_cents = COALESCE($17, total_amount_in_cents),
-    metadata = COALESCE($18, metadata),
+    price_id = COALESCE($4, price_id),
+    product_token_id = COALESCE($5, product_token_id),
+    token_amount = COALESCE($6, token_amount),
+    delegation_id = COALESCE($7, delegation_id),
+    customer_wallet_id = COALESCE($8, customer_wallet_id),
+    status = COALESCE($9, status),
+    current_period_start = COALESCE($10, current_period_start),
+    current_period_end = COALESCE($11, current_period_end),
+    next_redemption_date = COALESCE($12, next_redemption_date),
+    total_redemptions = COALESCE($13, total_redemptions),
+    total_amount_in_cents = COALESCE($14, total_amount_in_cents),
+    metadata = COALESCE($15, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
@@ -179,40 +178,69 @@ LIMIT 1;
 
 -- name: ListSubscriptionDetailsWithPagination :many
 SELECT 
-    s.id,
-    s.status,
-    s.current_period_start,
-    s.current_period_end,
-    s.next_redemption_date,
-    s.total_redemptions,
-    s.total_term_length,
-    s.total_amount_in_cents,
-    s.token_amount,
-    s.product_price_in_pennies,
-    s.interval_type,
-    s.currency,
+    s.id AS subscription_id,
+    s.status AS subscription_status,
+    s.current_period_start AS subscription_current_period_start,
+    s.current_period_end AS subscription_current_period_end,
+    s.created_at AS subscription_created_at,
+    s.updated_at AS subscription_updated_at,
+    s.token_amount AS subscription_token_amount,
+    s.next_redemption_date AS subscription_next_redemption_date,
+    s.total_redemptions AS subscription_total_redemptions,
+    s.total_amount_in_cents AS subscription_total_amount_in_cents,
+
     -- Customer details
-    c.id as customer_id,
-    c.name as customer_name,
-    c.email as customer_email,
+    c.id AS customer_id,
+    c.name AS customer_name,
+    c.email AS customer_email,
+
     -- Product details
-    p.id as product_id,
-    p.name as product_name,
-    p.product_type,
-    p.interval_type,
-    p.price_in_pennies,
+    p.id AS product_id,
+    p.name AS product_name,
+    p.description AS product_description,
+    p.image_url AS product_image_url,
+    p.active AS product_active,
+    p.metadata AS product_metadata,
+    p.workspace_id AS product_workspace_id,
+
+    -- Price details (from prices table)
+    pr.id AS price_id,
+    pr.product_id AS price_product_id, -- The product_id FK in the prices table
+    pr.active AS price_active,
+    pr.type AS price_type,
+    pr.nickname AS price_nickname,
+    pr.currency AS price_currency,
+    pr.unit_amount_in_pennies AS price_unit_amount_in_pennies,
+    pr.interval_type AS price_interval_type,
+    pr.interval_count AS price_interval_count,
+    pr.term_length AS price_term_length,
+    pr.metadata AS price_metadata,
+    pr.created_at AS price_created_at,
+    pr.updated_at AS price_updated_at,
+
+    -- Product token details
+    pt.id AS product_token_id,
+    pt.token_id AS product_token_token_id,
+    pt.network_id AS product_token_network_id,
+    pt.created_at AS product_token_created_at,
+    pt.updated_at AS product_token_updated_at,
+    
+
     -- Token details
-    t.symbol as token_symbol,
-    t.contract_address as token_address,
+    t.symbol AS token_symbol,
+    t.contract_address AS token_address,
+
     -- Network details
-    n.name as network_name,
-    n.type as network_type,
-    n.chain_id,
+    n.name AS network_name,
+    n.type AS network_type,
+    n.chain_id AS network_chain_id,
+
     -- Customer wallet details
-    cw.wallet_address as customer_wallet_address
+    cw.wallet_address AS customer_wallet_address
 FROM subscriptions s
 JOIN customers c ON s.customer_id = c.id
 JOIN products p ON s.product_id = p.id
+JOIN prices pr ON s.price_id = pr.id
 JOIN products_tokens pt ON s.product_token_id = pt.id
 JOIN tokens t ON pt.token_id = t.id
 JOIN networks n ON pt.network_id = n.id
@@ -220,10 +248,11 @@ LEFT JOIN customer_wallets cw ON s.customer_wallet_id = cw.id
 WHERE s.deleted_at IS NULL
     AND c.deleted_at IS NULL
     AND p.deleted_at IS NULL
+    AND pr.deleted_at IS NULL
     AND pt.deleted_at IS NULL
     AND t.deleted_at IS NULL
     AND n.deleted_at IS NULL
-    AND cw.deleted_at IS NULL
+    AND (cw.id IS NULL OR cw.deleted_at IS NULL) -- Correct handling for LEFT JOIN on deletable table
     AND p.workspace_id = $3
 ORDER BY s.created_at DESC
 LIMIT $1 OFFSET $2; 

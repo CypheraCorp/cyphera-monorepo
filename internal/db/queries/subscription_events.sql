@@ -120,59 +120,71 @@ ORDER BY occurred_at DESC
 LIMIT 1;
 
 -- name: ListSubscriptionEventDetailsWithPagination :many
-SELECT 
-    se.id,
+SELECT
+    se.id AS subscription_event_id,
+    se.subscription_id,
     se.event_type,
     se.transaction_hash,
-    se.amount_in_cents,
-    se.occurred_at,
+    se.amount_in_cents AS event_amount_in_cents,
+    se.occurred_at AS event_occurred_at,
     se.error_message,
-    -- Subscription details
-    s.id as subscription_id,
-    s.status as subscription_status,
-    -- Customer details
-    c.id as customer_id,
-    c.name as customer_name,
-    c.email as customer_email,
-    -- Product details
-    p.id as product_id,
-    p.name as product_name,
-    p.product_type,
-    p.interval_type,
-    -- Token details
-    t.symbol as token_symbol,
-    t.contract_address as token_address,
-    -- Network details
-    n.name as network_name,
-    n.type as network_type,
-    n.chain_id,
-    -- Customer wallet details
-    cw.wallet_address as customer_wallet_address
-FROM subscription_events se
-JOIN subscriptions s ON se.subscription_id = s.id
-JOIN customers c ON s.customer_id = c.id
-JOIN products p ON s.product_id = p.id
-JOIN products_tokens pt ON s.product_token_id = pt.id
-JOIN tokens t ON pt.token_id = t.id
-JOIN networks n ON pt.network_id = n.id
-LEFT JOIN customer_wallets cw ON s.customer_wallet_id = cw.id
-WHERE s.deleted_at IS NULL
-    AND c.deleted_at IS NULL
+    se.metadata AS event_metadata,
+    se.created_at AS event_created_at,
+    s.customer_id,
+    s.status AS subscription_status,
+    p.id AS product_id,
+    p.name AS product_name,
+    pr.id AS price_id,
+    pr.type AS price_type,
+    pr.currency AS price_currency,
+    pr.unit_amount_in_pennies AS price_unit_amount_in_pennies,
+    pr.interval_type AS price_interval_type,
+    pr.interval_count AS price_interval_count,
+    pr.term_length AS price_term_length,
+    pt.id AS product_token_id,
+    pt.token_id AS product_token_token_id,
+    pt.created_at AS product_token_created_at,
+    pt.updated_at AS product_token_updated_at,
+    t.symbol AS product_token_symbol,
+    n.id AS network_id,
+    n.name AS network_name,
+    n.chain_id AS network_chain_id,
+    c.email AS customer_email,
+    c.name AS customer_name
+FROM
+    subscription_events se
+JOIN
+    subscriptions s ON se.subscription_id = s.id
+JOIN
+    products p ON s.product_id = p.id
+JOIN
+    prices pr ON s.price_id = pr.id
+JOIN
+    products_tokens pt ON s.product_token_id = pt.id
+JOIN
+    tokens t ON pt.token_id = t.id
+JOIN
+    networks n ON pt.network_id = n.id
+JOIN
+    customers c ON s.customer_id = c.id
+WHERE
+    p.workspace_id = $1
+    AND s.deleted_at IS NULL
     AND p.deleted_at IS NULL
-    AND pt.deleted_at IS NULL
-    AND t.deleted_at IS NULL
-    AND n.deleted_at IS NULL
-    AND p.workspace_id = $3
+    AND pr.deleted_at IS NULL
     AND se.event_type IN ('redeemed', 'failed', 'failed_redemption')
-ORDER BY se.occurred_at DESC
-LIMIT $1 OFFSET $2;
+ORDER BY
+    se.occurred_at DESC
+LIMIT $2 OFFSET $3;
 
 -- name: CountSubscriptionEventDetails :one
 SELECT COUNT(*) 
 FROM subscription_events se
 JOIN subscriptions s ON se.subscription_id = s.id
 JOIN products p ON s.product_id = p.id
+JOIN prices pr ON s.price_id = pr.id
 WHERE s.deleted_at IS NULL
     AND p.deleted_at IS NULL
+    AND pr.deleted_at IS NULL
     AND p.workspace_id = $1
     AND se.event_type IN ('redeemed', 'failed', 'failed_redemption');
