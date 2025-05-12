@@ -95,17 +95,6 @@ func (h *WorkspaceHandler) ListWorkspaces(c *gin.Context) {
 	sendList(c, response)
 }
 
-// GetAllWorkspaces retrieves all workspaces including deleted ones
-// @Summary Get all workspaces
-// @Description Retrieves all workspaces including deleted ones (admin only)
-// @Tags workspaces
-// @Accept json
-// @Produce json
-// @Success 200 {array} WorkspaceResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /admin/workspaces/all [get]
-// @exclude
 func (h *WorkspaceHandler) GetAllWorkspaces(c *gin.Context) {
 	workspaces, err := h.common.db.GetAllWorkspaces(c.Request.Context())
 	if err != nil {
@@ -173,19 +162,6 @@ type ListWorkspacesResponse struct {
 	Data   []WorkspaceResponse `json:"data"`
 }
 
-// CreateWorkspace creates a new workspace
-// @Summary Create workspace
-// @Description Creates a new workspace
-// @Tags workspaces
-// @Accept json
-// @Produce json
-// @Param workspace body CreateWorkspaceRequest true "Workspace creation data"
-// @Success 201 {object} WorkspaceResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /workspaces [post]
-// @exclude
 func (h *WorkspaceHandler) CreateWorkspace(c *gin.Context) {
 	var req CreateWorkspaceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -213,21 +189,6 @@ func (h *WorkspaceHandler) CreateWorkspace(c *gin.Context) {
 	sendSuccess(c, http.StatusCreated, toWorkspaceResponse(workspace))
 }
 
-// UpdateWorkspace updates an existing workspace
-// @Summary Update workspace
-// @Description Updates an existing workspace
-// @Tags workspaces
-// @Accept json
-// @Produce json
-// @Param workspace_id path string true "Workspace ID"
-// @Param workspace body UpdateWorkspaceRequest true "Workspace update data"
-// @Success 200 {object} WorkspaceResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /workspaces/{workspace_id} [put]
-// @exclude
 func (h *WorkspaceHandler) UpdateWorkspace(c *gin.Context) {
 	workspaceId := c.Param("workspace_id")
 	parsedUUID, err := uuid.Parse(workspaceId)
@@ -254,19 +215,6 @@ func (h *WorkspaceHandler) UpdateWorkspace(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toWorkspaceResponse(workspace))
 }
 
-// DeleteWorkspace soft deletes a workspace
-// @Summary Delete workspace
-// @Description Soft deletes a workspace
-// @Tags workspaces
-// @Accept json
-// @Produce json
-// @Param workspace_id path string true "Workspace ID"
-// @Success 204 "No Content"
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /workspaces/{workspace_id} [delete]
-// @exclude
 func (h *WorkspaceHandler) DeleteWorkspace(c *gin.Context) {
 	workspaceId := c.Param("workspace_id")
 	parsedUUID, err := uuid.Parse(workspaceId)

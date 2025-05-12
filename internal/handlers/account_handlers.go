@@ -93,17 +93,6 @@ type OnboardAccountRequest struct {
 	WalletAddress string `json:"wallet_address"`
 }
 
-// ListAccounts godoc
-// @Summary List accounts
-// @Description Returns a list of accounts. Only accessible by admins.
-// @Tags accounts
-// @Accept json
-// @Produce json
-// @Success 200 {object} AccountResponse
-// @Failure 401 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /accounts [get]
-// @exclude
 func (h *AccountHandler) ListAccounts(c *gin.Context) {
 	accounts, err := h.common.db.ListAccounts(c.Request.Context())
 	if err != nil {
@@ -262,21 +251,6 @@ func (h *AccountHandler) GetAccount(c *gin.Context) {
 // sendSuccess(c, http.StatusOK, toFullAccountResponse(fullAccountResponse))
 // }
 
-// CreateAccount godoc
-// @Summary Create an account
-// @Description Creates a new account with a default workspace. Only accessible by admins.
-// @Tags accounts
-// @Accept json
-// @Produce json
-// @Param account body CreateAccountRequest true "Account creation data"
-// @Success 201 {object} AccountResponse
-// @Failure 400 {object} ErrorResponse "Invalid request body or metadata format"
-// @Failure 401 {object} ErrorResponse "Not authenticated"
-// @Failure 403 {object} ErrorResponse "Not authorized"
-// @Failure 500 {object} ErrorResponse "Server error"
-// @Security ApiKeyAuth
-// @Router /accounts [post]
-// @exclude
 func (h *AccountHandler) CreateAccount(c *gin.Context) {
 	accountType := c.GetString("accountType")
 	if accountType != "admin" {
@@ -395,20 +369,6 @@ func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAc
 	}, nil
 }
 
-// SignInAccount godoc
-// @Summary Register or sign in to an account
-// @Description Creates a new account with user and workspace, or returns existing account details
-// @Tags accounts
-// @Accept json
-// @Produce json
-// @Param account body CreateAccountRequest true "Account creation data"
-// @Success 200 {object} AccountDetailsResponse "Existing account details"
-// @Success 201 {object} AccountDetailsResponse "Newly created account"
-// @Failure 400 {object} ErrorResponse "Invalid request body, metadata format, or missing required fields"
-// @Failure 500 {object} ErrorResponse "Server error"
-// @Security ApiKeyAuth
-// @Router /accounts/signin [post]
-// @exclude
 func (h *AccountHandler) SignInAccount(c *gin.Context) {
 	var req CreateAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -468,18 +428,6 @@ func toAccountDetailsResponse(acc *AccountAccessResponse) AccountDetailsResponse
 	}
 }
 
-// OnboardAccount godoc
-// @Summary Onboard an account
-// @Description Onboards an account by setting the finished_onboarding flag to true
-// @Tags accounts
-// @Accept json
-// @Produce json
-// @Param account_id path string true "Account ID"
-// @Success 200 {object} AccountResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Router /accounts/onboard [post]
-// @exclude
 func (h *AccountHandler) OnboardAccount(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
@@ -589,21 +537,6 @@ func HandleAccountAccessError(c *gin.Context, err error) bool {
 	return true
 }
 
-// DeleteAccount godoc
-// @Summary Delete an account
-// @Description Deletes an account. Only accessible by admins.
-// @Tags accounts
-// @Accept json
-// @Produce json
-// @Param account_id path string true "Account ID"
-// @Success 204 "No Content"
-// @Failure 400 {object} ErrorResponse
-// @Failure 401 {object} ErrorResponse
-// @Failure 403 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /admin/accounts/{account_id} [delete]
-// @exclude
 func (h *AccountHandler) DeleteAccount(c *gin.Context) {
 	accountType := c.GetString("accountType")
 	if accountType != "admin" {

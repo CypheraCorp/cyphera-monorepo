@@ -281,21 +281,6 @@ type UpdateSubscriptionRequest struct {
 	Metadata         json.RawMessage `json:"metadata"`
 }
 
-// UpdateSubscription godoc
-// @Summary Update an existing subscription
-// @Description Updates a subscription with the provided details
-// @Tags subscriptions
-// @Accept json
-// @Produce json
-// @Param subscription_id path string true "Subscription ID"
-// @Param subscription body UpdateSubscriptionRequest true "Updated subscription details"
-// @Success 200 {object} SubscriptionResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /subscriptions/{subscription_id} [put]
-// #exclude
 func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	ctx := c.Request.Context()
 	subscriptionID := c.Param("subscription_id")
@@ -1173,19 +1158,6 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 	return resp, nil
 }
 
-// SubscribeToProductByPriceID godoc
-// @Summary Subscribe to a product's price
-// @Description Creates a subscription for a product's specific price with the given delegation
-// @Tags products
-// @Accept json
-// @Produce json
-// @Param price_id path string true "Price ID to subscribe to"
-// @Param subscription body SubscribeRequest true "Subscription details"
-// @Success 201 {object} SubscriptionResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Router /prices/{price_id}/subscribe [post]
-// @exclude
 func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 	ctx := c.Request.Context()
 	priceIDStr := c.Param("price_id")

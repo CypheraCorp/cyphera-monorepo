@@ -196,20 +196,6 @@ func (h *SubscriptionEventHandler) GetSubscriptionEventByTxHash(c *gin.Context) 
 	sendSuccess(c, http.StatusOK, event)
 }
 
-// ListSubscriptionEvents godoc
-// @Summary List all subscription events
-// @Description Get a list of all subscription events
-// @Tags subscription-events
-// @Accept json
-// @Produce json
-// @Param page query int false "Page number"
-// @Param limit query int false "Items per page"
-// @Success 200 {object} PaginatedResponse{data=[]SubscriptionEventResponse}
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /subscription-events/transactions [get]
-// @exclude
 func (h *SubscriptionEventHandler) ListSubscriptionEvents(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)

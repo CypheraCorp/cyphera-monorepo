@@ -135,19 +135,6 @@ func (h *NetworkHandler) GetNetworkByChainID(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toNetworkResponse(network))
 }
 
-// CreateNetwork godoc
-// @Summary Create network
-// @Description Creates a new network
-// @Tags networks
-// @Accept json
-// @Produce json
-// @Param network body CreateNetworkRequest true "Network creation data"
-// @Success 201 {object} NetworkResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /networks [post]
-// @exclude
 func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 	var req CreateNetworkRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -173,21 +160,6 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 	sendSuccess(c, http.StatusCreated, toNetworkResponse(network))
 }
 
-// UpdateNetwork godoc
-// @Summary Update network
-// @Description Updates an existing network
-// @Tags networks
-// @Accept json
-// @Produce json
-// @Param network_id path string true "Network ID"
-// @Param network body UpdateNetworkRequest true "Network update data"
-// @Success 200 {object} NetworkResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /networks/{network_id} [put]
-// @exclude
 func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 	networkId := c.Param("network_id")
 	parsedUUID, err := uuid.Parse(networkId)
@@ -221,19 +193,6 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toNetworkResponse(network))
 }
 
-// DeleteNetwork godoc
-// @Summary Delete network
-// @Description Deletes a network
-// @Tags networks
-// @Accept json
-// @Produce json
-// @Param network_id path string true "Network ID"
-// @Success 204 "No Content"
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /networks/{network_id} [delete]
-// @exclude
 func (h *NetworkHandler) DeleteNetwork(c *gin.Context) {
 	networkId := c.Param("network_id")
 	parsedUUID, err := uuid.Parse(networkId)

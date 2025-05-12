@@ -114,19 +114,16 @@ type UpdateProductRequest struct {
 }
 
 type PublicProductResponse struct {
-	ID                      string                       `json:"id"`
-	AccountID               string                       `json:"account_id"`
-	WorkspaceID             string                       `json:"workspace_id"`
-	WalletAddress           string                       `json:"wallet_address"`
-	Name                    string                       `json:"name"`
-	Description             string                       `json:"description"`
-	ImageURL                string                       `json:"image_url,omitempty"`
-	URL                     string                       `json:"url,omitempty"`
-	ProductTokens           []PublicProductTokenResponse `json:"product_tokens,omitempty"`
-	Price                   PriceResponse                `json:"price"`
-	SmartAccountAddress     string                       `json:"smart_account_address,omitempty"`
-	SmartAccountExplorerURL string                       `json:"smart_account_explorer_url,omitempty"`
-	SmartAccountNetwork     string                       `json:"smart_account_network,omitempty"`
+	ID            string                       `json:"id"`
+	AccountID     string                       `json:"account_id"`
+	WorkspaceID   string                       `json:"workspace_id"`
+	WalletAddress string                       `json:"wallet_address"`
+	Name          string                       `json:"name"`
+	Description   string                       `json:"description"`
+	ImageURL      string                       `json:"image_url,omitempty"`
+	URL           string                       `json:"url,omitempty"`
+	ProductTokens []PublicProductTokenResponse `json:"product_tokens,omitempty"`
+	Price         PriceResponse                `json:"price"`
 }
 
 type PublicProductTokenResponse struct {
@@ -215,18 +212,6 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toProductResponse(product, dbPrices))
 }
 
-// GetPublicProductByID godoc
-// @Summary Get public product and price details by Price ID
-// @Description Get public product and specific price details by Price ID
-// @Tags products
-// @Accept json
-// @Produce json
-// @Param price_id path string true "Price ID"
-// @Success 200 {object} PublicProductResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Router /public/prices/{price_id} [get]
-// @exclude
 func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
 	priceIDStr := c.Param("price_id")
 	parsedPriceID, err := uuid.Parse(priceIDStr)
@@ -726,19 +711,16 @@ func toPublicProductResponse(workspace db.Workspace, product db.Product, price d
 	}
 
 	return PublicProductResponse{
-		ID:                      product.ID.String(),
-		AccountID:               workspace.AccountID.String(),
-		WorkspaceID:             workspace.ID.String(),
-		WalletAddress:           wallet.WalletAddress,
-		Name:                    product.Name,
-		Description:             product.Description.String,
-		ImageURL:                product.ImageUrl.String,
-		URL:                     product.Url.String,
-		ProductTokens:           publicProductTokens,
-		Price:                   toPriceResponse(price),
-		SmartAccountAddress:     "",
-		SmartAccountExplorerURL: "",
-		SmartAccountNetwork:     "",
+		ID:            product.ID.String(),
+		AccountID:     workspace.AccountID.String(),
+		WorkspaceID:   workspace.ID.String(),
+		WalletAddress: wallet.WalletAddress,
+		Name:          product.Name,
+		Description:   product.Description.String,
+		ImageURL:      product.ImageUrl.String,
+		URL:           product.Url.String,
+		ProductTokens: publicProductTokens,
+		Price:         toPriceResponse(price),
 	}
 }
 

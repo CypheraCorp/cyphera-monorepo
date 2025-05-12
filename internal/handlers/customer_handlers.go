@@ -215,19 +215,6 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// CreateCustomer godoc
-// @Summary Create customer
-// @Description Creates a new customer
-// @Tags customers
-// @Accept json
-// @Produce json
-// @Param customer body CreateCustomerRequest true "Customer creation data"
-// @Success 201 {object} CustomerResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /customers [post]
-// @exclude
 func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	var req CreateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -265,20 +252,6 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	sendSuccess(c, http.StatusCreated, toCustomerResponse(customer))
 }
 
-// UpdateCustomer godoc
-// @Summary Update customer
-// @Description Updates an existing customer
-// @Tags customers
-// @Accept json
-// @Produce json
-// @Param customer_id path string true "Customer ID"
-// @Param customer body UpdateCustomerRequest true "Customer update data"
-// @Success 200 {object} CustomerResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /customers/{customer_id} [put]
-// @exclude
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
@@ -318,19 +291,6 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toCustomerResponse(customer))
 }
 
-// DeleteCustomer godoc
-// @Summary Delete customer
-// @Description Deletes a customer
-// @Tags customers
-// @Accept json
-// @Produce json
-// @Param customer_id path string true "Customer ID"
-// @Success 204 "No Content"
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /customers/{customer_id} [delete]
-// @exclude
 func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)

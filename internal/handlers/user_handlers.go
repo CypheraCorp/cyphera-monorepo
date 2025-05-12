@@ -160,19 +160,6 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toUserResponse(user))
 }
 
-// CreateUser godoc
-// @Summary Create user
-// @Description Creates a new user
-// @Tags users
-// @Accept json
-// @Produce json
-// @Param user body CreateUserRequest true "User creation data"
-// @Success 201 {object} UserResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /users [post]
-// @exclude
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -223,20 +210,6 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	sendSuccess(c, http.StatusCreated, toUserResponse(user))
 }
 
-// UpdateUser godoc
-// @Summary Update user
-// @Description Updates a user's information
-// @Tags users
-// @Accept json
-// @Produce json
-// @Param user_id path string true "User ID"
-// @Param user body UpdateUserRequest true "User update data"
-// @Success 200 {object} UserResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /users/{user_id} [put]
-// @exclude
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)
@@ -301,19 +274,6 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toUserResponse(user))
 }
 
-// DeleteUser godoc
-// @Summary Delete user
-// @Description Deletes a user
-// @Tags users
-// @Accept json
-// @Produce json
-// @Param user_id path string true "User ID"
-// @Success 204 "No Content"
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /users/{user_id} [delete]
-// @exclude
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)
@@ -331,20 +291,6 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	sendSuccess(c, http.StatusNoContent, nil)
 }
 
-// GetUserAccount godoc
-// @Summary Get user's account
-// @Description Gets the account details associated with a user
-// @Tags users
-// @Accept json
-// @Produce json
-// @Param user_id path string true "User ID"
-// @Success 200 {object} UserAccountResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /users/{user_id}/account [get]
-// @exclude
 func (h *UserHandler) GetUserAccount(c *gin.Context) {
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)
