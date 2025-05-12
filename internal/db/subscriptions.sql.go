@@ -860,7 +860,11 @@ func (q *Queries) ListSubscriptionsByProduct(ctx context.Context, arg ListSubscr
 }
 
 const listSubscriptionsDueForRedemption = `-- name: ListSubscriptionsDueForRedemption :many
-SELECT id, customer_id, product_id, price_id, product_token_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, created_at, updated_at, deleted_at FROM subscriptions
+SELECT 
+    id, customer_id, product_id, price_id, product_token_id, token_amount, delegation_id, customer_wallet_id, 
+    status, current_period_start, current_period_end, next_redemption_date, total_redemptions, 
+    total_amount_in_cents, metadata, created_at, updated_at, deleted_at 
+FROM subscriptions
 WHERE 
     (status = 'active' OR status = 'overdue')
     AND next_redemption_date <= $1
