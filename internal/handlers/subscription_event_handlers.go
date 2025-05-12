@@ -108,7 +108,8 @@ func (h *SubscriptionEventHandler) GetSubscriptionEventByTxHash(c *gin.Context) 
 // @Produce json
 // @Param page query int false "Page number"
 // @Param limit query int false "Items per page"
-// @Success 200 {array} db.SubscriptionEventDetails
+// @Success 200 {object} PaginatedResponse{data=[]db.ListSubscriptionEventDetailsWithPaginationRow}
+// @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /subscription-events/transactions [get]
@@ -137,15 +138,25 @@ func (h *SubscriptionEventHandler) ListSubscriptionEvents(c *gin.Context) {
 	offset := (page - 1) * limit
 
 	params := db.ListSubscriptionEventDetailsWithPaginationParams{
+		WorkspaceID: parsedWorkspaceID,
 		Limit:       int32(limit),
 		Offset:      int32(offset),
-		WorkspaceID: parsedWorkspaceID,
 	}
 
 	events, err := h.common.db.ListSubscriptionEventDetailsWithPagination(c.Request.Context(), params)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve subscription events", err)
 		return
+	}
+
+	eventsResponse := make([]SubscriptionEventResponse, len(events))
+	for i, event := range events {
+		eventResponse, err := toSubscriptionEventResponse(c.Request.Context(), event)
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, "Failed to retrieve subscription event", err)
+			return
+		}
+		eventsResponse[i] = eventResponse
 	}
 
 	// Get the total count for pagination metadata
@@ -155,7 +166,7 @@ func (h *SubscriptionEventHandler) ListSubscriptionEvents(c *gin.Context) {
 		return
 	}
 
-	sendPaginatedSuccess(c, http.StatusOK, events, int(page), int(limit), int(totalCount))
+	sendPaginatedSuccess(c, http.StatusOK, eventsResponse, int(page), int(limit), int(totalCount))
 }
 
 // ListSubscriptionEventsBySubscription godoc

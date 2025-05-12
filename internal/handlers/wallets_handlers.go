@@ -123,6 +123,43 @@ func toWalletResponse(w db.Wallet) WalletResponse {
 	}
 }
 
+func toWalletResponseFromWalletRow(w db.GetWalletByAddressAndCircleNetworkTypeRow) WalletResponse {
+	var metadata map[string]interface{}
+	if err := json.Unmarshal(w.Metadata, &metadata); err != nil {
+		logger.Error("Error unmarshaling wallet metadata", zap.Error(err))
+		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
+	}
+
+	var lastUsedAt *int64
+	if w.LastUsedAt.Valid {
+		unix := w.LastUsedAt.Time.Unix()
+		lastUsedAt = &unix
+	}
+
+	networkID := ""
+	if w.NetworkID.Valid {
+		networkID = w.NetworkID.String()
+	}
+
+	return WalletResponse{
+		ID:            w.ID.String(),
+		Object:        "wallet",
+		WorkspaceID:   w.WorkspaceID.String(),
+		WalletType:    w.WalletType,
+		WalletAddress: w.WalletAddress,
+		NetworkType:   string(w.NetworkType),
+		NetworkID:     networkID,
+		Nickname:      w.Nickname.String,
+		ENS:           w.Ens.String,
+		IsPrimary:     w.IsPrimary.Bool,
+		Verified:      w.Verified.Bool,
+		LastUsedAt:    lastUsedAt,
+		Metadata:      metadata,
+		CreatedAt:     w.CreatedAt.Time.Unix(),
+		UpdatedAt:     w.UpdatedAt.Time.Unix(),
+	}
+}
+
 // Helper function for GetWalletWithCircleDataByID results
 func toWalletWithCircleDataByIDResponse(w db.GetWalletWithCircleDataByIDRow) WalletResponse {
 	response := toWalletResponse(db.Wallet{
@@ -377,9 +414,9 @@ func (h *WalletHandler) GetWalletByAddress(c *gin.Context) {
 		return
 	}
 
-	wallet, err := h.common.db.GetWalletByAddress(c.Request.Context(), db.GetWalletByAddressParams{
-		WalletAddress: walletAddress,
-		NetworkType:   db.NetworkType(networkType),
+	wallet, err := h.common.db.GetWalletByAddressAndCircleNetworkType(c.Request.Context(), db.GetWalletByAddressAndCircleNetworkTypeParams{
+		WalletAddress:     walletAddress,
+		CircleNetworkType: db.CircleNetworkType(networkType),
 	})
 	if err != nil {
 		handleDBError(c, err, "Wallet not found")
@@ -392,7 +429,7 @@ func (h *WalletHandler) GetWalletByAddress(c *gin.Context) {
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, toWalletResponse(wallet))
+	sendSuccess(c, http.StatusOK, toWalletResponseFromWalletRow(wallet))
 }
 
 // ListWallets godoc

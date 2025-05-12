@@ -24,63 +24,39 @@ func NewCustomerHandler(common *CommonServices) *CustomerHandler {
 
 // CustomerResponse represents the standardized API response for customer operations
 type CustomerResponse struct {
-	ID                string                 `json:"id"`
-	Object            string                 `json:"object"`
-	WorkspaceID       string                 `json:"workspace_id"`
-	ExternalID        string                 `json:"external_id,omitempty"`
-	Email             string                 `json:"email"`
-	Name              string                 `json:"name,omitempty"`
-	Phone             string                 `json:"phone,omitempty"`
-	Description       string                 `json:"description,omitempty"`
-	Metadata          map[string]interface{} `json:"metadata,omitempty"`
-	BalanceInPennies  int32                  `json:"balance_in_pennies"`
-	Currency          string                 `json:"currency"`
-	DefaultSourceID   string                 `json:"default_source,omitempty"`
-	InvoicePrefix     string                 `json:"invoice_prefix,omitempty"`
-	NextInvoiceNumber int32                  `json:"next_invoice_number"`
-	TaxExempt         bool                   `json:"tax_exempt"`
-	TaxIDs            map[string]interface{} `json:"tax_ids,omitempty"`
-	Livemode          bool                   `json:"livemode"`
-	CreatedAt         int64                  `json:"created_at"`
-	UpdatedAt         int64                  `json:"updated_at"`
-	WorkspaceName     string                 `json:"workspace_name,omitempty"`
-	BusinessName      string                 `json:"business_name,omitempty"`
+	ID            string                 `json:"id"`
+	Object        string                 `json:"object"`
+	WorkspaceID   string                 `json:"workspace_id"`
+	ExternalID    string                 `json:"external_id,omitempty"`
+	Email         string                 `json:"email"`
+	Name          string                 `json:"name,omitempty"`
+	Phone         string                 `json:"phone,omitempty"`
+	Description   string                 `json:"description,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt     int64                  `json:"created_at"`
+	UpdatedAt     int64                  `json:"updated_at"`
+	WorkspaceName string                 `json:"workspace_name,omitempty"`
+	BusinessName  string                 `json:"business_name,omitempty"`
 }
 
 // CreateCustomerRequest represents the request body for creating a customer
 type CreateCustomerRequest struct {
-	ExternalID          string                 `json:"external_id,omitempty"`
-	Email               string                 `json:"email" binding:"required,email"`
-	Name                string                 `json:"name,omitempty"`
-	Phone               string                 `json:"phone,omitempty"`
-	Description         string                 `json:"description,omitempty"`
-	BalanceInPennies    int32                  `json:"balance_in_pennies,omitempty"`
-	Currency            string                 `json:"currency,omitempty" binding:"required_with=BalanceInPennies"`
-	DefaultSourceID     string                 `json:"default_source_id,omitempty" binding:"omitempty,uuid4"`
-	InvoicePrefix       string                 `json:"invoice_prefix,omitempty"`
-	NextInvoiceSequence *int32                 `json:"next_invoice_sequence,omitempty"`
-	TaxExempt           *bool                  `json:"tax_exempt,omitempty"`
-	TaxIDs              map[string]interface{} `json:"tax_ids,omitempty"`
-	Metadata            map[string]interface{} `json:"metadata,omitempty"`
-	Livemode            *bool                  `json:"livemode,omitempty"`
+	ExternalID  string                 `json:"external_id,omitempty"`
+	Email       string                 `json:"email" binding:"required,email"`
+	Name        string                 `json:"name,omitempty"`
+	Phone       string                 `json:"phone,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // UpdateCustomerRequest represents the request body for updating a customer
 type UpdateCustomerRequest struct {
-	ExternalID          *string                `json:"external_id,omitempty"`
-	Email               *string                `json:"email,omitempty" binding:"omitempty,email"`
-	Name                *string                `json:"name,omitempty"`
-	Phone               *string                `json:"phone,omitempty"`
-	Description         *string                `json:"description,omitempty"`
-	BalanceInPennies    *int32                 `json:"balance_in_pennies,omitempty"`
-	Currency            *string                `json:"currency,omitempty" binding:"omitempty,required_with=BalanceInPennies"`
-	DefaultSourceID     *string                `json:"default_source_id,omitempty" binding:"omitempty,uuid4"`
-	InvoicePrefix       *string                `json:"invoice_prefix,omitempty"`
-	NextInvoiceSequence *int32                 `json:"next_invoice_sequence,omitempty"`
-	TaxExempt           *bool                  `json:"tax_exempt,omitempty"`
-	TaxIDs              map[string]interface{} `json:"tax_ids,omitempty"`
-	Metadata            map[string]interface{} `json:"metadata,omitempty"`
-	Livemode            *bool                  `json:"livemode,omitempty"`
+	ExternalID  *string                `json:"external_id,omitempty"`
+	Email       *string                `json:"email,omitempty" binding:"omitempty,email"`
+	Name        *string                `json:"name,omitempty"`
+	Phone       *string                `json:"phone,omitempty"`
+	Description *string                `json:"description,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ListCustomersResponse represents the paginated response for customer list operations
@@ -144,33 +120,10 @@ func (h *CustomerHandler) updateBasicCustomerFields(params *db.UpdateCustomerPar
 	if req.Description != nil {
 		params.Description = pgtype.Text{String: *req.Description, Valid: true}
 	}
-	if req.InvoicePrefix != nil {
-		params.InvoicePrefix = pgtype.Text{String: *req.InvoicePrefix, Valid: true}
-	}
-	if req.Currency != nil {
-		params.Currency = pgtype.Text{String: *req.Currency, Valid: true}
-	}
-}
-
-// updateCustomerNumericFields updates numeric fields of the customer
-func (h *CustomerHandler) updateCustomerNumericFields(params *db.UpdateCustomerParams, req UpdateCustomerRequest) {
-	if req.BalanceInPennies != nil {
-		params.BalanceInPennies = pgtype.Int4{Int32: *req.BalanceInPennies, Valid: true}
-	}
-	if req.NextInvoiceSequence != nil {
-		params.NextInvoiceSequence = pgtype.Int4{Int32: *req.NextInvoiceSequence, Valid: true}
-	}
 }
 
 // updateCustomerJSONFields updates JSON fields of the customer
 func (h *CustomerHandler) updateCustomerJSONFields(params *db.UpdateCustomerParams, req UpdateCustomerRequest) error {
-	if req.TaxIDs != nil {
-		taxIDs, err := json.Marshal(req.TaxIDs)
-		if err != nil {
-			return fmt.Errorf("invalid tax IDs format: %w", err)
-		}
-		params.TaxIds = taxIDs
-	}
 	if req.Metadata != nil {
 		metadata, err := json.Marshal(req.Metadata)
 		if err != nil {
@@ -189,23 +142,6 @@ func (h *CustomerHandler) updateCustomerParams(id uuid.UUID, req UpdateCustomerR
 
 	// Update basic text fields
 	h.updateBasicCustomerFields(&params, req)
-
-	// Update numeric fields
-	h.updateCustomerNumericFields(&params, req)
-
-	// Update boolean fields
-	if req.TaxExempt != nil {
-		params.TaxExempt = pgtype.Bool{Bool: *req.TaxExempt, Valid: true}
-	}
-
-	// Update UUID fields
-	if req.DefaultSourceID != nil {
-		parsedSourceID, err := uuid.Parse(*req.DefaultSourceID)
-		if err != nil {
-			return params, fmt.Errorf("invalid default source ID: %w", err)
-		}
-		params.DefaultSourceID = pgtype.UUID{Bytes: parsedSourceID, Valid: true}
-	}
 
 	// Update JSON fields
 	if err := h.updateCustomerJSONFields(&params, req); err != nil {
@@ -263,18 +199,19 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 		return
 	}
 
-	listCustomersResponse := ListCustomersResponse{
-		Object:  "list",
-		Data:    make([]CustomerResponse, len(customers)),
-		HasMore: false,
-		Total:   int64(len(customers)),
+	// Get the total count for pagination metadata
+	totalCount, err := h.common.db.CountCustomersByWorkspaceID(c.Request.Context(), parsedWorkspaceID)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to count customers", err)
+		return
 	}
 
+	customerResponses := make([]CustomerResponse, len(customers))
 	for i, customer := range customers {
-		listCustomersResponse.Data[i] = toCustomerResponse(customer)
+		customerResponses[i] = toCustomerResponse(customer)
 	}
 
-	sendSuccess(c, http.StatusOK, listCustomersResponse)
+	sendPaginatedSuccess(c, http.StatusOK, customerResponses, int(page), int(limit), int(totalCount))
 }
 
 // CreateCustomer godoc
@@ -303,7 +240,7 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 		return
 	}
 
-	metadata, err := json.Marshal(req.Metadata)
+	metadataBytes, err := json.Marshal(req.Metadata)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
 		return
@@ -316,11 +253,7 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 		Name:        pgtype.Text{String: req.Name, Valid: req.Name != ""},
 		Description: pgtype.Text{String: req.Description, Valid: req.Description != ""},
 		Phone:       pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
-		BalanceInPennies: pgtype.Int4{
-			Int32: req.BalanceInPennies,
-			Valid: req.BalanceInPennies != 0,
-		},
-		Metadata: metadata,
+		Metadata:    metadataBytes,
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to create customer", err)
@@ -328,17 +261,6 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	}
 
 	sendSuccess(c, http.StatusCreated, toCustomerResponse(customer))
-}
-
-// validateCustomerParams validates customer parameters
-func validateCustomerParams(req *UpdateCustomerRequest) error {
-	if req.BalanceInPennies != nil && *req.BalanceInPennies < 0 {
-		return fmt.Errorf("balance_in_pennies cannot be negative")
-	}
-	if req.NextInvoiceSequence != nil && *req.NextInvoiceSequence < 0 {
-		return fmt.Errorf("next_invoice_sequence cannot be negative")
-	}
-	return nil
 }
 
 // UpdateCustomer godoc
@@ -372,12 +294,6 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	var req UpdateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid request body", err)
-		return
-	}
-
-	// Validate integer parameters
-	if err := validateCustomerParams(&req); err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
@@ -446,40 +362,17 @@ func toCustomerResponse(c db.Customer) CustomerResponse {
 		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
 	}
 
-	var taxIDs map[string]interface{}
-	if len(c.TaxIds) > 0 {
-		if err := json.Unmarshal(c.TaxIds, &taxIDs); err != nil {
-			log.Printf("Error unmarshaling customer tax IDs: %v", err)
-			taxIDs = make(map[string]interface{}) // Use empty map if unmarshal fails
-		}
-	} else {
-		taxIDs = make(map[string]interface{}) // Initialize empty map for nil or empty tax IDs
-	}
-
-	defaultSourceID := ""
-	if c.DefaultSourceID.Valid {
-		defaultSourceID = uuid.UUID(c.DefaultSourceID.Bytes).String()
-	}
-
 	return CustomerResponse{
-		ID:                c.ID.String(),
-		Object:            "customer",
-		WorkspaceID:       c.WorkspaceID.String(),
-		ExternalID:        c.ExternalID.String,
-		Email:             c.Email.String,
-		Name:              c.Name.String,
-		Phone:             c.Phone.String,
-		Description:       c.Description.String,
-		Metadata:          metadata,
-		BalanceInPennies:  c.BalanceInPennies.Int32,
-		Currency:          c.Currency.String,
-		DefaultSourceID:   defaultSourceID,
-		InvoicePrefix:     c.InvoicePrefix.String,
-		NextInvoiceNumber: c.NextInvoiceSequence.Int32,
-		TaxExempt:         c.TaxExempt.Bool,
-		TaxIDs:            taxIDs,
-		Livemode:          c.Livemode.Bool,
-		CreatedAt:         c.CreatedAt.Time.Unix(),
-		UpdatedAt:         c.UpdatedAt.Time.Unix(),
+		ID:          c.ID.String(),
+		Object:      "customer",
+		WorkspaceID: c.WorkspaceID.String(),
+		ExternalID:  c.ExternalID.String,
+		Email:       c.Email.String,
+		Name:        c.Name.String,
+		Phone:       c.Phone.String,
+		Description: c.Description.String,
+		Metadata:    metadata,
+		CreatedAt:   c.CreatedAt.Time.Unix(),
+		UpdatedAt:   c.UpdatedAt.Time.Unix(),
 	}
 }

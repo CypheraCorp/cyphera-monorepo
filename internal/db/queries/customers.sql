@@ -23,17 +23,9 @@ INSERT INTO customers (
     name,
     phone,
     description,
-    balance_in_pennies,
-    currency,
-    default_source_id,
-    invoice_prefix,
-    next_invoice_sequence,
-    tax_exempt,
-    tax_ids,
-    metadata,
-    livemode
+    metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+    $1, $2, $3, $4, $5, $6, $7
 )
 RETURNING *;
 
@@ -44,15 +36,7 @@ SET
     name = COALESCE($4, name),
     phone = COALESCE($5, phone),
     description = COALESCE($6, description),
-    balance_in_pennies = COALESCE($7, balance_in_pennies),
-    currency = COALESCE($8, currency),
-    default_source_id = COALESCE($9, default_source_id),
-    invoice_prefix = COALESCE($10, invoice_prefix),
-    next_invoice_sequence = COALESCE($11, next_invoice_sequence),
-    tax_exempt = COALESCE($12, tax_exempt),
-    tax_ids = COALESCE($13, tax_ids),
-    metadata = COALESCE($14, metadata),
-    livemode = COALESCE($15, livemode),
+    metadata = COALESCE($7, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 RETURNING *;
@@ -77,21 +61,6 @@ INNER JOIN workspaces w ON c.workspace_id = w.id
 WHERE c.workspace_id = $1 AND c.deleted_at IS NULL
 ORDER BY c.created_at DESC;
 
--- name: UpdateCustomerBalance :one
-UPDATE customers
-SET 
-    balance_in_pennies = balance_in_pennies + $2,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
-RETURNING *;
-
--- name: GetCustomersByBalance :many
-SELECT * FROM customers
-WHERE workspace_id = $1 
-AND deleted_at IS NULL 
-AND balance_in_pennies > $2
-ORDER BY balance_in_pennies DESC;
-
 -- name: CountCustomers :one
 SELECT COUNT(*) FROM customers
 WHERE workspace_id = $1 AND deleted_at IS NULL;
@@ -101,3 +70,7 @@ SELECT * FROM customers
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
+
+-- name: CountCustomersByWorkspaceID :one
+SELECT COUNT(*) FROM customers
+WHERE workspace_id = $1 AND deleted_at IS NULL;

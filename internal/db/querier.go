@@ -13,6 +13,7 @@ import (
 
 type Querier interface {
 	ActivateNetwork(ctx context.Context, id uuid.UUID) (Network, error)
+	ActivatePrice(ctx context.Context, id uuid.UUID) (Price, error)
 	ActivateProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	ActivateProductToken(ctx context.Context, id uuid.UUID) (ProductsToken, error)
 	ActivateToken(ctx context.Context, id uuid.UUID) (Token, error)
@@ -21,10 +22,13 @@ type Querier interface {
 	CountActiveSubscriptions(ctx context.Context) (int64, error)
 	CountCustomerWallets(ctx context.Context, customerID uuid.UUID) (int64, error)
 	CountCustomers(ctx context.Context, workspaceID uuid.UUID) (int64, error)
+	CountCustomersByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountDelegations(ctx context.Context) (int64, error)
 	CountDelegationsByDelegator(ctx context.Context, delegator string) (int64, error)
 	CountFailedSubscriptionAttempts(ctx context.Context) (int64, error)
 	CountFailedSubscriptionAttemptsByErrorType(ctx context.Context, errorType SubscriptionEventType) (int64, error)
+	CountPricesByProduct(ctx context.Context, productID uuid.UUID) (int64, error)
+	CountPricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountProducts(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountSubscriptionEventDetails(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountSubscriptionEvents(ctx context.Context) (int64, error)
@@ -44,6 +48,7 @@ type Querier interface {
 	CreateFailedRedemptionEvent(ctx context.Context, arg CreateFailedRedemptionEventParams) (SubscriptionEvent, error)
 	CreateFailedSubscriptionAttempt(ctx context.Context, arg CreateFailedSubscriptionAttemptParams) (FailedSubscriptionAttempt, error)
 	CreateNetwork(ctx context.Context, arg CreateNetworkParams) (Network, error)
+	CreatePrice(ctx context.Context, arg CreatePriceParams) (Price, error)
 	CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error)
 	CreateProductToken(ctx context.Context, arg CreateProductTokenParams) (ProductsToken, error)
 	CreateRedemptionEvent(ctx context.Context, arg CreateRedemptionEventParams) (SubscriptionEvent, error)
@@ -56,6 +61,7 @@ type Querier interface {
 	DeactivateAllProductTokens(ctx context.Context, productID uuid.UUID) error
 	DeactivateAllProductTokensForNetwork(ctx context.Context, arg DeactivateAllProductTokensForNetworkParams) error
 	DeactivateNetwork(ctx context.Context, id uuid.UUID) (Network, error)
+	DeactivatePrice(ctx context.Context, id uuid.UUID) (Price, error)
 	DeactivateProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	DeactivateProductToken(ctx context.Context, id uuid.UUID) (ProductsToken, error)
 	DeactivateToken(ctx context.Context, id uuid.UUID) (Token, error)
@@ -69,6 +75,7 @@ type Querier interface {
 	DeleteDelegationData(ctx context.Context, id uuid.UUID) error
 	DeleteFailedSubscriptionAttempt(ctx context.Context, id uuid.UUID) error
 	DeleteNetwork(ctx context.Context, id uuid.UUID) error
+	DeletePrice(ctx context.Context, id uuid.UUID) error
 	DeleteProduct(ctx context.Context, arg DeleteProductParams) error
 	DeleteProductToken(ctx context.Context, id uuid.UUID) error
 	DeleteProductTokenByIds(ctx context.Context, arg DeleteProductTokenByIdsParams) error
@@ -104,7 +111,6 @@ type Querier interface {
 	GetCustomerIdForWallet(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	GetCustomerWallet(ctx context.Context, id uuid.UUID) (CustomerWallet, error)
 	GetCustomerWalletByAddress(ctx context.Context, arg GetCustomerWalletByAddressParams) (CustomerWallet, error)
-	GetCustomersByBalance(ctx context.Context, arg GetCustomersByBalanceParams) ([]Customer, error)
 	GetCustomersByWalletAddress(ctx context.Context, walletAddress string) ([]Customer, error)
 	GetCustomersWithWorkspaceInfo(ctx context.Context, workspaceID uuid.UUID) ([]GetCustomersWithWorkspaceInfoRow, error)
 	GetDelegationData(ctx context.Context, id uuid.UUID) (DelegationDatum, error)
@@ -119,6 +125,8 @@ type Querier interface {
 	GetNetworkByChainID(ctx context.Context, chainID int32) (Network, error)
 	GetNetworkByCircleNetworkType(ctx context.Context, circleNetworkType CircleNetworkType) (Network, error)
 	GetOverdueSubscriptions(ctx context.Context) ([]Subscription, error)
+	GetPrice(ctx context.Context, id uuid.UUID) (Price, error)
+	GetPriceWithProduct(ctx context.Context, id uuid.UUID) (GetPriceWithProductRow, error)
 	GetPrimaryCustomerWallet(ctx context.Context, customerID uuid.UUID) (CustomerWallet, error)
 	GetProduct(ctx context.Context, arg GetProductParams) (Product, error)
 	GetProductNetworks(ctx context.Context, productID uuid.UUID) ([]GetProductNetworksRow, error)
@@ -142,7 +150,7 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserBySupabaseID(ctx context.Context, supabaseID string) (User, error)
-	GetWalletByAddress(ctx context.Context, arg GetWalletByAddressParams) (Wallet, error)
+	GetWalletByAddressAndCircleNetworkType(ctx context.Context, arg GetWalletByAddressAndCircleNetworkTypeParams) (GetWalletByAddressAndCircleNetworkTypeRow, error)
 	GetWalletByID(ctx context.Context, arg GetWalletByIDParams) (Wallet, error)
 	GetWalletStats(ctx context.Context, workspaceID uuid.UUID) (GetWalletStatsRow, error)
 	GetWalletWithCircleDataByAddress(ctx context.Context, arg GetWalletWithCircleDataByAddressParams) (GetWalletWithCircleDataByAddressRow, error)
@@ -157,6 +165,8 @@ type Querier interface {
 	ListAccounts(ctx context.Context) ([]Account, error)
 	ListAccountsByType(ctx context.Context, accountType AccountType) ([]Account, error)
 	ListAccountsByUser(ctx context.Context, id uuid.UUID) ([]Account, error)
+	ListActivePricesByProduct(ctx context.Context, productID uuid.UUID) ([]Price, error)
+	ListActivePricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]Price, error)
 	ListActiveProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	ListActiveSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListActiveTokensByNetwork(ctx context.Context, networkID uuid.UUID) ([]Token, error)
@@ -175,6 +185,8 @@ type Querier interface {
 	ListFailedSubscriptionAttemptsWithPagination(ctx context.Context, arg ListFailedSubscriptionAttemptsWithPaginationParams) ([]FailedSubscriptionAttempt, error)
 	ListFailedSubscriptionEvents(ctx context.Context) ([]SubscriptionEvent, error)
 	ListNetworks(ctx context.Context, arg ListNetworksParams) ([]Network, error)
+	ListPricesByProduct(ctx context.Context, productID uuid.UUID) ([]Price, error)
+	ListPricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]Price, error)
 	ListPrimaryCustomerWallets(ctx context.Context) ([]CustomerWallet, error)
 	ListPrimaryWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]Wallet, error)
 	ListPrimaryWalletsWithCircleDataByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListPrimaryWalletsWithCircleDataByWorkspaceIDRow, error)
@@ -223,11 +235,11 @@ type Querier interface {
 	UpdateCircleUserByWorkspaceID(ctx context.Context, arg UpdateCircleUserByWorkspaceIDParams) (CircleUser, error)
 	UpdateCircleWalletState(ctx context.Context, arg UpdateCircleWalletStateParams) (CircleWallet, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
-	UpdateCustomerBalance(ctx context.Context, arg UpdateCustomerBalanceParams) (Customer, error)
 	UpdateCustomerWallet(ctx context.Context, arg UpdateCustomerWalletParams) (CustomerWallet, error)
 	UpdateCustomerWalletUsageTime(ctx context.Context, id uuid.UUID) (CustomerWallet, error)
 	UpdateDelegationData(ctx context.Context, arg UpdateDelegationDataParams) (DelegationDatum, error)
 	UpdateNetwork(ctx context.Context, arg UpdateNetworkParams) (Network, error)
+	UpdatePrice(ctx context.Context, arg UpdatePriceParams) (Price, error)
 	UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error)
 	UpdateProductToken(ctx context.Context, arg UpdateProductTokenParams) (ProductsToken, error)
 	UpdateSubscription(ctx context.Context, arg UpdateSubscriptionParams) (Subscription, error)

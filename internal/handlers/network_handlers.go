@@ -67,8 +67,8 @@ type ListNetworksResponse struct {
 
 // NetworkWithTokensResponse represents a network with its associated tokens
 type NetworkWithTokensResponse struct {
-	NetworkResponse
-	Tokens []TokenResponse `json:"tokens"`
+	NetworkResponse NetworkResponse `json:"network"`
+	Tokens          []TokenResponse `json:"tokens"`
 }
 
 // ListNetworksWithTokensResponse represents the response for listing networks with tokens

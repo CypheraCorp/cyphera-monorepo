@@ -51,6 +51,27 @@ func (app *Application) HandleRequest(ctx context.Context /*, event MyEvent - if
 	return nil // Indicate successful execution to Lambda runtime
 }
 
+func (a *Application) LocalHandleRequest(ctx context.Context) error {
+	logger.Info("Entering LocalHandleRequest for subscription processing")
+
+	// --- Process Subscriptions ---
+	logger.Info("Starting subscription processing...")
+	results, err := a.subscriptionHandler.ProcessDueSubscriptions(ctx)
+	if err != nil {
+		logger.Error("Error processing subscriptions in LocalHandleRequest", zap.Error(err))
+		return fmt.Errorf("LocalHandleRequest: error from ProcessDueSubscriptions: %w", err) // Return error to Lambda runtime
+	}
+
+	logger.Info("Subscription processing results in LocalHandleRequest",
+		zap.Int("total", results.Total),
+		zap.Int("succeeded", results.Succeeded),
+		zap.Int("failed", results.Failed),
+	)
+
+	logger.Info("Subscription processing finished successfully in LocalHandleRequest.")
+	return nil // Indicate successful execution to Lambda runtime
+}
+
 func main() {
 	// Load .env file for local development
 	err := godotenv.Load()
@@ -67,7 +88,6 @@ func main() {
 		log.Fatalf("Invalid STAGE environment variable: '%s'. Must be one of: %s, %s, %s",
 			stage, helpers.StageProd, helpers.StageDev, helpers.StageLocal)
 	}
-
 	// Initialize logger (AFTER stage validation)
 	logger.InitLogger(stage)
 	logger.Info("Lambda Cold Start: Initializing subscription processor for stage", zap.String("stage", stage))
@@ -182,7 +202,6 @@ func main() {
 	rpcTimeoutStr := os.Getenv("DELEGATION_RPC_TIMEOUT") // As defined in template.yaml
 	rpcTimeout, err := time.ParseDuration(rpcTimeoutStr)
 	if err != nil {
-		logger.Warn("Failed to parse DELEGATION_RPC_TIMEOUT, using default 3m", zap.String("value", rpcTimeoutStr), zap.Error(err))
 		rpcTimeout = 3 * time.Minute
 	}
 
@@ -206,8 +225,14 @@ func main() {
 		// though typically you don't close them between warm invocations.
 	}
 
-	// --- Start the Lambda Handler ---
-	// lambda.Start blocks and handles invocations using the HandleRequest method
-	lambda.Start(app.HandleRequest)
-
+	if stage == helpers.StageLocal {
+		err := app.LocalHandleRequest(ctx)
+		if err != nil {
+			logger.Fatal("Error in LocalHandleRequest", zap.Error(err))
+		}
+	} else {
+		// --- Start the Lambda Handler ---
+		// lambda.Start blocks and handles invocations using the HandleRequest method
+		lambda.Start(app.HandleRequest)
+	}
 }

@@ -17,8 +17,10 @@ SELECT COUNT(*)
 FROM subscription_events se
 JOIN subscriptions s ON se.subscription_id = s.id
 JOIN products p ON s.product_id = p.id
+JOIN prices pr ON s.price_id = pr.id
 WHERE s.deleted_at IS NULL
     AND p.deleted_at IS NULL
+    AND pr.deleted_at IS NULL
     AND p.workspace_id = $1
     AND se.event_type IN ('redeemed', 'failed', 'failed_redemption')
 `
@@ -418,86 +420,103 @@ func (q *Queries) ListRecentSubscriptionEventsByType(ctx context.Context, arg Li
 }
 
 const listSubscriptionEventDetailsWithPagination = `-- name: ListSubscriptionEventDetailsWithPagination :many
-SELECT 
-    se.id,
+SELECT
+    se.id AS subscription_event_id,
+    se.subscription_id,
     se.event_type,
     se.transaction_hash,
-    se.amount_in_cents,
-    se.occurred_at,
+    se.amount_in_cents AS event_amount_in_cents,
+    se.occurred_at AS event_occurred_at,
     se.error_message,
-    -- Subscription details
-    s.id as subscription_id,
-    s.status as subscription_status,
-    -- Customer details
-    c.id as customer_id,
-    c.name as customer_name,
-    c.email as customer_email,
-    -- Product details
-    p.id as product_id,
-    p.name as product_name,
-    p.product_type,
-    p.interval_type,
-    -- Token details
-    t.symbol as token_symbol,
-    t.contract_address as token_address,
-    -- Network details
-    n.name as network_name,
-    n.type as network_type,
-    n.chain_id,
-    -- Customer wallet details
-    cw.wallet_address as customer_wallet_address
-FROM subscription_events se
-JOIN subscriptions s ON se.subscription_id = s.id
-JOIN customers c ON s.customer_id = c.id
-JOIN products p ON s.product_id = p.id
-JOIN products_tokens pt ON s.product_token_id = pt.id
-JOIN tokens t ON pt.token_id = t.id
-JOIN networks n ON pt.network_id = n.id
-LEFT JOIN customer_wallets cw ON s.customer_wallet_id = cw.id
-WHERE s.deleted_at IS NULL
-    AND c.deleted_at IS NULL
+    se.metadata AS event_metadata,
+    se.created_at AS event_created_at,
+    s.customer_id,
+    s.status AS subscription_status,
+    p.id AS product_id,
+    p.name AS product_name,
+    pr.id AS price_id,
+    pr.type AS price_type,
+    pr.currency AS price_currency,
+    pr.unit_amount_in_pennies AS price_unit_amount_in_pennies,
+    pr.interval_type AS price_interval_type,
+    pr.term_length AS price_term_length,
+    pt.id AS product_token_id,
+    pt.token_id AS product_token_token_id,
+    pt.created_at AS product_token_created_at,
+    pt.updated_at AS product_token_updated_at,
+    t.symbol AS product_token_symbol,
+    n.id AS network_id,
+    n.name AS network_name,
+    n.chain_id AS network_chain_id,
+    c.email AS customer_email,
+    c.name AS customer_name
+FROM
+    subscription_events se
+JOIN
+    subscriptions s ON se.subscription_id = s.id
+JOIN
+    products p ON s.product_id = p.id
+JOIN
+    prices pr ON s.price_id = pr.id
+JOIN
+    products_tokens pt ON s.product_token_id = pt.id
+JOIN
+    tokens t ON pt.token_id = t.id
+JOIN
+    networks n ON pt.network_id = n.id
+JOIN
+    customers c ON s.customer_id = c.id
+WHERE
+    p.workspace_id = $1
+    AND s.deleted_at IS NULL
     AND p.deleted_at IS NULL
-    AND pt.deleted_at IS NULL
-    AND t.deleted_at IS NULL
-    AND n.deleted_at IS NULL
-    AND p.workspace_id = $3
+    AND pr.deleted_at IS NULL
     AND se.event_type IN ('redeemed', 'failed', 'failed_redemption')
-ORDER BY se.occurred_at DESC
-LIMIT $1 OFFSET $2
+ORDER BY
+    se.occurred_at DESC
+LIMIT $2 OFFSET $3
 `
 
 type ListSubscriptionEventDetailsWithPaginationParams struct {
+	WorkspaceID uuid.UUID `json:"workspace_id"`
 	Limit       int32     `json:"limit"`
 	Offset      int32     `json:"offset"`
-	WorkspaceID uuid.UUID `json:"workspace_id"`
 }
 
 type ListSubscriptionEventDetailsWithPaginationRow struct {
-	ID                    uuid.UUID             `json:"id"`
-	EventType             SubscriptionEventType `json:"event_type"`
-	TransactionHash       pgtype.Text           `json:"transaction_hash"`
-	AmountInCents         int32                 `json:"amount_in_cents"`
-	OccurredAt            pgtype.Timestamptz    `json:"occurred_at"`
-	ErrorMessage          pgtype.Text           `json:"error_message"`
-	SubscriptionID        uuid.UUID             `json:"subscription_id"`
-	SubscriptionStatus    SubscriptionStatus    `json:"subscription_status"`
-	CustomerID            uuid.UUID             `json:"customer_id"`
-	CustomerName          pgtype.Text           `json:"customer_name"`
-	CustomerEmail         pgtype.Text           `json:"customer_email"`
-	ProductID             uuid.UUID             `json:"product_id"`
-	ProductName           string                `json:"product_name"`
-	ProductType           ProductType           `json:"product_type"`
-	IntervalType          NullIntervalType      `json:"interval_type"`
-	TokenSymbol           string                `json:"token_symbol"`
-	TokenAddress          string                `json:"token_address"`
-	NetworkName           string                `json:"network_name"`
-	NetworkType           string                `json:"network_type"`
-	ChainID               int32                 `json:"chain_id"`
-	CustomerWalletAddress pgtype.Text           `json:"customer_wallet_address"`
+	SubscriptionEventID      uuid.UUID             `json:"subscription_event_id"`
+	SubscriptionID           uuid.UUID             `json:"subscription_id"`
+	EventType                SubscriptionEventType `json:"event_type"`
+	TransactionHash          pgtype.Text           `json:"transaction_hash"`
+	EventAmountInCents       int32                 `json:"event_amount_in_cents"`
+	EventOccurredAt          pgtype.Timestamptz    `json:"event_occurred_at"`
+	ErrorMessage             pgtype.Text           `json:"error_message"`
+	EventMetadata            []byte                `json:"event_metadata"`
+	EventCreatedAt           pgtype.Timestamptz    `json:"event_created_at"`
+	CustomerID               uuid.UUID             `json:"customer_id"`
+	SubscriptionStatus       SubscriptionStatus    `json:"subscription_status"`
+	ProductID                uuid.UUID             `json:"product_id"`
+	ProductName              string                `json:"product_name"`
+	PriceID                  uuid.UUID             `json:"price_id"`
+	PriceType                PriceType             `json:"price_type"`
+	PriceCurrency            Currency              `json:"price_currency"`
+	PriceUnitAmountInPennies int32                 `json:"price_unit_amount_in_pennies"`
+	PriceIntervalType        NullIntervalType      `json:"price_interval_type"`
+	PriceTermLength          pgtype.Int4           `json:"price_term_length"`
+	ProductTokenID           uuid.UUID             `json:"product_token_id"`
+	ProductTokenTokenID      uuid.UUID             `json:"product_token_token_id"`
+	ProductTokenCreatedAt    pgtype.Timestamptz    `json:"product_token_created_at"`
+	ProductTokenUpdatedAt    pgtype.Timestamptz    `json:"product_token_updated_at"`
+	ProductTokenSymbol       string                `json:"product_token_symbol"`
+	NetworkID                uuid.UUID             `json:"network_id"`
+	NetworkName              string                `json:"network_name"`
+	NetworkChainID           int32                 `json:"network_chain_id"`
+	CustomerEmail            pgtype.Text           `json:"customer_email"`
+	CustomerName             pgtype.Text           `json:"customer_name"`
 }
 
 func (q *Queries) ListSubscriptionEventDetailsWithPagination(ctx context.Context, arg ListSubscriptionEventDetailsWithPaginationParams) ([]ListSubscriptionEventDetailsWithPaginationRow, error) {
-	rows, err := q.db.Query(ctx, listSubscriptionEventDetailsWithPagination, arg.Limit, arg.Offset, arg.WorkspaceID)
+	rows, err := q.db.Query(ctx, listSubscriptionEventDetailsWithPagination, arg.WorkspaceID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -506,27 +525,35 @@ func (q *Queries) ListSubscriptionEventDetailsWithPagination(ctx context.Context
 	for rows.Next() {
 		var i ListSubscriptionEventDetailsWithPaginationRow
 		if err := rows.Scan(
-			&i.ID,
+			&i.SubscriptionEventID,
+			&i.SubscriptionID,
 			&i.EventType,
 			&i.TransactionHash,
-			&i.AmountInCents,
-			&i.OccurredAt,
+			&i.EventAmountInCents,
+			&i.EventOccurredAt,
 			&i.ErrorMessage,
-			&i.SubscriptionID,
-			&i.SubscriptionStatus,
+			&i.EventMetadata,
+			&i.EventCreatedAt,
 			&i.CustomerID,
-			&i.CustomerName,
-			&i.CustomerEmail,
+			&i.SubscriptionStatus,
 			&i.ProductID,
 			&i.ProductName,
-			&i.ProductType,
-			&i.IntervalType,
-			&i.TokenSymbol,
-			&i.TokenAddress,
+			&i.PriceID,
+			&i.PriceType,
+			&i.PriceCurrency,
+			&i.PriceUnitAmountInPennies,
+			&i.PriceIntervalType,
+			&i.PriceTermLength,
+			&i.ProductTokenID,
+			&i.ProductTokenTokenID,
+			&i.ProductTokenCreatedAt,
+			&i.ProductTokenUpdatedAt,
+			&i.ProductTokenSymbol,
+			&i.NetworkID,
 			&i.NetworkName,
-			&i.NetworkType,
-			&i.ChainID,
-			&i.CustomerWalletAddress,
+			&i.NetworkChainID,
+			&i.CustomerEmail,
+			&i.CustomerName,
 		); err != nil {
 			return nil, err
 		}

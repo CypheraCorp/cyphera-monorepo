@@ -1,11 +1,14 @@
 package auth
 
 import (
+	"bytes"
 	"cyphera-api/internal/constants"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/logger"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -21,8 +24,17 @@ var (
 	ErrInvalidToken = errors.New("invalid token")
 )
 
+// Context keys for storing values (moved from handlers/middleware.go)
+const (
+	RequestIDKey  = "request_id"
+	AccountIDKey  = "X-Account-ID" // Note: This might conflict if you have a different AccountIDKey in this package already.
+	UserIDKey     = "X-User-ID"
+	SupabaseIDKey = "supabase_id" // Note: This might conflict if you have a different SupabaseIDKey in this package already.
+)
+
 type AuthClient struct {
 	SupabaseJWTToken string
+	UserMetadata     map[string]interface{} `json:"user_metadata"`
 }
 
 func NewAuthClient(supabaseJWTToken string) *AuthClient {
@@ -39,6 +51,20 @@ type SupabaseClaims struct {
 	Role         string                 `json:"role"`
 	AppMetadata  map[string]interface{} `json:"app_metadata"`
 	UserMetadata map[string]interface{} `json:"user_metadata"`
+}
+
+// RequestLog represents a structured log entry for an HTTP request (moved from handlers/middleware.go)
+type RequestLog struct {
+	Method     string    `json:"method"`
+	Path       string    `json:"path,omitempty"`
+	Query      string    `json:"query,omitempty"`
+	UserAgent  string    `json:"user_agent,omitempty"`
+	ClientIP   string    `json:"client_ip"`
+	RequestID  string    `json:"request_id,omitempty"`
+	AccountID  string    `json:"account_id,omitempty"`
+	UserID     string    `json:"user_id,omitempty"`
+	SupabaseID string    `json:"supabase_id,omitempty"`
+	Timestamp  time.Time `json:"timestamp"`
 }
 
 // EnsureValidAPIKeyOrToken is a middleware that checks for either a valid API key or JWT token
@@ -282,6 +308,99 @@ func (ac *AuthClient) RequireRoles(roles ...string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+
+		c.Next()
+	}
+}
+
+// --- Logging Middleware (Moved from internal/handlers/middleware.go) ---
+
+// shouldSkipLogging determines if request logging should be skipped for a given path
+func shouldSkipLogging(path string) bool {
+	// Skip logging for health check endpoints
+	if path == "/healthz" || path == "/readyz" {
+		return true
+	}
+	return false
+}
+
+// getRequestBody safely reads and returns the request body
+func getRequestBody(c *gin.Context) ([]byte, error) {
+	var bodyBytes []byte
+	if c.Request.Body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(c.Request.Body)
+		if err != nil {
+			return nil, err
+		}
+		// Restore the request body for subsequent middleware/handlers
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	}
+	return bodyBytes, nil
+}
+
+// LogRequest is a middleware that logs the request body
+func LogRequest() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Skip logging for certain paths
+		if shouldSkipLogging(c.Request.URL.Path) {
+			c.Next()
+			return
+		}
+
+		start := time.Now()
+
+		// Get request body
+		bodyBytes, err := getRequestBody(c)
+		if err != nil {
+			logger.Log.Debug("Request body reading failed",
+				zap.Error(err),
+				zap.String("path", c.Request.URL.Path),
+				zap.String("method", c.Request.Method),
+			)
+			logger.Log.Error("Failed to read request body", zap.Error(err))
+			c.Next()
+			return
+		}
+
+		// Attempt to unmarshal body for pretty printing
+		var bodyField zap.Field
+		var prettyBody interface{}
+		if len(bodyBytes) > 0 && json.Unmarshal(bodyBytes, &prettyBody) == nil {
+			bodyField = zap.Any("body", prettyBody) // Log parsed JSON
+		} else {
+			// Fallback to string if not JSON or empty
+			bodyField = zap.String("body", string(bodyBytes))
+		}
+
+		// Prepare base log entry (without body initially)
+		requestLog := RequestLog{
+			Method:     c.Request.Method,
+			Path:       c.Request.URL.Path,
+			Query:      c.Request.URL.RawQuery,
+			UserAgent:  c.Request.UserAgent(),
+			ClientIP:   c.ClientIP(),
+			RequestID:  c.GetHeader(RequestIDKey),
+			AccountID:  c.GetHeader(AccountIDKey),
+			UserID:     c.GetHeader(UserIDKey),
+			SupabaseID: c.GetHeader(SupabaseIDKey),
+			Timestamp:  start.UTC(),
+		}
+
+		// Log the request details including the prepared body field
+		logger.Log.Debug("Request received",
+			zap.String("method", requestLog.Method),
+			zap.String("path", requestLog.Path),
+			zap.String("query", requestLog.Query),
+			zap.String("user_agent", requestLog.UserAgent),
+			zap.String("client_ip", requestLog.ClientIP),
+			zap.String("request_id", requestLog.RequestID),
+			zap.String("account_id", requestLog.AccountID),
+			zap.String("user_id", requestLog.UserID),
+			zap.String("supabase_id", requestLog.SupabaseID),
+			bodyField, // Add the dynamically created body field here
+			zap.Time("timestamp", requestLog.Timestamp),
+		)
 
 		c.Next()
 	}

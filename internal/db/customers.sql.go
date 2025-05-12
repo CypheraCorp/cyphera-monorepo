@@ -24,6 +24,18 @@ func (q *Queries) CountCustomers(ctx context.Context, workspaceID uuid.UUID) (in
 	return count, err
 }
 
+const countCustomersByWorkspaceID = `-- name: CountCustomersByWorkspaceID :one
+SELECT COUNT(*) FROM customers
+WHERE workspace_id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) CountCustomersByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countCustomersByWorkspaceID, workspaceID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCustomer = `-- name: CreateCustomer :one
 INSERT INTO customers (
     workspace_id,
@@ -32,37 +44,21 @@ INSERT INTO customers (
     name,
     phone,
     description,
-    balance_in_pennies,
-    currency,
-    default_source_id,
-    invoice_prefix,
-    next_invoice_sequence,
-    tax_exempt,
-    tax_ids,
-    metadata,
-    livemode
+    metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+    $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, workspace_id, external_id, email, name, phone, description, balance_in_pennies, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, external_id, email, name, phone, description, metadata, created_at, updated_at, deleted_at
 `
 
 type CreateCustomerParams struct {
-	WorkspaceID         uuid.UUID   `json:"workspace_id"`
-	ExternalID          pgtype.Text `json:"external_id"`
-	Email               pgtype.Text `json:"email"`
-	Name                pgtype.Text `json:"name"`
-	Phone               pgtype.Text `json:"phone"`
-	Description         pgtype.Text `json:"description"`
-	BalanceInPennies    pgtype.Int4 `json:"balance_in_pennies"`
-	Currency            pgtype.Text `json:"currency"`
-	DefaultSourceID     pgtype.UUID `json:"default_source_id"`
-	InvoicePrefix       pgtype.Text `json:"invoice_prefix"`
-	NextInvoiceSequence pgtype.Int4 `json:"next_invoice_sequence"`
-	TaxExempt           pgtype.Bool `json:"tax_exempt"`
-	TaxIds              []byte      `json:"tax_ids"`
-	Metadata            []byte      `json:"metadata"`
-	Livemode            pgtype.Bool `json:"livemode"`
+	WorkspaceID uuid.UUID   `json:"workspace_id"`
+	ExternalID  pgtype.Text `json:"external_id"`
+	Email       pgtype.Text `json:"email"`
+	Name        pgtype.Text `json:"name"`
+	Phone       pgtype.Text `json:"phone"`
+	Description pgtype.Text `json:"description"`
+	Metadata    []byte      `json:"metadata"`
 }
 
 func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error) {
@@ -73,15 +69,7 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		arg.Name,
 		arg.Phone,
 		arg.Description,
-		arg.BalanceInPennies,
-		arg.Currency,
-		arg.DefaultSourceID,
-		arg.InvoicePrefix,
-		arg.NextInvoiceSequence,
-		arg.TaxExempt,
-		arg.TaxIds,
 		arg.Metadata,
-		arg.Livemode,
 	)
 	var i Customer
 	err := row.Scan(
@@ -92,15 +80,7 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		&i.Name,
 		&i.Phone,
 		&i.Description,
-		&i.BalanceInPennies,
-		&i.Currency,
-		&i.DefaultSourceID,
-		&i.InvoicePrefix,
-		&i.NextInvoiceSequence,
-		&i.TaxExempt,
-		&i.TaxIds,
 		&i.Metadata,
-		&i.Livemode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -125,7 +105,7 @@ func (q *Queries) DeleteCustomer(ctx context.Context, arg DeleteCustomerParams) 
 }
 
 const getAllCustomers = `-- name: GetAllCustomers :many
-SELECT id, workspace_id, external_id, email, name, phone, description, balance_in_pennies, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
+SELECT id, workspace_id, external_id, email, name, phone, description, metadata, created_at, updated_at, deleted_at FROM customers
 ORDER BY created_at DESC
 `
 
@@ -146,15 +126,7 @@ func (q *Queries) GetAllCustomers(ctx context.Context) ([]Customer, error) {
 			&i.Name,
 			&i.Phone,
 			&i.Description,
-			&i.BalanceInPennies,
-			&i.Currency,
-			&i.DefaultSourceID,
-			&i.InvoicePrefix,
-			&i.NextInvoiceSequence,
-			&i.TaxExempt,
-			&i.TaxIds,
 			&i.Metadata,
-			&i.Livemode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -170,7 +142,7 @@ func (q *Queries) GetAllCustomers(ctx context.Context) ([]Customer, error) {
 }
 
 const getCustomer = `-- name: GetCustomer :one
-SELECT id, workspace_id, external_id, email, name, phone, description, balance_in_pennies, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
+SELECT id, workspace_id, external_id, email, name, phone, description, metadata, created_at, updated_at, deleted_at FROM customers
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -190,15 +162,7 @@ func (q *Queries) GetCustomer(ctx context.Context, arg GetCustomerParams) (Custo
 		&i.Name,
 		&i.Phone,
 		&i.Description,
-		&i.BalanceInPennies,
-		&i.Currency,
-		&i.DefaultSourceID,
-		&i.InvoicePrefix,
-		&i.NextInvoiceSequence,
-		&i.TaxExempt,
-		&i.TaxIds,
 		&i.Metadata,
-		&i.Livemode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -207,7 +171,7 @@ func (q *Queries) GetCustomer(ctx context.Context, arg GetCustomerParams) (Custo
 }
 
 const getCustomerByEmail = `-- name: GetCustomerByEmail :one
-SELECT id, workspace_id, external_id, email, name, phone, description, balance_in_pennies, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
+SELECT id, workspace_id, external_id, email, name, phone, description, metadata, created_at, updated_at, deleted_at FROM customers
 WHERE workspace_id = $1 AND email = $2 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -227,15 +191,7 @@ func (q *Queries) GetCustomerByEmail(ctx context.Context, arg GetCustomerByEmail
 		&i.Name,
 		&i.Phone,
 		&i.Description,
-		&i.BalanceInPennies,
-		&i.Currency,
-		&i.DefaultSourceID,
-		&i.InvoicePrefix,
-		&i.NextInvoiceSequence,
-		&i.TaxExempt,
-		&i.TaxIds,
 		&i.Metadata,
-		&i.Livemode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -244,7 +200,7 @@ func (q *Queries) GetCustomerByEmail(ctx context.Context, arg GetCustomerByEmail
 }
 
 const getCustomerByExternalID = `-- name: GetCustomerByExternalID :one
-SELECT id, workspace_id, external_id, email, name, phone, description, balance_in_pennies, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
+SELECT id, workspace_id, external_id, email, name, phone, description, metadata, created_at, updated_at, deleted_at FROM customers
 WHERE workspace_id = $1 AND external_id = $2 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -264,15 +220,7 @@ func (q *Queries) GetCustomerByExternalID(ctx context.Context, arg GetCustomerBy
 		&i.Name,
 		&i.Phone,
 		&i.Description,
-		&i.BalanceInPennies,
-		&i.Currency,
-		&i.DefaultSourceID,
-		&i.InvoicePrefix,
-		&i.NextInvoiceSequence,
-		&i.TaxExempt,
-		&i.TaxIds,
 		&i.Metadata,
-		&i.Livemode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -280,62 +228,9 @@ func (q *Queries) GetCustomerByExternalID(ctx context.Context, arg GetCustomerBy
 	return i, err
 }
 
-const getCustomersByBalance = `-- name: GetCustomersByBalance :many
-SELECT id, workspace_id, external_id, email, name, phone, description, balance_in_pennies, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
-WHERE workspace_id = $1 
-AND deleted_at IS NULL 
-AND balance_in_pennies > $2
-ORDER BY balance_in_pennies DESC
-`
-
-type GetCustomersByBalanceParams struct {
-	WorkspaceID      uuid.UUID   `json:"workspace_id"`
-	BalanceInPennies pgtype.Int4 `json:"balance_in_pennies"`
-}
-
-func (q *Queries) GetCustomersByBalance(ctx context.Context, arg GetCustomersByBalanceParams) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, getCustomersByBalance, arg.WorkspaceID, arg.BalanceInPennies)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Customer{}
-	for rows.Next() {
-		var i Customer
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.ExternalID,
-			&i.Email,
-			&i.Name,
-			&i.Phone,
-			&i.Description,
-			&i.BalanceInPennies,
-			&i.Currency,
-			&i.DefaultSourceID,
-			&i.InvoicePrefix,
-			&i.NextInvoiceSequence,
-			&i.TaxExempt,
-			&i.TaxIds,
-			&i.Metadata,
-			&i.Livemode,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getCustomersWithWorkspaceInfo = `-- name: GetCustomersWithWorkspaceInfo :many
 SELECT 
-    c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.balance_in_pennies, c.currency, c.default_source_id, c.invoice_prefix, c.next_invoice_sequence, c.tax_exempt, c.tax_ids, c.metadata, c.livemode, c.created_at, c.updated_at, c.deleted_at,
+    c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.created_at, c.updated_at, c.deleted_at,
     w.name as workspace_name,
     w.business_name as workspace_business_name,
     w.support_email as workspace_support_email
@@ -353,15 +248,7 @@ type GetCustomersWithWorkspaceInfoRow struct {
 	Name                  pgtype.Text        `json:"name"`
 	Phone                 pgtype.Text        `json:"phone"`
 	Description           pgtype.Text        `json:"description"`
-	BalanceInPennies      pgtype.Int4        `json:"balance_in_pennies"`
-	Currency              pgtype.Text        `json:"currency"`
-	DefaultSourceID       pgtype.UUID        `json:"default_source_id"`
-	InvoicePrefix         pgtype.Text        `json:"invoice_prefix"`
-	NextInvoiceSequence   pgtype.Int4        `json:"next_invoice_sequence"`
-	TaxExempt             pgtype.Bool        `json:"tax_exempt"`
-	TaxIds                []byte             `json:"tax_ids"`
 	Metadata              []byte             `json:"metadata"`
-	Livemode              pgtype.Bool        `json:"livemode"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt             pgtype.Timestamptz `json:"deleted_at"`
@@ -387,15 +274,7 @@ func (q *Queries) GetCustomersWithWorkspaceInfo(ctx context.Context, workspaceID
 			&i.Name,
 			&i.Phone,
 			&i.Description,
-			&i.BalanceInPennies,
-			&i.Currency,
-			&i.DefaultSourceID,
-			&i.InvoicePrefix,
-			&i.NextInvoiceSequence,
-			&i.TaxExempt,
-			&i.TaxIds,
 			&i.Metadata,
-			&i.Livemode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -414,7 +293,7 @@ func (q *Queries) GetCustomersWithWorkspaceInfo(ctx context.Context, workspaceID
 }
 
 const listCustomers = `-- name: ListCustomers :many
-SELECT id, workspace_id, external_id, email, name, phone, description, balance_in_pennies, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
+SELECT id, workspace_id, external_id, email, name, phone, description, metadata, created_at, updated_at, deleted_at FROM customers
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -436,15 +315,7 @@ func (q *Queries) ListCustomers(ctx context.Context, workspaceID uuid.UUID) ([]C
 			&i.Name,
 			&i.Phone,
 			&i.Description,
-			&i.BalanceInPennies,
-			&i.Currency,
-			&i.DefaultSourceID,
-			&i.InvoicePrefix,
-			&i.NextInvoiceSequence,
-			&i.TaxExempt,
-			&i.TaxIds,
 			&i.Metadata,
-			&i.Livemode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -460,7 +331,7 @@ func (q *Queries) ListCustomers(ctx context.Context, workspaceID uuid.UUID) ([]C
 }
 
 const listCustomersWithPagination = `-- name: ListCustomersWithPagination :many
-SELECT id, workspace_id, external_id, email, name, phone, description, balance_in_pennies, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at FROM customers
+SELECT id, workspace_id, external_id, email, name, phone, description, metadata, created_at, updated_at, deleted_at FROM customers
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -489,15 +360,7 @@ func (q *Queries) ListCustomersWithPagination(ctx context.Context, arg ListCusto
 			&i.Name,
 			&i.Phone,
 			&i.Description,
-			&i.BalanceInPennies,
-			&i.Currency,
-			&i.DefaultSourceID,
-			&i.InvoicePrefix,
-			&i.NextInvoiceSequence,
-			&i.TaxExempt,
-			&i.TaxIds,
 			&i.Metadata,
-			&i.Livemode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -519,36 +382,20 @@ SET
     name = COALESCE($4, name),
     phone = COALESCE($5, phone),
     description = COALESCE($6, description),
-    balance_in_pennies = COALESCE($7, balance_in_pennies),
-    currency = COALESCE($8, currency),
-    default_source_id = COALESCE($9, default_source_id),
-    invoice_prefix = COALESCE($10, invoice_prefix),
-    next_invoice_sequence = COALESCE($11, next_invoice_sequence),
-    tax_exempt = COALESCE($12, tax_exempt),
-    tax_ids = COALESCE($13, tax_ids),
-    metadata = COALESCE($14, metadata),
-    livemode = COALESCE($15, livemode),
+    metadata = COALESCE($7, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, external_id, email, name, phone, description, balance_in_pennies, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, external_id, email, name, phone, description, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateCustomerParams struct {
-	ID                  uuid.UUID   `json:"id"`
-	WorkspaceID         uuid.UUID   `json:"workspace_id"`
-	Email               pgtype.Text `json:"email"`
-	Name                pgtype.Text `json:"name"`
-	Phone               pgtype.Text `json:"phone"`
-	Description         pgtype.Text `json:"description"`
-	BalanceInPennies    pgtype.Int4 `json:"balance_in_pennies"`
-	Currency            pgtype.Text `json:"currency"`
-	DefaultSourceID     pgtype.UUID `json:"default_source_id"`
-	InvoicePrefix       pgtype.Text `json:"invoice_prefix"`
-	NextInvoiceSequence pgtype.Int4 `json:"next_invoice_sequence"`
-	TaxExempt           pgtype.Bool `json:"tax_exempt"`
-	TaxIds              []byte      `json:"tax_ids"`
-	Metadata            []byte      `json:"metadata"`
-	Livemode            pgtype.Bool `json:"livemode"`
+	ID          uuid.UUID   `json:"id"`
+	WorkspaceID uuid.UUID   `json:"workspace_id"`
+	Email       pgtype.Text `json:"email"`
+	Name        pgtype.Text `json:"name"`
+	Phone       pgtype.Text `json:"phone"`
+	Description pgtype.Text `json:"description"`
+	Metadata    []byte      `json:"metadata"`
 }
 
 func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error) {
@@ -559,15 +406,7 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		arg.Name,
 		arg.Phone,
 		arg.Description,
-		arg.BalanceInPennies,
-		arg.Currency,
-		arg.DefaultSourceID,
-		arg.InvoicePrefix,
-		arg.NextInvoiceSequence,
-		arg.TaxExempt,
-		arg.TaxIds,
 		arg.Metadata,
-		arg.Livemode,
 	)
 	var i Customer
 	err := row.Scan(
@@ -578,56 +417,7 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		&i.Name,
 		&i.Phone,
 		&i.Description,
-		&i.BalanceInPennies,
-		&i.Currency,
-		&i.DefaultSourceID,
-		&i.InvoicePrefix,
-		&i.NextInvoiceSequence,
-		&i.TaxExempt,
-		&i.TaxIds,
 		&i.Metadata,
-		&i.Livemode,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
-const updateCustomerBalance = `-- name: UpdateCustomerBalance :one
-UPDATE customers
-SET 
-    balance_in_pennies = balance_in_pennies + $2,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, workspace_id, external_id, email, name, phone, description, balance_in_pennies, currency, default_source_id, invoice_prefix, next_invoice_sequence, tax_exempt, tax_ids, metadata, livemode, created_at, updated_at, deleted_at
-`
-
-type UpdateCustomerBalanceParams struct {
-	ID               uuid.UUID   `json:"id"`
-	BalanceInPennies pgtype.Int4 `json:"balance_in_pennies"`
-}
-
-func (q *Queries) UpdateCustomerBalance(ctx context.Context, arg UpdateCustomerBalanceParams) (Customer, error) {
-	row := q.db.QueryRow(ctx, updateCustomerBalance, arg.ID, arg.BalanceInPennies)
-	var i Customer
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.ExternalID,
-		&i.Email,
-		&i.Name,
-		&i.Phone,
-		&i.Description,
-		&i.BalanceInPennies,
-		&i.Currency,
-		&i.DefaultSourceID,
-		&i.InvoicePrefix,
-		&i.NextInvoiceSequence,
-		&i.TaxExempt,
-		&i.TaxIds,
-		&i.Metadata,
-		&i.Livemode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
