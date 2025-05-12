@@ -127,6 +127,13 @@ type CreateSubscriptionParams struct {
 // @Security ApiKeyAuth
 // @Router /subscriptions/{subscription_id} [get]
 func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	subscriptionID := c.Param("subscription_id")
 	parsedUUID, err := uuid.Parse(subscriptionID)
 	if err != nil {
@@ -134,7 +141,10 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 		return
 	}
 
-	subscription, err := h.common.db.GetSubscription(c.Request.Context(), parsedUUID)
+	subscription, err := h.common.db.GetSubscriptionWithWorkspace(c.Request.Context(), db.GetSubscriptionWithWorkspaceParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Subscription not found")
 		return
@@ -224,6 +234,13 @@ func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /customers/{customer_id}/subscriptions [get]
 func (h *SubscriptionHandler) ListSubscriptionsByCustomer(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	customerID := c.Param("customer_id")
 	parsedUUID, err := uuid.Parse(customerID)
 	if err != nil {
@@ -231,7 +248,10 @@ func (h *SubscriptionHandler) ListSubscriptionsByCustomer(c *gin.Context) {
 		return
 	}
 
-	subscriptions, err := h.common.db.ListSubscriptionsByCustomer(c.Request.Context(), parsedUUID)
+	subscriptions, err := h.common.db.ListSubscriptionsByCustomer(c.Request.Context(), db.ListSubscriptionsByCustomerParams{
+		CustomerID:  parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve customer subscriptions", err)
 		return
@@ -306,6 +326,7 @@ type UpdateSubscriptionRequest struct {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /subscriptions/{subscription_id} [put]
+// #exclude
 func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	ctx := c.Request.Context()
 	subscriptionID := c.Param("subscription_id")
@@ -437,93 +458,6 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	}
 
 	sendSuccess(c, http.StatusOK, subscription)
-}
-
-// UpdateSubscriptionStatus godoc
-// @Summary Update a subscription's status
-// @Description Updates just the status of a subscription
-// @Tags subscriptions
-// @Accept json
-// @Produce json
-// @Param subscription_id path string true "Subscription ID"
-// @Param status body struct { Status string `json:"status"` } true "New status"
-// @Success 200 {object} db.Subscription
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /subscriptions/{subscription_id}/status [patch]
-func (h *SubscriptionHandler) UpdateSubscriptionStatus(c *gin.Context) {
-	subscriptionID := c.Param("subscription_id")
-	parsedUUID, err := uuid.Parse(subscriptionID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid subscription ID format", err)
-		return
-	}
-
-	// Parse request body
-	var request struct {
-		Status string `json:"status" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&request); err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid request format", err)
-		return
-	}
-
-	// Validate status
-	var status db.SubscriptionStatus
-	switch request.Status {
-	case string(db.SubscriptionStatusActive), string(db.SubscriptionStatusCanceled), string(db.SubscriptionStatusExpired), string(db.SubscriptionStatusSuspended), string(db.SubscriptionStatusFailed):
-		status = db.SubscriptionStatus(request.Status)
-	default:
-		sendError(c, http.StatusBadRequest, "Invalid status value", nil)
-		return
-	}
-
-	// Update status
-	params := db.UpdateSubscriptionStatusParams{
-		ID:     parsedUUID,
-		Status: status,
-	}
-
-	updatedSubscription, err := h.common.db.UpdateSubscriptionStatus(c.Request.Context(), params)
-	if err != nil {
-		handleDBError(c, err, "Failed to update subscription status")
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, updatedSubscription)
-}
-
-// CancelSubscription godoc
-// @Summary Cancel a subscription
-// @Description Sets a subscription status to canceled
-// @Tags subscriptions
-// @Accept json
-// @Produce json
-// @Param subscription_id path string true "Subscription ID"
-// @Success 200 {object} db.Subscription
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /subscriptions/{subscription_id}/cancel [post]
-func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
-	subscriptionID := c.Param("subscription_id")
-	parsedUUID, err := uuid.Parse(subscriptionID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid subscription ID format", err)
-		return
-	}
-
-	canceledSubscription, err := h.common.db.CancelSubscription(c.Request.Context(), parsedUUID)
-	if err != nil {
-		handleDBError(c, err, "Failed to cancel subscription")
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, canceledSubscription)
 }
 
 // DeleteSubscription godoc

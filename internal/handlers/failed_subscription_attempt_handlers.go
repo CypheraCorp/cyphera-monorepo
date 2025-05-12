@@ -35,6 +35,7 @@ func NewFailedSubscriptionAttemptHandler(common *CommonServices) *FailedSubscrip
 // @Success 200 {object} []db.FailedSubscriptionAttempt
 // @Failure 500 {object} ErrorResponse
 // @Router /failed-subscription-attempts [get]
+// @exclude
 func (h *FailedSubscriptionAttemptHandler) ListFailedSubscriptionAttempts(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -91,6 +92,7 @@ func (h *FailedSubscriptionAttemptHandler) ListFailedSubscriptionAttempts(c *gin
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /failed-subscription-attempts/{attempt_id} [get]
+// @exclude
 func (h *FailedSubscriptionAttemptHandler) GetFailedSubscriptionAttempt(c *gin.Context) {
 	ctx := c.Request.Context()
 	attemptID := c.Param("attempt_id")
@@ -121,6 +123,7 @@ func (h *FailedSubscriptionAttemptHandler) GetFailedSubscriptionAttempt(c *gin.C
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /failed-subscription-attempts/customer/{customer_id} [get]
+// @exclude
 func (h *FailedSubscriptionAttemptHandler) ListFailedSubscriptionAttemptsByCustomer(c *gin.Context) {
 	ctx := c.Request.Context()
 	customerID := c.Param("customer_id")
@@ -157,6 +160,7 @@ func (h *FailedSubscriptionAttemptHandler) ListFailedSubscriptionAttemptsByCusto
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /failed-subscription-attempts/product/{product_id} [get]
+// @exclude
 func (h *FailedSubscriptionAttemptHandler) ListFailedSubscriptionAttemptsByProduct(c *gin.Context) {
 	ctx := c.Request.Context()
 	productID := c.Param("product_id")
@@ -187,6 +191,7 @@ func (h *FailedSubscriptionAttemptHandler) ListFailedSubscriptionAttemptsByProdu
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /failed-subscription-attempts/error-type/{error_type} [get]
+// @exclude
 func (h *FailedSubscriptionAttemptHandler) ListFailedSubscriptionAttemptsByErrorType(c *gin.Context) {
 	ctx := c.Request.Context()
 	errorType := c.Param("error_type")

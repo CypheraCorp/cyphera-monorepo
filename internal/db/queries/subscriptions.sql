@@ -2,6 +2,11 @@
 SELECT * FROM subscriptions
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1;
 
+-- name: GetSubscriptionWithWorkspace :one
+SELECT * FROM subscriptions s
+JOIN products p ON p.id = s.product_id
+WHERE s.id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL LIMIT 1;
+
 -- name: GetSubscriptionWithDetails :one
 SELECT 
     s.*,
@@ -26,7 +31,7 @@ LEFT JOIN customer_wallets cw ON cw.id = s.customer_wallet_id
 JOIN products_tokens pt ON pt.id = s.product_token_id
 JOIN tokens t ON t.id = pt.token_id
 JOIN networks n ON n.id = pt.network_id
-WHERE s.id = $1 AND s.deleted_at IS NULL;
+WHERE s.id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL;
 
 -- name: ListSubscriptions :many
 SELECT * FROM subscriptions
@@ -34,12 +39,13 @@ WHERE deleted_at IS NULL
 ORDER BY created_at DESC;
 
 -- name: ListSubscriptionsByCustomer :many
-SELECT * FROM subscriptions
-WHERE customer_id = $1 AND deleted_at IS NULL
-ORDER BY created_at DESC;
+SELECT s.* FROM subscriptions s
+JOIN products p ON p.id = s.product_id
+WHERE s.customer_id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL
+ORDER BY s.created_at DESC;
 
 -- name: ListSubscriptionsByProduct :many
-SELECT s.* FROM subscriptions s
+SELECT s.*, p.workspace_id FROM subscriptions s
 JOIN products p ON s.product_id = p.id
 WHERE s.product_id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL
 ORDER BY s.created_at DESC;

@@ -147,6 +147,7 @@ func (h *NetworkHandler) GetNetworkByChainID(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /networks [post]
+// @exclude
 func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 	var req CreateNetworkRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -186,6 +187,7 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /networks/{network_id} [put]
+// @exclude
 func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 	networkId := c.Param("network_id")
 	parsedUUID, err := uuid.Parse(networkId)
@@ -231,6 +233,7 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /networks/{network_id} [delete]
+// @exclude
 func (h *NetworkHandler) DeleteNetwork(c *gin.Context) {
 	networkId := c.Param("network_id")
 	parsedUUID, err := uuid.Parse(networkId)

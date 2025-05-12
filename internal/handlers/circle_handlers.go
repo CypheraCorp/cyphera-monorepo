@@ -226,6 +226,7 @@ type CreateUserResponse struct {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /admin/circle/users/{workspace_id} [post]
+// @exclude
 func (h *CircleHandler) CreateUser(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -385,6 +386,7 @@ func (h *CircleHandler) CreateUser(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /admin/circle/users/{workspace_id}/token [post]
+// @exclude
 func (h *CircleHandler) CreateUserToken(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -423,6 +425,7 @@ func (h *CircleHandler) CreateUserToken(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/users/{workspace_id}/token [get]
+// @exclude
 func (h *CircleHandler) GetUserByToken(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -480,6 +483,7 @@ func (h *CircleHandler) GetUserByToken(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/users/{user_id} [get]
+// @exclude
 func (h *CircleHandler) GetUserByID(c *gin.Context) {
 	// Validate account ID
 	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
@@ -517,6 +521,7 @@ func (h *CircleHandler) GetUserByID(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/{workspace_id}/challenges/{challenge_id} [get]
+// @exclude
 func (h *CircleHandler) GetChallenge(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -568,6 +573,7 @@ func (h *CircleHandler) GetChallenge(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/users/{workspace_id}/initialize [post]
+// @exclude
 func (h *CircleHandler) InitializeUser(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -664,6 +670,7 @@ func (h *CircleHandler) InitializeUser(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/users/{workspace_id}/pin/create [post]
+// @exclude
 func (h *CircleHandler) CreatePinChallenge(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -715,6 +722,7 @@ func (h *CircleHandler) CreatePinChallenge(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/users/{workspace_id}/pin/update [put]
+// @exclude
 func (h *CircleHandler) UpdatePinChallenge(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -766,6 +774,7 @@ func (h *CircleHandler) UpdatePinChallenge(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/users/{workspace_id}/pin/restore [post]
+// @exclude
 func (h *CircleHandler) CreatePinRestoreChallenge(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -817,6 +826,7 @@ func (h *CircleHandler) CreatePinRestoreChallenge(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/wallets/{workspace_id} [post]
+// @exclude
 func (h *CircleHandler) CreateWallets(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -1135,6 +1145,7 @@ func (h *CircleHandler) createCypheraWalletEntry(ctx context.Context, qtx *db.Qu
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/wallets/get/{wallet_id} [get]
+// @exclude
 func (h *CircleHandler) GetWallet(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id") // Assuming path is now /admin/circle/wallets/{workspace_id}/{wallet_id}
@@ -1383,6 +1394,7 @@ func getCircleNetworkType(blockchain string) (db.CircleNetworkType, error) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/wallets/balances/{wallet_id} [get]
+// @exclude
 func (h *CircleHandler) GetWalletBalance(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id") // Assuming path is now /admin/circle/wallets/{workspace_id}/{wallet_id}/balances
@@ -1596,6 +1608,7 @@ func (h *CircleHandler) GetWalletBalance(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/wallets/{workspace_id} [get]
+// @exclude
 func (h *CircleHandler) ListWallets(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -1870,6 +1883,7 @@ func (h *CircleHandler) lookupNetworkID(ctx context.Context, blockchain string) 
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/transactions/validate-address [post]
+// @exclude
 func (h *CircleHandler) ValidateAddress(c *gin.Context) {
 	// Validate account ID
 	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
@@ -1912,6 +1926,7 @@ func (h *CircleHandler) ValidateAddress(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/transactions/transfer/estimate-fee [post]
+// @exclude
 func (h *CircleHandler) EstimateTransferFee(c *gin.Context) {
 	// Validate account ID
 	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
@@ -1979,6 +1994,7 @@ func (h *CircleHandler) EstimateTransferFee(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/transactions/transfer [post]
+// @exclude
 func (h *CircleHandler) CreateTransfer(c *gin.Context) {
 	// Validate account ID
 	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
@@ -2053,6 +2069,7 @@ func (h *CircleHandler) CreateTransfer(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/transactions/{transaction_id} [get]
+// @exclude
 func (h *CircleHandler) GetTransaction(c *gin.Context) {
 	// Validate account ID
 	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
@@ -2109,6 +2126,7 @@ func (h *CircleHandler) GetTransaction(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /circle/transactions [get]
+// @exclude
 func (h *CircleHandler) ListTransactions(c *gin.Context) {
 	// Validate account ID
 	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))

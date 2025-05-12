@@ -347,22 +347,14 @@ func InitializeRoutes(router *gin.Engine) {
 				admin.GET("/workspaces/:workspace_id", workspaceHandler.GetWorkspace)
 				admin.PUT("/workspaces/:workspace_id", workspaceHandler.UpdateWorkspace)
 				admin.DELETE("/workspaces/:workspace_id", workspaceHandler.DeleteWorkspace)
-				admin.DELETE("/workspaces/:workspace_id/hard", workspaceHandler.HardDeleteWorkspace)
-				admin.GET("/workspaces/:workspace_id/customers", workspaceHandler.ListWorkspaceCustomers)
 
 				// API Key management
 				admin.GET("/api-keys", apiKeyHandler.GetAllAPIKeys)
-				admin.GET("/api-keys/expired", apiKeyHandler.GetExpiredAPIKeys)
 
 				// Network management
 				admin.POST("/networks", networkHandler.CreateNetwork)
 				admin.PUT("/networks/:network_id", networkHandler.UpdateNetwork)
 				admin.DELETE("/networks/:network_id", networkHandler.DeleteNetwork)
-
-				// Token management
-				admin.POST("/tokens", tokenHandler.CreateToken)
-				admin.PUT("/tokens/:token_id", tokenHandler.UpdateToken)
-				admin.DELETE("/tokens/:token_id", tokenHandler.DeleteToken)
 
 				// Circle API endpoints
 				circle := admin.Group("/circle")
@@ -432,19 +424,9 @@ func InitializeRoutes(router *gin.Engine) {
 			accounts := protected.Group("/accounts")
 			{
 				accounts.PUT("/", accountHandler.UpdateAccount)
-				accounts.POST("/onboard", accountHandler.OnboardAccount)
-				accounts.GET("/details", accountHandler.GetAccountDetails)
-
 				accounts.GET("/:account_id", accountHandler.GetAccount)
-				accounts.PUT("/:account_id", accountHandler.UpdateAccount)
-			}
-
-			// Current User routes
-			users := protected.Group("/users")
-			{
-				users.GET("/me", userHandler.GetCurrentUser)
-				users.PUT("/me", userHandler.UpdateUser)
-				users.GET("/supabase", userHandler.GetUserBySupabaseID)
+				accounts.POST("/onboard", accountHandler.OnboardAccount)
+				// accounts.PUT("/:account_id", accountHandler.UpdateAccount)
 			}
 
 			// Customers
@@ -466,7 +448,6 @@ func InitializeRoutes(router *gin.Engine) {
 				// Regular account routes (scoped to their workspace)
 				apiKeys.GET("", apiKeyHandler.ListAPIKeys)
 				apiKeys.POST("", apiKeyHandler.CreateAPIKey)
-				apiKeys.GET("/count", apiKeyHandler.GetActiveAPIKeysCount)
 				apiKeys.GET("/:api_key_id", apiKeyHandler.GetAPIKeyByID)
 				apiKeys.PUT("/:api_key_id", apiKeyHandler.UpdateAPIKey)
 				apiKeys.DELETE("/:api_key_id", apiKeyHandler.DeleteAPIKey)

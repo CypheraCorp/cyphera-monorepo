@@ -312,8 +312,13 @@ LEFT JOIN customer_wallets cw ON cw.id = s.customer_wallet_id
 JOIN products_tokens pt ON pt.id = s.product_token_id
 JOIN tokens t ON t.id = pt.token_id
 JOIN networks n ON n.id = pt.network_id
-WHERE s.id = $1 AND s.deleted_at IS NULL
+WHERE s.id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL
 `
+
+type GetSubscriptionWithDetailsParams struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
 
 type GetSubscriptionWithDetailsRow struct {
 	ID                       uuid.UUID          `json:"id"`
@@ -349,8 +354,8 @@ type GetSubscriptionWithDetailsRow struct {
 	PriceTermLength          pgtype.Int4        `json:"price_term_length"`
 }
 
-func (q *Queries) GetSubscriptionWithDetails(ctx context.Context, id uuid.UUID) (GetSubscriptionWithDetailsRow, error) {
-	row := q.db.QueryRow(ctx, getSubscriptionWithDetails, id)
+func (q *Queries) GetSubscriptionWithDetails(ctx context.Context, arg GetSubscriptionWithDetailsParams) (GetSubscriptionWithDetailsRow, error) {
+	row := q.db.QueryRow(ctx, getSubscriptionWithDetails, arg.ID, arg.WorkspaceID)
 	var i GetSubscriptionWithDetailsRow
 	err := row.Scan(
 		&i.ID,
@@ -384,6 +389,88 @@ func (q *Queries) GetSubscriptionWithDetails(ctx context.Context, id uuid.UUID) 
 		&i.PriceUnitAmountInPennies,
 		&i.PriceIntervalType,
 		&i.PriceTermLength,
+	)
+	return i, err
+}
+
+const getSubscriptionWithWorkspace = `-- name: GetSubscriptionWithWorkspace :one
+SELECT s.id, customer_id, product_id, price_id, product_token_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, s.metadata, s.created_at, s.updated_at, s.deleted_at, p.id, workspace_id, wallet_id, name, description, image_url, url, active, p.metadata, p.created_at, p.updated_at, p.deleted_at FROM subscriptions s
+JOIN products p ON p.id = s.product_id
+WHERE s.id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL LIMIT 1
+`
+
+type GetSubscriptionWithWorkspaceParams struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+type GetSubscriptionWithWorkspaceRow struct {
+	ID                 uuid.UUID          `json:"id"`
+	CustomerID         uuid.UUID          `json:"customer_id"`
+	ProductID          uuid.UUID          `json:"product_id"`
+	PriceID            uuid.UUID          `json:"price_id"`
+	ProductTokenID     uuid.UUID          `json:"product_token_id"`
+	TokenAmount        pgtype.Numeric     `json:"token_amount"`
+	DelegationID       uuid.UUID          `json:"delegation_id"`
+	CustomerWalletID   pgtype.UUID        `json:"customer_wallet_id"`
+	Status             SubscriptionStatus `json:"status"`
+	CurrentPeriodStart pgtype.Timestamptz `json:"current_period_start"`
+	CurrentPeriodEnd   pgtype.Timestamptz `json:"current_period_end"`
+	NextRedemptionDate pgtype.Timestamptz `json:"next_redemption_date"`
+	TotalRedemptions   int32              `json:"total_redemptions"`
+	TotalAmountInCents int32              `json:"total_amount_in_cents"`
+	Metadata           []byte             `json:"metadata"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	ID_2               uuid.UUID          `json:"id_2"`
+	WorkspaceID        uuid.UUID          `json:"workspace_id"`
+	WalletID           uuid.UUID          `json:"wallet_id"`
+	Name               string             `json:"name"`
+	Description        pgtype.Text        `json:"description"`
+	ImageUrl           pgtype.Text        `json:"image_url"`
+	Url                pgtype.Text        `json:"url"`
+	Active             bool               `json:"active"`
+	Metadata_2         []byte             `json:"metadata_2"`
+	CreatedAt_2        pgtype.Timestamptz `json:"created_at_2"`
+	UpdatedAt_2        pgtype.Timestamptz `json:"updated_at_2"`
+	DeletedAt_2        pgtype.Timestamptz `json:"deleted_at_2"`
+}
+
+func (q *Queries) GetSubscriptionWithWorkspace(ctx context.Context, arg GetSubscriptionWithWorkspaceParams) (GetSubscriptionWithWorkspaceRow, error) {
+	row := q.db.QueryRow(ctx, getSubscriptionWithWorkspace, arg.ID, arg.WorkspaceID)
+	var i GetSubscriptionWithWorkspaceRow
+	err := row.Scan(
+		&i.ID,
+		&i.CustomerID,
+		&i.ProductID,
+		&i.PriceID,
+		&i.ProductTokenID,
+		&i.TokenAmount,
+		&i.DelegationID,
+		&i.CustomerWalletID,
+		&i.Status,
+		&i.CurrentPeriodStart,
+		&i.CurrentPeriodEnd,
+		&i.NextRedemptionDate,
+		&i.TotalRedemptions,
+		&i.TotalAmountInCents,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.ID_2,
+		&i.WorkspaceID,
+		&i.WalletID,
+		&i.Name,
+		&i.Description,
+		&i.ImageUrl,
+		&i.Url,
+		&i.Active,
+		&i.Metadata_2,
+		&i.CreatedAt_2,
+		&i.UpdatedAt_2,
+		&i.DeletedAt_2,
 	)
 	return i, err
 }
@@ -764,13 +851,19 @@ func (q *Queries) ListSubscriptions(ctx context.Context) ([]Subscription, error)
 }
 
 const listSubscriptionsByCustomer = `-- name: ListSubscriptionsByCustomer :many
-SELECT id, customer_id, product_id, price_id, product_token_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, created_at, updated_at, deleted_at FROM subscriptions
-WHERE customer_id = $1 AND deleted_at IS NULL
-ORDER BY created_at DESC
+SELECT s.id, s.customer_id, s.product_id, s.price_id, s.product_token_id, s.token_amount, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.created_at, s.updated_at, s.deleted_at FROM subscriptions s
+JOIN products p ON p.id = s.product_id
+WHERE s.customer_id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL
+ORDER BY s.created_at DESC
 `
 
-func (q *Queries) ListSubscriptionsByCustomer(ctx context.Context, customerID uuid.UUID) ([]Subscription, error) {
-	rows, err := q.db.Query(ctx, listSubscriptionsByCustomer, customerID)
+type ListSubscriptionsByCustomerParams struct {
+	CustomerID  uuid.UUID `json:"customer_id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) ListSubscriptionsByCustomer(ctx context.Context, arg ListSubscriptionsByCustomerParams) ([]Subscription, error) {
+	rows, err := q.db.Query(ctx, listSubscriptionsByCustomer, arg.CustomerID, arg.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -809,7 +902,7 @@ func (q *Queries) ListSubscriptionsByCustomer(ctx context.Context, customerID uu
 }
 
 const listSubscriptionsByProduct = `-- name: ListSubscriptionsByProduct :many
-SELECT s.id, s.customer_id, s.product_id, s.price_id, s.product_token_id, s.token_amount, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.created_at, s.updated_at, s.deleted_at FROM subscriptions s
+SELECT s.id, s.customer_id, s.product_id, s.price_id, s.product_token_id, s.token_amount, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.created_at, s.updated_at, s.deleted_at, p.workspace_id FROM subscriptions s
 JOIN products p ON s.product_id = p.id
 WHERE s.product_id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL
 ORDER BY s.created_at DESC
@@ -820,15 +913,37 @@ type ListSubscriptionsByProductParams struct {
 	WorkspaceID uuid.UUID `json:"workspace_id"`
 }
 
-func (q *Queries) ListSubscriptionsByProduct(ctx context.Context, arg ListSubscriptionsByProductParams) ([]Subscription, error) {
+type ListSubscriptionsByProductRow struct {
+	ID                 uuid.UUID          `json:"id"`
+	CustomerID         uuid.UUID          `json:"customer_id"`
+	ProductID          uuid.UUID          `json:"product_id"`
+	PriceID            uuid.UUID          `json:"price_id"`
+	ProductTokenID     uuid.UUID          `json:"product_token_id"`
+	TokenAmount        pgtype.Numeric     `json:"token_amount"`
+	DelegationID       uuid.UUID          `json:"delegation_id"`
+	CustomerWalletID   pgtype.UUID        `json:"customer_wallet_id"`
+	Status             SubscriptionStatus `json:"status"`
+	CurrentPeriodStart pgtype.Timestamptz `json:"current_period_start"`
+	CurrentPeriodEnd   pgtype.Timestamptz `json:"current_period_end"`
+	NextRedemptionDate pgtype.Timestamptz `json:"next_redemption_date"`
+	TotalRedemptions   int32              `json:"total_redemptions"`
+	TotalAmountInCents int32              `json:"total_amount_in_cents"`
+	Metadata           []byte             `json:"metadata"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	WorkspaceID        uuid.UUID          `json:"workspace_id"`
+}
+
+func (q *Queries) ListSubscriptionsByProduct(ctx context.Context, arg ListSubscriptionsByProductParams) ([]ListSubscriptionsByProductRow, error) {
 	rows, err := q.db.Query(ctx, listSubscriptionsByProduct, arg.ProductID, arg.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Subscription{}
+	items := []ListSubscriptionsByProductRow{}
 	for rows.Next() {
-		var i Subscription
+		var i ListSubscriptionsByProductRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.CustomerID,
@@ -848,6 +963,7 @@ func (q *Queries) ListSubscriptionsByProduct(ctx context.Context, arg ListSubscr
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.WorkspaceID,
 		); err != nil {
 			return nil, err
 		}

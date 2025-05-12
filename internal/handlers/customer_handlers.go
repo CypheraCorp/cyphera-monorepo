@@ -226,6 +226,7 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /customers [post]
+// @exclude
 func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	var req CreateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -276,6 +277,7 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /customers/{customer_id} [put]
+// @exclude
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
@@ -327,6 +329,7 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /customers/{customer_id} [delete]
+// @exclude
 func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)

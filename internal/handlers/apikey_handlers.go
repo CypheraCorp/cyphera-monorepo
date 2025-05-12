@@ -156,6 +156,7 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /admin/api-keys [get]
+// @exclude
 func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
 	apiKeys, err := h.common.db.GetAllAPIKeys(c.Request.Context())
 	if err != nil {
@@ -190,6 +191,7 @@ func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /api-keys [post]
+// @exclude
 func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	var req CreateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -245,6 +247,7 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /api-keys/{api_key_id} [put]
+// @exclude
 func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
@@ -331,66 +334,6 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 	}
 
 	sendSuccess(c, http.StatusNoContent, nil)
-}
-
-// GetExpiredAPIKeys godoc
-// @Summary Get expired API keys
-// @Description Retrieves all expired API keys
-// @Tags api-keys
-// @Accept json
-// @Produce json
-// @Success 200 {array} APIKeyResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /admin/api-keys/expired [get]
-func (h *APIKeyHandler) GetExpiredAPIKeys(c *gin.Context) {
-	apiKeys, err := h.common.db.GetExpiredAPIKeys(c.Request.Context())
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve expired API keys", err)
-		return
-	}
-
-	response := make([]APIKeyResponse, len(apiKeys))
-	for i, key := range apiKeys {
-		response[i] = toAPIKeyResponse(key)
-	}
-
-	listAPIKeysResponse := ListAPIKeysResponse{
-		Object:  "list",
-		Data:    response,
-		HasMore: false,
-		Total:   int64(len(apiKeys)),
-	}
-
-	sendList(c, listAPIKeysResponse)
-}
-
-// GetActiveAPIKeysCount godoc
-// @Summary Get active API key count
-// @Description Gets the count of active API keys for a workspace
-// @Tags api-keys
-// @Accept json
-// @Produce json
-// @Success 200 {object} map[string]int32
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /api-keys/count [get]
-func (h *APIKeyHandler) GetActiveAPIKeysCount(c *gin.Context) {
-	workspaceID := c.GetHeader("X-Workspace-ID")
-	parsedWorkspaceID, err := uuid.Parse(workspaceID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
-		return
-	}
-
-	count, err := h.common.db.GetActiveAPIKeysCount(c.Request.Context(), parsedWorkspaceID)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to get API key count", err)
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, gin.H{"count": count})
 }
 
 // Helper function to convert database model to API response

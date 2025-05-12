@@ -108,33 +108,6 @@ type AddUserToAccountRequest struct {
 	Role  string `json:"role" binding:"required,oneof=admin support developer"`
 }
 
-// GetCurrentUser godoc
-// @Summary Get current user
-// @Description Retrieves the details of the currently authenticated user
-// @Tags users
-// @Accept json
-// @Produce json
-// @Success 200 {object} UserResponse
-// @Failure 401 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /users/me [get]
-func (h *UserHandler) GetCurrentUser(c *gin.Context) {
-	userID := c.GetString("userID")
-	parsedUUID, err := uuid.Parse(userID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid user ID format", err)
-		return
-	}
-
-	user, err := h.common.db.GetUserByID(c.Request.Context(), parsedUUID)
-	if err != nil {
-		handleDBError(c, err, "User not found")
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, toUserResponse(user))
-}
-
 // GetUser godoc
 // @Summary Get user by ID
 // @Description Gets a user by their ID
@@ -148,6 +121,12 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /users/{user_id} [get]
 func (h *UserHandler) GetUser(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	if workspaceID == "" {
+		sendError(c, http.StatusBadRequest, "Workspace ID is required", nil)
+		return
+	}
+
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)
 	if err != nil {
@@ -158,6 +137,23 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 	user, err := h.common.db.GetUserByID(c.Request.Context(), parsedUUID)
 	if err != nil {
 		handleDBError(c, err, "User not found")
+		return
+	}
+
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
+	workspace, err := h.common.db.GetWorkspace(c.Request.Context(), parsedWorkspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
+		return
+	}
+
+	if user.AccountID.String() != workspace.AccountID.String() {
+		sendError(c, http.StatusForbidden, "User does not have access to this workspace", nil)
 		return
 	}
 
@@ -176,6 +172,7 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users [post]
+// @exclude
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -239,6 +236,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users/{user_id} [put]
+// @exclude
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)
@@ -315,6 +313,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users/{user_id} [delete]
+// @exclude
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)
@@ -345,6 +344,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /users/{user_id}/account [get]
+// @exclude
 func (h *UserHandler) GetUserAccount(c *gin.Context) {
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)
@@ -361,34 +361,6 @@ func (h *UserHandler) GetUserAccount(c *gin.Context) {
 
 	response := toUserAccountResponse(userAccount)
 	sendSuccess(c, http.StatusOK, response)
-}
-
-// GetUserBySupabaseID godoc
-// @Summary Get user by Supabase ID
-// @Description Gets a user by their Supabase ID
-// @Tags users
-// @Accept json
-// @Produce json
-// @Param supabase_id query string true "Supabase ID"
-// @Success 200 {object} UserResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /users/supabase [get]
-func (h *UserHandler) GetUserBySupabaseID(c *gin.Context) {
-	supabaseID := c.Query("supabase_id")
-	if supabaseID == "" {
-		sendError(c, http.StatusBadRequest, "Supabase ID is required", nil)
-		return
-	}
-
-	user, err := h.common.db.GetUserBySupabaseID(c.Request.Context(), supabaseID)
-	if err != nil {
-		handleDBError(c, err, "User not found")
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, toUserResponse(user))
 }
 
 // Helper function to convert database model to API response

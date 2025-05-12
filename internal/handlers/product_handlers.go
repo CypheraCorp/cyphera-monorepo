@@ -228,6 +228,7 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Router /public/prices/{price_id} [get]
+// @exclude
 func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
 	priceIDStr := c.Param("price_id")
 	parsedPriceID, err := uuid.Parse(priceIDStr)
@@ -305,6 +306,7 @@ func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /prices/{price_id}/subscribe [post]
+// @exclude
 func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 	ctx := c.Request.Context()
 	priceIDStr := c.Param("price_id")
@@ -420,7 +422,10 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		return
 	}
 
-	subscriptions, err := h.common.db.ListSubscriptionsByCustomer(ctx, customer.ID)
+	subscriptions, err := h.common.db.ListSubscriptionsByCustomer(ctx, db.ListSubscriptionsByCustomerParams{
+		CustomerID:  customer.ID,
+		WorkspaceID: product.WorkspaceID,
+	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to check for existing subscription", err)
 		return

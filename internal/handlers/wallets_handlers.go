@@ -384,54 +384,6 @@ func (h *WalletHandler) GetWallet(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toWalletResponse(wallet))
 }
 
-// GetWalletByAddress godoc
-// @Summary Get wallet by address
-// @Description Get wallet details by wallet address and network type
-// @Tags wallets
-// @Accept json
-// @Produce json
-// @Param wallet_address path string true "Wallet address"
-// @Param network_type query string true "Network type"
-// @Success 200 {object} WalletResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /wallets/address/{wallet_address} [get]
-func (h *WalletHandler) GetWalletByAddress(c *gin.Context) {
-	walletAddress := c.Param("wallet_address")
-	networkType := c.Query("network_type")
-
-	if walletAddress == "" || networkType == "" {
-		sendError(c, http.StatusBadRequest, "Wallet address and network type are required", nil)
-		return
-	}
-
-	// Get workspace ID from context (assuming it's set by middleware)
-	workspaceIDStr := c.GetString("workspace_id")
-	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
-	if err != nil {
-		sendError(c, http.StatusUnauthorized, "Invalid workspace context", err)
-		return
-	}
-
-	wallet, err := h.common.db.GetWalletByAddressAndCircleNetworkType(c.Request.Context(), db.GetWalletByAddressAndCircleNetworkTypeParams{
-		WalletAddress:     walletAddress,
-		CircleNetworkType: db.CircleNetworkType(networkType),
-	})
-	if err != nil {
-		handleDBError(c, err, "Wallet not found")
-		return
-	}
-
-	// Verify workspace access
-	if wallet.WorkspaceID != parsedWorkspaceID {
-		sendError(c, http.StatusForbidden, "Access denied to this wallet", nil)
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, toWalletResponseFromWalletRow(wallet))
-}
-
 // ListWallets godoc
 // @Summary List all wallets
 // @Description List all wallets for the authenticated workspace
@@ -535,6 +487,7 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /wallets/{wallet_id} [patch]
+// @exclude
 func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 	workspaceIDStr := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
@@ -597,73 +550,6 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 	}
 
 	sendSuccess(c, http.StatusOK, toWalletResponse(wallet))
-}
-
-// SetWalletAsPrimary godoc
-// @Summary Set wallet as primary
-// @Description Set a wallet as the primary wallet for its network type
-// @Tags wallets
-// @Accept json
-// @Produce json
-// @Param wallet_id path string true "Wallet ID"
-// @Success 200 {object} WalletResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /wallets/{wallet_id}/primary [post]
-func (h *WalletHandler) SetWalletAsPrimary(c *gin.Context) {
-	workspaceIDStr := c.GetHeader("X-Workspace-ID")
-	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid or missing X-Workspace-ID header", err)
-		return
-	}
-
-	walletID := c.Param("wallet_id")
-	parsedUUID, err := uuid.Parse(walletID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid wallet ID format", err)
-		return
-	}
-
-	// Get current wallet to verify ownership and get network type
-	currentWallet, err := h.common.db.GetWalletByID(c.Request.Context(), db.GetWalletByIDParams{
-		ID:          parsedUUID,
-		WorkspaceID: parsedWorkspaceID,
-	})
-	if err != nil {
-		handleDBError(c, err, "Wallet not found")
-		return
-	}
-
-	// Verify workspace access
-	if currentWallet.WorkspaceID != parsedWorkspaceID {
-		sendError(c, http.StatusForbidden, "Access denied to this wallet", nil)
-		return
-	}
-
-	// Set as primary
-	_, err = h.common.db.SetWalletAsPrimary(c.Request.Context(), db.SetWalletAsPrimaryParams{
-		WorkspaceID: currentWallet.WorkspaceID,
-		NetworkType: currentWallet.NetworkType,
-		ID:          parsedUUID,
-	})
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to set wallet as primary", err)
-		return
-	}
-
-	// Get updated wallet
-	updatedWallet, err := h.common.db.GetWalletByID(c.Request.Context(), db.GetWalletByIDParams{
-		ID:          parsedUUID,
-		WorkspaceID: parsedWorkspaceID,
-	})
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to get updated wallet", err)
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, toWalletResponse(updatedWallet))
 }
 
 // DeleteWallet godoc

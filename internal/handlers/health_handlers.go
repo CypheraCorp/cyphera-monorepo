@@ -24,6 +24,7 @@ type HealthResponse struct {
 // @Produce      json
 // @Success      200  {object}  HealthResponse   "Returns health status"
 // @Router       /health [get]
+// @exclude
 func (h *HealthHandler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, HealthResponse{
 		Status: "ok",
