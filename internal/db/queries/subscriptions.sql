@@ -50,7 +50,11 @@ WHERE (status = 'active' OR status = 'overdue') AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
 -- name: ListSubscriptionsDueForRedemption :many
-SELECT * FROM subscriptions
+SELECT 
+    id, customer_id, product_id, price_id, product_token_id, token_amount, delegation_id, customer_wallet_id, 
+    status, current_period_start, current_period_end, next_redemption_date, total_redemptions, 
+    total_amount_in_cents, metadata, created_at, updated_at, deleted_at 
+FROM subscriptions
 WHERE 
     (status = 'active' OR status = 'overdue')
     AND next_redemption_date <= $1
@@ -134,6 +138,7 @@ RETURNING *;
 UPDATE subscriptions
 SET 
     status = 'completed',
+    next_redemption_date = NULL,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;

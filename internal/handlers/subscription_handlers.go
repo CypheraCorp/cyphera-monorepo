@@ -894,15 +894,12 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		// If this was the final payment (determined by ProcessDueSubscriptions and passed via params.isFinalPayment),
 		// also update status to Completed
 		if params.isFinalPayment {
-			updateParams := db.UpdateSubscriptionStatusParams{
-				ID:     originalSubscription.ID,
-				Status: db.SubscriptionStatusCompleted,
-			}
-			if _, updateErr := params.queries.UpdateSubscriptionStatus(params.ctx, updateParams); updateErr != nil {
-				log.Printf("Warning: Failed to mark subscription %s as completed after successful final payment: %v", originalSubscription.ID, updateErr)
+			// Call CompleteSubscription which sets status and nullifies next_redemption_date
+			if _, updateErr := params.queries.CompleteSubscription(params.ctx, originalSubscription.ID); updateErr != nil {
+				log.Printf("Warning: Failed to mark subscription %s as completed using CompleteSubscription after successful final payment: %v", originalSubscription.ID, updateErr)
 			} else {
 				result.isCompleted = true // Internal flag for event type
-				log.Printf("Marked subscription %s as completed after successful final payment", originalSubscription.ID)
+				log.Printf("Marked subscription %s as completed (via CompleteSubscription) after successful final payment", originalSubscription.ID)
 			}
 		}
 
@@ -1137,17 +1134,19 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 		// Determine if this subscription's term is considered complete for this processing run
 		isTermComplete := false
 		if price.Type == db.PriceTypeRecurring {
-			if price.TermLength.Valid && subscription.TotalRedemptions >= price.TermLength.Int32 {
+			// Check if the current redemption will fulfill the term length
+			if price.TermLength.Valid && (subscription.TotalRedemptions+1) >= price.TermLength.Int32 {
 				isTermComplete = true
 			}
 		} else if price.Type == db.PriceTypeOneOff {
-			if subscription.TotalRedemptions >= 1 { // Considered complete after 1st redemption for one-off
+			// For one-off, it's complete if this payment makes total_redemptions reach 1
+			if (subscription.TotalRedemptions + 1) >= 1 {
 				isTermComplete = true
 			}
 		}
-		// isFinalPayment is true if the period has ended AND the term is complete according to its price.
-		// This flag is used by processSubscription to decide if it should mark as 'completed'.
-		isFinalPaymentForThisProcessing := subscription.CurrentPeriodEnd.Time.Before(now) && isTermComplete
+		// isFinalPayment is true if the term is complete according to its price,
+		// indicating this processing run handles the final payment of the term.
+		isFinalPaymentForThisProcessing := isTermComplete
 
 		// Process the subscription
 		params := processSubscriptionParams{
