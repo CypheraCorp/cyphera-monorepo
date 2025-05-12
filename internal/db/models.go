@@ -611,25 +611,17 @@ type CircleWallet struct {
 }
 
 type Customer struct {
-	ID                  uuid.UUID          `json:"id"`
-	WorkspaceID         uuid.UUID          `json:"workspace_id"`
-	ExternalID          pgtype.Text        `json:"external_id"`
-	Email               pgtype.Text        `json:"email"`
-	Name                pgtype.Text        `json:"name"`
-	Phone               pgtype.Text        `json:"phone"`
-	Description         pgtype.Text        `json:"description"`
-	BalanceInPennies    pgtype.Int4        `json:"balance_in_pennies"`
-	Currency            pgtype.Text        `json:"currency"`
-	DefaultSourceID     pgtype.UUID        `json:"default_source_id"`
-	InvoicePrefix       pgtype.Text        `json:"invoice_prefix"`
-	NextInvoiceSequence pgtype.Int4        `json:"next_invoice_sequence"`
-	TaxExempt           pgtype.Bool        `json:"tax_exempt"`
-	TaxIds              []byte             `json:"tax_ids"`
-	Metadata            []byte             `json:"metadata"`
-	Livemode            pgtype.Bool        `json:"livemode"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
+	ID          uuid.UUID          `json:"id"`
+	WorkspaceID uuid.UUID          `json:"workspace_id"`
+	ExternalID  pgtype.Text        `json:"external_id"`
+	Email       pgtype.Text        `json:"email"`
+	Name        pgtype.Text        `json:"name"`
+	Phone       pgtype.Text        `json:"phone"`
+	Description pgtype.Text        `json:"description"`
+	Metadata    []byte             `json:"metadata"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type CustomerWallet struct {

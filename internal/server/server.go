@@ -306,7 +306,7 @@ func InitializeRoutes(router *gin.Engine) {
 
 	// if we are not in production, log the request body
 	if os.Getenv("GIN_MODE") != "release" {
-		router.Use(handlers.LogRequest())
+		router.Use(auth.LogRequest())
 	}
 
 	// API v1 routes

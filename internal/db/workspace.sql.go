@@ -208,7 +208,7 @@ func (q *Queries) HardDeleteWorkspace(ctx context.Context, id uuid.UUID) error {
 }
 
 const listWorkspaceCustomers = `-- name: ListWorkspaceCustomers :many
-SELECT c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.balance_in_pennies, c.currency, c.default_source_id, c.invoice_prefix, c.next_invoice_sequence, c.tax_exempt, c.tax_ids, c.metadata, c.livemode, c.created_at, c.updated_at, c.deleted_at FROM customers c
+SELECT c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.created_at, c.updated_at, c.deleted_at FROM customers c
 INNER JOIN workspaces w ON c.workspace_id = w.id
 WHERE w.id = $1 AND c.deleted_at IS NULL
 ORDER BY c.created_at DESC
@@ -231,15 +231,7 @@ func (q *Queries) ListWorkspaceCustomers(ctx context.Context, id uuid.UUID) ([]C
 			&i.Name,
 			&i.Phone,
 			&i.Description,
-			&i.BalanceInPennies,
-			&i.Currency,
-			&i.DefaultSourceID,
-			&i.InvoicePrefix,
-			&i.NextInvoiceSequence,
-			&i.TaxExempt,
-			&i.TaxIds,
 			&i.Metadata,
-			&i.Livemode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -256,7 +248,7 @@ func (q *Queries) ListWorkspaceCustomers(ctx context.Context, id uuid.UUID) ([]C
 
 const listWorkspaceCustomersWithPagination = `-- name: ListWorkspaceCustomersWithPagination :many
 SELECT 
-    c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.balance_in_pennies, c.currency, c.default_source_id, c.invoice_prefix, c.next_invoice_sequence, c.tax_exempt, c.tax_ids, c.metadata, c.livemode, c.created_at, c.updated_at, c.deleted_at
+    c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.created_at, c.updated_at, c.deleted_at
 FROM customers c
 JOIN workspaces w ON c.workspace_id = w.id
 WHERE w.id = $1 AND c.deleted_at IS NULL
@@ -287,15 +279,7 @@ func (q *Queries) ListWorkspaceCustomersWithPagination(ctx context.Context, arg 
 			&i.Name,
 			&i.Phone,
 			&i.Description,
-			&i.BalanceInPennies,
-			&i.Currency,
-			&i.DefaultSourceID,
-			&i.InvoicePrefix,
-			&i.NextInvoiceSequence,
-			&i.TaxExempt,
-			&i.TaxIds,
 			&i.Metadata,
-			&i.Livemode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
