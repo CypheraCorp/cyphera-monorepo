@@ -323,10 +323,10 @@ func InitializeRoutes(router *gin.Engine) {
 			admin.Use(authClient.RequireRoles("admin"))
 			{
 				// public routes
-				admin.GET("/public/products/:product_id", productHandler.GetPublicProductByID)
+				admin.GET("/public/prices/:price_id", productHandler.GetPublicProductByPriceID)
 
 				// subscribe to a product
-				admin.POST("/products/:product_id/subscribe", productHandler.SubscribeToProduct)
+				admin.POST("/prices/:price_id/subscribe", productHandler.SubscribeToProductByPriceID)
 
 				// Account management
 				admin.GET("/accounts", accountHandler.ListAccounts)

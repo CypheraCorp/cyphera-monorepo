@@ -439,7 +439,6 @@ SELECT
     pr.currency AS price_currency,
     pr.unit_amount_in_pennies AS price_unit_amount_in_pennies,
     pr.interval_type AS price_interval_type,
-    pr.interval_count AS price_interval_count,
     pr.term_length AS price_term_length,
     pt.id AS product_token_id,
     pt.token_id AS product_token_token_id,
@@ -449,7 +448,6 @@ SELECT
     n.id AS network_id,
     n.name AS network_name,
     n.chain_id AS network_chain_id,
-    c.id AS customer_id,
     c.email AS customer_email,
     c.name AS customer_name
 FROM
@@ -504,7 +502,6 @@ type ListSubscriptionEventDetailsWithPaginationRow struct {
 	PriceCurrency            Currency              `json:"price_currency"`
 	PriceUnitAmountInPennies int32                 `json:"price_unit_amount_in_pennies"`
 	PriceIntervalType        NullIntervalType      `json:"price_interval_type"`
-	PriceIntervalCount       pgtype.Int4           `json:"price_interval_count"`
 	PriceTermLength          pgtype.Int4           `json:"price_term_length"`
 	ProductTokenID           uuid.UUID             `json:"product_token_id"`
 	ProductTokenTokenID      uuid.UUID             `json:"product_token_token_id"`
@@ -514,7 +511,6 @@ type ListSubscriptionEventDetailsWithPaginationRow struct {
 	NetworkID                uuid.UUID             `json:"network_id"`
 	NetworkName              string                `json:"network_name"`
 	NetworkChainID           int32                 `json:"network_chain_id"`
-	CustomerID_2             uuid.UUID             `json:"customer_id_2"`
 	CustomerEmail            pgtype.Text           `json:"customer_email"`
 	CustomerName             pgtype.Text           `json:"customer_name"`
 }
@@ -547,7 +543,6 @@ func (q *Queries) ListSubscriptionEventDetailsWithPagination(ctx context.Context
 			&i.PriceCurrency,
 			&i.PriceUnitAmountInPennies,
 			&i.PriceIntervalType,
-			&i.PriceIntervalCount,
 			&i.PriceTermLength,
 			&i.ProductTokenID,
 			&i.ProductTokenTokenID,
@@ -557,7 +552,6 @@ func (q *Queries) ListSubscriptionEventDetailsWithPagination(ctx context.Context
 			&i.NetworkID,
 			&i.NetworkName,
 			&i.NetworkChainID,
-			&i.CustomerID_2,
 			&i.CustomerEmail,
 			&i.CustomerName,
 		); err != nil {

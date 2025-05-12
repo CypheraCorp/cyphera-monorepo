@@ -101,3 +101,7 @@ SELECT * FROM customers
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
+
+-- name: CountCustomersByWorkspaceID :one
+SELECT COUNT(*) FROM customers
+WHERE workspace_id = $1 AND deleted_at IS NULL;

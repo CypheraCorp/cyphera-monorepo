@@ -27,11 +27,10 @@ INSERT INTO prices (
     currency, -- currency enum
     unit_amount_in_pennies,
     interval_type, -- interval_type enum (nullable)
-    interval_count, -- (nullable)
     term_length, -- (nullable)
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
 )
 RETURNING *;
 

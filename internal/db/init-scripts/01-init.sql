@@ -256,15 +256,14 @@ CREATE TABLE prices (
     currency currency NOT NULL, -- 'USD', 'EUR'
     unit_amount_in_pennies INTEGER NOT NULL,
     interval_type interval_type, -- Nullable, for 'recurring' type
-    interval_count INTEGER, -- Nullable, for 'recurring' type
     term_length INTEGER, -- Nullable, for 'recurring' type, e.g., 12 for 12 months
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
-        CONSTRAINT prices_recurring_fields_check CHECK (
-        (type = 'recurring' AND interval_type IS NOT NULL AND interval_count IS NOT NULL AND interval_count > 0 AND term_length IS NOT NULL AND term_length > 0) OR
-        (type = 'one_off' AND interval_type IS NULL AND interval_count IS NULL AND term_length IS NULL)
+    CONSTRAINT prices_recurring_fields_check CHECK (
+        (type = 'recurring' AND interval_type IS NOT NULL AND term_length IS NOT NULL AND term_length > 0) OR
+        (type = 'one_off' AND interval_type IS NULL AND term_length IS NULL)
     )
 );
 

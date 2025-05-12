@@ -263,18 +263,19 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 		return
 	}
 
-	listCustomersResponse := ListCustomersResponse{
-		Object:  "list",
-		Data:    make([]CustomerResponse, len(customers)),
-		HasMore: false,
-		Total:   int64(len(customers)),
+	// Get the total count for pagination metadata
+	totalCount, err := h.common.db.CountCustomersByWorkspaceID(c.Request.Context(), parsedWorkspaceID)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to count customers", err)
+		return
 	}
 
+	customerResponses := make([]CustomerResponse, len(customers))
 	for i, customer := range customers {
-		listCustomersResponse.Data[i] = toCustomerResponse(customer)
+		customerResponses[i] = toCustomerResponse(customer)
 	}
 
-	sendSuccess(c, http.StatusOK, listCustomersResponse)
+	sendPaginatedSuccess(c, http.StatusOK, customerResponses, int(page), int(limit), int(totalCount))
 }
 
 // CreateCustomer godoc

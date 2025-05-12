@@ -296,11 +296,11 @@ export const redeemDelegation = async (
         account: redeemer, 
         calls: callsForRedemption,
         maxFeePerGas: redemptionGasPrices.maxFeePerGas,
-        maxPriorityFeePerGas: redemptionGasPrices.maxPriorityFeePerGas,
+        maxPriorityFeePerGas: redemptionGasPrices.maxPriorityFeePerGas
         // Optional: Increase gas limits if needed
-        callGasLimit: 150000n,
-        preVerificationGas: 50000n,
-        verificationGasLimit: 150000n,
+        // callGasLimit: 150000n,
+        // preVerificationGas: 50000n,
+        // verificationGasLimit: 150000n,
       });
       logger.info(`Redemption UserOperation hash (sent in ${(Date.now() - overallStartTime) / 1000}s): ${redeemUserOpHash}`);
       logger.info("Waiting for redemption transaction receipt...");

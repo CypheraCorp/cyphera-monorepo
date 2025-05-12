@@ -139,7 +139,6 @@ SELECT
     pr.currency AS price_currency,
     pr.unit_amount_in_pennies AS price_unit_amount_in_pennies,
     pr.interval_type AS price_interval_type,
-    pr.interval_count AS price_interval_count,
     pr.term_length AS price_term_length,
     pt.id AS product_token_id,
     pt.token_id AS product_token_token_id,

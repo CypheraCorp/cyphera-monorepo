@@ -24,6 +24,18 @@ func (q *Queries) CountCustomers(ctx context.Context, workspaceID uuid.UUID) (in
 	return count, err
 }
 
+const countCustomersByWorkspaceID = `-- name: CountCustomersByWorkspaceID :one
+SELECT COUNT(*) FROM customers
+WHERE workspace_id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) CountCustomersByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countCustomersByWorkspaceID, workspaceID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCustomer = `-- name: CreateCustomer :one
 INSERT INTO customers (
     workspace_id,

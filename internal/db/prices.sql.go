@@ -18,7 +18,7 @@ SET
     active = true,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, interval_count, term_length, metadata, created_at, updated_at, deleted_at
+RETURNING id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) ActivatePrice(ctx context.Context, id uuid.UUID) (Price, error) {
@@ -33,7 +33,6 @@ func (q *Queries) ActivatePrice(ctx context.Context, id uuid.UUID) (Price, error
 		&i.Currency,
 		&i.UnitAmountInPennies,
 		&i.IntervalType,
-		&i.IntervalCount,
 		&i.TermLength,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -78,13 +77,12 @@ INSERT INTO prices (
     currency, -- currency enum
     unit_amount_in_pennies,
     interval_type, -- interval_type enum (nullable)
-    interval_count, -- (nullable)
     term_length, -- (nullable)
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
 )
-RETURNING id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, interval_count, term_length, metadata, created_at, updated_at, deleted_at
+RETURNING id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at
 `
 
 type CreatePriceParams struct {
@@ -95,7 +93,6 @@ type CreatePriceParams struct {
 	Currency            Currency         `json:"currency"`
 	UnitAmountInPennies int32            `json:"unit_amount_in_pennies"`
 	IntervalType        NullIntervalType `json:"interval_type"`
-	IntervalCount       pgtype.Int4      `json:"interval_count"`
 	TermLength          pgtype.Int4      `json:"term_length"`
 	Metadata            []byte           `json:"metadata"`
 }
@@ -109,7 +106,6 @@ func (q *Queries) CreatePrice(ctx context.Context, arg CreatePriceParams) (Price
 		arg.Currency,
 		arg.UnitAmountInPennies,
 		arg.IntervalType,
-		arg.IntervalCount,
 		arg.TermLength,
 		arg.Metadata,
 	)
@@ -123,7 +119,6 @@ func (q *Queries) CreatePrice(ctx context.Context, arg CreatePriceParams) (Price
 		&i.Currency,
 		&i.UnitAmountInPennies,
 		&i.IntervalType,
-		&i.IntervalCount,
 		&i.TermLength,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -139,7 +134,7 @@ SET
     active = false,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, interval_count, term_length, metadata, created_at, updated_at, deleted_at
+RETURNING id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) DeactivatePrice(ctx context.Context, id uuid.UUID) (Price, error) {
@@ -154,7 +149,6 @@ func (q *Queries) DeactivatePrice(ctx context.Context, id uuid.UUID) (Price, err
 		&i.Currency,
 		&i.UnitAmountInPennies,
 		&i.IntervalType,
-		&i.IntervalCount,
 		&i.TermLength,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -176,7 +170,7 @@ func (q *Queries) DeletePrice(ctx context.Context, id uuid.UUID) error {
 }
 
 const getPrice = `-- name: GetPrice :one
-SELECT id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, interval_count, term_length, metadata, created_at, updated_at, deleted_at FROM prices
+SELECT id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at FROM prices
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -192,7 +186,6 @@ func (q *Queries) GetPrice(ctx context.Context, id uuid.UUID) (Price, error) {
 		&i.Currency,
 		&i.UnitAmountInPennies,
 		&i.IntervalType,
-		&i.IntervalCount,
 		&i.TermLength,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -203,7 +196,7 @@ func (q *Queries) GetPrice(ctx context.Context, id uuid.UUID) (Price, error) {
 }
 
 const getPriceWithProduct = `-- name: GetPriceWithProduct :one
-SELECT pr.id, pr.product_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.interval_count, pr.term_length, pr.metadata, pr.created_at, pr.updated_at, pr.deleted_at, p.name as product_name, p.workspace_id
+SELECT pr.id, pr.product_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.term_length, pr.metadata, pr.created_at, pr.updated_at, pr.deleted_at, p.name as product_name, p.workspace_id
 FROM prices pr
 JOIN products p ON pr.product_id = p.id
 WHERE pr.id = $1 AND pr.deleted_at IS NULL AND p.deleted_at IS NULL
@@ -218,7 +211,6 @@ type GetPriceWithProductRow struct {
 	Currency            Currency           `json:"currency"`
 	UnitAmountInPennies int32              `json:"unit_amount_in_pennies"`
 	IntervalType        NullIntervalType   `json:"interval_type"`
-	IntervalCount       pgtype.Int4        `json:"interval_count"`
 	TermLength          pgtype.Int4        `json:"term_length"`
 	Metadata            []byte             `json:"metadata"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
@@ -240,7 +232,6 @@ func (q *Queries) GetPriceWithProduct(ctx context.Context, id uuid.UUID) (GetPri
 		&i.Currency,
 		&i.UnitAmountInPennies,
 		&i.IntervalType,
-		&i.IntervalCount,
 		&i.TermLength,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -253,7 +244,7 @@ func (q *Queries) GetPriceWithProduct(ctx context.Context, id uuid.UUID) (GetPri
 }
 
 const listActivePricesByProduct = `-- name: ListActivePricesByProduct :many
-SELECT id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, interval_count, term_length, metadata, created_at, updated_at, deleted_at FROM prices
+SELECT id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at FROM prices
 WHERE product_id = $1 AND active = true AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -276,7 +267,6 @@ func (q *Queries) ListActivePricesByProduct(ctx context.Context, productID uuid.
 			&i.Currency,
 			&i.UnitAmountInPennies,
 			&i.IntervalType,
-			&i.IntervalCount,
 			&i.TermLength,
 			&i.Metadata,
 			&i.CreatedAt,
@@ -294,7 +284,7 @@ func (q *Queries) ListActivePricesByProduct(ctx context.Context, productID uuid.
 }
 
 const listActivePricesByWorkspace = `-- name: ListActivePricesByWorkspace :many
-SELECT pr.id, pr.product_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.interval_count, pr.term_length, pr.metadata, pr.created_at, pr.updated_at, pr.deleted_at
+SELECT pr.id, pr.product_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.term_length, pr.metadata, pr.created_at, pr.updated_at, pr.deleted_at
 FROM prices pr
 JOIN products p ON pr.product_id = p.id
 WHERE p.workspace_id = $1 AND pr.active = true AND pr.deleted_at IS NULL AND p.deleted_at IS NULL
@@ -319,7 +309,6 @@ func (q *Queries) ListActivePricesByWorkspace(ctx context.Context, workspaceID u
 			&i.Currency,
 			&i.UnitAmountInPennies,
 			&i.IntervalType,
-			&i.IntervalCount,
 			&i.TermLength,
 			&i.Metadata,
 			&i.CreatedAt,
@@ -337,7 +326,7 @@ func (q *Queries) ListActivePricesByWorkspace(ctx context.Context, workspaceID u
 }
 
 const listPricesByProduct = `-- name: ListPricesByProduct :many
-SELECT id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, interval_count, term_length, metadata, created_at, updated_at, deleted_at FROM prices
+SELECT id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at FROM prices
 WHERE product_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -360,7 +349,6 @@ func (q *Queries) ListPricesByProduct(ctx context.Context, productID uuid.UUID) 
 			&i.Currency,
 			&i.UnitAmountInPennies,
 			&i.IntervalType,
-			&i.IntervalCount,
 			&i.TermLength,
 			&i.Metadata,
 			&i.CreatedAt,
@@ -378,7 +366,7 @@ func (q *Queries) ListPricesByProduct(ctx context.Context, productID uuid.UUID) 
 }
 
 const listPricesByWorkspace = `-- name: ListPricesByWorkspace :many
-SELECT pr.id, pr.product_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.interval_count, pr.term_length, pr.metadata, pr.created_at, pr.updated_at, pr.deleted_at
+SELECT pr.id, pr.product_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.term_length, pr.metadata, pr.created_at, pr.updated_at, pr.deleted_at
 FROM prices pr
 JOIN products p ON pr.product_id = p.id
 WHERE p.workspace_id = $1 AND pr.deleted_at IS NULL AND p.deleted_at IS NULL
@@ -403,7 +391,6 @@ func (q *Queries) ListPricesByWorkspace(ctx context.Context, workspaceID uuid.UU
 			&i.Currency,
 			&i.UnitAmountInPennies,
 			&i.IntervalType,
-			&i.IntervalCount,
 			&i.TermLength,
 			&i.Metadata,
 			&i.CreatedAt,
@@ -428,7 +415,7 @@ SET
     metadata = COALESCE($4, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, interval_count, term_length, metadata, created_at, updated_at, deleted_at
+RETURNING id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdatePriceParams struct {
@@ -455,7 +442,6 @@ func (q *Queries) UpdatePrice(ctx context.Context, arg UpdatePriceParams) (Price
 		&i.Currency,
 		&i.UnitAmountInPennies,
 		&i.IntervalType,
-		&i.IntervalCount,
 		&i.TermLength,
 		&i.Metadata,
 		&i.CreatedAt,

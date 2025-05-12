@@ -302,7 +302,6 @@ SELECT
     pr.currency AS price_currency,
     pr.unit_amount_in_pennies AS price_unit_amount_in_pennies,
     pr.interval_type AS price_interval_type,
-    pr.interval_count AS price_interval_count,
     pr.term_length AS price_term_length
 FROM subscriptions s
 JOIN products p ON p.id = s.product_id
@@ -346,7 +345,6 @@ type GetSubscriptionWithDetailsRow struct {
 	PriceCurrency            Currency           `json:"price_currency"`
 	PriceUnitAmountInPennies int32              `json:"price_unit_amount_in_pennies"`
 	PriceIntervalType        NullIntervalType   `json:"price_interval_type"`
-	PriceIntervalCount       pgtype.Int4        `json:"price_interval_count"`
 	PriceTermLength          pgtype.Int4        `json:"price_term_length"`
 }
 
@@ -384,7 +382,6 @@ func (q *Queries) GetSubscriptionWithDetails(ctx context.Context, id uuid.UUID) 
 		&i.PriceCurrency,
 		&i.PriceUnitAmountInPennies,
 		&i.PriceIntervalType,
-		&i.PriceIntervalCount,
 		&i.PriceTermLength,
 	)
 	return i, err
@@ -559,7 +556,6 @@ SELECT
     pr.currency AS price_currency,
     pr.unit_amount_in_pennies AS price_unit_amount_in_pennies,
     pr.interval_type AS price_interval_type,
-    pr.interval_count AS price_interval_count,
     pr.term_length AS price_term_length,
     pr.metadata AS price_metadata,
     pr.created_at AS price_created_at,
@@ -640,7 +636,6 @@ type ListSubscriptionDetailsWithPaginationRow struct {
 	PriceCurrency                  Currency           `json:"price_currency"`
 	PriceUnitAmountInPennies       int32              `json:"price_unit_amount_in_pennies"`
 	PriceIntervalType              NullIntervalType   `json:"price_interval_type"`
-	PriceIntervalCount             pgtype.Int4        `json:"price_interval_count"`
 	PriceTermLength                pgtype.Int4        `json:"price_term_length"`
 	PriceMetadata                  []byte             `json:"price_metadata"`
 	PriceCreatedAt                 pgtype.Timestamptz `json:"price_created_at"`
@@ -696,7 +691,6 @@ func (q *Queries) ListSubscriptionDetailsWithPagination(ctx context.Context, arg
 			&i.PriceCurrency,
 			&i.PriceUnitAmountInPennies,
 			&i.PriceIntervalType,
-			&i.PriceIntervalCount,
 			&i.PriceTermLength,
 			&i.PriceMetadata,
 			&i.PriceCreatedAt,

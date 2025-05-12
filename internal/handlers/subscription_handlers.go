@@ -1224,11 +1224,6 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 		intervalTypeStr = string(subDetails.PriceIntervalType.IntervalType)
 	}
 
-	var intervalCountInt32 int32
-	if subDetails.PriceIntervalCount.Valid {
-		intervalCountInt32 = subDetails.PriceIntervalCount.Int32
-	}
-
 	var termLengthInt32 int32
 	if subDetails.PriceTermLength.Valid {
 		termLengthInt32 = subDetails.PriceTermLength.Int32
@@ -1256,7 +1251,6 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 			Currency:            string(subDetails.PriceCurrency),
 			UnitAmountInPennies: subDetails.PriceUnitAmountInPennies,
 			IntervalType:        intervalTypeStr,
-			IntervalCount:       intervalCountInt32,
 			TermLength:          termLengthInt32,
 			Metadata:            subDetails.PriceMetadata, // Expecting json.RawMessage
 			CreatedAt:           priceCreatedAtUnix,
@@ -1308,9 +1302,8 @@ func toSubscriptionEventResponse(ctx context.Context, eventDetails db.ListSubscr
 			Type:                eventDetails.PriceType,
 			Currency:            eventDetails.PriceCurrency,
 			UnitAmountInPennies: eventDetails.PriceUnitAmountInPennies,
-			IntervalType:        eventDetails.PriceIntervalType,  // db.NullIntervalType from sqlc
-			IntervalCount:       eventDetails.PriceIntervalCount, // pgtype.Int4 from sqlc
-			TermLength:          eventDetails.PriceTermLength,    // pgtype.Int4 from sqlc
+			IntervalType:        eventDetails.PriceIntervalType, // db.NullIntervalType from sqlc
+			TermLength:          eventDetails.PriceTermLength,   // pgtype.Int4 from sqlc
 		},
 		ProductToken: ProductTokenResponse{
 			ID:          eventDetails.ProductTokenID.String(),

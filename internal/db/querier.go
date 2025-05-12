@@ -22,6 +22,7 @@ type Querier interface {
 	CountActiveSubscriptions(ctx context.Context) (int64, error)
 	CountCustomerWallets(ctx context.Context, customerID uuid.UUID) (int64, error)
 	CountCustomers(ctx context.Context, workspaceID uuid.UUID) (int64, error)
+	CountCustomersByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountDelegations(ctx context.Context) (int64, error)
 	CountDelegationsByDelegator(ctx context.Context, delegator string) (int64, error)
 	CountFailedSubscriptionAttempts(ctx context.Context) (int64, error)

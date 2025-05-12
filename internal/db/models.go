@@ -702,7 +702,6 @@ type Price struct {
 	Currency            Currency           `json:"currency"`
 	UnitAmountInPennies int32              `json:"unit_amount_in_pennies"`
 	IntervalType        NullIntervalType   `json:"interval_type"`
-	IntervalCount       pgtype.Int4        `json:"interval_count"`
 	TermLength          pgtype.Int4        `json:"term_length"`
 	Metadata            []byte             `json:"metadata"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`

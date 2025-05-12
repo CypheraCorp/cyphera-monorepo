@@ -227,8 +227,8 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 // @Success 200 {object} PublicProductResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
-// @Router /prices/public/{price_id} [get]
-func (h *ProductHandler) GetPublicProductByID(c *gin.Context) {
+// @Router /public/prices/{price_id} [get]
+func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
 	priceIDStr := c.Param("price_id")
 	parsedPriceID, err := uuid.Parse(priceIDStr)
 	if err != nil {
@@ -293,7 +293,7 @@ func (h *ProductHandler) GetPublicProductByID(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, response)
 }
 
-// SubscribeToProduct godoc
+// SubscribeToProductByPriceID godoc
 // @Summary Subscribe to a product's price
 // @Description Creates a subscription for a product's specific price with the given delegation
 // @Tags products
@@ -305,7 +305,7 @@ func (h *ProductHandler) GetPublicProductByID(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /prices/{price_id}/subscribe [post]
-func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
+func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 	ctx := c.Request.Context()
 	priceIDStr := c.Param("price_id")
 	parsedPriceID, err := uuid.Parse(priceIDStr)
@@ -1413,7 +1413,6 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 				Currency:            db.Currency(price.Currency),
 				UnitAmountInPennies: price.UnitAmountInPennies,
 				IntervalType:        db.NullIntervalType{IntervalType: db.IntervalType(price.IntervalType), Valid: true},
-				IntervalCount:       pgtype.Int4{Int32: price.IntervalCount, Valid: true},
 				TermLength:          pgtype.Int4{Int32: price.TermLength, Valid: true},
 				Metadata:            price.Metadata,
 			})
@@ -1554,7 +1553,6 @@ func toPriceResponse(p db.Price) PriceResponse {
 		Currency:            string(p.Currency),
 		UnitAmountInPennies: p.UnitAmountInPennies,
 		IntervalType:        string(p.IntervalType.IntervalType),
-		IntervalCount:       p.IntervalCount.Int32,
 		TermLength:          p.TermLength.Int32,
 		Metadata:            p.Metadata,
 		CreatedAt:           p.CreatedAt.Time.Unix(),
