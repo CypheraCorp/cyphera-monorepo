@@ -186,7 +186,7 @@ func (q *Queries) GetCustomerWalletByAddress(ctx context.Context, arg GetCustome
 }
 
 const getCustomersByWalletAddress = `-- name: GetCustomersByWalletAddress :many
-SELECT c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.balance_in_pennies, c.currency, c.default_source_id, c.invoice_prefix, c.next_invoice_sequence, c.tax_exempt, c.tax_ids, c.metadata, c.livemode, c.created_at, c.updated_at, c.deleted_at FROM customers c
+SELECT c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.created_at, c.updated_at, c.deleted_at FROM customers c
 JOIN customer_wallets cw ON c.id = cw.customer_id
 WHERE cw.wallet_address = $1 AND c.deleted_at IS NULL AND cw.deleted_at IS NULL
 `
@@ -208,15 +208,7 @@ func (q *Queries) GetCustomersByWalletAddress(ctx context.Context, walletAddress
 			&i.Name,
 			&i.Phone,
 			&i.Description,
-			&i.BalanceInPennies,
-			&i.Currency,
-			&i.DefaultSourceID,
-			&i.InvoicePrefix,
-			&i.NextInvoiceSequence,
-			&i.TaxExempt,
-			&i.TaxIds,
 			&i.Metadata,
-			&i.Livemode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,

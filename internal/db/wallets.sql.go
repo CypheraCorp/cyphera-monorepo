@@ -319,19 +319,50 @@ func (q *Queries) GetRecentlyUsedWalletsWithCircleData(ctx context.Context, arg 
 	return items, nil
 }
 
-const getWalletByAddress = `-- name: GetWalletByAddress :one
-SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
-WHERE wallet_address = $1 AND network_type = $2 AND deleted_at IS NULL
+const getWalletByAddressAndCircleNetworkType = `-- name: GetWalletByAddressAndCircleNetworkType :one
+SELECT w.id, workspace_id, wallet_type, wallet_address, w.network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, w.created_at, w.updated_at, w.deleted_at, n.id, name, type, n.network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, n.created_at, n.updated_at, n.deleted_at FROM wallets as w
+LEFT JOIN networks as n ON w.network_id = n.id
+WHERE w.wallet_address = $1 AND n.circle_network_type = $2 AND w.deleted_at IS NULL
 `
 
-type GetWalletByAddressParams struct {
-	WalletAddress string      `json:"wallet_address"`
-	NetworkType   NetworkType `json:"network_type"`
+type GetWalletByAddressAndCircleNetworkTypeParams struct {
+	WalletAddress     string            `json:"wallet_address"`
+	CircleNetworkType CircleNetworkType `json:"circle_network_type"`
 }
 
-func (q *Queries) GetWalletByAddress(ctx context.Context, arg GetWalletByAddressParams) (Wallet, error) {
-	row := q.db.QueryRow(ctx, getWalletByAddress, arg.WalletAddress, arg.NetworkType)
-	var i Wallet
+type GetWalletByAddressAndCircleNetworkTypeRow struct {
+	ID                uuid.UUID             `json:"id"`
+	WorkspaceID       uuid.UUID             `json:"workspace_id"`
+	WalletType        string                `json:"wallet_type"`
+	WalletAddress     string                `json:"wallet_address"`
+	NetworkType       NetworkType           `json:"network_type"`
+	NetworkID         pgtype.UUID           `json:"network_id"`
+	Nickname          pgtype.Text           `json:"nickname"`
+	Ens               pgtype.Text           `json:"ens"`
+	IsPrimary         pgtype.Bool           `json:"is_primary"`
+	Verified          pgtype.Bool           `json:"verified"`
+	LastUsedAt        pgtype.Timestamptz    `json:"last_used_at"`
+	Metadata          []byte                `json:"metadata"`
+	CreatedAt         pgtype.Timestamptz    `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz    `json:"updated_at"`
+	DeletedAt         pgtype.Timestamptz    `json:"deleted_at"`
+	ID_2              pgtype.UUID           `json:"id_2"`
+	Name              pgtype.Text           `json:"name"`
+	Type              pgtype.Text           `json:"type"`
+	NetworkType_2     NullNetworkType       `json:"network_type_2"`
+	CircleNetworkType NullCircleNetworkType `json:"circle_network_type"`
+	BlockExplorerUrl  pgtype.Text           `json:"block_explorer_url"`
+	ChainID           pgtype.Int4           `json:"chain_id"`
+	IsTestnet         pgtype.Bool           `json:"is_testnet"`
+	Active            pgtype.Bool           `json:"active"`
+	CreatedAt_2       pgtype.Timestamptz    `json:"created_at_2"`
+	UpdatedAt_2       pgtype.Timestamptz    `json:"updated_at_2"`
+	DeletedAt_2       pgtype.Timestamptz    `json:"deleted_at_2"`
+}
+
+func (q *Queries) GetWalletByAddressAndCircleNetworkType(ctx context.Context, arg GetWalletByAddressAndCircleNetworkTypeParams) (GetWalletByAddressAndCircleNetworkTypeRow, error) {
+	row := q.db.QueryRow(ctx, getWalletByAddressAndCircleNetworkType, arg.WalletAddress, arg.CircleNetworkType)
+	var i GetWalletByAddressAndCircleNetworkTypeRow
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
@@ -348,6 +379,18 @@ func (q *Queries) GetWalletByAddress(ctx context.Context, arg GetWalletByAddress
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ID_2,
+		&i.Name,
+		&i.Type,
+		&i.NetworkType_2,
+		&i.CircleNetworkType,
+		&i.BlockExplorerUrl,
+		&i.ChainID,
+		&i.IsTestnet,
+		&i.Active,
+		&i.CreatedAt_2,
+		&i.UpdatedAt_2,
+		&i.DeletedAt_2,
 	)
 	return i, err
 }

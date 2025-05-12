@@ -20,6 +20,8 @@ const (
 	BlockchainNEAR  = "NEAR"
 	BlockchainEVM   = "EVM"
 	BlockchainUNI   = "UNI"
+	BlockchainOP    = "OP"
+	BlockchainBASE  = "BASE"
 
 	// Testnet blockchains
 	BlockchainETHSepolia  = "ETH-SEPOLIA"
@@ -30,6 +32,8 @@ const (
 	BlockchainNEARTestnet = "NEAR-TESTNET"
 	BlockchainEVMTestnet  = "EVM-TESTNET"
 	BlockchainUNISepolia  = "UNI-SEPOLIA"
+	BlockchainOPSepolia   = "OP-SEPOLIA"
+	BlockchainBASESepolia = "BASE-SEPOLIA"
 )
 
 // AllBlockchains is a slice containing all supported blockchain values
@@ -38,7 +42,8 @@ var AllBlockchains = []string{
 	BlockchainARB, BlockchainNEAR, BlockchainEVM, BlockchainUNI,
 	BlockchainETHSepolia, BlockchainAVAXFuji, BlockchainMATICAmoy,
 	BlockchainSOLDevnet, BlockchainARBSepolia, BlockchainNEARTestnet,
-	BlockchainEVMTestnet, BlockchainUNISepolia,
+	BlockchainEVMTestnet, BlockchainUNISepolia, BlockchainOPSepolia,
+	BlockchainBASESepolia,
 }
 
 // ValidateBlockchains checks if the provided blockchains are valid

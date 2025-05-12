@@ -189,8 +189,11 @@ func sendSuccess(c *gin.Context, statusCode int, data interface{}) {
 
 // sendPaginatedSuccess sends a successful paginated response
 func sendPaginatedSuccess(c *gin.Context, statusCode int, data interface{}, page, limit, total int) {
+	hasMore := (total+limit-1)/limit > page
 	response := gin.H{
-		"data": data,
+		"data":     data,
+		"object":   "list",
+		"has_more": hasMore,
 		"pagination": gin.H{
 			"current_page": page,
 			"per_page":     limit,

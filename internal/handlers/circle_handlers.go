@@ -22,9 +22,7 @@ import (
 
 // Define constants for Circle blockchain identifiers to satisfy goconst
 const (
-	circleEthSepolia = "ETH-SEPOLIA"
-	circleSol        = "SOL"
-
+	circleEthSepolia      = "ETH-SEPOLIA"
 	circleEth             = "ETH"
 	circleArb             = "ARB"
 	circleArbSepolia      = "ARB-SEPOLIA"
@@ -34,7 +32,8 @@ const (
 	circleBaseSepolia     = "BASE-SEPOLIA"
 	circleUnichain        = "UNICHAIN"
 	circleUnichainSepolia = "UNICHAIN-SEPOLIA"
-	circleSolDevnet       = "SOL-DEVNET"
+	circleOp              = "OP"
+	circleOPSepolia       = "OP-SEPOLIA"
 )
 
 // CircleHandler handles API requests related to Circle's wallet and user management features.
@@ -953,6 +952,8 @@ func (h *CircleHandler) CreateWallets(c *gin.Context) {
 						}
 					}()
 
+					spew.Dump(walletsListResponse.Data.Wallets)
+
 					// Process each wallet and create Cyphera wallet entries
 					walletCount := 0
 					for _, walletData := range walletsListResponse.Data.Wallets {
@@ -1023,12 +1024,20 @@ func (h *CircleHandler) createCypheraWalletEntry(ctx context.Context, qtx *db.Qu
 		networkIDPgType.Valid = true
 	}
 
+	network, err := h.common.db.GetNetwork(ctx, networkID)
+	if err != nil {
+		return fmt.Errorf("failed to get network: %w", err)
+	}
+
+	spew.Dump(walletData)
+
 	// Check if wallet already exists in our database
-	var dbWallet db.Wallet
-	dbWallet, err = h.common.db.GetWalletByAddress(ctx, db.GetWalletByAddressParams{
-		WalletAddress: walletData.Address,
-		NetworkType:   getNetworkType(walletData.Blockchain),
+	dbWallet, err := h.common.db.GetWalletByAddressAndCircleNetworkType(ctx, db.GetWalletByAddressAndCircleNetworkTypeParams{
+		WalletAddress:     walletData.Address,
+		CircleNetworkType: network.CircleNetworkType,
 	})
+
+	spew.Dump(dbWallet)
 
 	// Check if the error is "no rows found" or another error
 	walletExists := true
@@ -1056,6 +1065,8 @@ func (h *CircleHandler) createCypheraWalletEntry(ctx context.Context, qtx *db.Qu
 	if err != nil {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
+
+	spew.Dump(walletExists, walletData.Blockchain)
 
 	if walletExists {
 		// Wallet exists, update it
@@ -1191,6 +1202,12 @@ func (h *CircleHandler) GetWallet(c *gin.Context) {
 		networkIDPgType.Valid = true
 	}
 
+	network, err := h.common.db.GetNetwork(c.Request.Context(), networkID)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to get network", err)
+		return
+	}
+
 	// Begin a transaction
 	tx, qtx, err := h.common.BeginTx(c.Request.Context())
 	if err != nil {
@@ -1204,10 +1221,9 @@ func (h *CircleHandler) GetWallet(c *gin.Context) {
 	}()
 
 	// Check if wallet already exists in our database
-	var dbWallet db.Wallet
-	dbWallet, err = h.common.db.GetWalletByAddress(c.Request.Context(), db.GetWalletByAddressParams{
-		WalletAddress: walletData.Address,
-		NetworkType:   getNetworkType(walletData.Blockchain),
+	dbWallet, err := h.common.db.GetWalletByAddressAndCircleNetworkType(c.Request.Context(), db.GetWalletByAddressAndCircleNetworkTypeParams{
+		WalletAddress:     walletData.Address,
+		CircleNetworkType: network.CircleNetworkType,
 	})
 	// Check if the error is "no rows found" or another error
 	walletExists := true
@@ -1309,8 +1325,6 @@ func getNetworkType(blockchain string) db.NetworkType {
 	switch blockchain {
 	case circleEth, circleEthSepolia, circleArb, circleArbSepolia, circleMatic, circleMaticAmoy, circleBase, circleBaseSepolia, circleUnichain, circleUnichainSepolia:
 		return db.NetworkTypeEvm
-	case circleSol, circleSolDevnet:
-		return db.NetworkTypeSolana
 	default:
 		return db.NetworkTypeEvm // Default to EVM
 	}
@@ -1337,13 +1351,13 @@ func getCircleNetworkType(blockchain string) (db.CircleNetworkType, error) {
 	case circleBaseSepolia:
 		return db.CircleNetworkTypeBASESEPOLIA, nil
 	case circleUnichain:
-		return db.CircleNetworkTypeUNICHAIN, nil
+		return db.CircleNetworkTypeUNI, nil
 	case circleUnichainSepolia:
-		return db.CircleNetworkTypeUNICHAINSEPOLIA, nil
-	case circleSol:
-		return db.CircleNetworkTypeSOL, nil
-	case circleSolDevnet:
-		return db.CircleNetworkTypeSOLDEVNET, nil
+		return db.CircleNetworkTypeUNI, nil
+	case circleOp:
+		return db.CircleNetworkTypeOP, nil
+	case circleOPSepolia:
+		return db.CircleNetworkTypeOPSEPOLIA, nil
 	default:
 		return "", fmt.Errorf("unsupported blockchain: %s", blockchain)
 	}
@@ -1430,6 +1444,12 @@ func (h *CircleHandler) GetWalletBalance(c *gin.Context) {
 		// Don't return, continue processing
 	}
 
+	network, err := h.common.db.GetNetwork(c.Request.Context(), networkID)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to get network", err)
+		return
+	}
+
 	var networkIDPgType pgtype.UUID
 	if networkID != uuid.Nil {
 		networkIDPgType.Bytes = networkID
@@ -1437,9 +1457,9 @@ func (h *CircleHandler) GetWalletBalance(c *gin.Context) {
 	}
 
 	// Check if this wallet already exists in our database
-	_, err = h.common.db.GetWalletByAddress(c.Request.Context(), db.GetWalletByAddressParams{
-		WalletAddress: walletData.Address,
-		NetworkType:   getNetworkType(walletData.Blockchain),
+	_, err = h.common.db.GetWalletByAddressAndCircleNetworkType(c.Request.Context(), db.GetWalletByAddressAndCircleNetworkTypeParams{
+		WalletAddress:     walletData.Address,
+		CircleNetworkType: network.CircleNetworkType,
 	})
 
 	// If wallet doesn't exist, create it
@@ -1690,11 +1710,16 @@ func (h *CircleHandler) ListWallets(c *gin.Context) {
 			networkIDPgType.Valid = true
 		}
 
+		network, err := h.common.db.GetNetwork(c.Request.Context(), networkID)
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, "Failed to get network", err)
+			return
+		}
+
 		// Check if wallet already exists in our database
-		var dbWallet db.Wallet
-		dbWallet, err = h.common.db.GetWalletByAddress(c.Request.Context(), db.GetWalletByAddressParams{
-			WalletAddress: walletData.Address,
-			NetworkType:   getNetworkType(walletData.Blockchain),
+		dbWallet, err := h.common.db.GetWalletByAddressAndCircleNetworkType(c.Request.Context(), db.GetWalletByAddressAndCircleNetworkTypeParams{
+			WalletAddress:     walletData.Address,
+			CircleNetworkType: network.CircleNetworkType,
 		})
 
 		// Check if the error is "no rows found" or another error

@@ -30,9 +30,10 @@ FROM wallets w
 LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id AND w.wallet_type = 'circle_wallet'
 WHERE w.id = $1 AND w.workspace_id = $2 AND w.deleted_at IS NULL;
 
--- name: GetWalletByAddress :one
-SELECT * FROM wallets
-WHERE wallet_address = $1 AND network_type = $2 AND deleted_at IS NULL;
+-- name: GetWalletByAddressAndCircleNetworkType :one
+SELECT * FROM wallets as w
+LEFT JOIN networks as n ON w.network_id = n.id
+WHERE w.wallet_address = $1 AND n.circle_network_type = $2 AND w.deleted_at IS NULL;
 
 -- name: GetWalletWithCircleDataByAddress :one
 SELECT 

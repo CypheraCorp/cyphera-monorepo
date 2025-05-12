@@ -17,7 +17,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -34,22 +33,6 @@ type ProductHandler struct {
 	delegationClient *dsClient.DelegationClient
 }
 
-type CreateSubscriptionParams struct {
-	Customer        db.Customer
-	CustomerWallet  db.CustomerWallet
-	ProductID       uuid.UUID
-	ProductTokenID  uuid.UUID
-	TokenAmount     int64
-	Currency        db.Currency
-	PriceInPennies  int32
-	IntervalType    db.IntervalType
-	TotalTermLength int32
-	DelegationData  db.DelegationDatum
-	PeriodStart     time.Time
-	PeriodEnd       time.Time
-	NextRedemption  time.Time
-}
-
 // NewProductHandler creates a new ProductHandler instance
 func NewProductHandler(common *CommonServices, delegationClient *dsClient.DelegationClient) *ProductHandler {
 	return &ProductHandler{
@@ -58,63 +41,107 @@ func NewProductHandler(common *CommonServices, delegationClient *dsClient.Delega
 	}
 }
 
+// PriceResponse represents a price object in API responses
+type PriceResponse struct {
+	ID                  string          `json:"id"`
+	Object              string          `json:"object"`
+	ProductID           string          `json:"product_id"`
+	Active              bool            `json:"active"`
+	Type                string          `json:"type"`
+	Nickname            string          `json:"nickname,omitempty"`
+	Currency            string          `json:"currency"`
+	UnitAmountInPennies int32           `json:"unit_amount_in_pennies"`
+	IntervalType        string          `json:"interval_type,omitempty"`
+	IntervalCount       int32           `json:"interval_count,omitempty"`
+	TermLength          int32           `json:"term_length,omitempty"`
+	Metadata            json.RawMessage `json:"metadata,omitempty" swaggertype:"object"`
+	CreatedAt           int64           `json:"created_at"`
+	UpdatedAt           int64           `json:"updated_at"`
+}
+
+// CreatePriceRequest represents the request body for creating a new price
+type CreatePriceRequest struct {
+	Active              bool            `json:"active"`
+	Type                string          `json:"type" binding:"required"`
+	Nickname            string          `json:"nickname"`
+	Currency            string          `json:"currency" binding:"required"`
+	UnitAmountInPennies int32           `json:"unit_amount_in_pennies" binding:"required"`
+	IntervalType        string          `json:"interval_type"`
+	IntervalCount       int32           `json:"interval_count"`
+	TermLength          int32           `json:"term_length"`
+	Metadata            json.RawMessage `json:"metadata" swaggertype:"object"`
+}
+
 // ProductResponse represents the standardized API response for product operations
 type ProductResponse struct {
-	ID              string                 `json:"id"`
-	Object          string                 `json:"object"`
-	WorkspaceID     string                 `json:"workspace_id"`
-	WalletID        string                 `json:"wallet_id"`
-	Name            string                 `json:"name"`
-	Description     string                 `json:"description,omitempty"`
-	ProductType     string                 `json:"product_type"`
-	IntervalType    string                 `json:"interval_type,omitempty"`
-	Currency        string                 `json:"currency"`
-	TermLength      int32                  `json:"term_length,omitempty"`
-	PriceInPennies  int32                  `json:"price_in_pennies"`
-	ImageURL        string                 `json:"image_url,omitempty"`
-	URL             string                 `json:"url,omitempty"`
-	MerchantPaidGas bool                   `json:"merchant_paid_gas"`
-	Active          bool                   `json:"active"`
-	Metadata        json.RawMessage        `json:"metadata,omitempty" swaggertype:"object"`
-	CreatedAt       int64                  `json:"created_at"`
-	UpdatedAt       int64                  `json:"updated_at"`
-	ProductTokens   []ProductTokenResponse `json:"product_tokens,omitempty"`
+	ID            string                 `json:"id"`
+	Object        string                 `json:"object"`
+	WorkspaceID   string                 `json:"workspace_id"`
+	WalletID      string                 `json:"wallet_id"`
+	Name          string                 `json:"name"`
+	Description   string                 `json:"description,omitempty"`
+	ImageURL      string                 `json:"image_url,omitempty"`
+	URL           string                 `json:"url,omitempty"`
+	Active        bool                   `json:"active"`
+	Metadata      json.RawMessage        `json:"metadata,omitempty" swaggertype:"object"`
+	CreatedAt     int64                  `json:"created_at"`
+	UpdatedAt     int64                  `json:"updated_at"`
+	Prices        []PriceResponse        `json:"prices,omitempty"`
+	ProductTokens []ProductTokenResponse `json:"product_tokens,omitempty"`
 }
 
 // CreateProductRequest represents the request body for creating a product
 type CreateProductRequest struct {
-	Name            string                      `json:"name" binding:"required"`
-	WalletID        string                      `json:"wallet_id" binding:"required"`
-	Description     string                      `json:"description"`
-	ProductType     string                      `json:"product_type" binding:"required"`
-	IntervalType    string                      `json:"interval_type"`
-	TermLength      int32                       `json:"term_length"`
-	Currency        string                      `json:"currency"`
-	PriceInPennies  int32                       `json:"price_in_pennies" binding:"required"`
-	ImageURL        string                      `json:"image_url"`
-	URL             string                      `json:"url"`
-	MerchantPaidGas bool                        `json:"merchant_paid_gas"`
-	Active          bool                        `json:"active"`
-	Metadata        json.RawMessage             `json:"metadata" swaggertype:"object"`
-	ProductTokens   []CreateProductTokenRequest `json:"product_tokens,omitempty"`
+	Name          string                      `json:"name" binding:"required"`
+	WalletID      string                      `json:"wallet_id" binding:"required"`
+	Description   string                      `json:"description"`
+	ImageURL      string                      `json:"image_url"`
+	URL           string                      `json:"url"`
+	Active        bool                        `json:"active"`
+	Metadata      json.RawMessage             `json:"metadata" swaggertype:"object"`
+	Prices        []CreatePriceRequest        `json:"prices" binding:"required,dive"`
+	ProductTokens []CreateProductTokenRequest `json:"product_tokens,omitempty"`
 }
 
 // UpdateProductRequest represents the request body for updating a product
 type UpdateProductRequest struct {
-	Name            string                      `json:"name,omitempty"`
-	WalletID        string                      `json:"wallet_id,omitempty"`
-	Description     string                      `json:"description,omitempty"`
-	ProductType     string                      `json:"product_type,omitempty"`
-	IntervalType    string                      `json:"interval_type,omitempty"`
-	Currency        string                      `json:"currency,omitempty"`
-	TermLength      *int32                      `json:"term_length,omitempty"`
-	PriceInPennies  *int32                      `json:"price_in_pennies,omitempty"`
-	ImageURL        string                      `json:"image_url,omitempty"`
-	URL             string                      `json:"url,omitempty"`
-	MerchantPaidGas *bool                       `json:"merchant_paid_gas,omitempty"`
-	Active          *bool                       `json:"active,omitempty"`
-	Metadata        json.RawMessage             `json:"metadata,omitempty" swaggertype:"object"`
-	ProductTokens   []CreateProductTokenRequest `json:"product_tokens,omitempty"`
+	Name          string                      `json:"name,omitempty"`
+	WalletID      string                      `json:"wallet_id,omitempty"`
+	Description   string                      `json:"description,omitempty"`
+	ImageURL      string                      `json:"image_url,omitempty"`
+	URL           string                      `json:"url,omitempty"`
+	Active        *bool                       `json:"active,omitempty"`
+	Metadata      json.RawMessage             `json:"metadata,omitempty" swaggertype:"object"`
+	ProductTokens []CreateProductTokenRequest `json:"product_tokens,omitempty"`
+}
+
+type PublicProductResponse struct {
+	ID                      string                       `json:"id"`
+	AccountID               string                       `json:"account_id"`
+	WorkspaceID             string                       `json:"workspace_id"`
+	WalletAddress           string                       `json:"wallet_address"`
+	Name                    string                       `json:"name"`
+	Description             string                       `json:"description"`
+	ImageURL                string                       `json:"image_url,omitempty"`
+	URL                     string                       `json:"url,omitempty"`
+	ProductTokens           []PublicProductTokenResponse `json:"product_tokens,omitempty"`
+	Price                   PriceResponse                `json:"price"`
+	SmartAccountAddress     string                       `json:"smart_account_address,omitempty"`
+	SmartAccountExplorerURL string                       `json:"smart_account_explorer_url,omitempty"`
+	SmartAccountNetwork     string                       `json:"smart_account_network,omitempty"`
+}
+
+type PublicProductTokenResponse struct {
+	ProductTokenID string `json:"product_token_id"`
+	NetworkID      string `json:"network_id"`
+	NetworkName    string `json:"network_name"`
+	NetworkChainID string `json:"network_chain_id"`
+	TokenID        string `json:"token_id"`
+	TokenAddress   string `json:"token_address"`
+	TokenName      string `json:"token_name"`
+	TokenSymbol    string `json:"token_symbol"`
+	TokenImageURL  string `json:"token_image_url"`
+	TokenDecimals  int32  `json:"token_decimals"`
 }
 
 // ListProductsResponse represents the paginated response for product list operations
@@ -125,13 +152,6 @@ type ListProductsResponse struct {
 	Total   int64             `json:"total"`
 }
 
-// PublishProductResponse represents the response for publishing a product
-type PublishProductResponse struct {
-	Message               string `json:"message"`
-	CypheraProductId      string `json:"cyphera_product_id"`
-	CypheraProductTokenId string `json:"cyphera_product_token_id"`
-}
-
 // CaveatStruct represents a single caveat in a delegation
 type CaveatStruct struct {
 	// TODO: add caveat fields
@@ -140,20 +160,12 @@ type CaveatStruct struct {
 
 // DelegationStruct represents the delegation data structure
 type DelegationStruct struct {
-	Delegate  string         `json:"delegate"`  // Hex string from viem
-	Delegator string         `json:"delegator"` // Hex string from viem
-	Authority string         `json:"authority"` // Hex string from viem
+	Delegate  string         `json:"delegate"`
+	Delegator string         `json:"delegator"`
+	Authority string         `json:"authority"`
 	Caveats   []CaveatStruct `json:"caveats"`
-	Salt      string         `json:"salt"`      // bigint represented as string
-	Signature string         `json:"signature"` // Hex string from viem
-}
-
-// SubscribeRequest represents the request body for subscribing to a product
-type SubscribeRequest struct {
-	SubscriberAddress string           `json:"subscriber_address" binding:"required"`
-	ProductTokenID    string           `json:"product_token_id" binding:"required"`
-	TokenAmount       string           `json:"token_amount" binding:"required"` // string to avoid precision loss, big ints are not supported by json
-	Delegation        DelegationStruct `json:"delegation" binding:"required"`
+	Salt      string         `json:"salt"`
+	Signature string         `json:"signature"`
 }
 
 const (
@@ -196,32 +208,53 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, toProductResponse(product))
-}
-
-// GetPublicProductByID godoc
-// @Summary Get public product by ID
-// @Description Get public product details by product ID
-// @Tags products
-// @Accept json
-// @Produce json
-// @Param product_id path string true "Product ID"
-// @Success 200 {object} ProductResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /products/public/{product_id} [get]
-func (h *ProductHandler) GetPublicProductByID(c *gin.Context) {
-	productId := c.Param("product_id")
-	parsedUUID, err := uuid.Parse(productId)
+	dbPrices, err := h.common.db.ListPricesByProduct(c.Request.Context(), product.ID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve prices for product", err)
 		return
 	}
 
-	product, err := h.common.db.GetProductWithoutWorkspaceId(c.Request.Context(), parsedUUID)
+	sendSuccess(c, http.StatusOK, toProductResponse(product, dbPrices))
+}
+
+// GetPublicProductByID godoc
+// @Summary Get public product and price details by Price ID
+// @Description Get public product and specific price details by Price ID
+// @Tags products
+// @Accept json
+// @Produce json
+// @Param price_id path string true "Price ID"
+// @Success 200 {object} PublicProductResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /public/prices/{price_id} [get]
+func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
+	priceIDStr := c.Param("price_id")
+	parsedPriceID, err := uuid.Parse(priceIDStr)
 	if err != nil {
-		handleDBError(c, err, "Product not found")
+		sendError(c, http.StatusBadRequest, "Invalid price ID format", err)
+		return
+	}
+
+	price, err := h.common.db.GetPrice(c.Request.Context(), parsedPriceID)
+	if err != nil {
+		handleDBError(c, err, "Price not found")
+		return
+	}
+
+	if !price.Active {
+		sendError(c, http.StatusNotFound, "Price is not active", nil)
+		return
+	}
+
+	product, err := h.common.db.GetProductWithoutWorkspaceId(c.Request.Context(), price.ProductID)
+	if err != nil {
+		handleDBError(c, err, "Product not found for the given price")
+		return
+	}
+
+	if !product.Active {
+		sendError(c, http.StatusNotFound, "Product associated with this price is not active", nil)
 		return
 	}
 
@@ -230,27 +263,26 @@ func (h *ProductHandler) GetPublicProductByID(c *gin.Context) {
 		WorkspaceID: product.WorkspaceID,
 	})
 	if err != nil {
-		handleDBError(c, err, "Wallet not found")
+		handleDBError(c, err, "Wallet not found for the product")
 		return
 	}
 
 	workspace, err := h.common.db.GetWorkspace(c.Request.Context(), product.WorkspaceID)
 	if err != nil {
-		handleDBError(c, err, "Workspace not found")
+		handleDBError(c, err, "Workspace not found for the product")
 		return
 	}
 
-	productTokens, err := h.common.db.GetActiveProductTokensByProduct(c.Request.Context(), parsedUUID)
+	productTokens, err := h.common.db.GetActiveProductTokensByProduct(c.Request.Context(), product.ID)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve product tokens", err)
 		return
 	}
 
-	response := toPublicProductResponse(workspace, product, productTokens, wallet)
+	response := toPublicProductResponse(workspace, product, price, productTokens, wallet)
 
-	// get the token Contract Address for each product_token variant
-	for i, productToken := range response.ProductTokens {
-		token, err := h.common.db.GetToken(c.Request.Context(), uuid.MustParse(productToken.TokenID))
+	for i, pt := range response.ProductTokens {
+		token, err := h.common.db.GetToken(c.Request.Context(), uuid.MustParse(pt.TokenID))
 		if err != nil {
 			sendError(c, http.StatusInternalServerError, "Failed to retrieve token", err)
 			return
@@ -261,24 +293,24 @@ func (h *ProductHandler) GetPublicProductByID(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, response)
 }
 
-// SubscribeToProduct godoc
-// @Summary Subscribe to a product
-// @Description Creates a subscription for a product with the given delegation
+// SubscribeToProductByPriceID godoc
+// @Summary Subscribe to a product's price
+// @Description Creates a subscription for a product's specific price with the given delegation
 // @Tags products
 // @Accept json
 // @Produce json
-// @Param product_id path string true "Product ID"
+// @Param price_id path string true "Price ID to subscribe to"
 // @Param subscription body SubscribeRequest true "Subscription details"
 // @Success 201 {object} db.Subscription
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
-// @Router /products/{product_id}/subscribe [post]
-func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
+// @Router /prices/{price_id}/subscribe [post]
+func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 	ctx := c.Request.Context()
-	productID := c.Param("product_id")
-	parsedProductID, err := uuid.Parse(productID)
+	priceIDStr := c.Param("price_id")
+	parsedPriceID, err := uuid.Parse(priceIDStr)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
+		sendError(c, http.StatusBadRequest, "Invalid price ID format", err)
 		return
 	}
 
@@ -287,34 +319,41 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 		sendError(c, http.StatusBadRequest, "Invalid request format", err)
 		return
 	}
+	request.PriceID = priceIDStr
 
-	// Initial request validation
-	if err := h.validateSubscriptionRequest(request, parsedProductID); err != nil {
+	price, err := h.common.db.GetPrice(ctx, parsedPriceID)
+	if err != nil {
+		handleDBError(c, err, "Price not found")
+		return
+	}
+
+	if !price.Active {
+		sendError(c, http.StatusBadRequest, "Cannot subscribe to inactive price", nil)
+		return
+	}
+
+	product, err := h.common.db.GetProductWithoutWorkspaceId(ctx, price.ProductID)
+	if err != nil {
+		handleDBError(c, err, "Product associated with the price not found")
+		return
+	}
+
+	if err := h.validateSubscriptionRequest(request, product.ID); err != nil {
 		sendError(c, http.StatusBadRequest, err.Error(), err)
 		return
 	}
 
-	// Parse the product token ID
+	if !product.Active {
+		sendError(c, http.StatusBadRequest, "Cannot subscribe to a price of an inactive product", nil)
+		return
+	}
+
 	parsedProductTokenID, err := uuid.Parse(request.ProductTokenID)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid product token ID format", err)
 		return
 	}
 
-	// Get product details first to verify it exists
-	product, err := h.common.db.GetProductWithoutWorkspaceId(ctx, parsedProductID)
-	if err != nil {
-		handleDBError(c, err, "Product not found")
-		return
-	}
-
-	// Verify the product is active
-	if !product.Active {
-		sendError(c, http.StatusBadRequest, "Cannot subscribe to inactive product", nil)
-		return
-	}
-
-	// retrieve the merchant's wallet details
 	merchantWallet, err := h.common.db.GetWalletByID(ctx, db.GetWalletByIDParams{
 		ID:          product.WalletID,
 		WorkspaceID: product.WorkspaceID,
@@ -324,14 +363,12 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 		return
 	}
 
-	// Get product token details to verify it exists and is associated with the product
 	productToken, err := h.common.db.GetProductToken(ctx, parsedProductTokenID)
 	if err != nil {
 		handleDBError(c, err, "Product token not found")
 		return
 	}
 
-	// get the token details
 	token, err := h.common.db.GetToken(ctx, productToken.TokenID)
 	if err != nil {
 		handleDBError(c, err, "Token not found")
@@ -344,7 +381,6 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 		return
 	}
 
-	// parse the token amount
 	tokenAmount, err := strconv.ParseInt(request.TokenAmount, 10, 64)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid token amount format", err)
@@ -360,16 +396,13 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 		NetworkName:          network.Name,
 	}
 
-	// Verify product token is associated with product
-	if productToken.ProductID != parsedProductID {
+	if productToken.ProductID != product.ID {
 		sendError(c, http.StatusBadRequest, "Product token does not belong to the specified product", nil)
 		return
 	}
 
-	// Normalize the wallet address (lowercase for Ethereum addresses)
 	normalizedAddress := normalizeWalletAddress(request.SubscriberAddress, determineNetworkType(productToken.NetworkType))
 
-	// Begin database transaction
 	tx, qtx, err := h.common.BeginTx(ctx)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to start transaction", err)
@@ -379,106 +412,79 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 		if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
 			logger.Error("Failed to rollback transaction", zap.Error(err))
 		}
-	}() // Will be ignored if committed
+	}()
 
-	// Process customer and wallet, create new customer and wallet if they don't exist
 	customer, customerWallet, err := h.processCustomerAndWallet(ctx, qtx, normalizedAddress, product, productToken)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to process customer or wallet", err)
 		return
 	}
 
-	// Check for existing subscription
 	subscriptions, err := h.common.db.ListSubscriptionsByCustomer(ctx, customer.ID)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to check for existing subscription", err)
 		return
 	}
 
-	// Check if there's an active subscription for this product
 	var existingSubscription *db.Subscription
 	for i, sub := range subscriptions {
-		if sub.ProductID == product.ID && sub.Status == db.SubscriptionStatusActive {
+		if sub.PriceID == price.ID && sub.Status == db.SubscriptionStatusActive {
 			existingSubscription = &subscriptions[i]
 			break
 		}
 	}
 
 	if existingSubscription != nil {
-		logger.Info("Subscription already exists",
+		logger.Info("Subscription already exists for this price",
 			zap.String("subscription_id", existingSubscription.ID.String()),
 			zap.String("customer_id", customer.ID.String()),
-			zap.String("product_id", product.ID.String()))
+			zap.String("price_id", price.ID.String()))
 
-		// Create an error to log
-		duplicateErr := fmt.Errorf("subscription already exists for customer %s and product %s", customer.ID, product.ID)
+		duplicateErr := fmt.Errorf("subscription already exists for customer %s and price %s", customer.ID, price.ID)
+		h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, duplicateErr)
 
-		// Log the failed subscription attempt
-		h.logFailedSubscriptionCreation(
-			ctx,
-			&customer.ID,
-			product,
-			productToken,
-			normalizedAddress,
-			request.Delegation.Signature,
-			duplicateErr,
-		)
-
-		// Commit the transaction if we're using one
 		if tx != nil {
 			if commitErr := tx.Commit(ctx); commitErr != nil {
 				logger.Error("Failed to commit transaction", zap.Error(commitErr))
 			}
 		}
 
-		// Return a conflict response with the existing subscription details
 		c.JSON(http.StatusConflict, gin.H{
-			"message":      "Subscription already exists",
+			"message":      "Subscription already exists for this price",
 			"subscription": existingSubscription,
 		})
 		return
 	}
 
-	// Store delegation information
 	delegationData, err := h.storeDelegationData(ctx, qtx, request.Delegation)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to store delegation data", err)
 		return
 	}
 
-	// Calculate subscription periods
-	periodStart, periodEnd, nextRedemption := h.calculateSubscriptionPeriods(product)
+	periodStart, periodEnd, nextRedemption := h.calculateSubscriptionPeriods(price)
 
-	spew.Dump(product)
-
-	// Create the subscription
 	subscription, err := h.createSubscription(ctx, qtx, CreateSubscriptionParams{
-		Customer:        customer,
-		CustomerWallet:  customerWallet,
-		ProductID:       parsedProductID,
-		ProductTokenID:  parsedProductTokenID,
-		TokenAmount:     tokenAmount,
-		Currency:        product.Currency,
-		PriceInPennies:  product.PriceInPennies,
-		IntervalType:    product.IntervalType.IntervalType,
-		DelegationData:  delegationData,
-		PeriodStart:     periodStart,
-		PeriodEnd:       periodEnd,
-		NextRedemption:  nextRedemption,
-		TotalTermLength: product.TermLength.Int32,
+		Customer:       customer,
+		CustomerWallet: customerWallet,
+		ProductID:      product.ID,
+		Price:          price,
+		ProductTokenID: parsedProductTokenID,
+		TokenAmount:    tokenAmount,
+		DelegationData: delegationData,
+		PeriodStart:    periodStart,
+		PeriodEnd:      periodEnd,
+		NextRedemption: nextRedemption,
 	})
 	if err != nil {
-		// Log the failed subscription attempt
-		h.logFailedSubscriptionCreation(ctx, &customer.ID, product, productToken, normalizedAddress, request.Delegation.Signature, err)
-
+		h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, err)
 		sendError(c, http.StatusInternalServerError, "Failed to create subscription", err)
 		return
 	}
 
-	// Create a subscription creation event
 	eventMetadata, _ := json.Marshal(map[string]interface{}{
 		"product_name":   product.Name,
-		"product_type":   product.ProductType,
+		"price_type":     price.Type,
 		"wallet_address": customerWallet.WalletAddress,
 		"network_type":   customerWallet.NetworkType,
 	})
@@ -487,7 +493,7 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 		SubscriptionID: subscription.ID,
 		EventType:      db.SubscriptionEventTypeCreated,
 		OccurredAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		AmountInCents:  product.PriceInPennies,
+		AmountInCents:  price.UnitAmountInPennies,
 		Metadata:       eventMetadata,
 	})
 	if err != nil {
@@ -499,25 +505,19 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 		zap.String("subscription_id", subscription.ID.String()),
 		zap.String("event_type", string(db.SubscriptionEventTypeCreated)))
 
-	// Commit the transaction before attempting redemption
-	// This ensures the subscription is saved even if redemption fails
 	if err := tx.Commit(ctx); err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to commit transaction", err)
 		return
 	}
 
-	// Execute initial redemption (outside transaction to avoid long-running transactions)
-	updatedSubscription, err := h.performInitialRedemption(ctx, customer, customerWallet, subscription, product, productToken, request.Delegation, executionObject)
+	updatedSubscription, err := h.performInitialRedemption(ctx, customer, customerWallet, subscription, product, price, productToken, request.Delegation, executionObject)
 	if err != nil {
-		// we fail here the subscription is created and marked as failed
-		// Additionally mark with deleted_at to indicate it was never successfully active
 		logger.Error("Initial redemption failed, subscription marked as failed and soft-deleted",
 			zap.Error(err),
 			zap.String("subscription_id", subscription.ID.String()),
 			zap.String("customer_id", customer.ID.String()),
-			zap.String("product_id", product.ID.String()))
+			zap.String("price_id", price.ID.String()))
 
-		// Update the subscription status to 'failed'
 		_, updateErr := h.common.db.UpdateSubscriptionStatus(ctx, db.UpdateSubscriptionStatusParams{
 			ID:     subscription.ID,
 			Status: db.SubscriptionStatusFailed,
@@ -529,8 +529,6 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 				zap.String("subscription_id", subscription.ID.String()))
 		}
 
-		// Soft delete the subscription while keeping it in the database
-		// This marks it as deleted but preserves the record for troubleshooting
 		deleteErr := h.common.db.DeleteSubscription(ctx, subscription.ID)
 		if deleteErr != nil {
 			logger.Error("Failed to soft-delete subscription after redemption failure",
@@ -538,13 +536,12 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 				zap.String("subscription_id", subscription.ID.String()))
 		}
 
-		// Create a subscription event with the failed_redemption data
 		errorMsg := fmt.Sprintf("Initial redemption failed: %v", err)
 		_, eventErr := h.common.db.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
 			SubscriptionID:  subscription.ID,
 			EventType:       db.SubscriptionEventTypeFailedRedemption,
 			TransactionHash: pgtype.Text{String: "", Valid: false},
-			AmountInCents:   product.PriceInPennies,
+			AmountInCents:   price.UnitAmountInPennies,
 			ErrorMessage:    pgtype.Text{String: errorMsg, Valid: true},
 			OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
 			Metadata:        json.RawMessage(`{}`),
@@ -565,17 +562,18 @@ func (h *ProductHandler) SubscribeToProduct(c *gin.Context) {
 
 // validateSubscriptionRequest validates the basic request parameters
 func (h *ProductHandler) validateSubscriptionRequest(request SubscribeRequest, productID uuid.UUID) error {
-	// Check if subscriber address is valid
 	if request.SubscriberAddress == "" {
 		return fmt.Errorf("subscriber address is required")
 	}
 
-	// Basic validation of product token ID format
+	if _, err := uuid.Parse(request.PriceID); err != nil {
+		return fmt.Errorf("invalid price ID format")
+	}
+
 	if _, err := uuid.Parse(request.ProductTokenID); err != nil {
 		return fmt.Errorf("invalid product token ID format")
 	}
 
-	// parse the token amount
 	tokenAmount, err := strconv.ParseInt(request.TokenAmount, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid token amount format")
@@ -585,12 +583,10 @@ func (h *ProductHandler) validateSubscriptionRequest(request SubscribeRequest, p
 		return fmt.Errorf("token amount must be greater than 0")
 	}
 
-	// check if delegate address matches cyphera wallet address
 	if request.Delegation.Delegate != h.common.GetCypheraSmartWalletAddress() {
 		return fmt.Errorf("delegate address does not match cyphera smart wallet address, %s != %s", request.Delegation.Delegate, h.common.GetCypheraSmartWalletAddress())
 	}
 
-	// Validate delegation data
 	if request.Delegation.Delegate == "" || request.Delegation.Delegator == "" ||
 		request.Delegation.Authority == "" || request.Delegation.Salt == "" ||
 		request.Delegation.Signature == "" {
@@ -602,11 +598,9 @@ func (h *ProductHandler) validateSubscriptionRequest(request SubscribeRequest, p
 
 // normalizeWalletAddress ensures consistent wallet address format based on network type
 func normalizeWalletAddress(address, networkType string) string {
-	// For EVM addresses, convert to lowercase
 	if networkType == string(db.NetworkTypeEvm) {
 		return strings.ToLower(address)
 	}
-	// For other network types, return as is (for now)
 	return address
 }
 
@@ -618,7 +612,6 @@ func (h *ProductHandler) processCustomerAndWallet(
 	product db.Product,
 	productToken db.GetProductTokenRow,
 ) (db.Customer, db.CustomerWallet, error) {
-	// Look for existing customer with this wallet
 	customers, err := tx.GetCustomersByWalletAddress(ctx, walletAddress)
 	if err != nil {
 		logger.Error("Failed to check for existing customers",
@@ -627,15 +620,12 @@ func (h *ProductHandler) processCustomerAndWallet(
 		return db.Customer{}, db.CustomerWallet{}, err
 	}
 
-	// Get network type from product token
 	networkType := determineNetworkType(productToken.NetworkType)
 
 	if len(customers) == 0 {
-		// No existing customer, create new one
 		return h.createNewCustomerWithWallet(ctx, tx, walletAddress, product, networkType)
 	}
 
-	// Use the first (most recent) customer found
 	customer := customers[0]
 	customerWallet, err := h.findOrCreateCustomerWallet(ctx, tx, customer, walletAddress, networkType, product.ID.String())
 
@@ -654,7 +644,6 @@ func (h *ProductHandler) createNewCustomerWithWallet(
 		zap.String("wallet_address", walletAddress),
 		zap.String("product_id", product.ID.String()))
 
-	// Create customer metadata
 	metadata := map[string]interface{}{
 		"source":                  "product_subscription",
 		"created_from_product_id": product.ID.String(),
@@ -665,7 +654,6 @@ func (h *ProductHandler) createNewCustomerWithWallet(
 		return db.Customer{}, db.CustomerWallet{}, err
 	}
 
-	// Create customer
 	createCustomerParams := db.CreateCustomerParams{
 		WorkspaceID: product.WorkspaceID,
 		Email: pgtype.Text{
@@ -688,7 +676,6 @@ func (h *ProductHandler) createNewCustomerWithWallet(
 		return db.Customer{}, db.CustomerWallet{}, err
 	}
 
-	// Create wallet metadata
 	walletMetadata := map[string]interface{}{
 		"source":     "product_subscription",
 		"product_id": product.ID.String(),
@@ -699,7 +686,6 @@ func (h *ProductHandler) createNewCustomerWithWallet(
 		return db.Customer{}, db.CustomerWallet{}, err
 	}
 
-	// Create customer wallet
 	createWalletParams := db.CreateCustomerWalletParams{
 		CustomerID:    customer.ID,
 		WalletAddress: walletAddress,
@@ -732,29 +718,24 @@ func (h *ProductHandler) findOrCreateCustomerWallet(
 	networkType string,
 	productID string,
 ) (db.CustomerWallet, error) {
-	// List customer's wallets
 	wallets, err := tx.ListCustomerWallets(ctx, customer.ID)
 	if err != nil {
 		return db.CustomerWallet{}, err
 	}
 
-	// Check if wallet with this address already exists
 	for _, wallet := range wallets {
 		if strings.EqualFold(wallet.WalletAddress, walletAddress) {
-			// Update last used timestamp
 			updatedWallet, err := tx.UpdateCustomerWalletUsageTime(ctx, wallet.ID)
 			if err != nil {
 				logger.Warn("Failed to update wallet usage time",
 					zap.Error(err),
 					zap.String("wallet_id", wallet.ID.String()))
-				// Continue with the existing wallet anyway
 				return wallet, nil
 			}
 			return updatedWallet, nil
 		}
 	}
 
-	// Create wallet metadata
 	walletMetadata := map[string]interface{}{
 		"source":     "product_subscription",
 		"product_id": productID,
@@ -765,7 +746,6 @@ func (h *ProductHandler) findOrCreateCustomerWallet(
 		return db.CustomerWallet{}, err
 	}
 
-	// Create a new wallet for the customer
 	createWalletParams := db.CreateCustomerWalletParams{
 		CustomerID:    customer.ID,
 		WalletAddress: walletAddress,
@@ -775,7 +755,7 @@ func (h *ProductHandler) findOrCreateCustomerWallet(
 			Valid:  true,
 		},
 		IsPrimary: pgtype.Bool{
-			Bool:  len(wallets) == 0, // Primary if it's the first wallet
+			Bool:  len(wallets) == 0,
 			Valid: true,
 		},
 		Verified: pgtype.Bool{
@@ -806,26 +786,23 @@ func (h *ProductHandler) storeDelegationData(
 	return tx.CreateDelegationData(ctx, delegationParams)
 }
 
-// calculateSubscriptionPeriods determines the start, end, and next redemption dates
-func (h *ProductHandler) calculateSubscriptionPeriods(product db.Product) (time.Time, time.Time, time.Time) {
+// calculateSubscriptionPeriods determines the start, end, and next redemption dates based on a price
+func (h *ProductHandler) calculateSubscriptionPeriods(price db.Price) (time.Time, time.Time, time.Time) {
 	now := time.Now()
 	periodStart := now
 	var periodEnd time.Time
 	var nextRedemption time.Time
 
-	// For recurring products, calculate end date based on interval
-	termLength := 1 // Default term length
-	if product.TermLength.Valid {
-		termLength = int(product.TermLength.Int32)
+	termLength := 1
+	if price.TermLength.Valid {
+		termLength = int(price.TermLength.Int32)
 	}
 
-	if product.ProductType == db.ProductTypeRecurring {
-		periodEnd = CalculatePeriodEnd(now, product.IntervalType.IntervalType, int32(termLength))
-		nextRedemption = CalculateNextRedemption(product.IntervalType.IntervalType, now)
-	} else { // One-off product
-		// For one-off products, end date is same as start
+	if price.Type == db.PriceTypeRecurring {
+		periodEnd = CalculatePeriodEnd(now, price.IntervalType.IntervalType, int32(termLength))
+		nextRedemption = CalculateNextRedemption(price.IntervalType.IntervalType, now)
+	} else {
 		periodEnd = now
-		// For one-off products, nextRedemption is now for immediate redemption
 		nextRedemption = now
 	}
 
@@ -838,37 +815,27 @@ func (h *ProductHandler) createSubscription(
 	tx *db.Queries,
 	params CreateSubscriptionParams,
 ) (db.Subscription, error) {
-	// Create metadata with important context
 	metadata := map[string]interface{}{
 		"created_at":     time.Now().Format(time.RFC3339),
 		"wallet_address": params.CustomerWallet.WalletAddress,
 		"network_type":   params.CustomerWallet.NetworkType,
+		"price_id":       params.Price.ID.String(),
 	}
 	subscriptionMetadataBytes, err := json.Marshal(metadata)
 	if err != nil {
 		return db.Subscription{}, err
 	}
 
-	spew.Dump(params)
-	spew.Dump(params.TotalTermLength)
-
-	// Create subscription params
 	subscriptionParams := db.CreateSubscriptionParams{
 		CustomerID:     params.Customer.ID,
 		ProductID:      params.ProductID,
+		PriceID:        params.Price.ID,
 		ProductTokenID: params.ProductTokenID,
 		TokenAmount: pgtype.Numeric{
 			Int:   big.NewInt(int64(params.TokenAmount)),
 			Valid: true,
 		},
-		Currency: params.Currency,
-		ProductPriceInPennies: pgtype.Numeric{
-			Int:   big.NewInt(int64(params.PriceInPennies)),
-			Valid: true,
-		},
-		IntervalType:    params.IntervalType,
-		TotalTermLength: params.TotalTermLength,
-		DelegationID:    params.DelegationData.ID,
+		DelegationID: params.DelegationData.ID,
 		CustomerWalletID: pgtype.UUID{
 			Bytes: params.CustomerWallet.ID,
 			Valid: true,
@@ -891,11 +858,10 @@ func (h *ProductHandler) createSubscription(
 		Metadata:           subscriptionMetadataBytes,
 	}
 
-	spew.Dump(subscriptionParams)
-
 	logger.Info("Creating new subscription",
 		zap.String("customer_id", params.Customer.ID.String()),
 		zap.String("product_id", params.ProductID.String()),
+		zap.String("price_id", params.Price.ID.String()),
 		zap.String("customer_wallet_id", params.CustomerWallet.ID.String()))
 
 	return tx.CreateSubscription(ctx, subscriptionParams)
@@ -908,6 +874,7 @@ func (h *ProductHandler) performInitialRedemption(
 	customerWallet db.CustomerWallet,
 	subscription db.Subscription,
 	product db.Product,
+	price db.Price,
 	productToken db.GetProductTokenRow,
 	delegation DelegationStruct,
 	executionObject dsClient.ExecutionObject,
@@ -915,9 +882,8 @@ func (h *ProductHandler) performInitialRedemption(
 	logger.Info("Performing initial redemption",
 		zap.String("subscription_id", subscription.ID.String()),
 		zap.String("customer_id", customer.ID.String()),
-		zap.String("product_id", product.ID.String()))
+		zap.String("price_id", price.ID.String()))
 
-	// Marshal the delegation to JSON for the delegation client
 	rawCaveats := marshalCaveats(delegation.Caveats)
 	delegationData := dsClient.DelegationData{
 		Delegate:  delegation.Delegate,
@@ -928,22 +894,21 @@ func (h *ProductHandler) performInitialRedemption(
 		Signature: delegation.Signature,
 	}
 
-	// Convert the delegation data to JSON bytes
 	delegationBytes, err := json.Marshal(delegationData)
 	if err != nil {
 		return subscription, fmt.Errorf("failed to marshal delegation data: %w", err)
 	}
 
-	// Attempt to redeem the delegation
 	txHash, err := h.delegationClient.RedeemDelegation(ctx, delegationBytes, executionObject)
 	if err != nil {
 		return subscription, fmt.Errorf("delegation redemption failed: %w", err)
 	}
 
-	// Create enriched metadata for success event
 	metadata := map[string]interface{}{
 		"product_id":        product.ID.String(),
 		"product_name":      product.Name,
+		"price_id":          price.ID.String(),
+		"price_type":        price.Type,
 		"product_token_id":  productToken.ID.String(),
 		"token_symbol":      productToken.TokenSymbol,
 		"network_name":      productToken.NetworkName,
@@ -952,20 +917,19 @@ func (h *ProductHandler) performInitialRedemption(
 		"customer_name":     customer.Name.String,
 		"customer_email":    customer.Email.String,
 		"redemption_time":   time.Now().Unix(),
-		"subscription_type": string(product.ProductType),
+		"subscription_type": string(price.Type),
 		"tx_hash":           txHash,
 	}
 
 	metadataBytes, _ := json.Marshal(metadata)
 
-	// Record successful redemption event
 	successEventParams := db.CreateRedemptionEventParams{
 		SubscriptionID: subscription.ID,
 		TransactionHash: pgtype.Text{
 			String: txHash,
 			Valid:  true,
 		},
-		AmountInCents: product.PriceInPennies,
+		AmountInCents: price.UnitAmountInPennies,
 		Metadata:      metadataBytes,
 	}
 
@@ -974,28 +938,24 @@ func (h *ProductHandler) performInitialRedemption(
 		logger.Error("Failed to record successful redemption event",
 			zap.Error(eventErr),
 			zap.String("subscription_id", subscription.ID.String()))
-		// Continue despite the event recording error
 	}
 
-	// Update subscription with redemption info
 	var nextRedemptionDate pgtype.Timestamptz
-	if product.ProductType == db.ProductTypeRecurring {
-		nextDate := CalculateNextRedemption(product.IntervalType.IntervalType, time.Now())
+	if price.Type == db.PriceTypeRecurring {
+		nextDate := CalculateNextRedemption(price.IntervalType.IntervalType, time.Now())
 		nextRedemptionDate = pgtype.Timestamptz{
 			Time:  nextDate,
 			Valid: true,
 		}
 	} else {
-		// For one-off products, no next redemption
 		nextRedemptionDate = pgtype.Timestamptz{
 			Valid: false,
 		}
 	}
 
-	// Update subscription redemption details
 	updateParams := db.IncrementSubscriptionRedemptionParams{
 		ID:                 subscription.ID,
-		TotalAmountInCents: product.PriceInPennies,
+		TotalAmountInCents: price.UnitAmountInPennies,
 		NextRedemptionDate: nextRedemptionDate,
 	}
 
@@ -1007,13 +967,11 @@ func (h *ProductHandler) performInitialRedemption(
 		return subscription, err
 	}
 
-	// Update wallet last used timestamp
 	_, walletErr := h.common.db.UpdateCustomerWalletUsageTime(ctx, customerWallet.ID)
 	if walletErr != nil {
 		logger.Warn("Failed to update wallet last used timestamp",
 			zap.Error(walletErr),
 			zap.String("wallet_id", customerWallet.ID.String()))
-		// Not critical, continue
 	}
 
 	logger.Info("Initial redemption successful",
@@ -1023,8 +981,7 @@ func (h *ProductHandler) performInitialRedemption(
 	return updatedSubscription, nil
 }
 
-func toPublicProductResponse(workspace db.Workspace, product db.Product, productTokens []db.GetActiveProductTokensByProductRow, wallet db.Wallet) PublicProductResponse {
-	// Convert product tokens to public response format
+func toPublicProductResponse(workspace db.Workspace, product db.Product, price db.Price, productTokens []db.GetActiveProductTokensByProductRow, wallet db.Wallet) PublicProductResponse {
 	publicProductTokens := make([]PublicProductTokenResponse, len(productTokens))
 	for i, pt := range productTokens {
 		publicProductTokens[i] = PublicProductTokenResponse{
@@ -1039,80 +996,38 @@ func toPublicProductResponse(workspace db.Workspace, product db.Product, product
 		}
 	}
 
-	var intervalTypeStr string
-	if product.IntervalType.Valid {
-		intervalTypeStr = string(product.IntervalType.IntervalType)
-	}
-
 	return PublicProductResponse{
-		ProductID:               product.ID.String(),
+		ID:                      product.ID.String(),
 		AccountID:               workspace.AccountID.String(),
 		WorkspaceID:             workspace.ID.String(),
 		WalletAddress:           wallet.WalletAddress,
 		Name:                    product.Name,
 		Description:             product.Description.String,
-		ProductType:             string(product.ProductType),
-		IntervalType:            intervalTypeStr,
-		Currency:                string(product.Currency),
-		TermLength:              product.TermLength.Int32,
-		PriceInPennies:          product.PriceInPennies,
 		ImageURL:                product.ImageUrl.String,
-		MerchantPaidGas:         product.MerchantPaidGas,
+		URL:                     product.Url.String,
 		ProductTokens:           publicProductTokens,
+		Price:                   toPriceResponse(price),
 		SmartAccountAddress:     "",
 		SmartAccountExplorerURL: "",
 		SmartAccountNetwork:     "",
 	}
 }
 
-type PublicProductResponse struct {
-	ProductID               string                       `json:"product_id"`
-	AccountID               string                       `json:"account_id"`
-	WorkspaceID             string                       `json:"workspace_id"`
-	WalletAddress           string                       `json:"wallet_address"`
-	Name                    string                       `json:"name"`
-	Description             string                       `json:"description"`
-	ProductType             string                       `json:"product_type"`
-	IntervalType            string                       `json:"interval_type,omitempty"`
-	Currency                string                       `json:"currency"`
-	TermLength              int32                        `json:"term_length,omitempty"`
-	PriceInPennies          int32                        `json:"price_in_pennies"`
-	ImageURL                string                       `json:"image_url,omitempty"`
-	MerchantPaidGas         bool                         `json:"merchant_paid_gas"`
-	ProductTokens           []PublicProductTokenResponse `json:"product_tokens,omitempty"`
-	SmartAccountAddress     string                       `json:"smart_account_address,omitempty"`
-	SmartAccountExplorerURL string                       `json:"smart_account_explorer_url,omitempty"`
-	SmartAccountNetwork     string                       `json:"smart_account_network,omitempty"`
-}
-
-type PublicProductTokenResponse struct {
-	ProductTokenID string `json:"product_token_id"`
-	NetworkID      string `json:"network_id"`
-	NetworkName    string `json:"network_name"`
-	NetworkChainID string `json:"network_chain_id"`
-	TokenID        string `json:"token_id"`
-	TokenAddress   string `json:"token_address"`
-	TokenName      string `json:"token_name"`
-	TokenSymbol    string `json:"token_symbol"`
-	TokenImageURL  string `json:"token_image_url"`
-	TokenDecimals  int32  `json:"token_decimals"`
-}
-
-// validateProductType validates the product type and returns a db.ProductType if valid
-func validateProductType(productType string) (db.ProductType, error) {
-	if productType == "" {
-		return "", nil
+// validatePriceType validates the price type and returns a db.PriceType if valid
+func validatePriceType(priceTypeStr string) (db.PriceType, error) {
+	if priceTypeStr == "" {
+		return "", fmt.Errorf("price type is required")
 	}
-	if productType != constants.ProductTypeRecurring && productType != constants.ProductTypeOneOff {
-		return "", fmt.Errorf("invalid product type. Must be '%s' or '%s'", constants.ProductTypeRecurring, constants.ProductTypeOneOff)
+	if priceTypeStr != string(db.PriceTypeRecurring) && priceTypeStr != string(db.PriceTypeOneOff) {
+		return "", fmt.Errorf("invalid price type. Must be '%s' or '%s'", db.PriceTypeRecurring, db.PriceTypeOneOff)
 	}
-	return db.ProductType(productType), nil
+	return db.PriceType(priceTypeStr), nil
 }
 
 // validateCurrency validates the currency and returns a db.Currency if valid
 func validateCurrency(currency string) (db.Currency, error) {
 	if currency == "" {
-		return "", nil
+		return "", fmt.Errorf("currency is required")
 	}
 
 	validCurrencies := map[string]bool{
@@ -1152,7 +1067,7 @@ func validateIntervalType(intervalType string) (db.IntervalType, error) {
 // validateWalletID validates and parses the wallet ID
 func validateWalletID(walletID string) (uuid.UUID, error) {
 	if walletID == "" {
-		return uuid.Nil, nil
+		return uuid.Nil, fmt.Errorf("wallet ID is required")
 	}
 	parsed, err := uuid.Parse(walletID)
 	if err != nil {
@@ -1161,104 +1076,37 @@ func validateWalletID(walletID string) (uuid.UUID, error) {
 	return parsed, nil
 }
 
-// updateProductParams creates the update parameters for a product, setting all fields with either new or existing values
+// updateProductParams creates the update parameters for a product
 func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequest, existingProduct db.Product) (db.UpdateProductParams, error) {
 	params := db.UpdateProductParams{
-		ID: id,
-		// Always set all fields, either with new values (if changed) or existing values
-		Name:            existingProduct.Name,
-		Description:     existingProduct.Description,
-		ImageUrl:        existingProduct.ImageUrl,
-		Url:             existingProduct.Url,
-		ProductType:     existingProduct.ProductType,
-		IntervalType:    existingProduct.IntervalType,
-		Currency:        existingProduct.Currency,
-		TermLength:      existingProduct.TermLength,
-		PriceInPennies:  existingProduct.PriceInPennies,
-		MerchantPaidGas: existingProduct.MerchantPaidGas,
-		Active:          existingProduct.Active,
-		Metadata:        existingProduct.Metadata,
-		WalletID:        existingProduct.WalletID,
+		ID:          id,
+		Name:        existingProduct.Name,
+		Description: existingProduct.Description,
+		ImageUrl:    existingProduct.ImageUrl,
+		Url:         existingProduct.Url,
+		Active:      existingProduct.Active,
+		Metadata:    existingProduct.Metadata,
+		WalletID:    existingProduct.WalletID,
 	}
 
-	// Update name if provided and different
 	if req.Name != "" && req.Name != existingProduct.Name {
 		params.Name = req.Name
 	}
-
-	// Update description if provided and different
 	if req.Description != "" && req.Description != existingProduct.Description.String {
 		params.Description = pgtype.Text{String: req.Description, Valid: true}
 	}
-
-	// Update image URL if provided and different
 	if req.ImageURL != "" && req.ImageURL != existingProduct.ImageUrl.String {
 		params.ImageUrl = pgtype.Text{String: req.ImageURL, Valid: true}
 	}
-
-	// Update URL if provided and different
 	if req.URL != "" && req.URL != existingProduct.Url.String {
 		params.Url = pgtype.Text{String: req.URL, Valid: true}
 	}
-
-	// Update product type if provided and different
-	if req.ProductType != "" && string(existingProduct.ProductType) != req.ProductType {
-		productType, err := validateProductType(req.ProductType)
-		if err != nil {
-			return params, err
-		}
-		params.ProductType = productType
-	}
-
-	// Update currency if provided and different
-	if req.Currency != "" && req.Currency != string(existingProduct.Currency) {
-		currency, err := validateCurrency(req.Currency)
-		if err != nil {
-			return params, err
-		}
-		params.Currency = currency
-	}
-
-	// Update interval type if provided and different
-	var currentIntervalStr string
-	if existingProduct.IntervalType.Valid {
-		currentIntervalStr = string(existingProduct.IntervalType.IntervalType)
-	}
-
-	if req.IntervalType != "" && currentIntervalStr != req.IntervalType {
-		intervalType, err := validateIntervalType(req.IntervalType)
-		if err != nil {
-			return params, err
-		}
-		params.IntervalType = db.NullIntervalType{IntervalType: intervalType, Valid: true}
-	}
-
-	// Update term length if provided and different
-	if req.TermLength != nil && *req.TermLength != existingProduct.TermLength.Int32 {
-		params.TermLength = pgtype.Int4{Int32: *req.TermLength, Valid: true}
-	}
-
-	// Update price if provided and different
-	if req.PriceInPennies != nil && *req.PriceInPennies != existingProduct.PriceInPennies {
-		params.PriceInPennies = *req.PriceInPennies
-	}
-
-	// Update merchant paid gas if provided and different
-	if req.MerchantPaidGas != nil && *req.MerchantPaidGas != existingProduct.MerchantPaidGas {
-		params.MerchantPaidGas = *req.MerchantPaidGas
-	}
-
-	// Update active status if provided and different
 	if req.Active != nil && *req.Active != existingProduct.Active {
 		params.Active = *req.Active
 	}
-
-	// Update metadata if provided and different
 	if req.Metadata != nil && !bytes.Equal(req.Metadata, existingProduct.Metadata) {
 		params.Metadata = req.Metadata
 	}
-
-	// Update wallet ID if provided and different
 	if req.WalletID != "" && req.WalletID != existingProduct.WalletID.String() {
 		parsedWalletID, err := uuid.Parse(req.WalletID)
 		if err != nil {
@@ -1273,7 +1121,7 @@ func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequ
 // validatePaginationParams validates and returns pagination parameters
 func validatePaginationParams(c *gin.Context) (limit int32, page int32, err error) {
 	const maxLimit int32 = 100
-	limit = 10 // default limit
+	limit = 10
 
 	if limitStr := c.Query("limit"); limitStr != "" {
 		parsedLimit, err := strconv.ParseInt(limitStr, 10, 32)
@@ -1300,90 +1148,42 @@ func validatePaginationParams(c *gin.Context) (limit int32, page int32, err erro
 	return limit, page, nil
 }
 
-// validateProductUpdate validates all update parameters at once
+// validateProductUpdate validates core product update parameters
 func (h *ProductHandler) validateProductUpdate(c *gin.Context, req UpdateProductRequest, existingProduct db.Product) error {
-	// Validate name if provided
 	if req.Name != "" {
 		if len(req.Name) > 255 {
 			return fmt.Errorf("name must be less than 255 characters")
 		}
 	}
-
-	// Validate wallet if provided
 	if req.WalletID != "" {
 		parsedWalletID, err := uuid.Parse(req.WalletID)
 		if err != nil {
 			return fmt.Errorf("invalid wallet ID format: %w", err)
 		}
-
 		if err := h.validateWallet(c, parsedWalletID, existingProduct.WorkspaceID); err != nil {
 			return err
 		}
 	}
-
-	// Validate description if provided
 	if req.Description != "" {
 		if len(req.Description) > 1000 {
 			return fmt.Errorf("description must be less than 1000 characters")
 		}
 	}
-
-	// Validate currency if provided
-	if req.Currency != "" {
-		if _, err := validateCurrency(req.Currency); err != nil {
-			return err
-		}
-	}
-
-	// Validate product type if provided
-	if req.ProductType != "" {
-		if _, err := validateProductType(req.ProductType); err != nil {
-			return err
-		}
-	}
-
-	// Validate interval type if provided
-	if req.IntervalType != "" {
-		if _, err := validateIntervalType(req.IntervalType); err != nil {
-			return err
-		}
-	}
-
-	// Validate term length if provided
-	if req.TermLength != nil {
-		if err := validateTermLength(string(existingProduct.ProductType), *req.TermLength); err != nil {
-			return err
-		}
-	}
-
-	// Validate price if provided
-	if req.PriceInPennies != nil {
-		if err := validatePriceInPennies(*req.PriceInPennies); err != nil {
-			return err
-		}
-	}
-
-	// Validate image URL if provided
 	if req.ImageURL != "" {
 		if _, err := url.ParseRequestURI(req.ImageURL); err != nil {
 			return fmt.Errorf("invalid image URL format: %w", err)
 		}
 	}
-
-	// Validate URL if provided
 	if req.URL != "" {
 		if _, err := url.ParseRequestURI(req.URL); err != nil {
 			return fmt.Errorf("invalid URL format: %w", err)
 		}
 	}
-
-	// Validate metadata if provided
 	if req.Metadata != nil {
 		if !json.Valid(req.Metadata) {
 			return fmt.Errorf("invalid metadata JSON format")
 		}
 	}
-
 	return nil
 }
 
@@ -1408,7 +1208,6 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		return
 	}
 
-	// Get pagination parameters
 	limit, page, err := validatePaginationParams(c)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, err.Error(), err)
@@ -1424,14 +1223,12 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 
 	offset := (page - 1) * limit
 
-	// Get total count
 	total, err := h.common.db.CountProducts(c.Request.Context(), parsedWorkspaceID)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to count products", err)
 		return
 	}
 
-	// Get paginated products
 	products, err := h.common.db.ListProductsWithPagination(c.Request.Context(), db.ListProductsWithPaginationParams{
 		WorkspaceID: parsedWorkspaceID,
 		Limit:       limit,
@@ -1443,9 +1240,14 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 	}
 
 	responseList := make([]ProductResponse, len(products))
-	// for each product, get the active product tokens
 	for i, product := range products {
-		productResponse := toProductResponse(product)
+		dbPrices, err := h.common.db.ListPricesByProduct(c.Request.Context(), product.ID)
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve prices for product %s", product.ID), err)
+			return
+		}
+		productResponse := toProductResponse(product, dbPrices)
+
 		productTokenList, err := h.common.db.GetActiveProductTokensByProduct(c.Request.Context(), product.ID)
 		if err != nil {
 			sendError(c, http.StatusInternalServerError, "Failed to retrieve product tokens", err)
@@ -1459,7 +1261,6 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		responseList[i] = productResponse
 	}
 
-	// Calculate hasMore safely without integer overflow risk
 	var hasMore bool
 	if total > 0 {
 		hasMore = (int64(offset) + int64(limit)) < total
@@ -1475,50 +1276,19 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, listProductsResponse)
 }
 
-// ListActiveProducts godoc
-// @Summary List active products
-// @Description Retrieves all active products for a workspace
-// @Tags products
-// @Accept json
-// @Produce json
-// @Success 200 {object} ListProductsResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /products/active [get]
-func (h *ProductHandler) ListActiveProducts(c *gin.Context) {
-	workspaceID := c.GetHeader("X-Workspace-ID")
-	parsedWorkspaceID, err := uuid.Parse(workspaceID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
-		return
-	}
-
-	products, err := h.common.db.ListActiveProducts(c.Request.Context(), parsedWorkspaceID)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve active products", err)
-		return
-	}
-
-	responseList := make([]ProductResponse, len(products))
-	for i, product := range products {
-		responseList[i] = toProductResponse(product)
-	}
-
-	response := ListProductsResponse{
-		Object:  "list",
-		Data:    responseList,
-		HasMore: false,
-		Total:   int64(len(products)),
-	}
-
-	sendSuccess(c, http.StatusOK, response)
-}
-
-// validateTermLength validates the term length for recurring products
-func validateTermLength(productType string, termLength int32) error {
-	if productType == constants.ProductTypeRecurring && termLength <= 0 {
-		return fmt.Errorf("term length must be greater than 0 for recurring products")
+// validatePriceTermLength validates the term length for recurring prices
+func validatePriceTermLength(priceType db.PriceType, termLength int32, intervalType db.IntervalType, intervalCount int32) error {
+	if priceType == db.PriceTypeRecurring {
+		if intervalType == "" || intervalCount <= 0 {
+			return fmt.Errorf("interval_type and interval_count are required for recurring prices")
+		}
+		if termLength <= 0 {
+			return fmt.Errorf("term length must be greater than 0 for recurring prices")
+		}
+	} else if priceType == db.PriceTypeOneOff {
+		if intervalType != "" || intervalCount != 0 || termLength != 0 {
+			return fmt.Errorf("interval_type, interval_count, and term_length must not be set for one_off prices")
+		}
 	}
 	return nil
 }
@@ -1571,21 +1341,21 @@ func (h *ProductHandler) createProductTokens(c *gin.Context, productID uuid.UUID
 	return nil
 }
 
-// validatePriceInPennies validates that the price value is within int32 bounds
+// validatePriceInPennies validates that the price value is non-negative
 func validatePriceInPennies(price int32) error {
 	if price < 0 {
-		return fmt.Errorf("price_in_pennies cannot be negative")
+		return fmt.Errorf("unit_amount_in_pennies cannot be negative")
 	}
 	return nil
 }
 
 // CreateProduct godoc
 // @Summary Create product
-// @Description Creates a new product
+// @Description Creates a new product with associated prices
 // @Tags products
 // @Accept json
 // @Produce json
-// @Param product body CreateProductRequest true "Product creation data"
+// @Param product body CreateProductRequest true "Product and prices creation data"
 // @Success 201 {object} ProductResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -1605,80 +1375,55 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
-	// Validate product type
-	productType, err := validateProductType(req.ProductType)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), nil)
-		return
-	}
-
-	// Validate interval type
-	var intervalTypeValue db.NullIntervalType
-	if req.IntervalType != "" {
-		validatedInterval, err := validateIntervalType(req.IntervalType)
-		if err != nil {
-			sendError(c, http.StatusBadRequest, err.Error(), nil)
-			return
-		}
-		intervalTypeValue = db.NullIntervalType{IntervalType: validatedInterval, Valid: true}
-	} else {
-		intervalTypeValue = db.NullIntervalType{Valid: false}
-	}
-
-	// Validate wallet ID
 	parsedWalletID, err := validateWalletID(req.WalletID)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	// Validate term length
-	if err := validateTermLength(req.ProductType, req.TermLength); err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), nil)
-		return
-	}
-
-	// Validate price
-	if err := validatePriceInPennies(req.PriceInPennies); err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), nil)
-		return
-	}
-
-	// Validate wallet belongs to workspace
 	if err := h.validateWallet(c, parsedWalletID, parsedWorkspaceID); err != nil {
 		sendError(c, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	// Validate currency
-	currency, err := validateCurrency(req.Currency)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), nil)
-		return
-	}
-	// Create product
 	product, err := h.common.db.CreateProduct(c.Request.Context(), db.CreateProductParams{
-		WorkspaceID:     parsedWorkspaceID,
-		WalletID:        parsedWalletID,
-		Name:            req.Name,
-		Description:     pgtype.Text{String: req.Description, Valid: req.Description != ""},
-		ProductType:     productType,
-		IntervalType:    intervalTypeValue,
-		TermLength:      pgtype.Int4{Int32: req.TermLength, Valid: req.TermLength != 0},
-		Currency:        currency,
-		PriceInPennies:  req.PriceInPennies,
-		ImageUrl:        pgtype.Text{String: req.ImageURL, Valid: req.ImageURL != ""},
-		Url:             pgtype.Text{String: req.URL, Valid: req.URL != ""},
-		MerchantPaidGas: req.MerchantPaidGas,
-		Active:          req.Active,
-		Metadata:        req.Metadata,
+		WorkspaceID: parsedWorkspaceID,
+		WalletID:    parsedWalletID,
+		Name:        req.Name,
+		Description: pgtype.Text{String: req.Description, Valid: req.Description != ""},
+		ImageUrl:    pgtype.Text{String: req.ImageURL, Valid: req.ImageURL != ""},
+		Url:         pgtype.Text{String: req.URL, Valid: req.URL != ""},
+		Active:      req.Active,
+		Metadata:    req.Metadata,
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to create product", err)
 		return
 	}
 
-	// Create product tokens if provided
+	prices := make([]db.Price, len(req.Prices))
+
+	if len(req.Prices) > 0 {
+		for i, price := range req.Prices {
+			dbPrice, err := h.common.db.CreatePrice(c, db.CreatePriceParams{
+				ProductID:           product.ID,
+				Active:              price.Active,
+				Type:                db.PriceType(price.Type),
+				Nickname:            pgtype.Text{String: price.Nickname, Valid: true},
+				Currency:            db.Currency(price.Currency),
+				UnitAmountInPennies: price.UnitAmountInPennies,
+				IntervalType:        db.NullIntervalType{IntervalType: db.IntervalType(price.IntervalType), Valid: true},
+				TermLength:          pgtype.Int4{Int32: price.TermLength, Valid: true},
+				Metadata:            price.Metadata,
+			})
+			if err != nil {
+				sendError(c, http.StatusInternalServerError, "Failed to create prices", err)
+				return
+			}
+			prices[i] = dbPrice
+		}
+	}
+
 	if len(req.ProductTokens) > 0 {
 		if err := h.createProductTokens(c, product.ID, req.ProductTokens); err != nil {
 			sendError(c, http.StatusInternalServerError, "Failed to create product tokens", err)
@@ -1686,92 +1431,17 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		}
 	}
 
-	sendSuccess(c, http.StatusCreated, toProductResponse(product))
-}
-
-// @Param product_id path string true "Product ID"
-// @Success 200 {list} PublishProductResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /products/{product_id}/deploycontract [post]
-func (h *ProductHandler) PublishProduct(c *gin.Context) {
-	workspaceID := c.GetHeader("X-Workspace-ID")
-	parsedWorkspaceID, err := uuid.Parse(workspaceID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
-		return
-	}
-
-	productId := c.Param("product_id")
-	parsedProductID, err := uuid.Parse(productId)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
-		return
-	}
-
-	product, err := h.common.db.GetProduct(c.Request.Context(), db.GetProductParams{
-		ID:          parsedProductID,
-		WorkspaceID: parsedWorkspaceID,
-	})
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to get product", err)
-		return
-	}
-
-	productTokens, err := h.common.db.GetActiveProductTokensByProduct(c.Request.Context(), product.ID)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to get product tokens", err)
-		return
-	}
-
-	if len(productTokens) == 0 {
-		sendError(c, http.StatusBadRequest, "No active product tokens found", nil)
-		return
-	}
-
-	// dictionary mapping the token address to their network chainid and product token id
-	type NetworkTokenInfo struct {
-		TokenAddresses []string
-		ProductTokenID uuid.UUID
-	}
-
-	// dictionary mapping the network chainid to the token addresses and product token id
-	networkInfo := make(map[uuid.UUID]NetworkTokenInfo)
-	for _, token := range productTokens {
-		if info, exists := networkInfo[token.NetworkID]; exists {
-			// Append to existing token addresses for this network
-			info.TokenAddresses = append(info.TokenAddresses, token.ContractAddress)
-			networkInfo[token.NetworkID] = info
-		} else {
-			// Create new entry for this network
-			networkInfo[token.NetworkID] = NetworkTokenInfo{
-				TokenAddresses: []string{token.ContractAddress},
-				ProductTokenID: token.ID,
-			}
-		}
-	}
-
-	createdSubscriptionProducts := []PublishProductResponse{}
-	for _, info := range networkInfo {
-		createdSubscriptionProducts = append(createdSubscriptionProducts, PublishProductResponse{
-			Message:               "Subscription created successfully",
-			CypheraProductId:      product.ID.String(),
-			CypheraProductTokenId: info.ProductTokenID.String(),
-		})
-
-	}
-	sendSuccess(c, http.StatusOK, createdSubscriptionProducts)
+	sendSuccess(c, http.StatusCreated, toProductResponse(product, prices))
 }
 
 // UpdateProduct godoc
 // @Summary Update product
-// @Description Updates an existing product
+// @Description Updates an existing product. Price updates should be done via price-specific endpoints.
 // @Tags products
 // @Accept json
 // @Produce json
 // @Param product_id path string true "Product ID"
-// @Param product body UpdateProductRequest true "Product update data"
+// @Param product body UpdateProductRequest true "Product update data (prices are not updated here)"
 // @Success 200 {object} ProductResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
@@ -1785,7 +1455,6 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
-	// Parse product ID
 	productId := c.Param("product_id")
 	parsedUUID, err := uuid.Parse(productId)
 	if err != nil {
@@ -1793,14 +1462,12 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	// Parse request body
 	var req UpdateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
 	}
 
-	// Get existing product to verify workspace ownership
 	existingProduct, err := h.common.db.GetProduct(c.Request.Context(), db.GetProductParams{
 		ID:          parsedUUID,
 		WorkspaceID: parsedWorkspaceID,
@@ -1810,50 +1477,30 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	// Validate all update parameters
 	if err := h.validateProductUpdate(c, req, existingProduct); err != nil {
 		sendError(c, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	// Create update parameters
 	params, err := h.updateProductParams(parsedUUID, req, existingProduct)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid update parameters", err)
 		return
 	}
-
 	params.WorkspaceID = parsedWorkspaceID
 
-	// Update the product
 	product, err := h.common.db.UpdateProduct(c.Request.Context(), params)
 	if err != nil {
 		handleDBError(c, err, "Failed to update product")
 		return
 	}
 
-	// Update product tokens if provided
-	if len(req.ProductTokens) > 0 {
-		// First, delete all existing product tokens
-		err = h.common.db.DeleteProductTokensByProduct(c.Request.Context(), product.ID)
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to delete existing product tokens", err)
-			return
-		}
-
-		// Create new product tokens
-		if err := h.createProductTokens(c, product.ID, req.ProductTokens); err != nil {
-			sendError(c, http.StatusBadRequest, err.Error(), nil)
-			return
-		}
-	}
-
-	sendSuccess(c, http.StatusOK, toProductResponse(product))
+	sendSuccess(c, http.StatusOK, toProductResponse(product, []db.Price{}))
 }
 
 // DeleteProduct godoc
 // @Summary Delete product
-// @Description Deletes a product
+// @Description Deletes a product and its associated prices (soft delete)
 // @Tags products
 // @Accept json
 // @Produce json
@@ -1889,38 +1536,56 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 	sendSuccess(c, http.StatusNoContent, nil)
 }
 
+// Helper function to convert db.Price to PriceResponse
+func toPriceResponse(p db.Price) PriceResponse {
+	var metadata map[string]interface{}
+	if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
+		log.Printf("Error unmarshaling price metadata: %v", err)
+	}
+
+	return PriceResponse{
+		ID:                  p.ID.String(),
+		Object:              "price",
+		ProductID:           p.ProductID.String(),
+		Active:              p.Active,
+		Type:                string(p.Type),
+		Nickname:            p.Nickname.String,
+		Currency:            string(p.Currency),
+		UnitAmountInPennies: p.UnitAmountInPennies,
+		IntervalType:        string(p.IntervalType.IntervalType),
+		TermLength:          p.TermLength.Int32,
+		Metadata:            p.Metadata,
+		CreatedAt:           p.CreatedAt.Time.Unix(),
+		UpdatedAt:           p.UpdatedAt.Time.Unix(),
+	}
+}
+
 // Helper function to convert database model to API response
-func toProductResponse(p db.Product) ProductResponse {
+func toProductResponse(p db.Product, dbPrices []db.Price) ProductResponse {
 	var metadata map[string]interface{}
 	if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
 		log.Printf("Error unmarshaling product metadata: %v", err)
-		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
 	}
 
-	var intervalTypeStr string
-	if p.IntervalType.Valid {
-		intervalTypeStr = string(p.IntervalType.IntervalType)
+	apiPrices := make([]PriceResponse, len(dbPrices))
+	for i, dbPrice := range dbPrices {
+		apiPrices[i] = toPriceResponse(dbPrice)
 	}
 
 	return ProductResponse{
-		ID:              p.ID.String(),
-		Object:          "product",
-		WorkspaceID:     p.WorkspaceID.String(),
-		WalletID:        p.WalletID.String(),
-		Name:            p.Name,
-		Description:     p.Description.String,
-		ProductType:     string(p.ProductType),
-		IntervalType:    intervalTypeStr,
-		Currency:        string(p.Currency),
-		TermLength:      p.TermLength.Int32,
-		PriceInPennies:  p.PriceInPennies,
-		ImageURL:        p.ImageUrl.String,
-		URL:             p.Url.String,
-		MerchantPaidGas: p.MerchantPaidGas,
-		Active:          p.Active,
-		Metadata:        p.Metadata,
-		CreatedAt:       p.CreatedAt.Time.Unix(),
-		UpdatedAt:       p.UpdatedAt.Time.Unix(),
+		ID:          p.ID.String(),
+		Object:      "product",
+		WorkspaceID: p.WorkspaceID.String(),
+		WalletID:    p.WalletID.String(),
+		Name:        p.Name,
+		Description: p.Description.String,
+		ImageURL:    p.ImageUrl.String,
+		URL:         p.Url.String,
+		Active:      p.Active,
+		Metadata:    p.Metadata,
+		Prices:      apiPrices,
+		CreatedAt:   p.CreatedAt.Time.Unix(),
+		UpdatedAt:   p.UpdatedAt.Time.Unix(),
 	}
 }
 
@@ -1935,9 +1600,7 @@ func marshalCaveats(caveats []CaveatStruct) json.RawMessage {
 
 // determineNetworkType maps network names to their network types
 func determineNetworkType(networkTypeStr string) string {
-	// Convert to lowercase for case-insensitive comparison
 	networkType := strings.ToLower(networkTypeStr)
-
 	switch networkType {
 	case "ethereum", "sepolia", "goerli", "arbitrum", "optimism", "polygon", "base", "linea":
 		return string(db.NetworkTypeEvm)
@@ -1950,36 +1613,32 @@ func determineNetworkType(networkTypeStr string) string {
 	case "polkadot":
 		return string(db.NetworkTypePolkadot)
 	default:
-		// Default to EVM if unknown
 		return string(db.NetworkTypeEvm)
 	}
 }
 
 // logFailedSubscriptionCreation records information about failed subscription creation attempts
-// This helps with debugging and monitoring subscription failures
 func (h *ProductHandler) logFailedSubscriptionCreation(
 	ctx context.Context,
 	customerId *uuid.UUID,
 	product db.Product,
+	price db.Price,
 	productToken db.GetProductTokenRow,
 	walletAddress string,
 	delegationSignature string,
 	err error,
 ) {
-	// Log the error first
 	logger.Error("Failed to create subscription",
 		zap.Any("customer_id", customerId),
 		zap.String("product_id", product.ID.String()),
+		zap.String("price_id", price.ID.String()),
 		zap.String("product_token_id", productToken.ID.String()),
 		zap.String("wallet_address", walletAddress),
 		zap.String("delegation_signature", delegationSignature),
 		zap.Error(err),
 	)
 
-	// Determine error type based on the error message
 	errorType := h.determineErrorType(err)
-
-	// Create a customer ID in pgtype.UUID format if it exists
 	var customerIDPgType pgtype.UUID
 	if customerId != nil {
 		customerIDPgType = pgtype.UUID{Bytes: *customerId, Valid: true}
@@ -1987,10 +1646,7 @@ func (h *ProductHandler) logFailedSubscriptionCreation(
 		customerIDPgType = pgtype.UUID{Valid: false}
 	}
 
-	// Create a customer wallet ID in pgtype.UUID format if it exists
 	customerWalletIDPgType := pgtype.UUID{Valid: false}
-
-	// Create a delegation signature in pgtype.Text format
 	var delegationSignaturePgType pgtype.Text
 	if delegationSignature != "" {
 		delegationSignaturePgType = pgtype.Text{String: delegationSignature, Valid: true}
@@ -1998,7 +1654,6 @@ func (h *ProductHandler) logFailedSubscriptionCreation(
 		delegationSignaturePgType = pgtype.Text{Valid: false}
 	}
 
-	// Create a new failed subscription attempt record
 	_, dbErr := h.common.db.CreateFailedSubscriptionAttempt(ctx, db.CreateFailedSubscriptionAttemptParams{
 		CustomerID:          customerIDPgType,
 		ProductID:           product.ID,
@@ -2007,23 +1662,19 @@ func (h *ProductHandler) logFailedSubscriptionCreation(
 		WalletAddress:       walletAddress,
 		ErrorType:           errorType,
 		ErrorMessage:        err.Error(),
-		ErrorDetails:        []byte("{}"), // Empty JSON object for now
+		ErrorDetails:        []byte(`{"price_id":"` + price.ID.String() + `"}`),
 		DelegationSignature: delegationSignaturePgType,
-		Metadata:            []byte("{}"), // Empty JSON object for now
+		Metadata:            []byte("{}"),
 	})
 
 	if dbErr != nil {
-		logger.Error("Failed to create failed subscription attempt record",
-			zap.Error(dbErr),
-		)
+		logger.Error("Failed to create failed subscription attempt record", zap.Error(dbErr))
 	}
 }
 
 // determineErrorType determines the error type based on the error message
 func (h *ProductHandler) determineErrorType(err error) db.SubscriptionEventType {
 	errorMsg := err.Error()
-
-	// Determine error type based on error message
 	if strings.Contains(errorMsg, "validation") {
 		return db.SubscriptionEventTypeFailedValidation
 	} else if strings.Contains(errorMsg, "customer") && strings.Contains(errorMsg, "create") {
