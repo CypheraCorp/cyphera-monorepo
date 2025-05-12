@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/big"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -19,7 +18,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
 )
@@ -294,277 +292,6 @@ func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, response)
 }
 
-// SubscribeToProductByPriceID godoc
-// @Summary Subscribe to a product's price
-// @Description Creates a subscription for a product's specific price with the given delegation
-// @Tags products
-// @Accept json
-// @Produce json
-// @Param price_id path string true "Price ID to subscribe to"
-// @Param subscription body SubscribeRequest true "Subscription details"
-// @Success 201 {object} db.Subscription
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Router /prices/{price_id}/subscribe [post]
-// @exclude
-func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
-	ctx := c.Request.Context()
-	priceIDStr := c.Param("price_id")
-	parsedPriceID, err := uuid.Parse(priceIDStr)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid price ID format", err)
-		return
-	}
-
-	var request SubscribeRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid request format", err)
-		return
-	}
-	request.PriceID = priceIDStr
-
-	price, err := h.common.db.GetPrice(ctx, parsedPriceID)
-	if err != nil {
-		handleDBError(c, err, "Price not found")
-		return
-	}
-
-	if !price.Active {
-		sendError(c, http.StatusBadRequest, "Cannot subscribe to inactive price", nil)
-		return
-	}
-
-	product, err := h.common.db.GetProductWithoutWorkspaceId(ctx, price.ProductID)
-	if err != nil {
-		handleDBError(c, err, "Product associated with the price not found")
-		return
-	}
-
-	if err := h.validateSubscriptionRequest(request, product.ID); err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), err)
-		return
-	}
-
-	if !product.Active {
-		sendError(c, http.StatusBadRequest, "Cannot subscribe to a price of an inactive product", nil)
-		return
-	}
-
-	parsedProductTokenID, err := uuid.Parse(request.ProductTokenID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid product token ID format", err)
-		return
-	}
-
-	merchantWallet, err := h.common.db.GetWalletByID(ctx, db.GetWalletByIDParams{
-		ID:          product.WalletID,
-		WorkspaceID: product.WorkspaceID,
-	})
-	if err != nil {
-		handleDBError(c, err, "Merchant wallet not found")
-		return
-	}
-
-	productToken, err := h.common.db.GetProductToken(ctx, parsedProductTokenID)
-	if err != nil {
-		handleDBError(c, err, "Product token not found")
-		return
-	}
-
-	token, err := h.common.db.GetToken(ctx, productToken.TokenID)
-	if err != nil {
-		handleDBError(c, err, "Token not found")
-		return
-	}
-
-	network, err := h.common.db.GetNetwork(ctx, token.NetworkID)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to get network details", err)
-		return
-	}
-
-	tokenAmount, err := strconv.ParseInt(request.TokenAmount, 10, 64)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid token amount format", err)
-		return
-	}
-
-	executionObject := dsClient.ExecutionObject{
-		MerchantAddress:      merchantWallet.WalletAddress,
-		TokenContractAddress: token.ContractAddress,
-		TokenDecimals:        token.Decimals,
-		TokenAmount:          tokenAmount,
-		ChainID:              uint32(network.ChainID),
-		NetworkName:          network.Name,
-	}
-
-	if productToken.ProductID != product.ID {
-		sendError(c, http.StatusBadRequest, "Product token does not belong to the specified product", nil)
-		return
-	}
-
-	normalizedAddress := normalizeWalletAddress(request.SubscriberAddress, determineNetworkType(productToken.NetworkType))
-
-	tx, qtx, err := h.common.BeginTx(ctx)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to start transaction", err)
-		return
-	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
-			logger.Error("Failed to rollback transaction", zap.Error(err))
-		}
-	}()
-
-	customer, customerWallet, err := h.processCustomerAndWallet(ctx, qtx, normalizedAddress, product, productToken)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to process customer or wallet", err)
-		return
-	}
-
-	subscriptions, err := h.common.db.ListSubscriptionsByCustomer(ctx, db.ListSubscriptionsByCustomerParams{
-		CustomerID:  customer.ID,
-		WorkspaceID: product.WorkspaceID,
-	})
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to check for existing subscription", err)
-		return
-	}
-
-	var existingSubscription *db.Subscription
-	for i, sub := range subscriptions {
-		if sub.PriceID == price.ID && sub.Status == db.SubscriptionStatusActive {
-			existingSubscription = &subscriptions[i]
-			break
-		}
-	}
-
-	if existingSubscription != nil {
-		logger.Info("Subscription already exists for this price",
-			zap.String("subscription_id", existingSubscription.ID.String()),
-			zap.String("customer_id", customer.ID.String()),
-			zap.String("price_id", price.ID.String()))
-
-		duplicateErr := fmt.Errorf("subscription already exists for customer %s and price %s", customer.ID, price.ID)
-		h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, duplicateErr)
-
-		if tx != nil {
-			if commitErr := tx.Commit(ctx); commitErr != nil {
-				logger.Error("Failed to commit transaction", zap.Error(commitErr))
-			}
-		}
-
-		c.JSON(http.StatusConflict, gin.H{
-			"message":      "Subscription already exists for this price",
-			"subscription": existingSubscription,
-		})
-		return
-	}
-
-	delegationData, err := h.storeDelegationData(ctx, qtx, request.Delegation)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to store delegation data", err)
-		return
-	}
-
-	periodStart, periodEnd, nextRedemption := h.calculateSubscriptionPeriods(price)
-
-	subscription, err := h.createSubscription(ctx, qtx, CreateSubscriptionParams{
-		Customer:       customer,
-		CustomerWallet: customerWallet,
-		ProductID:      product.ID,
-		Price:          price,
-		ProductTokenID: parsedProductTokenID,
-		TokenAmount:    tokenAmount,
-		DelegationData: delegationData,
-		PeriodStart:    periodStart,
-		PeriodEnd:      periodEnd,
-		NextRedemption: nextRedemption,
-	})
-	if err != nil {
-		h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, err)
-		sendError(c, http.StatusInternalServerError, "Failed to create subscription", err)
-		return
-	}
-
-	eventMetadata, _ := json.Marshal(map[string]interface{}{
-		"product_name":   product.Name,
-		"price_type":     price.Type,
-		"wallet_address": customerWallet.WalletAddress,
-		"network_type":   customerWallet.NetworkType,
-	})
-
-	_, err = qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
-		SubscriptionID: subscription.ID,
-		EventType:      db.SubscriptionEventTypeCreated,
-		OccurredAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		AmountInCents:  price.UnitAmountInPennies,
-		Metadata:       eventMetadata,
-	})
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to create subscription creation event", err)
-		return
-	}
-
-	logger.Info("Created subscription event",
-		zap.String("subscription_id", subscription.ID.String()),
-		zap.String("event_type", string(db.SubscriptionEventTypeCreated)))
-
-	if err := tx.Commit(ctx); err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to commit transaction", err)
-		return
-	}
-
-	updatedSubscription, err := h.performInitialRedemption(ctx, customer, customerWallet, subscription, product, price, productToken, request.Delegation, executionObject)
-	if err != nil {
-		logger.Error("Initial redemption failed, subscription marked as failed and soft-deleted",
-			zap.Error(err),
-			zap.String("subscription_id", subscription.ID.String()),
-			zap.String("customer_id", customer.ID.String()),
-			zap.String("price_id", price.ID.String()))
-
-		_, updateErr := h.common.db.UpdateSubscriptionStatus(ctx, db.UpdateSubscriptionStatusParams{
-			ID:     subscription.ID,
-			Status: db.SubscriptionStatusFailed,
-		})
-
-		if updateErr != nil {
-			logger.Error("Failed to update subscription status after redemption failure",
-				zap.Error(updateErr),
-				zap.String("subscription_id", subscription.ID.String()))
-		}
-
-		deleteErr := h.common.db.DeleteSubscription(ctx, subscription.ID)
-		if deleteErr != nil {
-			logger.Error("Failed to soft-delete subscription after redemption failure",
-				zap.Error(deleteErr),
-				zap.String("subscription_id", subscription.ID.String()))
-		}
-
-		errorMsg := fmt.Sprintf("Initial redemption failed: %v", err)
-		_, eventErr := h.common.db.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
-			SubscriptionID:  subscription.ID,
-			EventType:       db.SubscriptionEventTypeFailedRedemption,
-			TransactionHash: pgtype.Text{String: "", Valid: false},
-			AmountInCents:   price.UnitAmountInPennies,
-			ErrorMessage:    pgtype.Text{String: errorMsg, Valid: true},
-			OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
-			Metadata:        json.RawMessage(`{}`),
-		})
-
-		if eventErr != nil {
-			logger.Error("Failed to create subscription event after redemption failure",
-				zap.Error(eventErr),
-				zap.String("subscription_id", subscription.ID.String()))
-		}
-
-		sendError(c, http.StatusInternalServerError, "Initial redemption failed, subscription marked as failed and soft-deleted", err)
-		return
-	}
-
-	sendSuccess(c, http.StatusCreated, updatedSubscription)
-}
-
 // validateSubscriptionRequest validates the basic request parameters
 func (h *ProductHandler) validateSubscriptionRequest(request SubscribeRequest, productID uuid.UUID) error {
 	if request.SubscriberAddress == "" {
@@ -799,13 +526,13 @@ func (h *ProductHandler) calculateSubscriptionPeriods(price db.Price) (time.Time
 	var nextRedemption time.Time
 
 	termLength := 1
-	if price.TermLength.Valid {
-		termLength = int(price.TermLength.Int32)
+	if price.TermLength != 0 {
+		termLength = int(price.TermLength)
 	}
 
 	if price.Type == db.PriceTypeRecurring {
-		periodEnd = CalculatePeriodEnd(now, price.IntervalType.IntervalType, int32(termLength))
-		nextRedemption = CalculateNextRedemption(price.IntervalType.IntervalType, now)
+		periodEnd = CalculatePeriodEnd(now, string(price.IntervalType), int32(termLength))
+		nextRedemption = CalculateNextRedemption(string(price.IntervalType), now)
 	} else {
 		periodEnd = now
 		nextRedemption = now
@@ -836,11 +563,8 @@ func (h *ProductHandler) createSubscription(
 		ProductID:      params.ProductID,
 		PriceID:        params.Price.ID,
 		ProductTokenID: params.ProductTokenID,
-		TokenAmount: pgtype.Numeric{
-			Int:   big.NewInt(int64(params.TokenAmount)),
-			Valid: true,
-		},
-		DelegationID: params.DelegationData.ID,
+		TokenAmount:    int32(params.TokenAmount),
+		DelegationID:   params.DelegationData.ID,
 		CustomerWalletID: pgtype.UUID{
 			Bytes: params.CustomerWallet.ID,
 			Valid: true,
@@ -947,7 +671,7 @@ func (h *ProductHandler) performInitialRedemption(
 
 	var nextRedemptionDate pgtype.Timestamptz
 	if price.Type == db.PriceTypeRecurring {
-		nextDate := CalculateNextRedemption(price.IntervalType.IntervalType, time.Now())
+		nextDate := CalculateNextRedemption(string(price.IntervalType), time.Now())
 		nextRedemptionDate = pgtype.Timestamptz{
 			Time:  nextDate,
 			Valid: true,
@@ -1417,8 +1141,8 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 				Nickname:            pgtype.Text{String: price.Nickname, Valid: true},
 				Currency:            db.Currency(price.Currency),
 				UnitAmountInPennies: price.UnitAmountInPennies,
-				IntervalType:        db.NullIntervalType{IntervalType: db.IntervalType(price.IntervalType), Valid: true},
-				TermLength:          pgtype.Int4{Int32: price.TermLength, Valid: true},
+				IntervalType:        db.IntervalType(price.IntervalType),
+				TermLength:          price.TermLength,
 				Metadata:            price.Metadata,
 			})
 			if err != nil {
@@ -1557,8 +1281,8 @@ func toPriceResponse(p db.Price) PriceResponse {
 		Nickname:            p.Nickname.String,
 		Currency:            string(p.Currency),
 		UnitAmountInPennies: p.UnitAmountInPennies,
-		IntervalType:        string(p.IntervalType.IntervalType),
-		TermLength:          p.TermLength.Int32,
+		IntervalType:        string(p.IntervalType),
+		TermLength:          p.TermLength,
 		Metadata:            p.Metadata,
 		CreatedAt:           p.CreatedAt.Time.Unix(),
 		UpdatedAt:           p.UpdatedAt.Time.Unix(),

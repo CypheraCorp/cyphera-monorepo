@@ -159,7 +159,7 @@ func (h *CustomerHandler) updateCustomerParams(id uuid.UUID, req UpdateCustomerR
 // @Produce json
 // @Param limit query int false "Number of customers to return (default 10, max 100)"
 // @Param offset query int false "Number of customers to skip (default 0)"
-// @Success 200 {object} ListCustomersResponse
+// @Success 200 {object} PaginatedResponse{data=[]CustomerResponse}
 // @Failure 400 {object} ErrorResponse "Invalid workspace ID format or pagination parameters"
 // @Failure 401 {object} ErrorResponse "Unauthorized access to workspace"
 // @Failure 500 {object} ErrorResponse "Server error"
@@ -211,7 +211,8 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 		customerResponses[i] = toCustomerResponse(customer)
 	}
 
-	sendPaginatedSuccess(c, http.StatusOK, customerResponses, int(page), int(limit), int(totalCount))
+	response := sendPaginatedSuccess(c, http.StatusOK, customerResponses, int(page), int(limit), int(totalCount))
+	c.JSON(http.StatusOK, response)
 }
 
 // CreateCustomer godoc

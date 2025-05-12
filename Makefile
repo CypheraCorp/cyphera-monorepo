@@ -76,7 +76,7 @@ run:
 	$(GO) run $(MAIN_PACKAGE)
 
 swagger:
-	swag init -g cmd/api/main/main.go
+	swag init --dir ./internal/handlers --generalInfo ../../cmd/api/main/main.go --output ./docs
 
 deploy:
 	# Add deployment steps here

@@ -208,8 +208,8 @@ func (h *TokenHandler) ListTokensByNetwork(c *gin.Context) {
 // @Tags tokens
 // @Accept json
 // @Produce json
-// @Param quote body GetConversionRateRequest true "Token and Fiat symbols"
-// @Success 200 {object} GetConversionRateResponse
+// @Param quote body GetTokenQuoteRequest true "Token and Fiat symbols"
+// @Success 200 {object} GetTokenQuoteResponse
 // @Failure 400 {object} ErrorResponse "Invalid request body or missing parameters"
 // @Failure 500 {object} ErrorResponse "Internal server error or failed to fetch price from CoinMarketCap"
 // @Security ApiKeyAuth

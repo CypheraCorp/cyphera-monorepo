@@ -146,7 +146,7 @@ type CreateSubscriptionParams struct {
 	ProductID          uuid.UUID          `json:"product_id"`
 	PriceID            uuid.UUID          `json:"price_id"`
 	ProductTokenID     uuid.UUID          `json:"product_token_id"`
-	TokenAmount        pgtype.Numeric     `json:"token_amount"`
+	TokenAmount        int32              `json:"token_amount"`
 	DelegationID       uuid.UUID          `json:"delegation_id"`
 	CustomerWalletID   pgtype.UUID        `json:"customer_wallet_id"`
 	Status             SubscriptionStatus `json:"status"`
@@ -326,7 +326,7 @@ type GetSubscriptionWithDetailsRow struct {
 	ProductID                uuid.UUID          `json:"product_id"`
 	PriceID                  uuid.UUID          `json:"price_id"`
 	ProductTokenID           uuid.UUID          `json:"product_token_id"`
-	TokenAmount              pgtype.Numeric     `json:"token_amount"`
+	TokenAmount              int32              `json:"token_amount"`
 	DelegationID             uuid.UUID          `json:"delegation_id"`
 	CustomerWalletID         pgtype.UUID        `json:"customer_wallet_id"`
 	Status                   SubscriptionStatus `json:"status"`
@@ -350,8 +350,8 @@ type GetSubscriptionWithDetailsRow struct {
 	PriceType                PriceType          `json:"price_type"`
 	PriceCurrency            Currency           `json:"price_currency"`
 	PriceUnitAmountInPennies int32              `json:"price_unit_amount_in_pennies"`
-	PriceIntervalType        NullIntervalType   `json:"price_interval_type"`
-	PriceTermLength          pgtype.Int4        `json:"price_term_length"`
+	PriceIntervalType        IntervalType       `json:"price_interval_type"`
+	PriceTermLength          int32              `json:"price_term_length"`
 }
 
 func (q *Queries) GetSubscriptionWithDetails(ctx context.Context, arg GetSubscriptionWithDetailsParams) (GetSubscriptionWithDetailsRow, error) {
@@ -410,7 +410,7 @@ type GetSubscriptionWithWorkspaceRow struct {
 	ProductID          uuid.UUID          `json:"product_id"`
 	PriceID            uuid.UUID          `json:"price_id"`
 	ProductTokenID     uuid.UUID          `json:"product_token_id"`
-	TokenAmount        pgtype.Numeric     `json:"token_amount"`
+	TokenAmount        int32              `json:"token_amount"`
 	DelegationID       uuid.UUID          `json:"delegation_id"`
 	CustomerWalletID   pgtype.UUID        `json:"customer_wallet_id"`
 	Status             SubscriptionStatus `json:"status"`
@@ -702,7 +702,7 @@ type ListSubscriptionDetailsWithPaginationRow struct {
 	SubscriptionCurrentPeriodEnd   pgtype.Timestamptz `json:"subscription_current_period_end"`
 	SubscriptionCreatedAt          pgtype.Timestamptz `json:"subscription_created_at"`
 	SubscriptionUpdatedAt          pgtype.Timestamptz `json:"subscription_updated_at"`
-	SubscriptionTokenAmount        pgtype.Numeric     `json:"subscription_token_amount"`
+	SubscriptionTokenAmount        int32              `json:"subscription_token_amount"`
 	SubscriptionNextRedemptionDate pgtype.Timestamptz `json:"subscription_next_redemption_date"`
 	SubscriptionTotalRedemptions   int32              `json:"subscription_total_redemptions"`
 	SubscriptionTotalAmountInCents int32              `json:"subscription_total_amount_in_cents"`
@@ -723,8 +723,8 @@ type ListSubscriptionDetailsWithPaginationRow struct {
 	PriceNickname                  pgtype.Text        `json:"price_nickname"`
 	PriceCurrency                  Currency           `json:"price_currency"`
 	PriceUnitAmountInPennies       int32              `json:"price_unit_amount_in_pennies"`
-	PriceIntervalType              NullIntervalType   `json:"price_interval_type"`
-	PriceTermLength                pgtype.Int4        `json:"price_term_length"`
+	PriceIntervalType              IntervalType       `json:"price_interval_type"`
+	PriceTermLength                int32              `json:"price_term_length"`
 	PriceMetadata                  []byte             `json:"price_metadata"`
 	PriceCreatedAt                 pgtype.Timestamptz `json:"price_created_at"`
 	PriceUpdatedAt                 pgtype.Timestamptz `json:"price_updated_at"`
@@ -919,7 +919,7 @@ type ListSubscriptionsByProductRow struct {
 	ProductID          uuid.UUID          `json:"product_id"`
 	PriceID            uuid.UUID          `json:"price_id"`
 	ProductTokenID     uuid.UUID          `json:"product_token_id"`
-	TokenAmount        pgtype.Numeric     `json:"token_amount"`
+	TokenAmount        int32              `json:"token_amount"`
 	DelegationID       uuid.UUID          `json:"delegation_id"`
 	CustomerWalletID   pgtype.UUID        `json:"customer_wallet_id"`
 	Status             SubscriptionStatus `json:"status"`
@@ -1140,7 +1140,7 @@ type UpdateSubscriptionParams struct {
 	ProductID          uuid.UUID          `json:"product_id"`
 	PriceID            uuid.UUID          `json:"price_id"`
 	ProductTokenID     uuid.UUID          `json:"product_token_id"`
-	TokenAmount        pgtype.Numeric     `json:"token_amount"`
+	TokenAmount        int32              `json:"token_amount"`
 	DelegationID       uuid.UUID          `json:"delegation_id"`
 	CustomerWalletID   pgtype.UUID        `json:"customer_wallet_id"`
 	Status             SubscriptionStatus `json:"status"`
