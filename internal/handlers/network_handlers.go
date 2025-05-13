@@ -136,17 +136,12 @@ func (h *NetworkHandler) GetNetworkByChainID(c *gin.Context) {
 }
 
 // CreateNetwork godoc
-// @Summary Create network
-// @Description Creates a new network
+// @Summary Create a new network
+// @Description Creates a new network with the specified details
 // @Tags networks
 // @Accept json
 // @Produce json
-// @Param network body CreateNetworkRequest true "Network creation data"
-// @Success 201 {object} NetworkResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /networks [post]
+// @Tags exclude
 func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 	var req CreateNetworkRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -173,19 +168,12 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 }
 
 // UpdateNetwork godoc
-// @Summary Update network
-// @Description Updates an existing network
+// @Summary Update a network
+// @Description Updates an existing network with the specified details
 // @Tags networks
 // @Accept json
 // @Produce json
-// @Param network_id path string true "Network ID"
-// @Param network body UpdateNetworkRequest true "Network update data"
-// @Success 200 {object} NetworkResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /networks/{network_id} [put]
+// @Tags exclude
 func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 	networkId := c.Param("network_id")
 	parsedUUID, err := uuid.Parse(networkId)
@@ -220,17 +208,12 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 }
 
 // DeleteNetwork godoc
-// @Summary Delete network
-// @Description Deletes a network
+// @Summary Delete a network
+// @Description Deletes a network with the specified ID
 // @Tags networks
 // @Accept json
 // @Produce json
-// @Param network_id path string true "Network ID"
-// @Success 204 "No Content"
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /networks/{network_id} [delete]
+// @Tags exclude
 func (h *NetworkHandler) DeleteNetwork(c *gin.Context) {
 	networkId := c.Param("network_id")
 	parsedUUID, err := uuid.Parse(networkId)

@@ -289,7 +289,7 @@ func (rp *RedemptionProcessor) processRedemption(task RedemptionTask) error {
 	executionObject := dsClient.ExecutionObject{
 		MerchantAddress:      merchantWallet.WalletAddress,
 		TokenContractAddress: token.ContractAddress,
-		TokenAmount:          subscription.TokenAmount.Int.Int64(),
+		TokenAmount:          int64(subscription.TokenAmount),
 		TokenDecimals:        token.Decimals,
 		ChainID:              uint32(network.ChainID),
 		NetworkName:          network.Name,

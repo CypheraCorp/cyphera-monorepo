@@ -17,13 +17,12 @@ type HealthResponse struct {
 }
 
 // Health godoc
-// @Summary      Health check
-// @Description  Checks if the server is running
-// @Tags         health
-// @Accept       json
-// @Produce      json
-// @Success      200  {object}  HealthResponse   "Returns health status"
-// @Router       /health [get]
+// @Summary Check the health of the server
+// @Description Returns a simple "ok" status
+// @Tags health
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *HealthHandler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, HealthResponse{
 		Status: "ok",

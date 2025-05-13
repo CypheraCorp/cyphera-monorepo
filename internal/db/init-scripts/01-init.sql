@@ -247,8 +247,8 @@ CREATE TABLE prices (
     nickname TEXT,
     currency currency NOT NULL, -- 'USD', 'EUR'
     unit_amount_in_pennies INTEGER NOT NULL,
-    interval_type interval_type, -- Nullable, for 'recurring' type
-    term_length INTEGER, -- Nullable, for 'recurring' type, e.g., 12 for 12 months
+    interval_type interval_type NOT NULL,
+    term_length INTEGER NOT NULL, -- Nullable, for 'recurring' type, e.g., 12 for 12 months
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -307,9 +307,10 @@ CREATE TABLE subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES customers(id),
     product_id UUID NOT NULL REFERENCES products(id),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
     price_id UUID NOT NULL REFERENCES prices(id),
     product_token_id UUID NOT NULL REFERENCES products_tokens(id),
-    token_amount NUMERIC NOT NULL,
+    token_amount INTEGER NOT NULL,
     delegation_id UUID NOT NULL REFERENCES delegation_data(id),
     customer_wallet_id UUID REFERENCES customer_wallets(id),
     status subscription_status NOT NULL DEFAULT 'active',

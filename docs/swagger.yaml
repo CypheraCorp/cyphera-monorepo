@@ -22,6 +22,13 @@ definitions:
       updated_at:
         type: integer
     type: object
+  handlers.AccountDetailsResponse:
+    properties:
+      account:
+        $ref: '#/definitions/handlers.AccountResponse'
+      user:
+        $ref: '#/definitions/handlers.UserResponse'
+    type: object
   handlers.AccountResponse:
     properties:
       account_type:
@@ -51,108 +58,46 @@ definitions:
         type: integer
       website_url:
         type: string
+      workspaces:
+        items:
+          $ref: '#/definitions/handlers.WorkspaceResponse'
+        type: array
     type: object
-  handlers.CreateAPIKeyRequest:
+  handlers.CircleWalletData:
     properties:
-      access_level:
-        enum:
-        - read
-        - write
-        - admin
-        type: string
-      description:
-        type: string
-      expires_at:
-        type: string
-      metadata:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-    required:
-    - access_level
-    - description
-    - name
-    type: object
-  handlers.CreateAccountRequest:
-    properties:
-      account_type:
-        enum:
-        - admin
-        - merchant
-        type: string
-      business_name:
-        type: string
-      business_type:
-        type: string
-      description:
-        type: string
-      finished_onboarding:
-        type: boolean
-      metadata:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-      support_email:
-        type: string
-      support_phone:
-        type: string
-      website_url:
-        type: string
-    required:
-    - account_type
-    - name
-    type: object
-  handlers.CreateCustomerRequest:
-    properties:
-      balance_in_pennies:
+      chain_id:
         type: integer
-      currency:
+      circle_user_id:
         type: string
-      default_source_id:
+      circle_wallet_id:
         type: string
-      description:
+      state:
         type: string
-      email:
-        type: string
-      external_id:
-        type: string
-      invoice_prefix:
-        type: string
-      livemode:
-        type: boolean
-      metadata:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-      next_invoice_sequence:
-        type: integer
-      phone:
-        type: string
-      tax_exempt:
-        type: boolean
-      tax_ids:
-        additionalProperties: true
-        type: object
-    required:
-    - email
     type: object
-  handlers.CreateNetworkRequest:
+  handlers.CreatePriceRequest:
     properties:
       active:
         type: boolean
-      chain_id:
-        type: integer
-      name:
+      currency:
         type: string
+      interval_count:
+        type: integer
+      interval_type:
+        type: string
+      metadata:
+        type: object
+      nickname:
+        type: string
+      term_length:
+        type: integer
       type:
         type: string
+      unit_amount_in_pennies:
+        type: integer
     required:
-    - chain_id
-    - name
+    - currency
     - type
+    - unit_amount_in_pennies
     type: object
   handlers.CreateProductRequest:
     properties:
@@ -162,32 +107,25 @@ definitions:
         type: string
       image_url:
         type: string
-      interval_type:
-        type: string
-      merchant_paid_gas:
-        type: boolean
       metadata:
         type: object
       name:
         type: string
-      price_in_pennies:
-        type: integer
+      prices:
+        items:
+          $ref: '#/definitions/handlers.CreatePriceRequest'
+        type: array
       product_tokens:
         items:
           $ref: '#/definitions/handlers.CreateProductTokenRequest'
         type: array
-      product_type:
-        type: string
-      term_length:
-        type: integer
       url:
         type: string
       wallet_id:
         type: string
     required:
     - name
-    - price_in_pennies
-    - product_type
+    - prices
     - wallet_id
     type: object
   handlers.CreateProductTokenRequest:
@@ -205,81 +143,17 @@ definitions:
     - product_id
     - token_id
     type: object
-  handlers.CreateTokenRequest:
-    properties:
-      active:
-        type: boolean
-      contract_address:
-        type: string
-      gas_token:
-        type: boolean
-      name:
-        type: string
-      network_id:
-        type: string
-      symbol:
-        type: string
-    required:
-    - contract_address
-    - name
-    - network_id
-    - symbol
-    type: object
-  handlers.CreateUserRequest:
-    properties:
-      account_id:
-        type: string
-      address_line_1:
-        type: string
-      address_line_2:
-        type: string
-      city:
-        type: string
-      country:
-        type: string
-      display_name:
-        type: string
-      email:
-        type: string
-      email_verified:
-        type: boolean
-      first_name:
-        type: string
-      is_account_owner:
-        type: boolean
-      last_name:
-        type: string
-      locale:
-        type: string
-      metadata:
-        additionalProperties: true
-        type: object
-      phone:
-        type: string
-      picture_url:
-        type: string
-      postal_code:
-        type: string
-      role:
-        enum:
-        - admin
-        - support
-        - developer
-        type: string
-      state_region:
-        type: string
-      supabase_id:
-        type: string
-      timezone:
-        type: string
-    required:
-    - account_id
-    - email
-    - role
-    - supabase_id
-    type: object
   handlers.CreateWalletRequest:
     properties:
+      chain_id:
+        description: Only for circle wallets
+        type: integer
+      circle_user_id:
+        description: Circle wallet specific fields
+        type: string
+      circle_wallet_id:
+        description: Only for circle wallets
+        type: string
       ens:
         type: string
       is_primary:
@@ -287,58 +161,34 @@ definitions:
       metadata:
         additionalProperties: true
         type: object
+      network_id:
+        type: string
       network_type:
         type: string
       nickname:
+        type: string
+      state:
+        description: Only for circle wallets
         type: string
       verified:
         type: boolean
       wallet_address:
         type: string
+      wallet_type:
+        description: '''wallet'' or ''circle_wallet'''
+        type: string
     required:
+    - network_id
     - network_type
     - wallet_address
-    type: object
-  handlers.CreateWorkspaceRequest:
-    description: Creates a new workspace
-    properties:
-      account_id:
-        type: string
-      business_name:
-        type: string
-      business_type:
-        type: string
-      description:
-        type: string
-      livemode:
-        type: boolean
-      metadata:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-      support_email:
-        type: string
-      support_phone:
-        type: string
-      website_url:
-        type: string
-    required:
-    - business_name
-    - name
+    - wallet_type
     type: object
   handlers.CustomerResponse:
     properties:
-      balance_in_pennies:
-        type: integer
       business_name:
         type: string
       created_at:
         type: integer
-      currency:
-        type: string
-      default_source:
-        type: string
       description:
         type: string
       email:
@@ -347,26 +197,15 @@ definitions:
         type: string
       id:
         type: string
-      invoice_prefix:
-        type: string
-      livemode:
-        type: boolean
       metadata:
         additionalProperties: true
         type: object
       name:
         type: string
-      next_invoice_number:
-        type: integer
       object:
         type: string
       phone:
         type: string
-      tax_exempt:
-        type: boolean
-      tax_ids:
-        additionalProperties: true
-        type: object
       updated_at:
         type: integer
       workspace_id:
@@ -379,20 +218,23 @@ definitions:
       error:
         type: string
     type: object
-  handlers.FullAccountResponse:
+  handlers.GetTokenQuoteRequest:
     properties:
-      account:
-        $ref: '#/definitions/handlers.AccountResponse'
-      user:
-        $ref: '#/definitions/handlers.UserResponse'
-      workspaces:
-        items:
-          $ref: '#/definitions/handlers.WorkspaceResponse'
-        type: array
+      fiat_symbol:
+        type: string
+      token_symbol:
+        type: string
+    required:
+    - fiat_symbol
+    - token_symbol
     type: object
-  handlers.HealthResponse:
+  handlers.GetTokenQuoteResponse:
     properties:
-      status:
+      fiat_symbol:
+        type: string
+      token_amount_in_fiat:
+        type: number
+      token_symbol:
         type: string
     type: object
   handlers.ListAPIKeysResponse:
@@ -407,28 +249,6 @@ definitions:
         type: string
       total:
         type: integer
-    type: object
-  handlers.ListCustomersResponse:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/handlers.CustomerResponse'
-        type: array
-      has_more:
-        type: boolean
-      object:
-        type: string
-      total:
-        type: integer
-    type: object
-  handlers.ListNetworksResponse:
-    properties:
-      data:
-        items:
-          $ref: '#/definitions/handlers.NetworkResponse'
-        type: array
-      object:
-        type: string
     type: object
   handlers.ListNetworksWithTokensResponse:
     properties:
@@ -474,13 +294,21 @@ definitions:
     properties:
       active:
         type: boolean
+      block_explorer_url:
+        type: string
       chain_id:
         type: integer
+      circle_network_type:
+        type: string
       created_at:
         type: integer
       id:
         type: string
+      is_testnet:
+        type: boolean
       name:
+        type: string
+      network_type:
         type: string
       object:
         type: string
@@ -491,24 +319,62 @@ definitions:
     type: object
   handlers.NetworkWithTokensResponse:
     properties:
-      active:
-        type: boolean
-      chain_id:
-        type: integer
-      created_at:
-        type: integer
-      id:
-        type: string
-      name:
-        type: string
-      object:
-        type: string
+      network:
+        $ref: '#/definitions/handlers.NetworkResponse'
       tokens:
         items:
           $ref: '#/definitions/handlers.TokenResponse'
         type: array
+    type: object
+  handlers.PaginatedResponse:
+    properties:
+      data: {}
+      has_more:
+        type: boolean
+      object:
+        type: string
+      pagination:
+        $ref: '#/definitions/handlers.Pagination'
+    type: object
+  handlers.Pagination:
+    properties:
+      current_page:
+        type: integer
+      per_page:
+        type: integer
+      total_items:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  handlers.PriceResponse:
+    properties:
+      active:
+        type: boolean
+      created_at:
+        type: integer
+      currency:
+        type: string
+      id:
+        type: string
+      interval_count:
+        type: integer
+      interval_type:
+        type: string
+      metadata:
+        type: object
+      nickname:
+        type: string
+      object:
+        type: string
+      product_id:
+        type: string
+      term_length:
+        type: integer
       type:
         type: string
+      unit_amount_in_pennies:
+        type: integer
       updated_at:
         type: integer
     type: object
@@ -524,26 +390,20 @@ definitions:
         type: string
       image_url:
         type: string
-      interval_type:
-        type: string
-      merchant_paid_gas:
-        type: boolean
       metadata:
         type: object
       name:
         type: string
       object:
         type: string
-      price_in_pennies:
-        type: integer
+      prices:
+        items:
+          $ref: '#/definitions/handlers.PriceResponse'
+        type: array
       product_tokens:
         items:
           $ref: '#/definitions/handlers.ProductTokenResponse'
         type: array
-      product_type:
-        type: string
-      term_length:
-        type: integer
       updated_at:
         type: integer
       url:
@@ -575,6 +435,8 @@ definitions:
         type: string
       product_id:
         type: string
+      token_decimals:
+        type: integer
       token_id:
         type: string
       token_name:
@@ -584,6 +446,110 @@ definitions:
       updated_at:
         type: integer
     type: object
+  handlers.SubscriptionEventPriceInfo:
+    properties:
+      currency:
+        type: string
+      id:
+        type: string
+      interval_count:
+        description: Use pgtype.Int4 to handle potential nulls
+        type: integer
+      interval_type:
+        description: Use db.NullIntervalType to handle potential nulls
+        type: string
+      term_length:
+        description: Use pgtype.Int4 to handle potential nulls
+        type: integer
+      type:
+        description: e.g., recurring, one_off
+        type: string
+      unit_amount_in_pennies:
+        type: integer
+    type: object
+  handlers.SubscriptionEventResponse:
+    properties:
+      customer:
+        $ref: '#/definitions/handlers.CustomerResponse'
+      customer_id:
+        type: string
+      error_message:
+        type: string
+      event_amount_in_cents:
+        type: integer
+      event_created_at:
+        type: string
+      event_metadata:
+        items:
+          type: integer
+        type: array
+      event_occurred_at:
+        type: string
+      event_type:
+        type: string
+      id:
+        type: string
+      network:
+        $ref: '#/definitions/handlers.NetworkResponse'
+      price_info:
+        $ref: '#/definitions/handlers.SubscriptionEventPriceInfo'
+      product_id:
+        type: string
+      product_name:
+        type: string
+      product_token:
+        $ref: '#/definitions/handlers.ProductTokenResponse'
+      subscription:
+        $ref: '#/definitions/handlers.SubscriptionResponse'
+      subscription_id:
+        type: string
+      subscription_status:
+        type: string
+      transaction_hash:
+        type: string
+    type: object
+  handlers.SubscriptionResponse:
+    properties:
+      canceled_at:
+        type: string
+      created_at:
+        type: string
+      current_period_end:
+        type: string
+      current_period_start:
+        type: string
+      customer_email:
+        type: string
+      customer_id:
+        type: string
+      customer_name:
+        type: string
+      id:
+        type: string
+      price:
+        $ref: '#/definitions/handlers.PriceResponse'
+      product:
+        $ref: '#/definitions/handlers.ProductResponse'
+      product_token:
+        $ref: '#/definitions/handlers.ProductTokenResponse'
+      status:
+        type: string
+      token_amount:
+        type: integer
+      trial_end:
+        type: string
+      trial_start:
+        type: string
+      updated_at:
+        type: string
+      workspace_id:
+        type: string
+    type: object
+  handlers.SuccessResponse:
+    properties:
+      message:
+        type: string
+    type: object
   handlers.TokenResponse:
     properties:
       active:
@@ -591,6 +557,10 @@ definitions:
       contract_address:
         type: string
       created_at:
+        type: integer
+      decimals:
+        type: integer
+      deleted_at:
         type: integer
       gas_token:
         type: boolean
@@ -607,95 +577,6 @@ definitions:
       updated_at:
         type: integer
     type: object
-  handlers.UpdateAPIKeyRequest:
-    properties:
-      access_level:
-        enum:
-        - read
-        - write
-        - admin
-        type: string
-      description:
-        type: string
-      expires_at:
-        type: string
-      metadata:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-    type: object
-  handlers.UpdateAccountRequest:
-    properties:
-      account_type:
-        enum:
-        - admin
-        - merchant
-        type: string
-      business_name:
-        type: string
-      business_type:
-        type: string
-      description:
-        type: string
-      finished_onboarding:
-        type: boolean
-      metadata:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-      support_email:
-        type: string
-      support_phone:
-        type: string
-      website_url:
-        type: string
-    type: object
-  handlers.UpdateCustomerRequest:
-    properties:
-      balance_in_pennies:
-        type: integer
-      currency:
-        type: string
-      default_source_id:
-        type: string
-      description:
-        type: string
-      email:
-        type: string
-      external_id:
-        type: string
-      invoice_prefix:
-        type: string
-      livemode:
-        type: boolean
-      metadata:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-      next_invoice_sequence:
-        type: integer
-      phone:
-        type: string
-      tax_exempt:
-        type: boolean
-      tax_ids:
-        additionalProperties: true
-        type: object
-    type: object
-  handlers.UpdateNetworkRequest:
-    properties:
-      active:
-        type: boolean
-      chain_id:
-        type: integer
-      name:
-        type: string
-      type:
-        type: string
-    type: object
   handlers.UpdateProductRequest:
     properties:
       active:
@@ -704,183 +585,18 @@ definitions:
         type: string
       image_url:
         type: string
-      interval_type:
-        type: string
-      merchant_paid_gas:
-        type: boolean
       metadata:
         type: object
       name:
         type: string
-      price_in_pennies:
-        type: integer
       product_tokens:
         items:
           $ref: '#/definitions/handlers.CreateProductTokenRequest'
         type: array
-      product_type:
-        type: string
-      term_length:
-        type: integer
       url:
         type: string
       wallet_id:
         type: string
-    type: object
-  handlers.UpdateProductTokenRequest:
-    properties:
-      active:
-        type: boolean
-    required:
-    - active
-    type: object
-  handlers.UpdateTokenRequest:
-    properties:
-      active:
-        type: boolean
-      contract_address:
-        type: string
-      gas_token:
-        type: boolean
-      name:
-        type: string
-      symbol:
-        type: string
-    type: object
-  handlers.UpdateUserRequest:
-    properties:
-      address_line_1:
-        type: string
-      address_line_2:
-        type: string
-      city:
-        type: string
-      country:
-        type: string
-      display_name:
-        type: string
-      email:
-        type: string
-      email_verified:
-        type: boolean
-      first_name:
-        type: string
-      last_name:
-        type: string
-      locale:
-        type: string
-      metadata:
-        additionalProperties: true
-        type: object
-      phone:
-        type: string
-      picture_url:
-        type: string
-      postal_code:
-        type: string
-      state_region:
-        type: string
-      status:
-        type: string
-      timezone:
-        type: string
-      two_factor_enabled:
-        type: boolean
-    type: object
-  handlers.UpdateWalletRequest:
-    properties:
-      ens:
-        type: string
-      is_primary:
-        type: boolean
-      metadata:
-        additionalProperties: true
-        type: object
-      nickname:
-        type: string
-      verified:
-        type: boolean
-    type: object
-  handlers.UpdateWorkspaceRequest:
-    description: Updates an existing workspace
-    properties:
-      account_id:
-        type: string
-      business_name:
-        type: string
-      business_type:
-        type: string
-      description:
-        type: string
-      livemode:
-        type: boolean
-      metadata:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-      support_email:
-        type: string
-      support_phone:
-        type: string
-      website_url:
-        type: string
-    type: object
-  handlers.UserAccountResponse:
-    properties:
-      account_name:
-        type: string
-      address_line_1:
-        type: string
-      address_line_2:
-        type: string
-      city:
-        type: string
-      country:
-        type: string
-      created_at:
-        type: integer
-      display_name:
-        type: string
-      email:
-        type: string
-      email_verified:
-        type: boolean
-      first_name:
-        type: string
-      id:
-        type: string
-      is_owner:
-        type: boolean
-      last_name:
-        type: string
-      locale:
-        type: string
-      metadata:
-        additionalProperties: true
-        type: object
-      object:
-        type: string
-      phone:
-        type: string
-      picture_url:
-        type: string
-      postal_code:
-        type: string
-      role:
-        type: string
-      state_region:
-        type: string
-      status:
-        type: string
-      supabase_id:
-        type: string
-      timezone:
-        type: string
-      two_factor_enabled:
-        type: boolean
-      updated_at:
-        type: integer
     type: object
   handlers.UserResponse:
     properties:
@@ -943,8 +659,10 @@ definitions:
     type: object
   handlers.WalletResponse:
     properties:
-      account_id:
-        type: string
+      circle_data:
+        allOf:
+        - $ref: '#/definitions/handlers.CircleWalletData'
+        description: Only present for circle wallets
       created_at:
         type: integer
       ens:
@@ -958,6 +676,8 @@ definitions:
       metadata:
         additionalProperties: true
         type: object
+      network_id:
+        type: string
       network_type:
         type: string
       nickname:
@@ -970,19 +690,11 @@ definitions:
         type: boolean
       wallet_address:
         type: string
-    type: object
-  handlers.WalletStatsResponse:
-    properties:
-      network_types_count:
-        type: integer
-      object:
+      wallet_type:
+        description: '''wallet'' or ''circle_wallet'''
         type: string
-      primary_wallets:
-        type: integer
-      total_wallets:
-        type: integer
-      verified_wallets:
-        type: integer
+      workspace_id:
+        type: string
     type: object
   handlers.WorkspaceResponse:
     description: Workspace response
@@ -1031,397 +743,27 @@ info:
   title: Cyphera API
   version: "1.0"
 paths:
-  /accounts:
-    get:
-      consumes:
-      - application/json
-      description: Returns a list of accounts. Only accessible by admins.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.AccountResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: List accounts
-      tags:
-      - accounts
-    post:
-      consumes:
-      - application/json
-      description: Creates a new account with a default workspace. Only accessible
-        by admins.
-      parameters:
-      - description: Account creation data
-        in: body
-        name: account
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.CreateAccountRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/handlers.AccountResponse'
-        "400":
-          description: Invalid request body or metadata format
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "401":
-          description: Not authenticated
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Not authorized
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create an account
-      tags:
-      - accounts
-  /accounts/:account_id:
-    put:
-      consumes:
-      - application/json
-      description: Updates the specified account by setting the values of the parameters
-        passed
-      parameters:
-      - description: Account update data
-        in: body
-        name: account
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UpdateAccountRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.AccountResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update an account
-      tags:
-      - accounts
   /accounts/{account_id}:
     get:
       consumes:
       - application/json
-      description: Get account details by account ID
-      parameters:
-      - description: Account ID
-        in: path
-        name: account_id
-        required: true
-        type: string
+      description: Retrieves the details of the user's account
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.AccountResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      summary: Get account by ID
-      tags:
-      - accounts
-  /accounts/me:
-    put:
-      consumes:
-      - application/json
-      description: Updates the currently authenticated user's account details
-      parameters:
-      - description: Account update data
-        in: body
-        name: account
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UpdateAccountRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.FullAccountResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update current account
-      tags:
-      - accounts
-  /accounts/me/details:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves the details of the currently authenticated user's account
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.FullAccountResponse'
+            $ref: '#/definitions/handlers.AccountDetailsResponse'
         "401":
           description: Unauthorized
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Get current account
+      summary: Get account
       tags:
       - accounts
-  /accounts/onboard:
-    post:
-      consumes:
-      - application/json
-      description: Onboards an account by setting the finished_onboarding flag to
-        true
-      parameters:
-      - description: Account ID
-        in: path
-        name: account_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.AccountResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      summary: Onboard an account
-      tags:
-      - accounts
-  /accounts/signin:
-    post:
-      consumes:
-      - application/json
-      description: Creates a new account with user and workspace, or returns existing
-        account details
-      parameters:
-      - description: Account creation data
-        in: body
-        name: account
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.CreateAccountRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Existing account details
-          schema:
-            $ref: '#/definitions/handlers.FullAccountResponse'
-        "201":
-          description: Newly created account
-          schema:
-            $ref: '#/definitions/handlers.FullAccountResponse'
-        "400":
-          description: Invalid request body, metadata format, or missing required
-            fields
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Register or sign in to an account
-      tags:
-      - accounts
-  /admin/accounts/{account_id}:
-    delete:
-      consumes:
-      - application/json
-      description: Deletes an account. Only accessible by admins.
-      parameters:
-      - description: Account ID
-        in: path
-        name: account_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Delete an account
-      tags:
-      - accounts
-  /admin/api-keys:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves all API keys across all workspaces (admin only)
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/handlers.APIKeyResponse'
-            type: array
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get all API keys
-      tags:
-      - api-keys
-  /admin/api-keys/expired:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves all expired API keys
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/handlers.APIKeyResponse'
-            type: array
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get expired API keys
-      tags:
-      - api-keys
-  /admin/workspaces/{workspace_id}/hard:
-    delete:
-      consumes:
-      - application/json
-      description: Permanently deletes a workspace (admin only)
-      parameters:
-      - description: Workspace ID
-        in: path
-        name: workspace_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Hard delete workspace
-      tags:
-      - workspaces
-  /admin/workspaces/all:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves all workspaces including deleted ones (admin only)
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/handlers.WorkspaceResponse'
-            type: array
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get all workspaces
-      tags:
-      - workspaces
   /api-keys:
     get:
       consumes:
@@ -1445,37 +787,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: List API keys
-      tags:
-      - api-keys
-    post:
-      consumes:
-      - application/json
-      description: Creates a new API key for the current workspace
-      parameters:
-      - description: API key creation data
-        in: body
-        name: key
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.CreateAPIKeyRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/handlers.APIKeyResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create API key
       tags:
       - api-keys
   /api-keys/{api_key_id}:
@@ -1537,69 +848,6 @@ paths:
       summary: Get an API key
       tags:
       - api-keys
-    put:
-      consumes:
-      - application/json
-      description: Updates an existing API key
-      parameters:
-      - description: API Key ID
-        in: path
-        name: api_key_id
-        required: true
-        type: string
-      - description: API key update data
-        in: body
-        name: key
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UpdateAPIKeyRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.APIKeyResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update API key
-      tags:
-      - api-keys
-  /api-keys/count:
-    get:
-      consumes:
-      - application/json
-      description: Gets the count of active API keys for a workspace
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: integer
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get active API key count
-      tags:
-      - api-keys
   /customers:
     get:
       consumes:
@@ -1620,7 +868,14 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.ListCustomersResponse'
+            allOf:
+            - $ref: '#/definitions/handlers.PaginatedResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/handlers.CustomerResponse'
+                  type: array
+              type: object
         "400":
           description: Invalid workspace ID format or pagination parameters
           schema:
@@ -1638,66 +893,7 @@ paths:
       summary: List customers
       tags:
       - customers
-    post:
-      consumes:
-      - application/json
-      description: Creates a new customer
-      parameters:
-      - description: Customer creation data
-        in: body
-        name: customer
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.CreateCustomerRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/handlers.CustomerResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create customer
-      tags:
-      - customers
   /customers/{customer_id}:
-    delete:
-      consumes:
-      - application/json
-      description: Deletes a customer
-      parameters:
-      - description: Customer ID
-        in: path
-        name: customer_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Delete customer
-      tags:
-      - customers
     get:
       consumes:
       - application/json
@@ -1728,98 +924,67 @@ paths:
       summary: Get customer by ID
       tags:
       - customers
-    put:
+  /customers/{customer_id}/subscriptions:
+    get:
       consumes:
       - application/json
-      description: Updates an existing customer
+      description: Get a list of all subscriptions for a specific customer
       parameters:
       - description: Customer ID
         in: path
         name: customer_id
         required: true
         type: string
-      - description: Customer update data
-        in: body
-        name: customer
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UpdateCustomerRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.CustomerResponse'
+            allOf:
+            - $ref: '#/definitions/handlers.PaginatedResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/handlers.SubscriptionResponse'
+                  type: array
+              type: object
         "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
+        "500":
+          description: Internal Server Error
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Update customer
+      summary: List subscriptions by customer
       tags:
-      - customers
-  /health:
-    get:
-      consumes:
-      - application/json
-      description: Checks if the server is running
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Returns health status
-          schema:
-            $ref: '#/definitions/handlers.HealthResponse'
-      summary: Health check
-      tags:
-      - health
+      - subscriptions
   /networks:
     get:
       consumes:
       - application/json
-      description: Retrieves all networks
+      description: Retrieves all networks with their associated tokens
+      parameters:
+      - description: Filter networks by testnet status
+        in: query
+        name: testnet
+        type: boolean
+      - description: Filter networks by active status
+        in: query
+        name: active
+        type: boolean
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.ListNetworksResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: List networks
-      tags:
-      - networks
-    post:
-      consumes:
-      - application/json
-      description: Creates a new network
-      parameters:
-      - description: Network creation data
-        in: body
-        name: network
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.CreateNetworkRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/handlers.NetworkResponse'
-        "400":
-          description: Bad Request
+            $ref: '#/definitions/handlers.ListNetworksWithTokensResponse'
+        "401":
+          description: Unauthorized
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
         "500":
@@ -1828,38 +993,10 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Create network
+      summary: List networks with tokens
       tags:
       - networks
   /networks/{network_id}:
-    delete:
-      consumes:
-      - application/json
-      description: Deletes a network
-      parameters:
-      - description: Network ID
-        in: path
-        name: network_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Delete network
-      tags:
-      - networks
     get:
       consumes:
       - application/json
@@ -1888,67 +1025,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get network by ID
-      tags:
-      - networks
-    put:
-      consumes:
-      - application/json
-      description: Updates an existing network
-      parameters:
-      - description: Network ID
-        in: path
-        name: network_id
-        required: true
-        type: string
-      - description: Network update data
-        in: body
-        name: network
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UpdateNetworkRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.NetworkResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update network
-      tags:
-      - networks
-  /networks/active:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves all active networks
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.ListNetworksResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: List active networks
       tags:
       - networks
   /networks/chain/{chain_id}:
@@ -1980,27 +1056,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get network by chain ID
-      tags:
-      - networks
-  /networks/tokens:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves all networks with their associated tokens
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.ListNetworksWithTokensResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: List networks with tokens
       tags:
       - networks
   /products:
@@ -2040,9 +1095,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a new product
+      description: Creates a new product with associated prices
       parameters:
-      - description: Product creation data
+      - description: Product and prices creation data
         in: body
         name: product
         required: true
@@ -2072,7 +1127,7 @@ paths:
     delete:
       consumes:
       - application/json
-      description: Deletes a product
+      description: Deletes a product and its associated prices (soft delete)
       parameters:
       - description: Product ID
         in: path
@@ -2130,14 +1185,15 @@ paths:
     put:
       consumes:
       - application/json
-      description: Updates an existing product
+      description: Updates an existing product. Price updates should be done via price-specific
+        endpoints.
       parameters:
       - description: Product ID
         in: path
         name: product_id
         required: true
         type: string
-      - description: Product update data
+      - description: Product update data (prices are not updated here)
         in: body
         name: product
         required: true
@@ -2167,19 +1223,31 @@ paths:
       summary: Update product
       tags:
       - products
-  /products/{product_id}/deploycontract:
-    post:
+  /products/{product_id}/subscriptions:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of all subscriptions for a specific product
       parameters:
       - description: Product ID
         in: path
         name: product_id
         required: true
         type: string
+      produces:
+      - application/json
       responses:
         "200":
           description: OK
           schema:
-            type: list
+            allOf:
+            - $ref: '#/definitions/handlers.PaginatedResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/handlers.SubscriptionResponse'
+                  type: array
+              type: object
         "400":
           description: Bad Request
           schema:
@@ -2190,20 +1258,55 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - ApiKeyAuth: []
-  /products/{product_id}/networks/{network_id}/tokens:
+      summary: List subscriptions by product
+      tags:
+      - subscriptions
+  /subscription-events:
     get:
       consumes:
       - application/json
-      description: Returns a list of all product tokens for a specific network
+      description: Retrieves a paginated list of subscription events for the workspace
       parameters:
-      - description: Product ID
-        in: path
-        name: product_id
+      - description: Workspace ID
+        in: header
+        name: X-Workspace-ID
         required: true
         type: string
-      - description: Network ID
+      - description: Number of events to return (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.PaginatedResponse'
+        "400":
+          description: Invalid workspace ID format or pagination parameters
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Failed to retrieve or count subscription events
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: List subscription events
+      tags:
+      - subscription-events
+  /subscription-events/{event_id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a subscription event by its ID
+      parameters:
+      - description: Event ID
         in: path
-        name: network_id
+        name: event_id
         required: true
         type: string
       produces:
@@ -2212,76 +1315,70 @@ paths:
         "200":
           description: OK
           schema:
-            items:
-              $ref: '#/definitions/handlers.ProductTokenResponse'
-            type: array
+            $ref: '#/definitions/handlers.SubscriptionEventResponse'
         "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Get product tokens by network
+      summary: Get a subscription event by ID
       tags:
-      - product-tokens
-  /products/{product_id}/networks/{network_id}/tokens/{token_id}:
+      - subscription-events
+  /subscriptions:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of all non-deleted subscriptions
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/handlers.PaginatedResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/handlers.SubscriptionResponse'
+                  type: array
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List all subscriptions
+      tags:
+      - subscriptions
+  /subscriptions/{subscription_id}:
     delete:
       consumes:
       - application/json
-      description: Soft deletes a product token
+      description: Soft-deletes a subscription (marks as deleted)
       parameters:
-      - description: Product ID
+      - description: Subscription ID
         in: path
-        name: product_id
-        required: true
-        type: string
-      - description: Network ID
-        in: path
-        name: network_id
-        required: true
-        type: string
-      - description: Token ID
-        in: path
-        name: token_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Delete a product token
-      tags:
-      - product-tokens
-    get:
-      consumes:
-      - application/json
-      description: Retrieves the details of an existing product token by product,
-        network, and token IDs
-      parameters:
-      - description: Product ID
-        in: path
-        name: product_id
-        required: true
-        type: string
-      - description: Network ID
-        in: path
-        name: network_id
-        required: true
-        type: string
-      - description: Token ID
-        in: path
-        name: token_id
+        name: subscription_id
         required: true
         type: string
       produces:
@@ -2290,7 +1387,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.ProductTokenResponse'
+            $ref: '#/definitions/handlers.SuccessResponse'
         "400":
           description: Bad Request
           schema:
@@ -2299,44 +1396,32 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Get a product token by IDs
+      summary: Delete a subscription
       tags:
-      - product-tokens
-    put:
+      - subscriptions
+    get:
       consumes:
       - application/json
-      description: Updates an existing product token
+      description: Retrieves a subscription by its ID
       parameters:
-      - description: Product ID
+      - description: Subscription ID
         in: path
-        name: product_id
+        name: subscription_id
         required: true
         type: string
-      - description: Network ID
-        in: path
-        name: network_id
-        required: true
-        type: string
-      - description: Token ID
-        in: path
-        name: token_id
-        required: true
-        type: string
-      - description: Product Token update data
-        in: body
-        name: token
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UpdateProductTokenRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.ProductTokenResponse'
+            $ref: '#/definitions/handlers.SubscriptionResponse'
         "400":
           description: Bad Request
           schema:
@@ -2345,25 +1430,24 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Update a product token
+      summary: Get a subscription by ID
       tags:
-      - product-tokens
-  /products/{product_id}/networks/{network_id}/tokens/active:
+      - subscriptions
+  /subscriptions/{subscription_id}/events:
     get:
       consumes:
       - application/json
-      description: Returns a list of all active product tokens for a specific network
+      description: Get a list of all events for a specific subscription
       parameters:
-      - description: Product ID
+      - description: Subscription ID
         in: path
-        name: product_id
-        required: true
-        type: string
-      - description: Network ID
-        in: path
-        name: network_id
+        name: subscription_id
         required: true
         type: string
       produces:
@@ -2373,183 +1457,8 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/handlers.ProductTokenResponse'
+              $ref: '#/definitions/handlers.SubscriptionEventResponse'
             type: array
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get active product tokens by network
-      tags:
-      - product-tokens
-  /products/{product_id}/tokens:
-    delete:
-      consumes:
-      - application/json
-      description: Soft deletes all product tokens for a specific product
-      parameters:
-      - description: Product ID
-        in: path
-        name: product_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Delete all product tokens by product
-      tags:
-      - product-tokens
-    get:
-      consumes:
-      - application/json
-      description: Returns a list of all product tokens for a specific product
-      parameters:
-      - description: Product ID
-        in: path
-        name: product_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/handlers.ProductTokenResponse'
-            type: array
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get product tokens by product
-      tags:
-      - product-tokens
-    post:
-      consumes:
-      - application/json
-      description: Creates a new product token
-      parameters:
-      - description: Product ID
-        in: path
-        name: product_id
-        required: true
-        type: string
-      - description: Product Token creation data
-        in: body
-        name: token
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.CreateProductTokenRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/handlers.ProductTokenResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create a product token
-      tags:
-      - product-tokens
-  /products/{product_id}/tokens/{token_id}:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves the details of an existing product token
-      parameters:
-      - description: Product ID
-        in: path
-        name: product_id
-        required: true
-        type: string
-      - description: Product Token ID
-        in: path
-        name: token_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.ProductTokenResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get a product token
-      tags:
-      - product-tokens
-  /products/{product_id}/tokens/active:
-    get:
-      consumes:
-      - application/json
-      description: Returns a list of all active product tokens for a specific product
-      parameters:
-      - description: Product ID
-        in: path
-        name: product_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/handlers.ProductTokenResponse'
-            type: array
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get active product tokens by product
-      tags:
-      - product-tokens
-  /products/active:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves all active products for a workspace
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.ListProductsResponse'
         "400":
           description: Bad Request
           schema:
@@ -2560,40 +1469,9 @@ paths:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: List active products
+      summary: List events for a subscription
       tags:
-      - products
-  /products/public/{product_id}:
-    get:
-      consumes:
-      - application/json
-      description: Get public product details by product ID
-      parameters:
-      - description: Product ID
-        in: path
-        name: product_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.ProductResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get public product by ID
-      tags:
-      - products
+      - subscription-events
   /tokens:
     get:
       consumes:
@@ -2615,66 +1493,7 @@ paths:
       summary: List tokens
       tags:
       - tokens
-    post:
-      consumes:
-      - application/json
-      description: Creates a new token
-      parameters:
-      - description: Token creation data
-        in: body
-        name: token
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.CreateTokenRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/handlers.TokenResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create token
-      tags:
-      - tokens
   /tokens/{token_id}:
-    delete:
-      consumes:
-      - application/json
-      description: Deletes a token
-      parameters:
-      - description: Token ID
-        in: path
-        name: token_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Delete token
-      tags:
-      - tokens
     get:
       consumes:
       - application/json
@@ -2703,46 +1522,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get token by ID
-      tags:
-      - tokens
-    put:
-      consumes:
-      - application/json
-      description: Updates an existing token
-      parameters:
-      - description: Token ID
-        in: path
-        name: token_id
-        required: true
-        type: string
-      - description: Token update data
-        in: body
-        name: token
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UpdateTokenRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.TokenResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update token
       tags:
       - tokens
   /tokens/network/{network_id}:
@@ -2774,37 +1553,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: List tokens by network
-      tags:
-      - tokens
-  /tokens/network/{network_id}/active:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves all active tokens for a specific network
-      parameters:
-      - description: Network ID
-        in: path
-        name: network_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.ListTokensResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: List active tokens by network
       tags:
       - tokens
   /tokens/network/{network_id}/address/{address}:
@@ -2843,98 +1591,40 @@ paths:
       summary: Get token by address
       tags:
       - tokens
-  /tokens/network/{network_id}/gas:
-    get:
+  /tokens/quote:
+    post:
       consumes:
       - application/json
-      description: Retrieves the gas token for a specific network
+      description: Retrieves the price of a given token symbol in the specified fiat
+        currency using CoinMarketCap API.
       parameters:
-      - description: Network ID
-        in: path
-        name: network_id
+      - description: Token and Fiat symbols
+        in: body
+        name: quote
         required: true
-        type: string
+        schema:
+          $ref: '#/definitions/handlers.GetTokenQuoteRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.TokenResponse'
+            $ref: '#/definitions/handlers.GetTokenQuoteResponse'
         "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get gas token for network
-      tags:
-      - tokens
-  /users:
-    post:
-      consumes:
-      - application/json
-      description: Creates a new user
-      parameters:
-      - description: User creation data
-        in: body
-        name: user
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.CreateUserRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/handlers.UserResponse'
-        "400":
-          description: Bad Request
+          description: Invalid request body or missing parameters
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
         "500":
-          description: Internal Server Error
+          description: Internal server error or failed to fetch price from CoinMarketCap
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Create user
+      summary: Get token quote
       tags:
-      - users
+      - tokens
   /users/{user_id}:
-    delete:
-      consumes:
-      - application/json
-      description: Deletes a user
-      parameters:
-      - description: User ID
-        in: path
-        name: user_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Delete user
-      tags:
-      - users
     get:
       consumes:
       - application/json
@@ -2965,134 +1655,20 @@ paths:
       summary: Get user by ID
       tags:
       - users
-    put:
-      consumes:
-      - application/json
-      description: Updates a user's information
-      parameters:
-      - description: User ID
-        in: path
-        name: user_id
-        required: true
-        type: string
-      - description: User update data
-        in: body
-        name: user
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UpdateUserRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.UserResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update user
-      tags:
-      - users
-  /users/{user_id}/account:
-    get:
-      consumes:
-      - application/json
-      description: Gets the account details associated with a user
-      parameters:
-      - description: User ID
-        in: path
-        name: user_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.UserAccountResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get user's account
-      tags:
-      - users
-  /users/me:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves the details of the currently authenticated user
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.UserResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get current user
-      tags:
-      - users
-  /users/supabase:
-    get:
-      consumes:
-      - application/json
-      description: Gets a user by their Supabase ID
-      parameters:
-      - description: Supabase ID
-        in: query
-        name: supabase_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.UserResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get user by Supabase ID
-      tags:
-      - users
   /wallets:
     get:
       consumes:
       - application/json
-      description: List all wallets for the authenticated account
+      description: List all wallets for the authenticated workspace
+      parameters:
+      - description: Include Circle wallet data
+        in: query
+        name: include_circle_data
+        type: boolean
+      - description: Filter by wallet type (wallet, circle_wallet)
+        in: query
+        name: wallet_type
+        type: string
       produces:
       - application/json
       responses:
@@ -3116,7 +1692,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a new wallet for the authenticated account
+      description: Creates a new wallet for the authenticated workspace
       parameters:
       - description: Wallet creation request
         in: body
@@ -3183,6 +1759,10 @@ paths:
         name: wallet_id
         required: true
         type: string
+      - description: Include Circle wallet data
+        in: query
+        name: include_circle_data
+        type: boolean
       produces:
       - application/json
       responses:
@@ -3201,260 +1781,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get wallet by ID
-      tags:
-      - wallets
-    patch:
-      consumes:
-      - application/json
-      description: Update wallet details
-      parameters:
-      - description: Wallet ID
-        in: path
-        name: wallet_id
-        required: true
-        type: string
-      - description: Wallet update request
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UpdateWalletRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.WalletResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update a wallet
-      tags:
-      - wallets
-  /wallets/{wallet_id}/primary:
-    post:
-      consumes:
-      - application/json
-      description: Set a wallet as the primary wallet for its network type
-      parameters:
-      - description: Wallet ID
-        in: path
-        name: wallet_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.WalletResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Set wallet as primary
-      tags:
-      - wallets
-  /wallets/address/{wallet_address}:
-    get:
-      consumes:
-      - application/json
-      description: Get wallet details by wallet address and network type
-      parameters:
-      - description: Wallet address
-        in: path
-        name: wallet_address
-        required: true
-        type: string
-      - description: Network type
-        in: query
-        name: network_type
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.WalletResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get wallet by address
-      tags:
-      - wallets
-  /wallets/ens:
-    get:
-      consumes:
-      - application/json
-      description: Get a list of wallets that have ENS names for the authenticated
-        account
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.WalletListResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get wallets with ENS names
-      tags:
-      - wallets
-  /wallets/network/{network_type}:
-    get:
-      consumes:
-      - application/json
-      description: List all wallets for a specific network type
-      parameters:
-      - description: Network Type
-        in: path
-        name: network_type
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.WalletListResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: List wallets by network type
-      tags:
-      - wallets
-  /wallets/recent:
-    get:
-      consumes:
-      - application/json
-      description: Get a list of recently used wallets for the authenticated account
-      parameters:
-      - description: Number of results to return (default 5)
-        in: query
-        name: limit
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.WalletListResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get recently used wallets
-      tags:
-      - wallets
-  /wallets/search:
-    get:
-      consumes:
-      - application/json
-      description: Search wallets by address, nickname, or ENS name
-      parameters:
-      - description: Search query
-        in: query
-        name: query
-        required: true
-        type: string
-      - description: Number of results to return (default 10)
-        in: query
-        name: limit
-        type: integer
-      - description: Number of results to skip (default 0)
-        in: query
-        name: offset
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.WalletListResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Search wallets
-      tags:
-      - wallets
-  /wallets/stats:
-    get:
-      consumes:
-      - application/json
-      description: Get statistics about wallets for the authenticated account
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.WalletStatsResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get wallet statistics
       tags:
       - wallets
   /workspaces:
@@ -3478,66 +1804,7 @@ paths:
       summary: List workspaces
       tags:
       - workspaces
-    post:
-      consumes:
-      - application/json
-      description: Creates a new workspace
-      parameters:
-      - description: Workspace creation data
-        in: body
-        name: workspace
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.CreateWorkspaceRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/handlers.WorkspaceResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create workspace
-      tags:
-      - workspaces
   /workspaces/{workspace_id}:
-    delete:
-      consumes:
-      - application/json
-      description: Soft deletes a workspace
-      parameters:
-      - description: Workspace ID
-        in: path
-        name: workspace_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Delete workspace
-      tags:
-      - workspaces
     get:
       consumes:
       - application/json
@@ -3566,85 +1833,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get a workspace
-      tags:
-      - workspaces
-    put:
-      consumes:
-      - application/json
-      description: Updates an existing workspace
-      parameters:
-      - description: Workspace ID
-        in: path
-        name: workspace_id
-        required: true
-        type: string
-      - description: Workspace update data
-        in: body
-        name: workspace
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UpdateWorkspaceRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.WorkspaceResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update workspace
-      tags:
-      - workspaces
-  /workspaces/{workspace_id}/customers:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves paginated customers for a workspace
-      parameters:
-      - description: Workspace ID
-        in: path
-        name: workspace_id
-        required: true
-        type: string
-      - description: Number of customers to return (default 10, max 100)
-        in: query
-        name: limit
-        type: integer
-      - description: Number of customers to skip (default 0)
-        in: query
-        name: offset
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.ListCustomersResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: List workspace customers
       tags:
       - workspaces
 securityDefinitions:

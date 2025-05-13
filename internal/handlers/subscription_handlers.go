@@ -4,6 +4,7 @@ import (
 	"context"
 	dsClient "cyphera-api/internal/client/delegation_server"
 	"cyphera-api/internal/db"
+	"cyphera-api/internal/logger"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.uber.org/zap"
 )
 
 // SubscriptionHandler manages subscription-related HTTP endpoints
@@ -46,63 +49,29 @@ type SubscribeRequest struct {
 
 // SubscriptionResponse represents a subscription along with its associated price and product details.
 type SubscriptionResponse struct {
-	ID                 uuid.UUID             `json:"id"`
-	WorkspaceID        uuid.UUID             `json:"workspace_id"`
-	CustomerID         uuid.UUID             `json:"customer_id,omitempty"`
-	CustomerName       string                `json:"customer_name,omitempty"`
-	CustomerEmail      string                `json:"customer_email,omitempty"`
-	Status             db.SubscriptionStatus `json:"status"`
-	CurrentPeriodStart pgtype.Timestamptz    `json:"current_period_start"`
-	CurrentPeriodEnd   pgtype.Timestamptz    `json:"current_period_end"`
-	TrialStart         pgtype.Timestamptz    `json:"trial_start,omitempty"`
-	TrialEnd           pgtype.Timestamptz    `json:"trial_end,omitempty"`
-	TokenAmount        pgtype.Numeric        `json:"token_amount"`
-	CanceledAt         pgtype.Timestamptz    `json:"canceled_at,omitempty"`
-	CreatedAt          pgtype.Timestamptz    `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz    `json:"updated_at"`
-	Price              PriceResponse         `json:"price"`
-	Product            ProductResponse       `json:"product"`
-	ProductToken       ProductTokenResponse  `json:"product_token"`
-}
-
-// SubscriptionEventPriceInfo contains essential price information relevant to a subscription event.
-// Simplified compared to a full PriceResponse for embedding.
-type SubscriptionEventPriceInfo struct {
-	ID                  uuid.UUID           `json:"id"`
-	Type                db.PriceType        `json:"type"` // e.g., recurring, one_off
-	Currency            db.Currency         `json:"currency"`
-	UnitAmountInPennies int32               `json:"unit_amount_in_pennies"`
-	IntervalType        db.NullIntervalType `json:"interval_type,omitempty"`  // Use db.NullIntervalType to handle potential nulls
-	IntervalCount       pgtype.Int4         `json:"interval_count,omitempty"` // Use pgtype.Int4 to handle potential nulls
-	TermLength          pgtype.Int4         `json:"term_length,omitempty"`    // Use pgtype.Int4 to handle potential nulls
-}
-
-// SubscriptionEventResponse represents a detailed view of a subscription event.
-// It includes denormalized information from related entities like subscription, product, and price.
-type SubscriptionEventResponse struct {
-	ID                 uuid.UUID                  `json:"id"`
-	SubscriptionID     uuid.UUID                  `json:"subscription_id"`
-	EventType          db.SubscriptionEventType   `json:"event_type"`
-	TransactionHash    pgtype.Text                `json:"transaction_hash,omitempty"`
-	EventAmountInCents int32                      `json:"event_amount_in_cents"`
-	EventOccurredAt    pgtype.Timestamptz         `json:"event_occurred_at"`
-	ErrorMessage       pgtype.Text                `json:"error_message,omitempty"`
-	EventMetadata      json.RawMessage            `json:"event_metadata,omitempty"`
-	EventCreatedAt     pgtype.Timestamptz         `json:"event_created_at"`
-	CustomerID         uuid.UUID                  `json:"customer_id"`
-	SubscriptionStatus db.SubscriptionStatus      `json:"subscription_status"`
-	ProductID          uuid.UUID                  `json:"product_id"`
-	ProductName        string                     `json:"product_name"`
-	PriceInfo          SubscriptionEventPriceInfo `json:"price_info"`
-	Subscription       SubscriptionResponse       `json:"subscription"`
-	ProductToken       ProductTokenResponse       `json:"product_token"`
-	Network            NetworkResponse            `json:"network"`
-	Customer           CustomerResponse           `json:"customer"`
+	ID                 uuid.UUID            `json:"id"`
+	WorkspaceID        uuid.UUID            `json:"workspace_id"`
+	CustomerID         uuid.UUID            `json:"customer_id,omitempty"`
+	CustomerName       string               `json:"customer_name,omitempty"`
+	CustomerEmail      string               `json:"customer_email,omitempty"`
+	Status             string               `json:"status"`
+	CurrentPeriodStart time.Time            `json:"current_period_start"`
+	CurrentPeriodEnd   time.Time            `json:"current_period_end"`
+	TrialStart         time.Time            `json:"trial_start,omitempty"`
+	TrialEnd           time.Time            `json:"trial_end,omitempty"`
+	TokenAmount        int32                `json:"token_amount"`
+	CanceledAt         time.Time            `json:"canceled_at,omitempty"`
+	CreatedAt          time.Time            `json:"created_at"`
+	UpdatedAt          time.Time            `json:"updated_at"`
+	Price              PriceResponse        `json:"price"`
+	Product            ProductResponse      `json:"product"`
+	ProductToken       ProductTokenResponse `json:"product_token"`
 }
 
 type CreateSubscriptionParams struct {
 	Customer       db.Customer
 	CustomerWallet db.CustomerWallet
+	WorkspaceID    uuid.UUID
 	ProductID      uuid.UUID
 	ProductTokenID uuid.UUID
 	Price          db.Price
@@ -120,13 +89,20 @@ type CreateSubscriptionParams struct {
 // @Accept json
 // @Produce json
 // @Param subscription_id path string true "Subscription ID"
-// @Success 200 {object} db.Subscription
+// @Success 200 {object} SubscriptionResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /subscriptions/{subscription_id} [get]
 func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	subscriptionID := c.Param("subscription_id")
 	parsedUUID, err := uuid.Parse(subscriptionID)
 	if err != nil {
@@ -134,7 +110,10 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 		return
 	}
 
-	subscription, err := h.common.db.GetSubscription(c.Request.Context(), parsedUUID)
+	subscription, err := h.common.db.GetSubscriptionWithWorkspace(c.Request.Context(), db.GetSubscriptionWithWorkspaceParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		handleDBError(c, err, "Subscription not found")
 		return
@@ -151,7 +130,7 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 // @Produce json
 // @Param page query int false "Page number"
 // @Param limit query int false "Items per page"
-// @Success 200 {array} db.Subscription
+// @Success 200 {object} PaginatedResponse{data=[]SubscriptionResponse}
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /subscriptions [get]
@@ -208,7 +187,8 @@ func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 		subscriptionResponses[i] = subscription
 	}
 
-	sendPaginatedSuccess(c, http.StatusOK, subscriptionResponses, int(page), int(limit), int(totalCount))
+	response := sendPaginatedSuccess(c, http.StatusOK, subscriptionResponses, int(page), int(limit), int(totalCount))
+	c.JSON(http.StatusOK, response)
 }
 
 // ListSubscriptionsByCustomer godoc
@@ -218,12 +198,19 @@ func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param customer_id path string true "Customer ID"
-// @Success 200 {array} db.Subscription
+// @Success 200 {object} PaginatedResponse{data=[]SubscriptionResponse}
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /customers/{customer_id}/subscriptions [get]
 func (h *SubscriptionHandler) ListSubscriptionsByCustomer(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	customerID := c.Param("customer_id")
 	parsedUUID, err := uuid.Parse(customerID)
 	if err != nil {
@@ -231,13 +218,25 @@ func (h *SubscriptionHandler) ListSubscriptionsByCustomer(c *gin.Context) {
 		return
 	}
 
-	subscriptions, err := h.common.db.ListSubscriptionsByCustomer(c.Request.Context(), parsedUUID)
+	subscriptions, err := h.common.db.ListSubscriptionsByCustomer(c.Request.Context(), db.ListSubscriptionsByCustomerParams{
+		CustomerID:  parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve customer subscriptions", err)
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, subscriptions)
+	subscriptionResponses := make([]SubscriptionResponse, len(subscriptions))
+	for i, sub := range subscriptions {
+		subscription, err := toSubscriptionResponseFromDBSubscription(sub)
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, "Failed to convert subscription to response", err)
+			return
+		}
+		subscriptionResponses[i] = subscription
+	}
+	sendSuccess(c, http.StatusOK, subscriptionResponses)
 }
 
 // ListSubscriptionsByProduct godoc
@@ -247,7 +246,7 @@ func (h *SubscriptionHandler) ListSubscriptionsByCustomer(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param product_id path string true "Product ID"
-// @Success 200 {array} db.Subscription
+// @Success 200 {object} PaginatedResponse{data=[]SubscriptionResponse}
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
@@ -293,19 +292,12 @@ type UpdateSubscriptionRequest struct {
 }
 
 // UpdateSubscription godoc
-// @Summary Update an existing subscription
-// @Description Updates a subscription with the provided details
+// @Summary Update a subscription
+// @Description Updates an existing subscription with the specified details
 // @Tags subscriptions
 // @Accept json
 // @Produce json
-// @Param subscription_id path string true "Subscription ID"
-// @Param subscription body UpdateSubscriptionRequest true "Updated subscription details"
-// @Success 200 {object} db.Subscription
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /subscriptions/{subscription_id} [put]
+// @Tags exclude
 func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	ctx := c.Request.Context()
 	subscriptionID := c.Param("subscription_id")
@@ -439,93 +431,6 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, subscription)
 }
 
-// UpdateSubscriptionStatus godoc
-// @Summary Update a subscription's status
-// @Description Updates just the status of a subscription
-// @Tags subscriptions
-// @Accept json
-// @Produce json
-// @Param subscription_id path string true "Subscription ID"
-// @Param status body struct { Status string `json:"status"` } true "New status"
-// @Success 200 {object} db.Subscription
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /subscriptions/{subscription_id}/status [patch]
-func (h *SubscriptionHandler) UpdateSubscriptionStatus(c *gin.Context) {
-	subscriptionID := c.Param("subscription_id")
-	parsedUUID, err := uuid.Parse(subscriptionID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid subscription ID format", err)
-		return
-	}
-
-	// Parse request body
-	var request struct {
-		Status string `json:"status" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&request); err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid request format", err)
-		return
-	}
-
-	// Validate status
-	var status db.SubscriptionStatus
-	switch request.Status {
-	case string(db.SubscriptionStatusActive), string(db.SubscriptionStatusCanceled), string(db.SubscriptionStatusExpired), string(db.SubscriptionStatusSuspended), string(db.SubscriptionStatusFailed):
-		status = db.SubscriptionStatus(request.Status)
-	default:
-		sendError(c, http.StatusBadRequest, "Invalid status value", nil)
-		return
-	}
-
-	// Update status
-	params := db.UpdateSubscriptionStatusParams{
-		ID:     parsedUUID,
-		Status: status,
-	}
-
-	updatedSubscription, err := h.common.db.UpdateSubscriptionStatus(c.Request.Context(), params)
-	if err != nil {
-		handleDBError(c, err, "Failed to update subscription status")
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, updatedSubscription)
-}
-
-// CancelSubscription godoc
-// @Summary Cancel a subscription
-// @Description Sets a subscription status to canceled
-// @Tags subscriptions
-// @Accept json
-// @Produce json
-// @Param subscription_id path string true "Subscription ID"
-// @Success 200 {object} db.Subscription
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /subscriptions/{subscription_id}/cancel [post]
-func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
-	subscriptionID := c.Param("subscription_id")
-	parsedUUID, err := uuid.Parse(subscriptionID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid subscription ID format", err)
-		return
-	}
-
-	canceledSubscription, err := h.common.db.CancelSubscription(c.Request.Context(), parsedUUID)
-	if err != nil {
-		handleDBError(c, err, "Failed to cancel subscription")
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, canceledSubscription)
-}
-
 // DeleteSubscription godoc
 // @Summary Delete a subscription
 // @Description Soft-deletes a subscription (marks as deleted)
@@ -540,10 +445,36 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /subscriptions/{subscription_id} [delete]
 func (h *SubscriptionHandler) DeleteSubscription(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	subscriptionID := c.Param("subscription_id")
 	parsedUUID, err := uuid.Parse(subscriptionID)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid subscription ID format", err)
+		return
+	}
+
+	subscription, err := h.common.db.GetSubscriptionWithWorkspace(c.Request.Context(), db.GetSubscriptionWithWorkspaceParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
+	if err != nil {
+		handleDBError(c, err, "Subscription not found")
+		return
+	}
+
+	if subscription.WorkspaceID != parsedWorkspaceID {
+		sendError(c, http.StatusBadRequest, "Subscription does not belong to this workspace", nil)
+		return
+	}
+
+	if subscription.Status != db.SubscriptionStatusCanceled && subscription.Status != db.SubscriptionStatusExpired {
+		sendError(c, http.StatusBadRequest, "Subscription is not canceled or expired", nil)
 		return
 	}
 
@@ -559,19 +490,19 @@ func (h *SubscriptionHandler) DeleteSubscription(c *gin.Context) {
 // CalculateNextRedemption computes the next scheduled redemption date based on interval type.
 // This is the central function for all interval calculations in the system.
 // For testing and development purposes, 1min and 5mins intervals are supported.
-func CalculateNextRedemption(intervalType db.IntervalType, currentTime time.Time) time.Time {
+func CalculateNextRedemption(intervalType string, currentTime time.Time) time.Time {
 	switch intervalType {
-	case db.IntervalType1min:
+	case "1min":
 		return currentTime.Add(1 * time.Minute)
-	case db.IntervalType5mins:
+	case "5mins":
 		return currentTime.Add(5 * time.Minute)
-	case db.IntervalTypeDaily:
+	case "daily":
 		return currentTime.AddDate(0, 0, 1) // Next day
-	case db.IntervalTypeWeek:
+	case "week":
 		return currentTime.AddDate(0, 0, 7) // Next week
-	case db.IntervalTypeMonth:
+	case "month":
 		return currentTime.AddDate(0, 1, 0) // Next month
-	case db.IntervalTypeYear:
+	case "year":
 		return currentTime.AddDate(1, 0, 0) // Next year
 	default:
 		return currentTime.AddDate(0, 1, 0) // Default to monthly
@@ -580,19 +511,19 @@ func CalculateNextRedemption(intervalType db.IntervalType, currentTime time.Time
 
 // CalculatePeriodEnd determines the end date of a subscription period based on interval type and term length.
 // This function is used when creating or updating subscription periods.
-func CalculatePeriodEnd(start time.Time, intervalType db.IntervalType, termLength int32) time.Time {
+func CalculatePeriodEnd(start time.Time, intervalType string, termLength int32) time.Time {
 	switch intervalType {
-	case db.IntervalType1min:
+	case "1min":
 		return start.Add(time.Duration(termLength) * time.Minute)
-	case db.IntervalType5mins:
+	case "5mins":
 		return start.Add(time.Duration(termLength*5) * time.Minute)
-	case db.IntervalTypeDaily:
+	case "daily":
 		return start.AddDate(0, 0, int(termLength))
-	case db.IntervalTypeWeek:
+	case "week":
 		return start.AddDate(0, 0, int(termLength*7))
-	case db.IntervalTypeMonth:
+	case "month":
 		return start.AddDate(0, int(termLength), 0)
-	case db.IntervalTypeYear:
+	case "year":
 		return start.AddDate(int(termLength), 0, 0)
 	default:
 		return start.AddDate(0, int(termLength), 0) // Default to monthly
@@ -622,7 +553,7 @@ type ProcessDueSubscriptionsResult struct {
 // processSubscriptionParams contains all parameters needed to process a subscription
 type processSubscriptionParams struct {
 	ctx            context.Context
-	subscription   db.Subscription
+	subscription   db.ListSubscriptionsDueForRedemptionRow
 	product        db.Product
 	Price          db.Price
 	productToken   db.GetProductTokenRow
@@ -780,7 +711,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		executionObject := dsClient.ExecutionObject{
 			MerchantAddress:      params.merchantWallet.WalletAddress,
 			TokenContractAddress: params.token.ContractAddress,
-			TokenAmount:          params.subscription.TokenAmount.Int.Int64(),
+			TokenAmount:          int64(params.subscription.TokenAmount),
 			TokenDecimals:        params.token.Decimals,
 			ChainID:              uint32(params.network.ChainID),
 			NetworkName:          params.network.Name,
@@ -829,7 +760,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 
 		// Update next redemption date based on product interval
 		var nextRedemptionDate pgtype.Timestamptz
-		if !params.Price.IntervalType.Valid {
+		if params.Price.IntervalType == "" {
 			errMsg := fmt.Sprintf("IntervalType is null for recurring price %s (subscription %s)", params.Price.ID, originalSubscription.ID)
 			log.Println(errMsg)
 			// Record failure event and update results before returning
@@ -839,7 +770,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			}
 			return result, errors.New(errMsg) // isProcessed remains false
 		}
-		nextDate := CalculateNextRedemption(params.Price.IntervalType.IntervalType, params.now)
+		nextDate := CalculateNextRedemption(string(params.Price.IntervalType), params.now)
 		nextRedemptionDate = pgtype.Timestamptz{Time: nextDate, Valid: true}
 
 		// Prepare update parameters for incrementing subscription
@@ -894,15 +825,12 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		// If this was the final payment (determined by ProcessDueSubscriptions and passed via params.isFinalPayment),
 		// also update status to Completed
 		if params.isFinalPayment {
-			updateParams := db.UpdateSubscriptionStatusParams{
-				ID:     originalSubscription.ID,
-				Status: db.SubscriptionStatusCompleted,
-			}
-			if _, updateErr := params.queries.UpdateSubscriptionStatus(params.ctx, updateParams); updateErr != nil {
-				log.Printf("Warning: Failed to mark subscription %s as completed after successful final payment: %v", originalSubscription.ID, updateErr)
+			// Call CompleteSubscription which sets status and nullifies next_redemption_date
+			if _, updateErr := params.queries.CompleteSubscription(params.ctx, originalSubscription.ID); updateErr != nil {
+				log.Printf("Warning: Failed to mark subscription %s as completed using CompleteSubscription after successful final payment: %v", originalSubscription.ID, updateErr)
 			} else {
 				result.isCompleted = true // Internal flag for event type
-				log.Printf("Marked subscription %s as completed after successful final payment", originalSubscription.ID)
+				log.Printf("Marked subscription %s as completed (via CompleteSubscription) after successful final payment", originalSubscription.ID)
 			}
 		}
 
@@ -1137,17 +1065,19 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 		// Determine if this subscription's term is considered complete for this processing run
 		isTermComplete := false
 		if price.Type == db.PriceTypeRecurring {
-			if price.TermLength.Valid && subscription.TotalRedemptions >= price.TermLength.Int32 {
+			// Check if the current redemption will fulfill the term length
+			if price.TermLength > 0 && (subscription.TotalRedemptions+1) >= price.TermLength {
 				isTermComplete = true
 			}
 		} else if price.Type == db.PriceTypeOneOff {
-			if subscription.TotalRedemptions >= 1 { // Considered complete after 1st redemption for one-off
+			// For one-off, it's complete if this payment makes total_redemptions reach 1
+			if (subscription.TotalRedemptions + 1) >= 1 {
 				isTermComplete = true
 			}
 		}
-		// isFinalPayment is true if the period has ended AND the term is complete according to its price.
-		// This flag is used by processSubscription to decide if it should mark as 'completed'.
-		isFinalPaymentForThisProcessing := subscription.CurrentPeriodEnd.Time.Before(now) && isTermComplete
+		// isFinalPayment is true if the term is complete according to its price,
+		// indicating this processing run handles the final payment of the term.
+		isFinalPaymentForThisProcessing := isTermComplete
 
 		// Process the subscription
 		params := processSubscriptionParams{
@@ -1220,23 +1150,18 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 
 	// Prepare nullable fields for PriceResponse
 	var intervalTypeStr string
-	if subDetails.PriceIntervalType.Valid {
-		intervalTypeStr = string(subDetails.PriceIntervalType.IntervalType)
-	}
-
-	var termLengthInt32 int32
-	if subDetails.PriceTermLength.Valid {
-		termLengthInt32 = subDetails.PriceTermLength.Int32
+	if subDetails.PriceIntervalType != "" {
+		intervalTypeStr = string(subDetails.PriceIntervalType)
 	}
 
 	resp := SubscriptionResponse{
 		ID:                 subDetails.SubscriptionID,
 		WorkspaceID:        subDetails.ProductWorkspaceID,
-		Status:             db.SubscriptionStatus(subDetails.SubscriptionStatus),
-		CurrentPeriodStart: subDetails.SubscriptionCurrentPeriodStart,
-		CurrentPeriodEnd:   subDetails.SubscriptionCurrentPeriodEnd,
-		CreatedAt:          subDetails.SubscriptionCreatedAt,
-		UpdatedAt:          subDetails.SubscriptionUpdatedAt,
+		Status:             string(subDetails.SubscriptionStatus),
+		CurrentPeriodStart: subDetails.SubscriptionCurrentPeriodStart.Time,
+		CurrentPeriodEnd:   subDetails.SubscriptionCurrentPeriodEnd.Time,
+		CreatedAt:          subDetails.SubscriptionCreatedAt.Time,
+		UpdatedAt:          subDetails.SubscriptionUpdatedAt.Time,
 		CustomerID:         subDetails.CustomerID,
 		TokenAmount:        subDetails.SubscriptionTokenAmount,
 		CustomerName:       subDetails.CustomerName.String,
@@ -1251,7 +1176,7 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 			Currency:            string(subDetails.PriceCurrency),
 			UnitAmountInPennies: subDetails.PriceUnitAmountInPennies,
 			IntervalType:        intervalTypeStr,
-			TermLength:          termLengthInt32,
+			TermLength:          subDetails.PriceTermLength,
 			Metadata:            subDetails.PriceMetadata, // Expecting json.RawMessage
 			CreatedAt:           priceCreatedAtUnix,
 			UpdatedAt:           priceUpdatedAtUnix,
@@ -1276,45 +1201,289 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 	return resp, nil
 }
 
-// toSubscriptionEventResponse converts a db.ListSubscriptionEventDetailsWithPaginationRow to a SubscriptionEventResponse.
-// It maps fields from the sqlc-generated struct, which includes joined data from subscriptions, products, and prices.
-func toSubscriptionEventResponse(ctx context.Context, eventDetails db.ListSubscriptionEventDetailsWithPaginationRow) (SubscriptionEventResponse, error) {
-	resp := SubscriptionEventResponse{
-		ID:                 eventDetails.SubscriptionEventID,
-		SubscriptionID:     eventDetails.SubscriptionID,
-		EventType:          eventDetails.EventType,
-		TransactionHash:    eventDetails.TransactionHash,
-		EventAmountInCents: eventDetails.EventAmountInCents,
-		EventOccurredAt:    eventDetails.EventOccurredAt,
-		ErrorMessage:       eventDetails.ErrorMessage,
-		EventMetadata:      eventDetails.EventMetadata,
-		EventCreatedAt:     eventDetails.EventCreatedAt,
-		SubscriptionStatus: eventDetails.SubscriptionStatus,
-		ProductID:          eventDetails.ProductID,
-		ProductName:        eventDetails.ProductName,
-		Customer: CustomerResponse{
-			ID:    eventDetails.CustomerID.String(),
-			Email: eventDetails.CustomerEmail.String,
-			Name:  eventDetails.CustomerName.String,
-		},
-		PriceInfo: SubscriptionEventPriceInfo{
-			ID:                  eventDetails.PriceID,
-			Type:                eventDetails.PriceType,
-			Currency:            eventDetails.PriceCurrency,
-			UnitAmountInPennies: eventDetails.PriceUnitAmountInPennies,
-			IntervalType:        eventDetails.PriceIntervalType, // db.NullIntervalType from sqlc
-			TermLength:          eventDetails.PriceTermLength,   // pgtype.Int4 from sqlc
-		},
-		ProductToken: ProductTokenResponse{
-			ID:          eventDetails.ProductTokenID.String(),
-			TokenID:     eventDetails.ProductTokenTokenID.String(),
-			TokenSymbol: eventDetails.ProductTokenSymbol,
-		},
-		Network: NetworkResponse{
-			ID:      eventDetails.NetworkID.String(),
-			ChainID: eventDetails.NetworkChainID,
-			Name:    eventDetails.NetworkName,
-		},
+// toSubscriptionResponseFromDBSubscription converts a db.Subscription to a SubscriptionResponse.
+func toSubscriptionResponseFromDBSubscription(sub db.Subscription) (SubscriptionResponse, error) {
+	resp := SubscriptionResponse{
+		ID:          sub.ID,
+		CustomerID:  sub.CustomerID,
+		WorkspaceID: sub.WorkspaceID,
+		Status:      string(sub.Status),
+		TokenAmount: sub.TokenAmount,
+		CreatedAt:   sub.CreatedAt.Time,
+		UpdatedAt:   sub.UpdatedAt.Time,
 	}
+
+	if sub.CurrentPeriodStart.Valid {
+		resp.CurrentPeriodStart = sub.CurrentPeriodStart.Time
+	}
+	if sub.CurrentPeriodEnd.Valid {
+		resp.CurrentPeriodEnd = sub.CurrentPeriodEnd.Time
+	}
+
 	return resp, nil
+}
+
+// SubscribeToProductByPriceID godoc
+// @Summary Subscribe to a product by price ID
+// @Description Subscribe to a product by specifying the price ID
+// @Tags subscriptions
+// @Accept json
+// @Produce json
+// @Tags exclude
+func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
+	ctx := c.Request.Context()
+	priceIDStr := c.Param("price_id")
+	parsedPriceID, err := uuid.Parse(priceIDStr)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid price ID format", err)
+		return
+	}
+
+	var request SubscribeRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid request format", err)
+		return
+	}
+	request.PriceID = priceIDStr
+
+	price, err := h.common.db.GetPrice(ctx, parsedPriceID)
+	if err != nil {
+		handleDBError(c, err, "Price not found")
+		return
+	}
+
+	if !price.Active {
+		sendError(c, http.StatusBadRequest, "Cannot subscribe to inactive price", nil)
+		return
+	}
+
+	product, err := h.common.db.GetProductWithoutWorkspaceId(ctx, price.ProductID)
+	if err != nil {
+		handleDBError(c, err, "Product associated with the price not found")
+		return
+	}
+
+	if err := h.validateSubscriptionRequest(request, product.ID); err != nil {
+		sendError(c, http.StatusBadRequest, err.Error(), err)
+		return
+	}
+
+	if !product.Active {
+		sendError(c, http.StatusBadRequest, "Cannot subscribe to a price of an inactive product", nil)
+		return
+	}
+
+	parsedProductTokenID, err := uuid.Parse(request.ProductTokenID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid product token ID format", err)
+		return
+	}
+
+	merchantWallet, err := h.common.db.GetWalletByID(ctx, db.GetWalletByIDParams{
+		ID:          product.WalletID,
+		WorkspaceID: product.WorkspaceID,
+	})
+	if err != nil {
+		handleDBError(c, err, "Merchant wallet not found")
+		return
+	}
+
+	productToken, err := h.common.db.GetProductToken(ctx, parsedProductTokenID)
+	if err != nil {
+		handleDBError(c, err, "Product token not found")
+		return
+	}
+
+	token, err := h.common.db.GetToken(ctx, productToken.TokenID)
+	if err != nil {
+		handleDBError(c, err, "Token not found")
+		return
+	}
+
+	network, err := h.common.db.GetNetwork(ctx, token.NetworkID)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to get network details", err)
+		return
+	}
+
+	tokenAmount, err := strconv.ParseInt(request.TokenAmount, 10, 64)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid token amount format", err)
+		return
+	}
+
+	executionObject := dsClient.ExecutionObject{
+		MerchantAddress:      merchantWallet.WalletAddress,
+		TokenContractAddress: token.ContractAddress,
+		TokenDecimals:        token.Decimals,
+		TokenAmount:          tokenAmount,
+		ChainID:              uint32(network.ChainID),
+		NetworkName:          network.Name,
+	}
+
+	if productToken.ProductID != product.ID {
+		sendError(c, http.StatusBadRequest, "Product token does not belong to the specified product", nil)
+		return
+	}
+
+	normalizedAddress := normalizeWalletAddress(request.SubscriberAddress, determineNetworkType(productToken.NetworkType))
+
+	tx, qtx, err := h.common.BeginTx(ctx)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to start transaction", err)
+		return
+	}
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
+			logger.Error("Failed to rollback transaction", zap.Error(err))
+		}
+	}()
+
+	customer, customerWallet, err := h.processCustomerAndWallet(ctx, qtx, normalizedAddress, product, productToken)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to process customer or wallet", err)
+		return
+	}
+
+	subscriptions, err := h.common.db.ListSubscriptionsByCustomer(ctx, db.ListSubscriptionsByCustomerParams{
+		CustomerID:  customer.ID,
+		WorkspaceID: product.WorkspaceID,
+	})
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to check for existing subscription", err)
+		return
+	}
+
+	var existingSubscription *db.Subscription
+	for i, sub := range subscriptions {
+		if sub.PriceID == price.ID && sub.Status == db.SubscriptionStatusActive {
+			existingSubscription = &subscriptions[i]
+			break
+		}
+	}
+
+	if existingSubscription != nil {
+		logger.Info("Subscription already exists for this price",
+			zap.String("subscription_id", existingSubscription.ID.String()),
+			zap.String("customer_id", customer.ID.String()),
+			zap.String("price_id", price.ID.String()))
+
+		duplicateErr := fmt.Errorf("subscription already exists for customer %s and price %s", customer.ID, price.ID)
+		h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, duplicateErr)
+
+		if tx != nil {
+			if commitErr := tx.Commit(ctx); commitErr != nil {
+				logger.Error("Failed to commit transaction", zap.Error(commitErr))
+			}
+		}
+
+		c.JSON(http.StatusConflict, gin.H{
+			"message":      "Subscription already exists for this price",
+			"subscription": existingSubscription,
+		})
+		return
+	}
+
+	delegationData, err := h.storeDelegationData(ctx, qtx, request.Delegation)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to store delegation data", err)
+		return
+	}
+
+	periodStart, periodEnd, nextRedemption := h.calculateSubscriptionPeriods(price)
+
+	subscription, err := h.createSubscription(ctx, qtx, CreateSubscriptionParams{
+		Customer:       customer,
+		CustomerWallet: customerWallet,
+		WorkspaceID:    product.WorkspaceID,
+		ProductID:      product.ID,
+		Price:          price,
+		ProductTokenID: parsedProductTokenID,
+		TokenAmount:    tokenAmount,
+		DelegationData: delegationData,
+		PeriodStart:    periodStart,
+		PeriodEnd:      periodEnd,
+		NextRedemption: nextRedemption,
+	})
+	if err != nil {
+		h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, err)
+		sendError(c, http.StatusInternalServerError, "Failed to create subscription", err)
+		return
+	}
+
+	eventMetadata, _ := json.Marshal(map[string]interface{}{
+		"product_name":   product.Name,
+		"price_type":     price.Type,
+		"wallet_address": customerWallet.WalletAddress,
+		"network_type":   customerWallet.NetworkType,
+	})
+
+	_, err = qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+		SubscriptionID: subscription.ID,
+		EventType:      db.SubscriptionEventTypeCreated,
+		OccurredAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		AmountInCents:  price.UnitAmountInPennies,
+		Metadata:       eventMetadata,
+	})
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to create subscription creation event", err)
+		return
+	}
+
+	logger.Info("Created subscription event",
+		zap.String("subscription_id", subscription.ID.String()),
+		zap.String("event_type", string(db.SubscriptionEventTypeCreated)))
+
+	if err := tx.Commit(ctx); err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to commit transaction", err)
+		return
+	}
+
+	updatedSubscription, err := h.performInitialRedemption(ctx, customer, customerWallet, subscription, product, price, productToken, request.Delegation, executionObject)
+	if err != nil {
+		logger.Error("Initial redemption failed, subscription marked as failed and soft-deleted",
+			zap.Error(err),
+			zap.String("subscription_id", subscription.ID.String()),
+			zap.String("customer_id", customer.ID.String()),
+			zap.String("price_id", price.ID.String()))
+
+		_, updateErr := h.common.db.UpdateSubscriptionStatus(ctx, db.UpdateSubscriptionStatusParams{
+			ID:     subscription.ID,
+			Status: db.SubscriptionStatusFailed,
+		})
+
+		if updateErr != nil {
+			logger.Error("Failed to update subscription status after redemption failure",
+				zap.Error(updateErr),
+				zap.String("subscription_id", subscription.ID.String()))
+		}
+
+		deleteErr := h.common.db.DeleteSubscription(ctx, subscription.ID)
+		if deleteErr != nil {
+			logger.Error("Failed to soft-delete subscription after redemption failure",
+				zap.Error(deleteErr),
+				zap.String("subscription_id", subscription.ID.String()))
+		}
+
+		errorMsg := fmt.Sprintf("Initial redemption failed: %v", err)
+		_, eventErr := h.common.db.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+			SubscriptionID:  subscription.ID,
+			EventType:       db.SubscriptionEventTypeFailedRedemption,
+			TransactionHash: pgtype.Text{String: "", Valid: false},
+			AmountInCents:   price.UnitAmountInPennies,
+			ErrorMessage:    pgtype.Text{String: errorMsg, Valid: true},
+			OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
+			Metadata:        json.RawMessage(`{}`),
+		})
+
+		if eventErr != nil {
+			logger.Error("Failed to create subscription event after redemption failure",
+				zap.Error(eventErr),
+				zap.String("subscription_id", subscription.ID.String()))
+		}
+
+		sendError(c, http.StatusInternalServerError, "Initial redemption failed, subscription marked as failed and soft-deleted", err)
+		return
+	}
+	sendSuccess(c, http.StatusCreated, updatedSubscription)
 }
