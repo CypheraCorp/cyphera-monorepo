@@ -501,8 +501,8 @@ type ListSubscriptionEventDetailsWithPaginationRow struct {
 	PriceType                PriceType             `json:"price_type"`
 	PriceCurrency            Currency              `json:"price_currency"`
 	PriceUnitAmountInPennies int32                 `json:"price_unit_amount_in_pennies"`
-	PriceIntervalType        NullIntervalType      `json:"price_interval_type"`
-	PriceTermLength          pgtype.Int4           `json:"price_term_length"`
+	PriceIntervalType        IntervalType          `json:"price_interval_type"`
+	PriceTermLength          int32                 `json:"price_term_length"`
 	ProductTokenID           uuid.UUID             `json:"product_token_id"`
 	ProductTokenTokenID      uuid.UUID             `json:"product_token_token_id"`
 	ProductTokenCreatedAt    pgtype.Timestamptz    `json:"product_token_created_at"`

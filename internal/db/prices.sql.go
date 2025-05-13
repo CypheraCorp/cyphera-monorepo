@@ -86,15 +86,15 @@ RETURNING id, product_id, active, type, nickname, currency, unit_amount_in_penni
 `
 
 type CreatePriceParams struct {
-	ProductID           uuid.UUID        `json:"product_id"`
-	Active              bool             `json:"active"`
-	Type                PriceType        `json:"type"`
-	Nickname            pgtype.Text      `json:"nickname"`
-	Currency            Currency         `json:"currency"`
-	UnitAmountInPennies int32            `json:"unit_amount_in_pennies"`
-	IntervalType        NullIntervalType `json:"interval_type"`
-	TermLength          pgtype.Int4      `json:"term_length"`
-	Metadata            []byte           `json:"metadata"`
+	ProductID           uuid.UUID    `json:"product_id"`
+	Active              bool         `json:"active"`
+	Type                PriceType    `json:"type"`
+	Nickname            pgtype.Text  `json:"nickname"`
+	Currency            Currency     `json:"currency"`
+	UnitAmountInPennies int32        `json:"unit_amount_in_pennies"`
+	IntervalType        IntervalType `json:"interval_type"`
+	TermLength          int32        `json:"term_length"`
+	Metadata            []byte       `json:"metadata"`
 }
 
 func (q *Queries) CreatePrice(ctx context.Context, arg CreatePriceParams) (Price, error) {
@@ -210,8 +210,8 @@ type GetPriceWithProductRow struct {
 	Nickname            pgtype.Text        `json:"nickname"`
 	Currency            Currency           `json:"currency"`
 	UnitAmountInPennies int32              `json:"unit_amount_in_pennies"`
-	IntervalType        NullIntervalType   `json:"interval_type"`
-	TermLength          pgtype.Int4        `json:"term_length"`
+	IntervalType        IntervalType       `json:"interval_type"`
+	TermLength          int32              `json:"term_length"`
 	Metadata            []byte             `json:"metadata"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`

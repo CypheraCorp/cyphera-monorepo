@@ -1,4 +1,4 @@
-.PHONY: all build install test clean lint run swagger deploy test-all test-integration stop-integration-server ensure-executable proto-build-go proto-build-js proto-build-all subscription-processor delegation-server delegation-server-setup delegation-server-build delegation-server-start delegation-server-mock delegation-server-test delegation-server-lint
+.PHONY: all build install test clean lint run swag deploy test-all test-integration stop-integration-server ensure-executable proto-build-go proto-build-js proto-build-all subscription-processor delegation-server delegation-server-setup delegation-server-build delegation-server-start delegation-server-mock delegation-server-test delegation-server-lint
 
 # Go parameters
 BINARY_NAME=cyphera-api
@@ -75,8 +75,8 @@ lint:
 run:
 	$(GO) run $(MAIN_PACKAGE)
 
-swagger:
-	swag init -g cmd/api/main/main.go
+swag:
+	swag init --dir ./internal/handlers --generalInfo ../../cmd/api/main/main.go --output ./docs --tags='!exclude'
 
 deploy:
 	# Add deployment steps here
@@ -166,7 +166,7 @@ help:
 	@echo "  make clean          - Clean build files"
 	@echo "  make lint           - Run linter"
 	@echo "  make run            - Run the application"
-	@echo "  make swagger        - Generate Swagger documentation"
+	@echo "  make swag        - Generate Swagger documentation"
 	@echo "  make deploy         - Deploy the application"
 	@echo "  make dev            - Run the application in development mode (loads .env)"
 	@echo "  make api-server     - Run the API server without live reload"

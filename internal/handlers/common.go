@@ -187,22 +187,35 @@ func sendSuccess(c *gin.Context, statusCode int, data interface{}) {
 	c.JSON(statusCode, data)
 }
 
+type PaginatedResponse struct {
+	Data       interface{} `json:"data"`
+	Object     string      `json:"object"`
+	HasMore    bool        `json:"has_more"`
+	Pagination Pagination  `json:"pagination"`
+}
+
+type Pagination struct {
+	CurrentPage int `json:"current_page"`
+	PerPage     int `json:"per_page"`
+	TotalItems  int `json:"total_items"`
+	TotalPages  int `json:"total_pages"`
+}
+
 // sendPaginatedSuccess sends a successful paginated response
-func sendPaginatedSuccess(c *gin.Context, statusCode int, data interface{}, page, limit, total int) {
+func sendPaginatedSuccess(c *gin.Context, statusCode int, data interface{}, page, limit, total int) PaginatedResponse {
 	hasMore := (total+limit-1)/limit > page
-	response := gin.H{
-		"data":     data,
-		"object":   "list",
-		"has_more": hasMore,
-		"pagination": gin.H{
-			"current_page": page,
-			"per_page":     limit,
-			"total_items":  total,
-			"total_pages":  (total + limit - 1) / limit,
+	response := PaginatedResponse{
+		Data:    data,
+		Object:  "list",
+		HasMore: hasMore,
+		Pagination: Pagination{
+			CurrentPage: page,
+			PerPage:     limit,
+			TotalItems:  total,
+			TotalPages:  (total + limit - 1) / limit,
 		},
 	}
-
-	c.JSON(statusCode, response)
+	return response
 }
 
 // sendSuccessMessage is a helper function that sends a success message

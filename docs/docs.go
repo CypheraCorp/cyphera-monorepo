@@ -24,408 +24,14 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/accounts": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Returns a list of accounts. Only accessible by admins.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "accounts"
-                ],
-                "summary": "List accounts",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.AccountResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Creates a new account with a default workspace. Only accessible by admins.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "accounts"
-                ],
-                "summary": "Create an account",
-                "parameters": [
-                    {
-                        "description": "Account creation data",
-                        "name": "account",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CreateAccountRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.AccountResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request body or metadata format",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Not authenticated",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Not authorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/accounts/:account_id": {
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Updates the specified account by setting the values of the parameters passed",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "accounts"
-                ],
-                "summary": "Update an account",
-                "parameters": [
-                    {
-                        "description": "Account update data",
-                        "name": "account",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UpdateAccountRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.AccountResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/accounts/me": {
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Updates the currently authenticated user's account details",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "accounts"
-                ],
-                "summary": "Update current account",
-                "parameters": [
-                    {
-                        "description": "Account update data",
-                        "name": "account",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UpdateAccountRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.FullAccountResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/accounts/me/details": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves the details of the currently authenticated user's account",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "accounts"
-                ],
-                "summary": "Get current account",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.FullAccountResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/accounts/onboard": {
-            "post": {
-                "description": "Onboards an account by setting the finished_onboarding flag to true",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "accounts"
-                ],
-                "summary": "Onboard an account",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Account ID",
-                        "name": "account_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.AccountResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/accounts/signin": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Creates a new account with user and workspace, or returns existing account details",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "accounts"
-                ],
-                "summary": "Register or sign in to an account",
-                "parameters": [
-                    {
-                        "description": "Account creation data",
-                        "name": "account",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CreateAccountRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Existing account details",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.FullAccountResponse"
-                        }
-                    },
-                    "201": {
-                        "description": "Newly created account",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.FullAccountResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request body, metadata format, or missing required fields",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/accounts/{account_id}": {
             "get": {
-                "description": "Get account details by account ID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "accounts"
-                ],
-                "summary": "Get account by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Account ID",
-                        "name": "account_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.AccountResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/accounts/{account_id}": {
-            "delete": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Deletes an account. Only accessible by admins.",
+                "description": "Retrieves the details of the user's account",
                 "consumes": [
                     "application/json"
                 ],
@@ -435,197 +41,16 @@ const docTemplate = `{
                 "tags": [
                     "accounts"
                 ],
-                "summary": "Delete an account",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Account ID",
-                        "name": "account_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
+                "summary": "Get account",
                 "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
+                    "200": {
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/handlers.AccountDetailsResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/api-keys": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves all API keys across all workspaces (admin only)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api-keys"
-                ],
-                "summary": "Get all API keys",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.APIKeyResponse"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/api-keys/expired": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves all expired API keys",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api-keys"
-                ],
-                "summary": "Get expired API keys",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.APIKeyResponse"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/workspaces/all": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves all workspaces including deleted ones (admin only)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "workspaces"
-                ],
-                "summary": "Get all workspaces",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.WorkspaceResponse"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/workspaces/{workspace_id}/hard": {
-            "delete": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Permanently deletes a workspace (admin only)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "workspaces"
-                ],
-                "summary": "Hard delete workspace",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace ID",
-                        "name": "workspace_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -656,98 +81,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handlers.ListAPIKeysResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Creates a new API key for the current workspace",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api-keys"
-                ],
-                "summary": "Create API key",
-                "parameters": [
-                    {
-                        "description": "API key creation data",
-                        "name": "key",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CreateAPIKeyRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.APIKeyResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api-keys/count": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Gets the count of active API keys for a workspace",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api-keys"
-                ],
-                "summary": "Get active API key count",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "integer"
-                            }
                         }
                     },
                     "400": {
@@ -807,62 +140,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Updates an existing API key",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api-keys"
-                ],
-                "summary": "Update API key",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "API Key ID",
-                        "name": "api_key_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "API key update data",
-                        "name": "key",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UpdateAPIKeyRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.APIKeyResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -950,7 +227,22 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ListCustomersResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handlers.PaginatedResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/handlers.CustomerResponse"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -967,55 +259,6 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Creates a new customer",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "customers"
-                ],
-                "summary": "Create customer",
-                "parameters": [
-                    {
-                        "description": "Customer creation data",
-                        "name": "customer",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CreateCustomerRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CustomerResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -1070,14 +313,16 @@ const docTemplate = `{
                         }
                     }
                 }
-            },
-            "put": {
+            }
+        },
+        "/customers/{customer_id}/subscriptions": {
+            "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Updates an existing customer",
+                "description": "Get a list of all subscriptions for a specific customer",
                 "consumes": [
                     "application/json"
                 ],
@@ -1085,9 +330,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "customers"
+                    "subscriptions"
                 ],
-                "summary": "Update customer",
+                "summary": "List subscriptions by customer",
                 "parameters": [
                     {
                         "type": "string",
@@ -1095,22 +340,28 @@ const docTemplate = `{
                         "name": "customer_id",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "description": "Customer update data",
-                        "name": "customer",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UpdateCustomerRequest"
-                        }
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.CustomerResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handlers.PaginatedResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/handlers.SubscriptionResponse"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -1119,77 +370,10 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Deletes a customer",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "customers"
-                ],
-                "summary": "Delete customer",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Customer ID",
-                        "name": "customer_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/health": {
-            "get": {
-                "description": "Checks if the server is running",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "health"
-                ],
-                "summary": "Health check",
-                "responses": {
-                    "200": {
-                        "description": "Returns health status",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.HealthResponse"
                         }
                     }
                 }
@@ -1202,7 +386,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves all networks",
+                "description": "Retrieves all networks with their associated tokens",
                 "consumes": [
                     "application/json"
                 ],
@@ -1212,95 +396,32 @@ const docTemplate = `{
                 "tags": [
                     "networks"
                 ],
-                "summary": "List networks",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ListNetworksResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Creates a new network",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "networks"
-                ],
-                "summary": "Create network",
+                "summary": "List networks with tokens",
                 "parameters": [
                     {
-                        "description": "Network creation data",
-                        "name": "network",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CreateNetworkRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.NetworkResponse"
-                        }
+                        "type": "boolean",
+                        "description": "Filter networks by testnet status",
+                        "name": "testnet",
+                        "in": "query"
                     },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/networks/active": {
-            "get": {
-                "security": [
                     {
-                        "ApiKeyAuth": []
+                        "type": "boolean",
+                        "description": "Filter networks by active status",
+                        "name": "active",
+                        "in": "query"
                     }
                 ],
-                "description": "Retrieves all active networks",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "networks"
-                ],
-                "summary": "List active networks",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ListNetworksResponse"
+                            "$ref": "#/definitions/handlers.ListNetworksWithTokensResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
                     "500": {
@@ -1361,40 +482,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/networks/tokens": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves all networks with their associated tokens",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "networks"
-                ],
-                "summary": "List networks with tokens",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ListNetworksWithTokensResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/networks/{network_id}": {
             "get": {
                 "security": [
@@ -1428,112 +515,6 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.NetworkResponse"
                         }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Updates an existing network",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "networks"
-                ],
-                "summary": "Update network",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Network ID",
-                        "name": "network_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Network update data",
-                        "name": "network",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UpdateNetworkRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.NetworkResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Deletes a network",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "networks"
-                ],
-                "summary": "Delete network",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Network ID",
-                        "name": "network_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -1609,7 +590,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Creates a new product",
+                "description": "Creates a new product with associated prices",
                 "consumes": [
                     "application/json"
                 ],
@@ -1622,7 +603,7 @@ const docTemplate = `{
                 "summary": "Create product",
                 "parameters": [
                     {
-                        "description": "Product creation data",
+                        "description": "Product and prices creation data",
                         "name": "product",
                         "in": "body",
                         "required": true,
@@ -1646,95 +627,6 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/products/active": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves all active products for a workspace",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "products"
-                ],
-                "summary": "List active products",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ListProductsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/products/public/{product_id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get public product details by product ID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "products"
-                ],
-                "summary": "Get public product by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Product ID",
-                        "name": "product_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ProductResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -1796,7 +688,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Updates an existing product",
+                "description": "Updates an existing product. Price updates should be done via price-specific endpoints.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1816,7 +708,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Product update data",
+                        "description": "Product update data (prices are not updated here)",
                         "name": "product",
                         "in": "body",
                         "required": true,
@@ -1858,7 +750,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Deletes a product",
+                "description": "Deletes a product and its associated prices (soft delete)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1897,13 +789,24 @@ const docTemplate = `{
                 }
             }
         },
-        "/products/{product_id}/deploycontract": {
-            "post": {
+        "/products/{product_id}/subscriptions": {
+            "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
+                "description": "Get a list of all subscriptions for a specific product",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subscriptions"
+                ],
+                "summary": "List subscriptions by product",
                 "parameters": [
                     {
                         "type": "string",
@@ -1917,7 +820,22 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "list"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handlers.PaginatedResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/handlers.SubscriptionResponse"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -1935,14 +853,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/products/{product_id}/networks/{network_id}/tokens": {
+        "/subscription-events": {
             "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Returns a list of all product tokens for a specific network",
+                "description": "Retrieves a paginated list of subscription events for the workspace",
                 "consumes": [
                     "application/json"
                 ],
@@ -1950,37 +863,45 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "product-tokens"
+                    "subscription-events"
                 ],
-                "summary": "Get product tokens by network",
+                "summary": "List subscription events",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Product ID",
-                        "name": "product_id",
-                        "in": "path",
+                        "description": "Workspace ID",
+                        "name": "X-Workspace-ID",
+                        "in": "header",
                         "required": true
                     },
                     {
-                        "type": "string",
-                        "description": "Network ID",
-                        "name": "network_id",
-                        "in": "path",
-                        "required": true
+                        "type": "integer",
+                        "description": "Number of events to return (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default 1)",
+                        "name": "page",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.ProductTokenResponse"
-                            }
+                            "$ref": "#/definitions/handlers.PaginatedResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid workspace ID format or pagination parameters",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to retrieve or count subscription events",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -1988,14 +909,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/products/{product_id}/networks/{network_id}/tokens/active": {
+        "/subscription-events/{event_id}": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns a list of all active product tokens for a specific network",
+                "description": "Retrieves a subscription event by its ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -2003,21 +924,14 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "product-tokens"
+                    "subscription-events"
                 ],
-                "summary": "Get active product tokens by network",
+                "summary": "Get a subscription event by ID",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Product ID",
-                        "name": "product_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Network ID",
-                        "name": "network_id",
+                        "description": "Event ID",
+                        "name": "event_id",
                         "in": "path",
                         "required": true
                     }
@@ -2026,67 +940,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.ProductTokenResponse"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/products/{product_id}/networks/{network_id}/tokens/{token_id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves the details of an existing product token by product, network, and token IDs",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "product-tokens"
-                ],
-                "summary": "Get a product token by IDs",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Product ID",
-                        "name": "product_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Network ID",
-                        "name": "network_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Token ID",
-                        "name": "token_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ProductTokenResponse"
+                            "$ref": "#/definitions/handlers.SubscriptionEventResponse"
                         }
                     },
                     "400": {
@@ -2100,16 +954,24 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
-            },
-            "put": {
+            }
+        },
+        "/subscriptions": {
+            "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Updates an existing product token",
+                "description": "Get a list of all non-deleted subscriptions",
                 "consumes": [
                     "application/json"
                 ],
@@ -2117,46 +979,86 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "product-tokens"
+                    "subscriptions"
                 ],
-                "summary": "Update a product token",
+                "summary": "List all subscriptions",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Product ID",
-                        "name": "product_id",
-                        "in": "path",
-                        "required": true
+                        "type": "integer",
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "description": "Network ID",
-                        "name": "network_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Token ID",
-                        "name": "token_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Product Token update data",
-                        "name": "token",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UpdateProductTokenRequest"
-                        }
+                        "type": "integer",
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ProductTokenResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/handlers.PaginatedResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/handlers.SubscriptionResponse"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/subscriptions/{subscription_id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieves a subscription by its ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subscriptions"
+                ],
+                "summary": "Get a subscription by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "subscription_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SubscriptionResponse"
                         }
                     },
                     "400": {
@@ -2167,6 +1069,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -2179,7 +1087,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Soft deletes a product token",
+                "description": "Soft-deletes a subscription (marks as deleted)",
                 "consumes": [
                     "application/json"
                 ],
@@ -2187,35 +1095,24 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "product-tokens"
+                    "subscriptions"
                 ],
-                "summary": "Delete a product token",
+                "summary": "Delete a subscription",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Product ID",
-                        "name": "product_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Network ID",
-                        "name": "network_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Token ID",
-                        "name": "token_id",
+                        "description": "Subscription ID",
+                        "name": "subscription_id",
                         "in": "path",
                         "required": true
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No Content"
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SuccessResponse"
+                        }
                     },
                     "400": {
                         "description": "Bad Request",
@@ -2228,18 +1125,24 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
                     }
                 }
             }
         },
-        "/products/{product_id}/tokens": {
+        "/subscriptions/{subscription_id}/events": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns a list of all product tokens for a specific product",
+                "description": "Get a list of all events for a specific subscription",
                 "consumes": [
                     "application/json"
                 ],
@@ -2247,14 +1150,14 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "product-tokens"
+                    "subscription-events"
                 ],
-                "summary": "Get product tokens by product",
+                "summary": "List events for a subscription",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Product ID",
-                        "name": "product_id",
+                        "description": "Subscription ID",
+                        "name": "subscription_id",
                         "in": "path",
                         "required": true
                     }
@@ -2265,7 +1168,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/handlers.ProductTokenResponse"
+                                "$ref": "#/definitions/handlers.SubscriptionEventResponse"
                             }
                         }
                     },
@@ -2274,199 +1177,9 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Creates a new product token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "product-tokens"
-                ],
-                "summary": "Create a product token",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Product ID",
-                        "name": "product_id",
-                        "in": "path",
-                        "required": true
                     },
-                    {
-                        "description": "Product Token creation data",
-                        "name": "token",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CreateProductTokenRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ProductTokenResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Soft deletes all product tokens for a specific product",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "product-tokens"
-                ],
-                "summary": "Delete all product tokens by product",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Product ID",
-                        "name": "product_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/products/{product_id}/tokens/active": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Returns a list of all active product tokens for a specific product",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "product-tokens"
-                ],
-                "summary": "Get active product tokens by product",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Product ID",
-                        "name": "product_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.ProductTokenResponse"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/products/{product_id}/tokens/{token_id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves the details of an existing product token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "product-tokens"
-                ],
-                "summary": "Get a product token",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Product ID",
-                        "name": "product_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Product Token ID",
-                        "name": "token_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ProductTokenResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -2506,55 +1219,6 @@ const docTemplate = `{
                         }
                     }
                 }
-            },
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Creates a new token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "tokens"
-                ],
-                "summary": "Create token",
-                "parameters": [
-                    {
-                        "description": "Token creation data",
-                        "name": "token",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CreateTokenRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.TokenResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
             }
         },
         "/tokens/network/{network_id}": {
@@ -2575,55 +1239,6 @@ const docTemplate = `{
                     "tokens"
                 ],
                 "summary": "List tokens by network",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Network ID",
-                        "name": "network_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ListTokensResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/tokens/network/{network_id}/active": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves all active tokens for a specific network",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "tokens"
-                ],
-                "summary": "List active tokens by network",
                 "parameters": [
                     {
                         "type": "string",
@@ -2711,14 +1326,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/tokens/network/{network_id}/gas": {
-            "get": {
+        "/tokens/quote": {
+            "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves the gas token for a specific network",
+                "description": "Retrieves the price of a given token symbol in the specified fiat currency using CoinMarketCap API.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2728,31 +1343,33 @@ const docTemplate = `{
                 "tags": [
                     "tokens"
                 ],
-                "summary": "Get gas token for network",
+                "summary": "Get token quote",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Network ID",
-                        "name": "network_id",
-                        "in": "path",
-                        "required": true
+                        "description": "Token and Fiat symbols",
+                        "name": "quote",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.GetTokenQuoteRequest"
+                        }
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.TokenResponse"
+                            "$ref": "#/definitions/handlers.GetTokenQuoteResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request body or missing parameters",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
+                    "500": {
+                        "description": "Internal server error or failed to fetch price from CoinMarketCap",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -2792,246 +1409,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handlers.TokenResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Updates an existing token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "tokens"
-                ],
-                "summary": "Update token",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Token ID",
-                        "name": "token_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Token update data",
-                        "name": "token",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UpdateTokenRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.TokenResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Deletes a token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "tokens"
-                ],
-                "summary": "Delete token",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Token ID",
-                        "name": "token_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/users": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Creates a new user",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Create user",
-                "parameters": [
-                    {
-                        "description": "User creation data",
-                        "name": "user",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CreateUserRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UserResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/users/me": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves the details of the currently authenticated user",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Get current user",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UserResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/users/supabase": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Gets a user by their Supabase ID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Get user by Supabase ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Supabase ID",
-                        "name": "supabase_id",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UserResponse"
                         }
                     },
                     "400": {
@@ -3096,161 +1473,6 @@ const docTemplate = `{
                         }
                     }
                 }
-            },
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Updates a user's information",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Update user",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User ID",
-                        "name": "user_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "User update data",
-                        "name": "user",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UpdateUserRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UserResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Deletes a user",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Delete user",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User ID",
-                        "name": "user_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/users/{user_id}/account": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Gets the account details associated with a user",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Get user's account",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User ID",
-                        "name": "user_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UserAccountResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
             }
         },
         "/wallets": {
@@ -3260,7 +1482,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List all wallets for the authenticated account",
+                "description": "List all wallets for the authenticated workspace",
                 "consumes": [
                     "application/json"
                 ],
@@ -3271,6 +1493,20 @@ const docTemplate = `{
                     "wallets"
                 ],
                 "summary": "List all wallets",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "description": "Include Circle wallet data",
+                        "name": "include_circle_data",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by wallet type (wallet, circle_wallet)",
+                        "name": "wallet_type",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -3298,7 +1534,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Creates a new wallet for the authenticated account",
+                "description": "Creates a new wallet for the authenticated workspace",
                 "consumes": [
                     "application/json"
                 ],
@@ -3342,300 +1578,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/wallets/address/{wallet_address}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get wallet details by wallet address and network type",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "wallets"
-                ],
-                "summary": "Get wallet by address",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Wallet address",
-                        "name": "wallet_address",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Network type",
-                        "name": "network_type",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.WalletResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/wallets/ens": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get a list of wallets that have ENS names for the authenticated account",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "wallets"
-                ],
-                "summary": "Get wallets with ENS names",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.WalletListResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/wallets/network/{network_type}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "List all wallets for a specific network type",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "wallets"
-                ],
-                "summary": "List wallets by network type",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Network Type",
-                        "name": "network_type",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.WalletListResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/wallets/recent": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get a list of recently used wallets for the authenticated account",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "wallets"
-                ],
-                "summary": "Get recently used wallets",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Number of results to return (default 5)",
-                        "name": "limit",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.WalletListResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/wallets/search": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Search wallets by address, nickname, or ENS name",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "wallets"
-                ],
-                "summary": "Search wallets",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Search query",
-                        "name": "query",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of results to return (default 10)",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of results to skip (default 0)",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.WalletListResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/wallets/stats": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get statistics about wallets for the authenticated account",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "wallets"
-                ],
-                "summary": "Get wallet statistics",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.WalletStatsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/wallets/{wallet_id}": {
             "get": {
                 "security": [
@@ -3661,6 +1603,12 @@ const docTemplate = `{
                         "name": "wallet_id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include Circle wallet data",
+                        "name": "include_circle_data",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -3727,111 +1675,6 @@ const docTemplate = `{
                         }
                     }
                 }
-            },
-            "patch": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Update wallet details",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "wallets"
-                ],
-                "summary": "Update a wallet",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Wallet ID",
-                        "name": "wallet_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Wallet update request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UpdateWalletRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.WalletResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/wallets/{wallet_id}/primary": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Set a wallet as the primary wallet for its network type",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "wallets"
-                ],
-                "summary": "Set wallet as primary",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Wallet ID",
-                        "name": "wallet_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.WalletResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
             }
         },
         "/workspaces": {
@@ -3857,55 +1700,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handlers.ListWorkspacesResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Creates a new workspace",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "workspaces"
-                ],
-                "summary": "Create workspace",
-                "parameters": [
-                    {
-                        "description": "Workspace creation data",
-                        "name": "workspace",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CreateWorkspaceRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.WorkspaceResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
                     "500": {
@@ -3964,173 +1758,6 @@ const docTemplate = `{
                         }
                     }
                 }
-            },
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Updates an existing workspace",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "workspaces"
-                ],
-                "summary": "Update workspace",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace ID",
-                        "name": "workspace_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Workspace update data",
-                        "name": "workspace",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UpdateWorkspaceRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.WorkspaceResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Soft deletes a workspace",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "workspaces"
-                ],
-                "summary": "Delete workspace",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace ID",
-                        "name": "workspace_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/workspaces/{workspace_id}/customers": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves paginated customers for a workspace",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "workspaces"
-                ],
-                "summary": "List workspace customers",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace ID",
-                        "name": "workspace_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of customers to return (default 10, max 100)",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of customers to skip (default 0)",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ListCustomersResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
             }
         }
     },
@@ -4165,6 +1792,17 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "integer"
+                }
+            }
+        },
+        "handlers.AccountDetailsResponse": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "$ref": "#/definitions/handlers.AccountResponse"
+                },
+                "user": {
+                    "$ref": "#/definitions/handlers.UserResponse"
                 }
             }
         },
@@ -4210,155 +1848,66 @@ const docTemplate = `{
                 },
                 "website_url": {
                     "type": "string"
+                },
+                "workspaces": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.WorkspaceResponse"
+                    }
                 }
             }
         },
-        "handlers.CreateAPIKeyRequest": {
+        "handlers.CircleWalletData": {
             "type": "object",
-            "required": [
-                "access_level",
-                "description",
-                "name"
-            ],
             "properties": {
-                "access_level": {
-                    "type": "string",
-                    "enum": [
-                        "read",
-                        "write",
-                        "admin"
-                    ]
-                },
-                "description": {
-                    "type": "string"
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.CreateAccountRequest": {
-            "type": "object",
-            "required": [
-                "account_type",
-                "name"
-            ],
-            "properties": {
-                "account_type": {
-                    "type": "string",
-                    "enum": [
-                        "admin",
-                        "merchant"
-                    ]
-                },
-                "business_name": {
-                    "type": "string"
-                },
-                "business_type": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "finished_onboarding": {
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "support_email": {
-                    "type": "string"
-                },
-                "support_phone": {
-                    "type": "string"
-                },
-                "website_url": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.CreateCustomerRequest": {
-            "type": "object",
-            "required": [
-                "email"
-            ],
-            "properties": {
-                "balance_in_pennies": {
+                "chain_id": {
                     "type": "integer"
                 },
-                "currency": {
+                "circle_user_id": {
                     "type": "string"
                 },
-                "default_source_id": {
+                "circle_wallet_id": {
                     "type": "string"
                 },
-                "description": {
+                "state": {
                     "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "external_id": {
-                    "type": "string"
-                },
-                "invoice_prefix": {
-                    "type": "string"
-                },
-                "livemode": {
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "next_invoice_sequence": {
-                    "type": "integer"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "tax_exempt": {
-                    "type": "boolean"
-                },
-                "tax_ids": {
-                    "type": "object",
-                    "additionalProperties": true
                 }
             }
         },
-        "handlers.CreateNetworkRequest": {
+        "handlers.CreatePriceRequest": {
             "type": "object",
             "required": [
-                "chain_id",
-                "name",
-                "type"
+                "currency",
+                "type",
+                "unit_amount_in_pennies"
             ],
             "properties": {
                 "active": {
                     "type": "boolean"
                 },
-                "chain_id": {
+                "currency": {
+                    "type": "string"
+                },
+                "interval_count": {
                     "type": "integer"
                 },
-                "name": {
+                "interval_type": {
                     "type": "string"
+                },
+                "metadata": {
+                    "type": "object"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "term_length": {
+                    "type": "integer"
                 },
                 "type": {
                     "type": "string"
+                },
+                "unit_amount_in_pennies": {
+                    "type": "integer"
                 }
             }
         },
@@ -4366,8 +1915,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "name",
-                "price_in_pennies",
-                "product_type",
+                "prices",
                 "wallet_id"
             ],
             "properties": {
@@ -4380,32 +1928,23 @@ const docTemplate = `{
                 "image_url": {
                     "type": "string"
                 },
-                "interval_type": {
-                    "type": "string"
-                },
-                "merchant_paid_gas": {
-                    "type": "boolean"
-                },
                 "metadata": {
                     "type": "object"
                 },
                 "name": {
                     "type": "string"
                 },
-                "price_in_pennies": {
-                    "type": "integer"
+                "prices": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.CreatePriceRequest"
+                    }
                 },
                 "product_tokens": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/handlers.CreateProductTokenRequest"
                     }
-                },
-                "product_type": {
-                    "type": "string"
-                },
-                "term_length": {
-                    "type": "integer"
                 },
                 "url": {
                     "type": "string"
@@ -4437,119 +1976,27 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.CreateTokenRequest": {
-            "type": "object",
-            "required": [
-                "contract_address",
-                "name",
-                "network_id",
-                "symbol"
-            ],
-            "properties": {
-                "active": {
-                    "type": "boolean"
-                },
-                "contract_address": {
-                    "type": "string"
-                },
-                "gas_token": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "network_id": {
-                    "type": "string"
-                },
-                "symbol": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.CreateUserRequest": {
-            "type": "object",
-            "required": [
-                "account_id",
-                "email",
-                "role",
-                "supabase_id"
-            ],
-            "properties": {
-                "account_id": {
-                    "type": "string"
-                },
-                "address_line_1": {
-                    "type": "string"
-                },
-                "address_line_2": {
-                    "type": "string"
-                },
-                "city": {
-                    "type": "string"
-                },
-                "country": {
-                    "type": "string"
-                },
-                "display_name": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "email_verified": {
-                    "type": "boolean"
-                },
-                "first_name": {
-                    "type": "string"
-                },
-                "is_account_owner": {
-                    "type": "boolean"
-                },
-                "last_name": {
-                    "type": "string"
-                },
-                "locale": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "picture_url": {
-                    "type": "string"
-                },
-                "postal_code": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string",
-                    "enum": [
-                        "admin",
-                        "support",
-                        "developer"
-                    ]
-                },
-                "state_region": {
-                    "type": "string"
-                },
-                "supabase_id": {
-                    "type": "string"
-                },
-                "timezone": {
-                    "type": "string"
-                }
-            }
-        },
         "handlers.CreateWalletRequest": {
             "type": "object",
             "required": [
+                "network_id",
                 "network_type",
-                "wallet_address"
+                "wallet_address",
+                "wallet_type"
             ],
             "properties": {
+                "chain_id": {
+                    "description": "Only for circle wallets",
+                    "type": "integer"
+                },
+                "circle_user_id": {
+                    "description": "Circle wallet specific fields",
+                    "type": "string"
+                },
+                "circle_wallet_id": {
+                    "description": "Only for circle wallets",
+                    "type": "string"
+                },
                 "ens": {
                     "type": "string"
                 },
@@ -4560,10 +2007,17 @@ const docTemplate = `{
                     "type": "object",
                     "additionalProperties": true
                 },
+                "network_id": {
+                    "type": "string"
+                },
                 "network_type": {
                     "type": "string"
                 },
                 "nickname": {
+                    "type": "string"
+                },
+                "state": {
+                    "description": "Only for circle wallets",
                     "type": "string"
                 },
                 "verified": {
@@ -4571,46 +2025,9 @@ const docTemplate = `{
                 },
                 "wallet_address": {
                     "type": "string"
-                }
-            }
-        },
-        "handlers.CreateWorkspaceRequest": {
-            "description": "Creates a new workspace",
-            "type": "object",
-            "required": [
-                "business_name",
-                "name"
-            ],
-            "properties": {
-                "account_id": {
-                    "type": "string"
                 },
-                "business_name": {
-                    "type": "string"
-                },
-                "business_type": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "livemode": {
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "support_email": {
-                    "type": "string"
-                },
-                "support_phone": {
-                    "type": "string"
-                },
-                "website_url": {
+                "wallet_type": {
+                    "description": "'wallet' or 'circle_wallet'",
                     "type": "string"
                 }
             }
@@ -4618,20 +2035,11 @@ const docTemplate = `{
         "handlers.CustomerResponse": {
             "type": "object",
             "properties": {
-                "balance_in_pennies": {
-                    "type": "integer"
-                },
                 "business_name": {
                     "type": "string"
                 },
                 "created_at": {
                     "type": "integer"
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "default_source": {
-                    "type": "string"
                 },
                 "description": {
                     "type": "string"
@@ -4645,12 +2053,6 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "invoice_prefix": {
-                    "type": "string"
-                },
-                "livemode": {
-                    "type": "boolean"
-                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": true
@@ -4658,21 +2060,11 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "next_invoice_number": {
-                    "type": "integer"
-                },
                 "object": {
                     "type": "string"
                 },
                 "phone": {
                     "type": "string"
-                },
-                "tax_exempt": {
-                    "type": "boolean"
-                },
-                "tax_ids": {
-                    "type": "object",
-                    "additionalProperties": true
                 },
                 "updated_at": {
                     "type": "integer"
@@ -4693,27 +2085,31 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.FullAccountResponse": {
+        "handlers.GetTokenQuoteRequest": {
             "type": "object",
+            "required": [
+                "fiat_symbol",
+                "token_symbol"
+            ],
             "properties": {
-                "account": {
-                    "$ref": "#/definitions/handlers.AccountResponse"
+                "fiat_symbol": {
+                    "type": "string"
                 },
-                "user": {
-                    "$ref": "#/definitions/handlers.UserResponse"
-                },
-                "workspaces": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/handlers.WorkspaceResponse"
-                    }
+                "token_symbol": {
+                    "type": "string"
                 }
             }
         },
-        "handlers.HealthResponse": {
+        "handlers.GetTokenQuoteResponse": {
             "type": "object",
             "properties": {
-                "status": {
+                "fiat_symbol": {
+                    "type": "string"
+                },
+                "token_amount_in_fiat": {
+                    "type": "number"
+                },
+                "token_symbol": {
                     "type": "string"
                 }
             }
@@ -4735,40 +2131,6 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
-                }
-            }
-        },
-        "handlers.ListCustomersResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/handlers.CustomerResponse"
-                    }
-                },
-                "has_more": {
-                    "type": "boolean"
-                },
-                "object": {
-                    "type": "string"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "handlers.ListNetworksResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/handlers.NetworkResponse"
-                    }
-                },
-                "object": {
-                    "type": "string"
                 }
             }
         },
@@ -4840,8 +2202,14 @@ const docTemplate = `{
                 "active": {
                     "type": "boolean"
                 },
+                "block_explorer_url": {
+                    "type": "string"
+                },
                 "chain_id": {
                     "type": "integer"
+                },
+                "circle_network_type": {
+                    "type": "string"
                 },
                 "created_at": {
                     "type": "integer"
@@ -4849,7 +2217,13 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "is_testnet": {
+                    "type": "boolean"
+                },
                 "name": {
+                    "type": "string"
+                },
+                "network_type": {
                     "type": "string"
                 },
                 "object": {
@@ -4866,32 +2240,90 @@ const docTemplate = `{
         "handlers.NetworkWithTokensResponse": {
             "type": "object",
             "properties": {
-                "active": {
-                    "type": "boolean"
-                },
-                "chain_id": {
-                    "type": "integer"
-                },
-                "created_at": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "object": {
-                    "type": "string"
+                "network": {
+                    "$ref": "#/definitions/handlers.NetworkResponse"
                 },
                 "tokens": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/handlers.TokenResponse"
                     }
+                }
+            }
+        },
+        "handlers.PaginatedResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "has_more": {
+                    "type": "boolean"
+                },
+                "object": {
+                    "type": "string"
+                },
+                "pagination": {
+                    "$ref": "#/definitions/handlers.Pagination"
+                }
+            }
+        },
+        "handlers.Pagination": {
+            "type": "object",
+            "properties": {
+                "current_page": {
+                    "type": "integer"
+                },
+                "per_page": {
+                    "type": "integer"
+                },
+                "total_items": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.PriceResponse": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "type": "integer"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "interval_count": {
+                    "type": "integer"
+                },
+                "interval_type": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "object": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "string"
+                },
+                "term_length": {
+                    "type": "integer"
                 },
                 "type": {
                     "type": "string"
+                },
+                "unit_amount_in_pennies": {
+                    "type": "integer"
                 },
                 "updated_at": {
                     "type": "integer"
@@ -4916,12 +2348,6 @@ const docTemplate = `{
                 "image_url": {
                     "type": "string"
                 },
-                "interval_type": {
-                    "type": "string"
-                },
-                "merchant_paid_gas": {
-                    "type": "boolean"
-                },
                 "metadata": {
                     "type": "object"
                 },
@@ -4931,20 +2357,17 @@ const docTemplate = `{
                 "object": {
                     "type": "string"
                 },
-                "price_in_pennies": {
-                    "type": "integer"
+                "prices": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.PriceResponse"
+                    }
                 },
                 "product_tokens": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/handlers.ProductTokenResponse"
                     }
-                },
-                "product_type": {
-                    "type": "string"
-                },
-                "term_length": {
-                    "type": "integer"
                 },
                 "updated_at": {
                     "type": "integer"
@@ -4993,6 +2416,9 @@ const docTemplate = `{
                 "product_id": {
                     "type": "string"
                 },
+                "token_decimals": {
+                    "type": "integer"
+                },
                 "token_id": {
                     "type": "string"
                 },
@@ -5007,6 +2433,162 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.SubscriptionEventPriceInfo": {
+            "type": "object",
+            "properties": {
+                "currency": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "interval_count": {
+                    "description": "Use pgtype.Int4 to handle potential nulls",
+                    "type": "integer"
+                },
+                "interval_type": {
+                    "description": "Use db.NullIntervalType to handle potential nulls",
+                    "type": "string"
+                },
+                "term_length": {
+                    "description": "Use pgtype.Int4 to handle potential nulls",
+                    "type": "integer"
+                },
+                "type": {
+                    "description": "e.g., recurring, one_off",
+                    "type": "string"
+                },
+                "unit_amount_in_pennies": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.SubscriptionEventResponse": {
+            "type": "object",
+            "properties": {
+                "customer": {
+                    "$ref": "#/definitions/handlers.CustomerResponse"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "error_message": {
+                    "type": "string"
+                },
+                "event_amount_in_cents": {
+                    "type": "integer"
+                },
+                "event_created_at": {
+                    "type": "string"
+                },
+                "event_metadata": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "event_occurred_at": {
+                    "type": "string"
+                },
+                "event_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "network": {
+                    "$ref": "#/definitions/handlers.NetworkResponse"
+                },
+                "price_info": {
+                    "$ref": "#/definitions/handlers.SubscriptionEventPriceInfo"
+                },
+                "product_id": {
+                    "type": "string"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "product_token": {
+                    "$ref": "#/definitions/handlers.ProductTokenResponse"
+                },
+                "subscription": {
+                    "$ref": "#/definitions/handlers.SubscriptionResponse"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "subscription_status": {
+                    "type": "string"
+                },
+                "transaction_hash": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.SubscriptionResponse": {
+            "type": "object",
+            "properties": {
+                "canceled_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "current_period_end": {
+                    "type": "string"
+                },
+                "current_period_start": {
+                    "type": "string"
+                },
+                "customer_email": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "customer_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "price": {
+                    "$ref": "#/definitions/handlers.PriceResponse"
+                },
+                "product": {
+                    "$ref": "#/definitions/handlers.ProductResponse"
+                },
+                "product_token": {
+                    "$ref": "#/definitions/handlers.ProductTokenResponse"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "token_amount": {
+                    "type": "integer"
+                },
+                "trial_end": {
+                    "type": "string"
+                },
+                "trial_start": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "workspace_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.SuccessResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.TokenResponse": {
             "type": "object",
             "properties": {
@@ -5017,6 +2599,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "created_at": {
+                    "type": "integer"
+                },
+                "decimals": {
+                    "type": "integer"
+                },
+                "deleted_at": {
                     "type": "integer"
                 },
                 "gas_token": {
@@ -5042,138 +2630,6 @@ const docTemplate = `{
                 }
             }
         },
-        "handlers.UpdateAPIKeyRequest": {
-            "type": "object",
-            "properties": {
-                "access_level": {
-                    "type": "string",
-                    "enum": [
-                        "read",
-                        "write",
-                        "admin"
-                    ]
-                },
-                "description": {
-                    "type": "string"
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.UpdateAccountRequest": {
-            "type": "object",
-            "properties": {
-                "account_type": {
-                    "type": "string",
-                    "enum": [
-                        "admin",
-                        "merchant"
-                    ]
-                },
-                "business_name": {
-                    "type": "string"
-                },
-                "business_type": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "finished_onboarding": {
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "support_email": {
-                    "type": "string"
-                },
-                "support_phone": {
-                    "type": "string"
-                },
-                "website_url": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.UpdateCustomerRequest": {
-            "type": "object",
-            "properties": {
-                "balance_in_pennies": {
-                    "type": "integer"
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "default_source_id": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "external_id": {
-                    "type": "string"
-                },
-                "invoice_prefix": {
-                    "type": "string"
-                },
-                "livemode": {
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "next_invoice_sequence": {
-                    "type": "integer"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "tax_exempt": {
-                    "type": "boolean"
-                },
-                "tax_ids": {
-                    "type": "object",
-                    "additionalProperties": true
-                }
-            }
-        },
-        "handlers.UpdateNetworkRequest": {
-            "type": "object",
-            "properties": {
-                "active": {
-                    "type": "boolean"
-                },
-                "chain_id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
         "handlers.UpdateProductRequest": {
             "type": "object",
             "properties": {
@@ -5186,20 +2642,11 @@ const docTemplate = `{
                 "image_url": {
                     "type": "string"
                 },
-                "interval_type": {
-                    "type": "string"
-                },
-                "merchant_paid_gas": {
-                    "type": "boolean"
-                },
                 "metadata": {
                     "type": "object"
                 },
                 "name": {
                     "type": "string"
-                },
-                "price_in_pennies": {
-                    "type": "integer"
                 },
                 "product_tokens": {
                     "type": "array",
@@ -5207,250 +2654,11 @@ const docTemplate = `{
                         "$ref": "#/definitions/handlers.CreateProductTokenRequest"
                     }
                 },
-                "product_type": {
-                    "type": "string"
-                },
-                "term_length": {
-                    "type": "integer"
-                },
                 "url": {
                     "type": "string"
                 },
                 "wallet_id": {
                     "type": "string"
-                }
-            }
-        },
-        "handlers.UpdateProductTokenRequest": {
-            "type": "object",
-            "required": [
-                "active"
-            ],
-            "properties": {
-                "active": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "handlers.UpdateTokenRequest": {
-            "type": "object",
-            "properties": {
-                "active": {
-                    "type": "boolean"
-                },
-                "contract_address": {
-                    "type": "string"
-                },
-                "gas_token": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "symbol": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.UpdateUserRequest": {
-            "type": "object",
-            "properties": {
-                "address_line_1": {
-                    "type": "string"
-                },
-                "address_line_2": {
-                    "type": "string"
-                },
-                "city": {
-                    "type": "string"
-                },
-                "country": {
-                    "type": "string"
-                },
-                "display_name": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "email_verified": {
-                    "type": "boolean"
-                },
-                "first_name": {
-                    "type": "string"
-                },
-                "last_name": {
-                    "type": "string"
-                },
-                "locale": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "picture_url": {
-                    "type": "string"
-                },
-                "postal_code": {
-                    "type": "string"
-                },
-                "state_region": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "timezone": {
-                    "type": "string"
-                },
-                "two_factor_enabled": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "handlers.UpdateWalletRequest": {
-            "type": "object",
-            "properties": {
-                "ens": {
-                    "type": "string"
-                },
-                "is_primary": {
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "nickname": {
-                    "type": "string"
-                },
-                "verified": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "handlers.UpdateWorkspaceRequest": {
-            "description": "Updates an existing workspace",
-            "type": "object",
-            "properties": {
-                "account_id": {
-                    "type": "string"
-                },
-                "business_name": {
-                    "type": "string"
-                },
-                "business_type": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "livemode": {
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "support_email": {
-                    "type": "string"
-                },
-                "support_phone": {
-                    "type": "string"
-                },
-                "website_url": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.UserAccountResponse": {
-            "type": "object",
-            "properties": {
-                "account_name": {
-                    "type": "string"
-                },
-                "address_line_1": {
-                    "type": "string"
-                },
-                "address_line_2": {
-                    "type": "string"
-                },
-                "city": {
-                    "type": "string"
-                },
-                "country": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "integer"
-                },
-                "display_name": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "email_verified": {
-                    "type": "boolean"
-                },
-                "first_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "is_owner": {
-                    "type": "boolean"
-                },
-                "last_name": {
-                    "type": "string"
-                },
-                "locale": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "object": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "picture_url": {
-                    "type": "string"
-                },
-                "postal_code": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string"
-                },
-                "state_region": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "supabase_id": {
-                    "type": "string"
-                },
-                "timezone": {
-                    "type": "string"
-                },
-                "two_factor_enabled": {
-                    "type": "boolean"
-                },
-                "updated_at": {
-                    "type": "integer"
                 }
             }
         },
@@ -5546,8 +2754,13 @@ const docTemplate = `{
         "handlers.WalletResponse": {
             "type": "object",
             "properties": {
-                "account_id": {
-                    "type": "string"
+                "circle_data": {
+                    "description": "Only present for circle wallets",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/handlers.CircleWalletData"
+                        }
+                    ]
                 },
                 "created_at": {
                     "type": "integer"
@@ -5568,6 +2781,9 @@ const docTemplate = `{
                     "type": "object",
                     "additionalProperties": true
                 },
+                "network_id": {
+                    "type": "string"
+                },
                 "network_type": {
                     "type": "string"
                 },
@@ -5585,26 +2801,13 @@ const docTemplate = `{
                 },
                 "wallet_address": {
                     "type": "string"
-                }
-            }
-        },
-        "handlers.WalletStatsResponse": {
-            "type": "object",
-            "properties": {
-                "network_types_count": {
-                    "type": "integer"
                 },
-                "object": {
+                "wallet_type": {
+                    "description": "'wallet' or 'circle_wallet'",
                     "type": "string"
                 },
-                "primary_wallets": {
-                    "type": "integer"
-                },
-                "total_wallets": {
-                    "type": "integer"
-                },
-                "verified_wallets": {
-                    "type": "integer"
+                "workspace_id": {
+                    "type": "string"
                 }
             }
         },
