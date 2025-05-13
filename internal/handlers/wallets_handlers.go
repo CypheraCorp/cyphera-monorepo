@@ -476,18 +476,11 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 
 // UpdateWallet godoc
 // @Summary Update a wallet
-// @Description Update wallet details
+// @Description Updates an existing wallet with the specified details
 // @Tags wallets
 // @Accept json
 // @Produce json
-// @Param wallet_id path string true "Wallet ID"
-// @Param body body UpdateWalletRequest true "Wallet update request"
-// @Success 200 {object} WalletResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /wallets/{wallet_id} [patch]
-// @exclude
+// @Tags exclude
 func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 	workspaceIDStr := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)

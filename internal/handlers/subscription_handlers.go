@@ -71,6 +71,7 @@ type SubscriptionResponse struct {
 type CreateSubscriptionParams struct {
 	Customer       db.Customer
 	CustomerWallet db.CustomerWallet
+	WorkspaceID    uuid.UUID
 	ProductID      uuid.UUID
 	ProductTokenID uuid.UUID
 	Price          db.Price
@@ -226,7 +227,16 @@ func (h *SubscriptionHandler) ListSubscriptionsByCustomer(c *gin.Context) {
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, subscriptions)
+	subscriptionResponses := make([]SubscriptionResponse, len(subscriptions))
+	for i, sub := range subscriptions {
+		subscription, err := toSubscriptionResponseFromDBSubscription(sub)
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, "Failed to convert subscription to response", err)
+			return
+		}
+		subscriptionResponses[i] = subscription
+	}
+	sendSuccess(c, http.StatusOK, subscriptionResponses)
 }
 
 // ListSubscriptionsByProduct godoc
@@ -281,6 +291,13 @@ type UpdateSubscriptionRequest struct {
 	Metadata         json.RawMessage `json:"metadata"`
 }
 
+// UpdateSubscription godoc
+// @Summary Update a subscription
+// @Description Updates an existing subscription with the specified details
+// @Tags subscriptions
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	ctx := c.Request.Context()
 	subscriptionID := c.Param("subscription_id")
@@ -428,10 +445,36 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /subscriptions/{subscription_id} [delete]
 func (h *SubscriptionHandler) DeleteSubscription(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	subscriptionID := c.Param("subscription_id")
 	parsedUUID, err := uuid.Parse(subscriptionID)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid subscription ID format", err)
+		return
+	}
+
+	subscription, err := h.common.db.GetSubscriptionWithWorkspace(c.Request.Context(), db.GetSubscriptionWithWorkspaceParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
+	if err != nil {
+		handleDBError(c, err, "Subscription not found")
+		return
+	}
+
+	if subscription.WorkspaceID != parsedWorkspaceID {
+		sendError(c, http.StatusBadRequest, "Subscription does not belong to this workspace", nil)
+		return
+	}
+
+	if subscription.Status != db.SubscriptionStatusCanceled && subscription.Status != db.SubscriptionStatusExpired {
+		sendError(c, http.StatusBadRequest, "Subscription is not canceled or expired", nil)
 		return
 	}
 
@@ -510,7 +553,7 @@ type ProcessDueSubscriptionsResult struct {
 // processSubscriptionParams contains all parameters needed to process a subscription
 type processSubscriptionParams struct {
 	ctx            context.Context
-	subscription   db.Subscription
+	subscription   db.ListSubscriptionsDueForRedemptionRow
 	product        db.Product
 	Price          db.Price
 	productToken   db.GetProductTokenRow
@@ -1158,6 +1201,35 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 	return resp, nil
 }
 
+// toSubscriptionResponseFromDBSubscription converts a db.Subscription to a SubscriptionResponse.
+func toSubscriptionResponseFromDBSubscription(sub db.Subscription) (SubscriptionResponse, error) {
+	resp := SubscriptionResponse{
+		ID:          sub.ID,
+		CustomerID:  sub.CustomerID,
+		WorkspaceID: sub.WorkspaceID,
+		Status:      string(sub.Status),
+		TokenAmount: sub.TokenAmount,
+		CreatedAt:   sub.CreatedAt.Time,
+		UpdatedAt:   sub.UpdatedAt.Time,
+	}
+
+	if sub.CurrentPeriodStart.Valid {
+		resp.CurrentPeriodStart = sub.CurrentPeriodStart.Time
+	}
+	if sub.CurrentPeriodEnd.Valid {
+		resp.CurrentPeriodEnd = sub.CurrentPeriodEnd.Time
+	}
+
+	return resp, nil
+}
+
+// SubscribeToProductByPriceID godoc
+// @Summary Subscribe to a product by price ID
+// @Description Subscribe to a product by specifying the price ID
+// @Tags subscriptions
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 	ctx := c.Request.Context()
 	priceIDStr := c.Param("price_id")
@@ -1323,6 +1395,7 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 	subscription, err := h.createSubscription(ctx, qtx, CreateSubscriptionParams{
 		Customer:       customer,
 		CustomerWallet: customerWallet,
+		WorkspaceID:    product.WorkspaceID,
 		ProductID:      product.ID,
 		Price:          price,
 		ProductTokenID: parsedProductTokenID,

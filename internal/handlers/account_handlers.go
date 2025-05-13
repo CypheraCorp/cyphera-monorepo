@@ -251,6 +251,12 @@ func (h *AccountHandler) GetAccount(c *gin.Context) {
 // sendSuccess(c, http.StatusOK, toFullAccountResponse(fullAccountResponse))
 // }
 
+// CreateAccount godoc
+// @Summary Create a new account
+// @Description Creates a new account with the specified name and account type
+// @Tags accounts
+// @Accept json
+// @Tags exclude
 func (h *AccountHandler) CreateAccount(c *gin.Context) {
 	accountType := c.GetString("accountType")
 	if accountType != "admin" {
@@ -369,6 +375,12 @@ func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAc
 	}, nil
 }
 
+// SignInAccount godoc
+// @Summary Sign in to an account
+// @Description Signs in to an account with the specified email and password
+// @Tags accounts
+// @Accept json
+// @Tags exclude
 func (h *AccountHandler) SignInAccount(c *gin.Context) {
 	var req CreateAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -428,6 +440,12 @@ func toAccountDetailsResponse(acc *AccountAccessResponse) AccountDetailsResponse
 	}
 }
 
+// OnboardAccount godoc
+// @Summary Onboard an account
+// @Description Onboards an account with the specified user details
+// @Tags accounts
+// @Accept json
+// @Tags exclude
 func (h *AccountHandler) OnboardAccount(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
@@ -537,6 +555,12 @@ func HandleAccountAccessError(c *gin.Context, err error) bool {
 	return true
 }
 
+// DeleteAccount godoc
+// @Summary Delete an account
+// @Description Deletes an account with the specified ID
+// @Tags accounts
+// @Accept json
+// @Tags exclude
 func (h *AccountHandler) DeleteAccount(c *gin.Context) {
 	accountType := c.GetString("accountType")
 	if accountType != "admin" {

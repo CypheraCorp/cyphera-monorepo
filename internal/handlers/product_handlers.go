@@ -212,6 +212,17 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toProductResponse(product, dbPrices))
 }
 
+// GetPublicProductByPriceID godoc
+// @Summary Get public product by price ID
+// @Description Get public product details by price ID
+// @Tags products
+// @Accept json
+// @Produce json
+// @Param price_id path string true "Price ID"
+// @Success 200 {object} PublicProductResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Tags exclude
 func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
 	priceIDStr := c.Param("price_id")
 	parsedPriceID, err := uuid.Parse(priceIDStr)
@@ -546,6 +557,7 @@ func (h *ProductHandler) createSubscription(
 	subscriptionParams := db.CreateSubscriptionParams{
 		CustomerID:     params.Customer.ID,
 		ProductID:      params.ProductID,
+		WorkspaceID:    params.WorkspaceID,
 		PriceID:        params.Price.ID,
 		ProductTokenID: params.ProductTokenID,
 		TokenAmount:    int32(params.TokenAmount),
@@ -573,9 +585,13 @@ func (h *ProductHandler) createSubscription(
 	}
 
 	logger.Info("Creating new subscription",
-		zap.String("customer_id", params.Customer.ID.String()),
 		zap.String("product_id", params.ProductID.String()),
+		zap.String("customer_id", params.Customer.ID.String()),
+		zap.String("workspace_id", params.WorkspaceID.String()),
 		zap.String("price_id", params.Price.ID.String()),
+		zap.String("product_token_id", params.ProductTokenID.String()),
+		zap.String("delegation_id", params.DelegationData.ID.String()),
+		zap.String("customer_id", params.Customer.ID.String()),
 		zap.String("customer_wallet_id", params.CustomerWallet.ID.String()))
 
 	return tx.CreateSubscription(ctx, subscriptionParams)
@@ -1341,6 +1357,7 @@ func (h *ProductHandler) logFailedSubscriptionCreation(
 ) {
 	logger.Error("Failed to create subscription",
 		zap.Any("customer_id", customerId),
+		zap.String("workspace_id", product.WorkspaceID.String()),
 		zap.String("product_id", product.ID.String()),
 		zap.String("price_id", price.ID.String()),
 		zap.String("product_token_id", productToken.ID.String()),

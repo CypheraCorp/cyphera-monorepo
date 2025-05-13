@@ -52,43 +52,6 @@
                 }
             }
         },
-        "/admin/api-keys": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves all API keys across all workspaces (admin only)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api-keys"
-                ],
-                "summary": "Get all API keys",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/handlers.APIKeyResponse"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api-keys": {
             "get": {
                 "security": [
@@ -112,55 +75,6 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/handlers.ListAPIKeysResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Creates a new API key for the current workspace",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api-keys"
-                ],
-                "summary": "Create API key",
-                "parameters": [
-                    {
-                        "description": "API key creation data",
-                        "name": "key",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CreateAPIKeyRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.APIKeyResponse"
                         }
                     },
                     "400": {
@@ -226,62 +140,6 @@
                     }
                 }
             },
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Updates an existing API key",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "api-keys"
-                ],
-                "summary": "Update API key",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "API Key ID",
-                        "name": "api_key_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "API key update data",
-                        "name": "key",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UpdateAPIKeyRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.APIKeyResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "delete": {
                 "security": [
                     {
@@ -320,394 +178,6 @@
                     },
                     "404": {
                         "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/circle/transactions/transfer": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Generates a challenge for initiating an on-chain digital asset transfer",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "circle"
-                ],
-                "summary": "Create a transfer transaction challenge",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Circle User Token",
-                        "name": "user_token",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "description": "Transfer creation request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.CreateTransferRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {}
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/circle/transactions/transfer/estimate-fee": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Calculates estimated gas fees for a transfer transaction based on network conditions",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "circle"
-                ],
-                "summary": "Estimate fee for a transfer transaction",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Circle User Token",
-                        "name": "user_token",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "description": "Fee estimation request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.EstimateTransferFeeRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {}
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/circle/transactions/validate-address": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Confirms that a specified address is valid for a given blockchain",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "circle"
-                ],
-                "summary": "Validate a blockchain address",
-                "parameters": [
-                    {
-                        "description": "Address validation request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ValidateAddressRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {}
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/circle/transactions/{transaction_id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves detailed information about a specific transaction",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "circle"
-                ],
-                "summary": "Get transaction details",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Circle User Token",
-                        "name": "user_token",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Transaction ID",
-                        "name": "transaction_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {}
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/circle/wallets/balances/{wallet_id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves token balances for a Circle wallet and ensures wallet is stored in database",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "circle"
-                ],
-                "summary": "Get Circle wallet balance",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Circle User Token",
-                        "name": "user_token",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Circle Wallet ID",
-                        "name": "wallet_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Include all token balances",
-                        "name": "include_all",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by token name",
-                        "name": "name",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by token address",
-                        "name": "token_address",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by token standard",
-                        "name": "standard",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page size for pagination",
-                        "name": "page_size",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Page before cursor for pagination",
-                        "name": "page_before",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Page after cursor for pagination",
-                        "name": "page_after",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {}
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/circle/wallets/{workspace_id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Lists wallets for a Circle user and stores them in the database",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "circle"
-                ],
-                "summary": "List Circle wallets",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Circle User Token",
-                        "name": "user_token",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by wallet address",
-                        "name": "address",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by blockchain",
-                        "name": "blockchain",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of results per page",
-                        "name": "page_size",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Cursor for previous page",
-                        "name": "page_before",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Cursor for next page",
-                        "name": "page_after",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {}
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -898,29 +368,6 @@
                         "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/health": {
-            "get": {
-                "description": "Checks if the server is running",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "health"
-                ],
-                "summary": "Health check",
-                "responses": {
-                    "200": {
-                        "description": "Returns health status",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.HealthResponse"
                         }
                     }
                 }
@@ -1400,14 +847,9 @@
                 }
             }
         },
-        "/subscription-events/transaction/{tx_hash}": {
+        "/subscription-events": {
             "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieves a subscription event by its transaction hash",
+                "description": "Retrieves a paginated list of subscription events for the workspace",
                 "consumes": [
                     "application/json"
                 ],
@@ -1417,37 +859,43 @@
                 "tags": [
                     "subscription-events"
                 ],
-                "summary": "Get a subscription event by transaction hash",
+                "summary": "List subscription events",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Transaction Hash",
-                        "name": "tx_hash",
-                        "in": "path",
+                        "description": "Workspace ID",
+                        "name": "X-Workspace-ID",
+                        "in": "header",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of events to return (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default 1)",
+                        "name": "page",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.SubscriptionEventResponse"
+                            "$ref": "#/definitions/handlers.PaginatedResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
+                        "description": "Invalid workspace ID format or pagination parameters",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Failed to retrieve or count subscription events",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -2221,62 +1669,6 @@
                         }
                     }
                 }
-            },
-            "patch": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Update wallet details",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "wallets"
-                ],
-                "summary": "Update a wallet",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Wallet ID",
-                        "name": "wallet_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Wallet update request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handlers.UpdateWalletRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.WalletResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
-                        }
-                    }
-                }
             }
         },
         "/workspaces": {
@@ -2476,37 +1868,6 @@
                 }
             }
         },
-        "handlers.CreateAPIKeyRequest": {
-            "type": "object",
-            "required": [
-                "access_level",
-                "description",
-                "name"
-            ],
-            "properties": {
-                "access_level": {
-                    "type": "string",
-                    "enum": [
-                        "read",
-                        "write",
-                        "admin"
-                    ]
-                },
-                "description": {
-                    "type": "string"
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
         "handlers.CreatePriceRequest": {
             "type": "object",
             "required": [
@@ -2605,66 +1966,6 @@
                     "type": "string"
                 },
                 "token_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.CreateTransferRequest": {
-            "type": "object",
-            "required": [
-                "destination_address",
-                "idempotency_key"
-            ],
-            "properties": {
-                "amounts": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "blockchain": {
-                    "type": "string"
-                },
-                "destination_address": {
-                    "type": "string"
-                },
-                "fee_level": {
-                    "type": "string"
-                },
-                "gas_limit": {
-                    "type": "string"
-                },
-                "gas_price": {
-                    "type": "string"
-                },
-                "idempotency_key": {
-                    "type": "string"
-                },
-                "max_fee": {
-                    "type": "string"
-                },
-                "nft_token_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "priority_fee": {
-                    "type": "string"
-                },
-                "ref_id": {
-                    "type": "string"
-                },
-                "source_address": {
-                    "type": "string"
-                },
-                "token_address": {
-                    "type": "string"
-                },
-                "token_id": {
-                    "type": "string"
-                },
-                "wallet_id": {
                     "type": "string"
                 }
             }
@@ -2778,45 +2079,6 @@
                 }
             }
         },
-        "handlers.EstimateTransferFeeRequest": {
-            "type": "object",
-            "required": [
-                "amounts",
-                "destination_address"
-            ],
-            "properties": {
-                "amounts": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "blockchain": {
-                    "type": "string"
-                },
-                "destination_address": {
-                    "type": "string"
-                },
-                "nft_token_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "source_address": {
-                    "type": "string"
-                },
-                "token_address": {
-                    "type": "string"
-                },
-                "token_id": {
-                    "type": "string"
-                },
-                "wallet_id": {
-                    "type": "string"
-                }
-            }
-        },
         "handlers.GetTokenQuoteRequest": {
             "type": "object",
             "required": [
@@ -2842,14 +2104,6 @@
                     "type": "number"
                 },
                 "token_symbol": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.HealthResponse": {
-            "type": "object",
-            "properties": {
-                "status": {
                     "type": "string"
                 }
             }
@@ -3370,32 +2624,6 @@
                 }
             }
         },
-        "handlers.UpdateAPIKeyRequest": {
-            "type": "object",
-            "properties": {
-                "access_level": {
-                    "type": "string",
-                    "enum": [
-                        "read",
-                        "write",
-                        "admin"
-                    ]
-                },
-                "description": {
-                    "type": "string"
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
         "handlers.UpdateProductRequest": {
             "type": "object",
             "properties": {
@@ -3425,31 +2653,6 @@
                 },
                 "wallet_id": {
                     "type": "string"
-                }
-            }
-        },
-        "handlers.UpdateWalletRequest": {
-            "type": "object",
-            "properties": {
-                "ens": {
-                    "type": "string"
-                },
-                "is_primary": {
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "nickname": {
-                    "type": "string"
-                },
-                "state": {
-                    "description": "Circle wallet specific fields",
-                    "type": "string"
-                },
-                "verified": {
-                    "type": "boolean"
                 }
             }
         },
@@ -3525,21 +2728,6 @@
                 },
                 "updated_at": {
                     "type": "integer"
-                }
-            }
-        },
-        "handlers.ValidateAddressRequest": {
-            "type": "object",
-            "required": [
-                "address",
-                "blockchain"
-            ],
-            "properties": {
-                "address": {
-                    "type": "string"
-                },
-                "blockchain": {
-                    "type": "string"
                 }
             }
         },

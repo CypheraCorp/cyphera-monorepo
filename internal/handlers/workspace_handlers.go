@@ -162,6 +162,13 @@ type ListWorkspacesResponse struct {
 	Data   []WorkspaceResponse `json:"data"`
 }
 
+// CreateWorkspace godoc
+// @Summary Create a new workspace
+// @Description Creates a new workspace with the specified details
+// @Tags workspaces
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *WorkspaceHandler) CreateWorkspace(c *gin.Context) {
 	var req CreateWorkspaceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -189,6 +196,13 @@ func (h *WorkspaceHandler) CreateWorkspace(c *gin.Context) {
 	sendSuccess(c, http.StatusCreated, toWorkspaceResponse(workspace))
 }
 
+// UpdateWorkspace godoc
+// @Summary Update a workspace
+// @Description Updates an existing workspace with the specified details
+// @Tags workspaces
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *WorkspaceHandler) UpdateWorkspace(c *gin.Context) {
 	workspaceId := c.Param("workspace_id")
 	parsedUUID, err := uuid.Parse(workspaceId)
@@ -215,6 +229,13 @@ func (h *WorkspaceHandler) UpdateWorkspace(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toWorkspaceResponse(workspace))
 }
 
+// DeleteWorkspace godoc
+// @Summary Delete a workspace
+// @Description Deletes a workspace with the specified ID
+// @Tags workspaces
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *WorkspaceHandler) DeleteWorkspace(c *gin.Context) {
 	workspaceId := c.Param("workspace_id")
 	parsedUUID, err := uuid.Parse(workspaceId)

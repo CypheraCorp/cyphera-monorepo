@@ -215,6 +215,13 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// CreateCustomer godoc
+// @Summary Create a new customer
+// @Description Creates a new customer with the specified details
+// @Tags customers
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	var req CreateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -252,6 +259,13 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	sendSuccess(c, http.StatusCreated, toCustomerResponse(customer))
 }
 
+// UpdateCustomer godoc
+// @Summary Update a customer
+// @Description Updates an existing customer with the specified details
+// @Tags customers
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
@@ -291,6 +305,13 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toCustomerResponse(customer))
 }
 
+// DeleteCustomer godoc
+// @Summary Delete a customer
+// @Description Deletes a customer with the specified ID
+// @Tags customers
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)

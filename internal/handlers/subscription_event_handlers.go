@@ -83,6 +83,13 @@ type SubscriptionEventResponse struct {
 // @Security ApiKeyAuth
 // @Router /subscription-events/{event_id} [get]
 func (h *SubscriptionEventHandler) GetSubscriptionEvent(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	eventID := c.Param("event_id")
 	parsedUUID, err := uuid.Parse(eventID)
 	if err != nil {
@@ -93,6 +100,26 @@ func (h *SubscriptionEventHandler) GetSubscriptionEvent(c *gin.Context) {
 	event, err := h.common.db.GetSubscriptionEvent(c.Request.Context(), parsedUUID)
 	if err != nil {
 		handleDBError(c, err, "Subscription event not found")
+		return
+	}
+
+	subscription, err := h.common.db.GetSubscription(c.Request.Context(), event.SubscriptionID)
+	if err != nil {
+		handleDBError(c, err, "Subscription not found")
+		return
+	}
+
+	product, err := h.common.db.GetProduct(c.Request.Context(), db.GetProductParams{
+		ID:          subscription.ProductID,
+		WorkspaceID: parsedWorkspaceID,
+	})
+	if err != nil {
+		handleDBError(c, err, "Product not found")
+		return
+	}
+
+	if product.WorkspaceID != parsedWorkspaceID {
+		sendError(c, http.StatusForbidden, "You are not authorized to access this subscription event", nil)
 		return
 	}
 
@@ -175,6 +202,7 @@ func toSubscriptionEventResponsePagination(ctx context.Context, eventDetails db.
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /subscription-events/transaction/{tx_hash} [get]
+// @Tags exclude
 func (h *SubscriptionEventHandler) GetSubscriptionEventByTxHash(c *gin.Context) {
 	txHash := c.Param("tx_hash")
 	if txHash == "" {
@@ -196,6 +224,19 @@ func (h *SubscriptionEventHandler) GetSubscriptionEventByTxHash(c *gin.Context) 
 	sendSuccess(c, http.StatusOK, event)
 }
 
+// ListSubscriptionEvents godoc
+// @Summary List subscription events
+// @Description Retrieves a paginated list of subscription events for the workspace
+// @Tags subscription-events
+// @Accept json
+// @Produce json
+// @Param X-Workspace-ID header string true "Workspace ID"
+// @Param limit query int false "Number of events to return (default 20, max 100)"
+// @Param page query int false "Page number (default 1)"
+// @Success 200 {object} handlers.PaginatedResponse
+// @Failure 400 {object} handlers.ErrorResponse "Invalid workspace ID format or pagination parameters"
+// @Failure 500 {object} handlers.ErrorResponse "Failed to retrieve or count subscription events"
+// @Router /subscription-events [get]
 func (h *SubscriptionEventHandler) ListSubscriptionEvents(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
@@ -266,10 +307,31 @@ func (h *SubscriptionEventHandler) ListSubscriptionEvents(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /subscriptions/{subscription_id}/events [get]
 func (h *SubscriptionEventHandler) ListSubscriptionEventsBySubscription(c *gin.Context) {
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
 	subscriptionID := c.Param("subscription_id")
 	parsedUUID, err := uuid.Parse(subscriptionID)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid subscription ID format", err)
+		return
+	}
+
+	subscription, err := h.common.db.GetSubscriptionWithWorkspace(c.Request.Context(), db.GetSubscriptionWithWorkspaceParams{
+		ID:          parsedUUID,
+		WorkspaceID: parsedWorkspaceID,
+	})
+	if err != nil {
+		handleDBError(c, err, "Subscription not found")
+		return
+	}
+
+	if subscription.WorkspaceID != parsedWorkspaceID {
+		sendError(c, http.StatusForbidden, "You are not authorized to access this subscription", nil)
 		return
 	}
 
@@ -279,5 +341,15 @@ func (h *SubscriptionEventHandler) ListSubscriptionEventsBySubscription(c *gin.C
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, events)
+	eventsResponse := make([]SubscriptionEventResponse, len(events))
+	for i, event := range events {
+		eventResponse, err := toSubscriptionEventResponse(c.Request.Context(), event)
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, "Failed to retrieve subscription event", err)
+			return
+		}
+		eventsResponse[i] = eventResponse
+	}
+
+	sendSuccess(c, http.StatusOK, eventsResponse)
 }

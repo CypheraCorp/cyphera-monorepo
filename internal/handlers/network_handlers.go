@@ -135,6 +135,13 @@ func (h *NetworkHandler) GetNetworkByChainID(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toNetworkResponse(network))
 }
 
+// CreateNetwork godoc
+// @Summary Create a new network
+// @Description Creates a new network with the specified details
+// @Tags networks
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 	var req CreateNetworkRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -160,6 +167,13 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 	sendSuccess(c, http.StatusCreated, toNetworkResponse(network))
 }
 
+// UpdateNetwork godoc
+// @Summary Update a network
+// @Description Updates an existing network with the specified details
+// @Tags networks
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 	networkId := c.Param("network_id")
 	parsedUUID, err := uuid.Parse(networkId)
@@ -193,6 +207,13 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toNetworkResponse(network))
 }
 
+// DeleteNetwork godoc
+// @Summary Delete a network
+// @Description Deletes a network with the specified ID
+// @Tags networks
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *NetworkHandler) DeleteNetwork(c *gin.Context) {
 	networkId := c.Param("network_id")
 	parsedUUID, err := uuid.Parse(networkId)

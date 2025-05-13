@@ -212,6 +212,12 @@ type CreateUserResponse struct {
 	} `json:"securityQuestionDetails"`
 }
 
+// CreateUser godoc
+// @Summary Create a new Circle user
+// @Description Creates a new Circle user with the specified external user ID
+// @Tags circle
+// @Accept json
+// @Tags exclude
 func (h *CircleHandler) CreateUser(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -359,6 +365,12 @@ func (h *CircleHandler) CreateUser(c *gin.Context) {
 	})
 }
 
+// CreateUserToken godoc
+// @Summary Create a new Circle user token
+// @Description Creates a new Circle user token with the specified external user ID
+// @Tags circle
+// @Accept json
+// @Tags exclude
 func (h *CircleHandler) CreateUserToken(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -385,6 +397,12 @@ func (h *CircleHandler) CreateUserToken(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, tokenResponse)
 }
 
+// GetUserByToken godoc
+// @Summary Get Circle user details by token
+// @Description Retrieves user details using Circle user token
+// @Tags circle
+// @Accept json
+// @Tags exclude
 func (h *CircleHandler) GetUserByToken(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -430,6 +448,12 @@ func (h *CircleHandler) GetUserByToken(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, userResponse)
 }
 
+// GetUserByID godoc
+// @Summary Get Circle user details by ID
+// @Description Retrieves user details using Circle user ID
+// @Tags circle
+// @Accept json
+// @Tags exclude
 func (h *CircleHandler) GetUserByID(c *gin.Context) {
 	// Validate account ID
 	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
@@ -454,6 +478,12 @@ func (h *CircleHandler) GetUserByID(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, userResponse)
 }
 
+// GetChallenge godoc
+// @Summary Get Circle challenge details
+// @Description Retrieves challenge details using Circle challenge ID
+// @Tags circle
+// @Accept json
+// @Tags exclude
 func (h *CircleHandler) GetChallenge(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -492,6 +522,12 @@ func (h *CircleHandler) GetChallenge(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, challengeResponse)
 }
 
+// InitializeUser godoc
+// @Summary Initialize a new Circle user
+// @Description Initializes a new Circle user with the specified idempotency key and account type
+// @Tags circle
+// @Accept json
+// @Tags exclude
 func (h *CircleHandler) InitializeUser(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -575,6 +611,12 @@ func (h *CircleHandler) InitializeUser(c *gin.Context) {
 	})
 }
 
+// CreatePinChallenge godoc
+// @Summary Create a new Circle PIN challenge
+// @Description Creates a new Circle PIN challenge with the specified idempotency key
+// @Tags circle
+// @Accept json
+// @Tags exclude
 func (h *CircleHandler) CreatePinChallenge(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -613,6 +655,12 @@ func (h *CircleHandler) CreatePinChallenge(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, pinResponse)
 }
 
+// UpdatePinChallenge godoc
+// @Summary Update a Circle PIN challenge
+// @Description Updates an existing Circle PIN challenge with the specified idempotency key
+// @Tags circle
+// @Accept json
+// @Tags exclude
 func (h *CircleHandler) UpdatePinChallenge(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -651,6 +699,12 @@ func (h *CircleHandler) UpdatePinChallenge(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, pinResponse)
 }
 
+// CreatePinRestoreChallenge godoc
+// @Summary Create a new Circle PIN restore challenge
+// @Description Creates a new Circle PIN restore challenge with the specified idempotency key
+// @Tags circle
+// @Accept json
+// @Tags exclude
 func (h *CircleHandler) CreatePinRestoreChallenge(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -689,6 +743,12 @@ func (h *CircleHandler) CreatePinRestoreChallenge(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, pinResponse)
 }
 
+// CreateWallets godoc
+// @Summary Create a new Circle wallets
+// @Description Creates a new Circle wallets with the specified idempotency key
+// @Tags circle
+// @Accept json
+// @Tags exclude
 func (h *CircleHandler) CreateWallets(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -994,6 +1054,12 @@ func (h *CircleHandler) createCypheraWalletEntry(ctx context.Context, qtx *db.Qu
 	return nil
 }
 
+// GetWallet godoc
+// @Summary Get a Circle wallet
+// @Description Retrieves wallet details using Circle wallet ID
+// @Tags circle
+// @Accept json
+// @Tags exclude
 func (h *CircleHandler) GetWallet(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id") // Assuming path is now /admin/circle/wallets/{workspace_id}/{wallet_id}
@@ -1223,25 +1289,11 @@ func getCircleNetworkType(blockchain string) (db.CircleNetworkType, error) {
 }
 
 // GetWalletBalance godoc
-// @Summary Get Circle wallet balance
-// @Description Retrieves token balances for a Circle wallet and ensures wallet is stored in database
+// @Summary Get a Circle wallet balance
+// @Description Retrieves wallet balance details using Circle wallet ID
 // @Tags circle
 // @Accept json
-// @Produce json
-// @Param user_token header string true "Circle User Token"
-// @Param wallet_id path string true "Circle Wallet ID"
-// @Param include_all query boolean false "Include all token balances"
-// @Param name query string false "Filter by token name"
-// @Param token_address query string false "Filter by token address"
-// @Param standard query string false "Filter by token standard"
-// @Param page_size query integer false "Page size for pagination"
-// @Param page_before query string false "Page before cursor for pagination"
-// @Param page_after query string false "Page after cursor for pagination"
-// @Success 200 {object} interface{}
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /circle/wallets/balances/{wallet_id} [get]
+// @Tags exclude
 func (h *CircleHandler) GetWalletBalance(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id") // Assuming path is now /admin/circle/wallets/{workspace_id}/{wallet_id}/balances
@@ -1440,21 +1492,10 @@ func (h *CircleHandler) GetWalletBalance(c *gin.Context) {
 
 // ListWallets godoc
 // @Summary List Circle wallets
-// @Description Lists wallets for a Circle user and stores them in the database
+// @Description Retrieves a list of Circle wallets for a given workspace
 // @Tags circle
 // @Accept json
-// @Produce json
-// @Param user_token header string true "Circle User Token"
-// @Param address query string false "Filter by wallet address"
-// @Param blockchain query string false "Filter by blockchain"
-// @Param page_size query int false "Number of results per page"
-// @Param page_before query string false "Cursor for previous page"
-// @Param page_after query string false "Cursor for next page"
-// @Success 200 {object} interface{}
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /circle/wallets/{workspace_id} [get]
+// @Tags exclude
 func (h *CircleHandler) ListWallets(c *gin.Context) {
 	// Validate workspace ID from path parameter
 	workspaceIDStr := c.Param("workspace_id")
@@ -1718,17 +1759,11 @@ func (h *CircleHandler) lookupNetworkID(ctx context.Context, blockchain string) 
 }
 
 // ValidateAddress godoc
-// @Summary Validate a blockchain address
-// @Description Confirms that a specified address is valid for a given blockchain
+// @Summary Validate a Circle address
+// @Description Validates an address for a given blockchain
 // @Tags circle
 // @Accept json
-// @Produce json
-// @Param body body ValidateAddressRequest true "Address validation request"
-// @Success 200 {object} interface{}
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /circle/transactions/validate-address [post]
+// @Tags exclude
 func (h *CircleHandler) ValidateAddress(c *gin.Context) {
 	// Validate account ID
 	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
@@ -1759,18 +1794,11 @@ func (h *CircleHandler) ValidateAddress(c *gin.Context) {
 }
 
 // EstimateTransferFee godoc
-// @Summary Estimate fee for a transfer transaction
-// @Description Calculates estimated gas fees for a transfer transaction based on network conditions
+// @Summary Estimate a Circle transfer fee
+// @Description Estimates the transfer fee for a given transfer request
 // @Tags circle
 // @Accept json
-// @Produce json
-// @Param user_token header string true "Circle User Token"
-// @Param body body EstimateTransferFeeRequest true "Fee estimation request"
-// @Success 200 {object} interface{}
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /circle/transactions/transfer/estimate-fee [post]
+// @Tags exclude
 func (h *CircleHandler) EstimateTransferFee(c *gin.Context) {
 	// Validate account ID
 	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
@@ -1826,18 +1854,11 @@ func (h *CircleHandler) EstimateTransferFee(c *gin.Context) {
 }
 
 // CreateTransfer godoc
-// @Summary Create a transfer transaction challenge
-// @Description Generates a challenge for initiating an on-chain digital asset transfer
+// @Summary Create a new Circle transfer
+// @Description Creates a new Circle transfer with the specified idempotency key
 // @Tags circle
 // @Accept json
-// @Produce json
-// @Param user_token header string true "Circle User Token"
-// @Param body body CreateTransferRequest true "Transfer creation request"
-// @Success 200 {object} interface{}
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /circle/transactions/transfer [post]
+// @Tags exclude
 func (h *CircleHandler) CreateTransfer(c *gin.Context) {
 	// Validate account ID
 	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
@@ -1900,18 +1921,11 @@ func (h *CircleHandler) CreateTransfer(c *gin.Context) {
 }
 
 // GetTransaction godoc
-// @Summary Get transaction details
-// @Description Retrieves detailed information about a specific transaction
+// @Summary Get a Circle transaction
+// @Description Retrieves transaction details using Circle transaction ID
 // @Tags circle
 // @Accept json
-// @Produce json
-// @Param user_token header string true "Circle User Token"
-// @Param transaction_id path string true "Transaction ID"
-// @Success 200 {object} interface{}
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /circle/transactions/{transaction_id} [get]
+// @Tags exclude
 func (h *CircleHandler) GetTransaction(c *gin.Context) {
 	// Validate account ID
 	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))
@@ -1942,6 +1956,12 @@ func (h *CircleHandler) GetTransaction(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, transactionResponse)
 }
 
+// ListTransactions godoc
+// @Summary List Circle transactions
+// @Description Retrieves a list of Circle transactions for a given user
+// @Tags circle
+// @Accept json
+// @Tags exclude
 func (h *CircleHandler) ListTransactions(c *gin.Context) {
 	// Validate account ID
 	_, err := uuid.Parse(c.GetHeader("X-Account-ID"))

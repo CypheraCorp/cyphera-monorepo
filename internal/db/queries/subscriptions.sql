@@ -4,8 +4,7 @@ WHERE id = $1 AND deleted_at IS NULL LIMIT 1;
 
 -- name: GetSubscriptionWithWorkspace :one
 SELECT * FROM subscriptions s
-JOIN products p ON p.id = s.product_id
-WHERE s.id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL LIMIT 1;
+WHERE s.id = $1 AND s.workspace_id = $2 AND s.deleted_at IS NULL LIMIT 1;
 
 -- name: GetSubscriptionWithDetails :one
 SELECT 
@@ -31,7 +30,7 @@ LEFT JOIN customer_wallets cw ON cw.id = s.customer_wallet_id
 JOIN products_tokens pt ON pt.id = s.product_token_id
 JOIN tokens t ON t.id = pt.token_id
 JOIN networks n ON n.id = pt.network_id
-WHERE s.id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL;
+WHERE s.id = $1 AND s.workspace_id = $2 AND s.deleted_at IS NULL;
 
 -- name: ListSubscriptions :many
 SELECT * FROM subscriptions
@@ -41,13 +40,13 @@ ORDER BY created_at DESC;
 -- name: ListSubscriptionsByCustomer :many
 SELECT s.* FROM subscriptions s
 JOIN products p ON p.id = s.product_id
-WHERE s.customer_id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL
+WHERE s.customer_id = $1 AND s.workspace_id = $2 AND s.deleted_at IS NULL
 ORDER BY s.created_at DESC;
 
 -- name: ListSubscriptionsByProduct :many
-SELECT s.*, p.workspace_id FROM subscriptions s
+SELECT s.* FROM subscriptions s
 JOIN products p ON s.product_id = p.id
-WHERE s.product_id = $1 AND p.workspace_id = $2 AND s.deleted_at IS NULL
+WHERE s.product_id = $1 AND s.workspace_id = $2 AND s.deleted_at IS NULL
 ORDER BY s.created_at DESC;
 
 -- name: ListActiveSubscriptions :many
@@ -89,6 +88,7 @@ WHERE status = $1 AND deleted_at IS NULL;
 INSERT INTO subscriptions (
     customer_id,
     product_id,
+    workspace_id,
     price_id,
     product_token_id,
     token_amount,
@@ -102,7 +102,7 @@ INSERT INTO subscriptions (
     total_amount_in_cents,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
 )
 RETURNING *;
 
@@ -111,18 +111,19 @@ UPDATE subscriptions
 SET
     customer_id = COALESCE($2, customer_id),
     product_id = COALESCE($3, product_id),
-    price_id = COALESCE($4, price_id),
-    product_token_id = COALESCE($5, product_token_id),
-    token_amount = COALESCE($6, token_amount),
-    delegation_id = COALESCE($7, delegation_id),
-    customer_wallet_id = COALESCE($8, customer_wallet_id),
-    status = COALESCE($9, status),
-    current_period_start = COALESCE($10, current_period_start),
-    current_period_end = COALESCE($11, current_period_end),
-    next_redemption_date = COALESCE($12, next_redemption_date),
-    total_redemptions = COALESCE($13, total_redemptions),
-    total_amount_in_cents = COALESCE($14, total_amount_in_cents),
-    metadata = COALESCE($15, metadata),
+    workspace_id = COALESCE($4, workspace_id),
+    price_id = COALESCE($5, price_id),
+    product_token_id = COALESCE($6, product_token_id),
+    token_amount = COALESCE($7, token_amount),
+    delegation_id = COALESCE($8, delegation_id),
+    customer_wallet_id = COALESCE($9, customer_wallet_id),
+    status = COALESCE($10, status),
+    current_period_start = COALESCE($11, current_period_start),
+    current_period_end = COALESCE($12, current_period_end),
+    next_redemption_date = COALESCE($13, next_redemption_date),
+    total_redemptions = COALESCE($14, total_redemptions),
+    total_amount_in_cents = COALESCE($15, total_amount_in_cents),
+    metadata = COALESCE($16, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;

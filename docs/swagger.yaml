@@ -74,28 +74,6 @@ definitions:
       state:
         type: string
     type: object
-  handlers.CreateAPIKeyRequest:
-    properties:
-      access_level:
-        enum:
-        - read
-        - write
-        - admin
-        type: string
-      description:
-        type: string
-      expires_at:
-        type: string
-      metadata:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-    required:
-    - access_level
-    - description
-    - name
-    type: object
   handlers.CreatePriceRequest:
     properties:
       active:
@@ -164,46 +142,6 @@ definitions:
     - network_id
     - product_id
     - token_id
-    type: object
-  handlers.CreateTransferRequest:
-    properties:
-      amounts:
-        items:
-          type: string
-        type: array
-      blockchain:
-        type: string
-      destination_address:
-        type: string
-      fee_level:
-        type: string
-      gas_limit:
-        type: string
-      gas_price:
-        type: string
-      idempotency_key:
-        type: string
-      max_fee:
-        type: string
-      nft_token_ids:
-        items:
-          type: string
-        type: array
-      priority_fee:
-        type: string
-      ref_id:
-        type: string
-      source_address:
-        type: string
-      token_address:
-        type: string
-      token_id:
-        type: string
-      wallet_id:
-        type: string
-    required:
-    - destination_address
-    - idempotency_key
     type: object
   handlers.CreateWalletRequest:
     properties:
@@ -280,32 +218,6 @@ definitions:
       error:
         type: string
     type: object
-  handlers.EstimateTransferFeeRequest:
-    properties:
-      amounts:
-        items:
-          type: string
-        type: array
-      blockchain:
-        type: string
-      destination_address:
-        type: string
-      nft_token_ids:
-        items:
-          type: string
-        type: array
-      source_address:
-        type: string
-      token_address:
-        type: string
-      token_id:
-        type: string
-      wallet_id:
-        type: string
-    required:
-    - amounts
-    - destination_address
-    type: object
   handlers.GetTokenQuoteRequest:
     properties:
       fiat_symbol:
@@ -323,11 +235,6 @@ definitions:
       token_amount_in_fiat:
         type: number
       token_symbol:
-        type: string
-    type: object
-  handlers.HealthResponse:
-    properties:
-      status:
         type: string
     type: object
   handlers.ListAPIKeysResponse:
@@ -670,24 +577,6 @@ definitions:
       updated_at:
         type: integer
     type: object
-  handlers.UpdateAPIKeyRequest:
-    properties:
-      access_level:
-        enum:
-        - read
-        - write
-        - admin
-        type: string
-      description:
-        type: string
-      expires_at:
-        type: string
-      metadata:
-        additionalProperties: true
-        type: object
-      name:
-        type: string
-    type: object
   handlers.UpdateProductRequest:
     properties:
       active:
@@ -708,23 +597,6 @@ definitions:
         type: string
       wallet_id:
         type: string
-    type: object
-  handlers.UpdateWalletRequest:
-    properties:
-      ens:
-        type: string
-      is_primary:
-        type: boolean
-      metadata:
-        additionalProperties: true
-        type: object
-      nickname:
-        type: string
-      state:
-        description: Circle wallet specific fields
-        type: string
-      verified:
-        type: boolean
     type: object
   handlers.UserResponse:
     properties:
@@ -775,16 +647,6 @@ definitions:
         type: boolean
       updated_at:
         type: integer
-    type: object
-  handlers.ValidateAddressRequest:
-    properties:
-      address:
-        type: string
-      blockchain:
-        type: string
-    required:
-    - address
-    - blockchain
     type: object
   handlers.WalletListResponse:
     properties:
@@ -902,29 +764,6 @@ paths:
       summary: Get account
       tags:
       - accounts
-  /admin/api-keys:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves all API keys across all workspaces (admin only)
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/handlers.APIKeyResponse'
-            type: array
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get all API keys
-      tags:
-      - api-keys
   /api-keys:
     get:
       consumes:
@@ -948,37 +787,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: List API keys
-      tags:
-      - api-keys
-    post:
-      consumes:
-      - application/json
-      description: Creates a new API key for the current workspace
-      parameters:
-      - description: API key creation data
-        in: body
-        name: key
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.CreateAPIKeyRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/handlers.APIKeyResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create API key
       tags:
       - api-keys
   /api-keys/{api_key_id}:
@@ -1040,296 +848,6 @@ paths:
       summary: Get an API key
       tags:
       - api-keys
-    put:
-      consumes:
-      - application/json
-      description: Updates an existing API key
-      parameters:
-      - description: API Key ID
-        in: path
-        name: api_key_id
-        required: true
-        type: string
-      - description: API key update data
-        in: body
-        name: key
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UpdateAPIKeyRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.APIKeyResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update API key
-      tags:
-      - api-keys
-  /circle/transactions/{transaction_id}:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves detailed information about a specific transaction
-      parameters:
-      - description: Circle User Token
-        in: header
-        name: user_token
-        required: true
-        type: string
-      - description: Transaction ID
-        in: path
-        name: transaction_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema: {}
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get transaction details
-      tags:
-      - circle
-  /circle/transactions/transfer:
-    post:
-      consumes:
-      - application/json
-      description: Generates a challenge for initiating an on-chain digital asset
-        transfer
-      parameters:
-      - description: Circle User Token
-        in: header
-        name: user_token
-        required: true
-        type: string
-      - description: Transfer creation request
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.CreateTransferRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema: {}
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create a transfer transaction challenge
-      tags:
-      - circle
-  /circle/transactions/transfer/estimate-fee:
-    post:
-      consumes:
-      - application/json
-      description: Calculates estimated gas fees for a transfer transaction based
-        on network conditions
-      parameters:
-      - description: Circle User Token
-        in: header
-        name: user_token
-        required: true
-        type: string
-      - description: Fee estimation request
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.EstimateTransferFeeRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema: {}
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Estimate fee for a transfer transaction
-      tags:
-      - circle
-  /circle/transactions/validate-address:
-    post:
-      consumes:
-      - application/json
-      description: Confirms that a specified address is valid for a given blockchain
-      parameters:
-      - description: Address validation request
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.ValidateAddressRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema: {}
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Validate a blockchain address
-      tags:
-      - circle
-  /circle/wallets/{workspace_id}:
-    get:
-      consumes:
-      - application/json
-      description: Lists wallets for a Circle user and stores them in the database
-      parameters:
-      - description: Circle User Token
-        in: header
-        name: user_token
-        required: true
-        type: string
-      - description: Filter by wallet address
-        in: query
-        name: address
-        type: string
-      - description: Filter by blockchain
-        in: query
-        name: blockchain
-        type: string
-      - description: Number of results per page
-        in: query
-        name: page_size
-        type: integer
-      - description: Cursor for previous page
-        in: query
-        name: page_before
-        type: string
-      - description: Cursor for next page
-        in: query
-        name: page_after
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema: {}
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: List Circle wallets
-      tags:
-      - circle
-  /circle/wallets/balances/{wallet_id}:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves token balances for a Circle wallet and ensures wallet
-        is stored in database
-      parameters:
-      - description: Circle User Token
-        in: header
-        name: user_token
-        required: true
-        type: string
-      - description: Circle Wallet ID
-        in: path
-        name: wallet_id
-        required: true
-        type: string
-      - description: Include all token balances
-        in: query
-        name: include_all
-        type: boolean
-      - description: Filter by token name
-        in: query
-        name: name
-        type: string
-      - description: Filter by token address
-        in: query
-        name: token_address
-        type: string
-      - description: Filter by token standard
-        in: query
-        name: standard
-        type: string
-      - description: Page size for pagination
-        in: query
-        name: page_size
-        type: integer
-      - description: Page before cursor for pagination
-        in: query
-        name: page_before
-        type: string
-      - description: Page after cursor for pagination
-        in: query
-        name: page_after
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema: {}
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get Circle wallet balance
-      tags:
-      - circle
   /customers:
     get:
       consumes:
@@ -1444,21 +962,6 @@ paths:
       summary: List subscriptions by customer
       tags:
       - subscriptions
-  /health:
-    get:
-      consumes:
-      - application/json
-      description: Checks if the server is running
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Returns health status
-          schema:
-            $ref: '#/definitions/handlers.HealthResponse'
-      summary: Health check
-      tags:
-      - health
   /networks:
     get:
       consumes:
@@ -1758,6 +1261,43 @@ paths:
       summary: List subscriptions by product
       tags:
       - subscriptions
+  /subscription-events:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a paginated list of subscription events for the workspace
+      parameters:
+      - description: Workspace ID
+        in: header
+        name: X-Workspace-ID
+        required: true
+        type: string
+      - description: Number of events to return (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.PaginatedResponse'
+        "400":
+          description: Invalid workspace ID format or pagination parameters
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Failed to retrieve or count subscription events
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: List subscription events
+      tags:
+      - subscription-events
   /subscription-events/{event_id}:
     get:
       consumes:
@@ -1791,41 +1331,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get a subscription event by ID
-      tags:
-      - subscription-events
-  /subscription-events/transaction/{tx_hash}:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves a subscription event by its transaction hash
-      parameters:
-      - description: Transaction Hash
-        in: path
-        name: tx_hash
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.SubscriptionEventResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get a subscription event by transaction hash
       tags:
       - subscription-events
   /subscriptions:
@@ -2276,42 +1781,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get wallet by ID
-      tags:
-      - wallets
-    patch:
-      consumes:
-      - application/json
-      description: Update wallet details
-      parameters:
-      - description: Wallet ID
-        in: path
-        name: wallet_id
-        required: true
-        type: string
-      - description: Wallet update request
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.UpdateWalletRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.WalletResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update a wallet
       tags:
       - wallets
   /workspaces:

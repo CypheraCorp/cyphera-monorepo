@@ -307,6 +307,7 @@ CREATE TABLE subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES customers(id),
     product_id UUID NOT NULL REFERENCES products(id),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
     price_id UUID NOT NULL REFERENCES prices(id),
     product_token_id UUID NOT NULL REFERENCES products_tokens(id),
     token_amount INTEGER NOT NULL,

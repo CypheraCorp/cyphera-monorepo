@@ -146,17 +146,12 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, listAPIKeysResponse)
 }
 
-// GetAllAPIKeys godoc
-// @Summary Get all API keys
-// @Description Retrieves all API keys across all workspaces (admin only)
+// CreateAPIKey godoc
+// @Summary Create a new API key
+// @Description Creates a new API key with the specified name and access level
 // @Tags api-keys
 // @Accept json
-// @Produce json
-// @Success 200 {array} APIKeyResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /admin/api-keys [get]
-// @exclude
+// @Tags exclude
 func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
 	apiKeys, err := h.common.db.GetAllAPIKeys(c.Request.Context())
 	if err != nil {
@@ -180,18 +175,11 @@ func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
 }
 
 // CreateAPIKey godoc
-// @Summary Create API key
-// @Description Creates a new API key for the current workspace
+// @Summary Create a new API key
+// @Description Creates a new API key with the specified name and access level
 // @Tags api-keys
 // @Accept json
-// @Produce json
-// @Param key body CreateAPIKeyRequest true "API key creation data"
-// @Success 201 {object} APIKeyResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /api-keys [post]
-// @exclude
+// @Tags exclude
 func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	var req CreateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -235,19 +223,11 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 }
 
 // UpdateAPIKey godoc
-// @Summary Update API key
-// @Description Updates an existing API key
+// @Summary Update an API key
+// @Description Updates an existing API key with the specified name and access level
 // @Tags api-keys
 // @Accept json
-// @Produce json
-// @Param api_key_id path string true "API Key ID"
-// @Param key body UpdateAPIKeyRequest true "API key update data"
-// @Success 200 {object} APIKeyResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /api-keys/{api_key_id} [put]
-// @exclude
+// @Tags exclude
 func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)

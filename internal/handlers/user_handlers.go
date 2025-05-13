@@ -160,6 +160,13 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toUserResponse(user))
 }
 
+// CreateUser godoc
+// @Summary Create a new user
+// @Description Creates a new user with the specified details
+// @Tags users
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -210,6 +217,13 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	sendSuccess(c, http.StatusCreated, toUserResponse(user))
 }
 
+// UpdateUser godoc
+// @Summary Update a user
+// @Description Updates an existing user with the specified details
+// @Tags users
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)
@@ -274,6 +288,13 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, toUserResponse(user))
 }
 
+// DeleteUser godoc
+// @Summary Delete a user
+// @Description Deletes a user with the specified ID
+// @Tags users
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)
@@ -291,6 +312,13 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	sendSuccess(c, http.StatusNoContent, nil)
 }
 
+// GetUserAccount godoc
+// @Summary Get user account by ID
+// @Description Gets a user account by their ID
+// @Tags users
+// @Accept json
+// @Produce json
+// @Tags exclude
 func (h *UserHandler) GetUserAccount(c *gin.Context) {
 	userId := c.Param("user_id")
 	parsedUUID, err := uuid.Parse(userId)

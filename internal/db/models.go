@@ -731,6 +731,7 @@ type Subscription struct {
 	ID                 uuid.UUID          `json:"id"`
 	CustomerID         uuid.UUID          `json:"customer_id"`
 	ProductID          uuid.UUID          `json:"product_id"`
+	WorkspaceID        uuid.UUID          `json:"workspace_id"`
 	PriceID            uuid.UUID          `json:"price_id"`
 	ProductTokenID     uuid.UUID          `json:"product_token_id"`
 	TokenAmount        int32              `json:"token_amount"`
