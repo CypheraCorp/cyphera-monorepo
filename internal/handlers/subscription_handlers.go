@@ -1485,6 +1485,5 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		sendError(c, http.StatusInternalServerError, "Initial redemption failed, subscription marked as failed and soft-deleted", err)
 		return
 	}
-
 	sendSuccess(c, http.StatusCreated, updatedSubscription)
 }
