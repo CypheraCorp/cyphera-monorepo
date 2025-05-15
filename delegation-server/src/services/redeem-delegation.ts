@@ -191,6 +191,7 @@ export const redeemDelegation = async (
     if (!isDeployed) {
       logger.info(`Smart Account ${redeemer.address} is not deployed. Sending UserOperation to trigger deployment...`);
       const { fast: deploymentGasPrices } = await pimlicoClient.getUserOperationGasPrice();
+
       if (!deploymentGasPrices || !deploymentGasPrices.maxFeePerGas || !deploymentGasPrices.maxPriorityFeePerGas) {
         throw new Error("Could not fetch gas prices from Pimlico for SA deployment.");
       }
@@ -296,11 +297,11 @@ export const redeemDelegation = async (
         account: redeemer, 
         calls: callsForRedemption,
         maxFeePerGas: redemptionGasPrices.maxFeePerGas,
-        maxPriorityFeePerGas: redemptionGasPrices.maxPriorityFeePerGas
+        maxPriorityFeePerGas: redemptionGasPrices.maxPriorityFeePerGas,
         // Optional: Increase gas limits if needed
-        // callGasLimit: 150000n,
-        // preVerificationGas: 50000n,
-        // verificationGasLimit: 150000n,
+        // callGasLimit: 10000000n,
+        // preVerificationGas: 5000000n,
+        // verificationGasLimit: 15000000n,
       });
       logger.info(`Redemption UserOperation hash (sent in ${(Date.now() - overallStartTime) / 1000}s): ${redeemUserOpHash}`);
       logger.info("Waiting for redemption transaction receipt...");

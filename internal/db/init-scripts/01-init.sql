@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
 CREATE TABLE networks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
+    simple_name TEXT NOT NULL,
     type TEXT NOT NULL,
     network_type network_type NOT NULL,
     circle_network_type circle_network_type NOT NULL,
@@ -517,20 +518,20 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
-INSERT INTO networks (name, type, network_type, circle_network_type, chain_id, is_testnet, active, block_explorer_url)
+INSERT INTO networks (name, simple_name, type, network_type, circle_network_type, chain_id, is_testnet, active, block_explorer_url)
 VALUES 
-    ('Ethereum Sepolia', 'Sepolia', 'evm', 'ETH-SEPOLIA', 11155111, true, true, 'https://sepolia.etherscan.io'),
-    ('Ethereum Mainnet', 'Mainnet', 'evm', 'ETH', 1, false, false, 'https://etherscan.io'),
-    ('Polygon Amoy', 'Amoy', 'evm', 'MATIC-AMOY', 80002, true, false, 'https://www.oklink.com/amoy'), 
-    ('Polygon Mainnet', 'Mainnet', 'evm', 'MATIC', 137, false, false, 'https://polygonscan.com'),
-    ('Arbitrum Sepolia', 'Sepolia', 'evm', 'ARB-SEPOLIA', 421614, true, false, 'https://sepolia.arbiscan.io'),
-    ('Arbitrum One', 'Mainnet', 'evm', 'ARB', 42161, false, false, 'https://arbiscan.io'),
-    ('Base Sepolia', 'Sepolia', 'evm', 'BASE-SEPOLIA', 84532, true, true, 'https://sepolia.basescan.org'),
-    ('Base Mainnet', 'Mainnet', 'evm', 'BASE', 8453, false, false, 'https://basescan.org'),
-    ('Optimism Sepolia', 'Sepolia', 'evm', 'OP-SEPOLIA', 11155420, true, false, 'https://sepolia.optimism.io'),
-    ('Optimism Mainnet', 'Mainnet', 'evm', 'OP', 10, false, false, 'https://optimistic.etherscan.io'),
-    ('Unichain Sepolia', 'Sepolia', 'evm', 'UNI-SEPOLIA', 1301, true, false, 'https://sepolia.unichain.io'),
-    ('Unichain Mainnet', 'Mainnet', 'evm', 'UNI', 130, false, false, 'https://unichain.io')
+    ('Ethereum Mainnet', 'ethereum', 'Mainnet', 'evm', 'ETH', 1, false, false, 'https://etherscan.io'),
+    ('Ethereum Sepolia', 'ethereum-sepolia', 'Sepolia', 'evm', 'ETH-SEPOLIA', 11155111, true, true, 'https://sepolia.etherscan.io'),
+    ('Polygon Mainnet', 'polygon', 'Mainnet', 'evm', 'MATIC', 137, false, false, 'https://polygonscan.com'),
+    ('Polygon Amoy', 'polygon-amoy', 'Amoy', 'evm', 'MATIC-AMOY', 80002, true, false, 'https://www.oklink.com/amoy'), 
+    ('Arbitrum Mainnet', 'arbitrum', 'Mainnet', 'evm', 'ARB', 42161, false, false, 'https://arbiscan.io'),
+    ('Arbitrum Sepolia', 'arbitrum-sepolia', 'Sepolia', 'evm', 'ARB-SEPOLIA', 421614, true, false, 'https://sepolia.arbiscan.io'),
+    ('Base Mainnet', 'base', 'Mainnet', 'evm', 'BASE', 8453, false, false, 'https://basescan.org'),
+    ('Base Sepolia', 'base-sepolia', 'Sepolia', 'evm', 'BASE-SEPOLIA', 84532, true, false, 'https://sepolia.basescan.org'),
+    ('Optimism Mainnet', 'optimism', 'Mainnet', 'evm', 'OP', 10, false, false, 'https://optimistic.etherscan.io'),
+    ('Optimism Sepolia', 'optimism-sepolia', 'Sepolia', 'evm', 'OP-SEPOLIA', 11155420, true, false, 'https://sepolia.optimism.io'),
+    ('Unichain Mainnet', 'unichain', 'Mainnet', 'evm', 'UNI', 130, false, false, 'https://unichain.io'),
+    ('Unichain Sepolia', 'unichain-sepolia', 'Sepolia', 'evm', 'UNI-SEPOLIA', 1301, true, false, 'https://sepolia.unichain.io')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token, active, decimals)
