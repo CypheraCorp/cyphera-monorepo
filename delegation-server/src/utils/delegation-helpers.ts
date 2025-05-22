@@ -3,6 +3,8 @@
  */
 import { Delegation } from '@metamask/delegation-toolkit'
 import { logger } from './utils'
+import { type Address, isAddress } from 'viem'
+import type { PublicClient } from 'viem'
 
 
 /**
@@ -71,11 +73,12 @@ export function parseDelegation(delegationData: Uint8Array | Buffer): Delegation
 }
 
 /**
- * Validates a delegation structure
+ * Validates a delegation structure and ensures the delegator SCA is deployed.
  * @param delegation The delegation to validate
+ * @param publicClient A Viem PublicClient to interact with the blockchain
  * @returns true if valid, throws error if invalid
  */
-export function validateDelegation(delegation: Delegation): boolean {
+export async function validateDelegation(delegation: Delegation, publicClient: PublicClient): Promise<boolean> {
   // Check required fields
   if (!delegation.delegator) {
     throw new Error('Invalid delegation: missing delegator')
@@ -97,6 +100,20 @@ export function validateDelegation(delegation: Delegation): boolean {
   // Validate delegate address format
   if (!isValidEthereumAddress(delegation.delegate)) {
     throw new Error('Invalid delegate address format: must be a valid Ethereum address (0x + 40 hex chars)')
+  }
+
+  // Check if the delegator Smart Account (customer's account) is deployed
+  try {
+    const bytecode = await publicClient.getBytecode({ address: delegation.delegator as Address });
+    if (!bytecode || bytecode === '0x') {
+      throw new Error(`Invalid delegation: Delegator smart account at ${delegation.delegator} is not deployed. The customer must deploy their account first.`);
+    }
+  } catch (error: any) {
+    // Catch errors from getBytecode (e.g., RPC issues) and re-throw appropriately
+    if (error.message.includes('Delegator smart account') && error.message.includes('is not deployed')) {
+        throw error; // Re-throw our specific error
+    }
+    throw new Error(`Failed to verify delegator deployment status for ${delegation.delegator}: ${error.message}`);
   }
   
   return true
