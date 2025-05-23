@@ -73,19 +73,24 @@ echo "Project root: $ROOT_DIR"
 DELEGATION_SERVER_DIR="$ROOT_DIR/delegation-server"
 echo "Delegation server directory: $DELEGATION_SERVER_DIR"
 
-# Function to check if port is in use
-check_port() {
+# Function to check if a port is listening (portable across OS)
+check_port_listening() {
   local port=$1
+  
+  # Try different commands based on what's available
   if command -v lsof >/dev/null; then
-    if lsof -i:"$port" >/dev/null 2>&1; then
-      return 0  # port is in use
-    fi
+    # macOS and some Linux systems
+    lsof -i ":$port" >/dev/null 2>&1
+  elif command -v ss >/dev/null; then
+    # Modern Linux systems
+    ss -tlpn | grep -q ":$port\s"
   elif command -v netstat >/dev/null; then
-    if netstat -tuln | grep ":$port " >/dev/null 2>&1; then
-      return 0  # port is in use
-    fi
+    # Fallback for older systems
+    netstat -tlpn 2>/dev/null | grep -q ":$port\s" || netstat -an 2>/dev/null | grep -q ":$port"
+  else
+    echo "Warning: No suitable command found to check port status"
+    return 1
   fi
-  return 1  # port is free
 }
 
 # Function to kill process using port
@@ -112,7 +117,7 @@ kill_process_on_port() {
     exit 1
   fi
   
-  if check_port "$port"; then
+  if check_port_listening "$port"; then
     echo "Failed to free port $port. Please terminate the process manually."
     exit 1
   fi
@@ -163,7 +168,7 @@ if [ "$MOCK" = "true" ]; then
   fi
 
   # Check if the gRPC port is in use and free it if necessary
-  if check_port "$GRPC_PORT"; then
+  if check_port_listening "$GRPC_PORT"; then
     kill_process_on_port "$GRPC_PORT"
   fi
 
@@ -200,7 +205,7 @@ if [ "$MOCK" = "true" ]; then
   ELAPSED_WAIT=0
   LISTENING=false
   while [ $ELAPSED_WAIT -lt $MAX_WAIT ]; do
-    if ss -tlpn | grep -q ":${GRPC_PORT}\s"; then
+    if check_port_listening "${GRPC_PORT}"; then
       echo "Server is listening on port ${GRPC_PORT} after ${ELAPSED_WAIT} seconds."
       LISTENING=true
       break
@@ -228,7 +233,7 @@ if [ "$MOCK" = "true" ]; then
 
   # Final check if the port is actually listening (redundant after loop, but safe)
   echo "Final check listener on port ${GRPC_PORT}..."
-  if ss -tlpn | grep -q ":${GRPC_PORT}\s"; then
+  if check_port_listening "${GRPC_PORT}"; then
     echo "Port ${GRPC_PORT} is confirmed listening."
   else
     # This should ideally not be reached if the loop worked
@@ -244,7 +249,7 @@ else
 fi
 
 # Check if the HTTP port is in use (for server mode) and free it if necessary
-if [ "$MODE" = "server" ] && check_port "$SERVER_PORT"; then
+if [ "$MODE" = "server" ] && check_port_listening "$SERVER_PORT"; then
   kill_process_on_port "$SERVER_PORT"
 fi
 
