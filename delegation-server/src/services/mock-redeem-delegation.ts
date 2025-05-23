@@ -13,6 +13,8 @@ import { parseDelegation, validateDelegation } from '../utils/delegation-helpers
  * @param tokenContractAddress The address of the token contract
  * @param tokenAmount The amount of tokens to redeem
  * @param tokenDecimals The number of decimals of the token
+ * @param chainId The blockchain chain ID
+ * @param networkName The network name
  * @returns A mock transaction hash
  */
 export const redeemDelegation = async (
@@ -20,7 +22,9 @@ export const redeemDelegation = async (
   merchantAddress: string,
   tokenContractAddress: string,
   tokenAmount: number,
-  tokenDecimals: number
+  tokenDecimals: number,
+  chainId: number,
+  networkName: string
 ): Promise<string> => {
   try {
     // Validate inputs first to avoid undefined errors
@@ -43,11 +47,34 @@ export const redeemDelegation = async (
     if (!tokenDecimals) {
       throw new Error("Token decimals are required");
     }
+
+    if (!chainId || chainId <= 0) {
+      throw new Error("Valid chain ID is required");
+    }
+
+    if (!networkName) {
+      throw new Error("Network name is required");
+    }
     
     // Parse and validate the delegation - this is real code that will actually check
     // the delegation format, so our test is still meaningful
     const delegation = parseDelegation(delegationData)
-    validateDelegation(delegation)
+    
+    // For mock mode, we'll do basic validation without blockchain calls
+    // Check required fields
+    if (!delegation.delegator) {
+      throw new Error('Invalid delegation: missing delegator')
+    }
+    
+    if (!delegation.delegate) {
+      throw new Error('Invalid delegation: missing delegate')
+    }
+    
+    if (!delegation.signature) {
+      throw new Error('Invalid delegation: missing signature')
+    }
+    
+    logger.info("[MOCK] Delegation structure validated successfully")
     
     logger.info("[MOCK] Redeeming delegation...")
     logger.debug("[MOCK] Delegation details:", {
@@ -56,7 +83,9 @@ export const redeemDelegation = async (
       merchantAddress,
       tokenContractAddress,
       tokenAmount,
-      tokenDecimals
+      tokenDecimals,
+      chainId,
+      networkName
     })
     
     // Simulate processing time to make the test more realistic

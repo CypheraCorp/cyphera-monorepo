@@ -80,6 +80,202 @@ const createTransport = (url: string | undefined): Transport => {
   });
 };
 
+// --- Helper Functions ---
+
+interface RedemptionValidationInputs {
+  delegationData: Uint8Array;
+  merchantAddress: string;
+  tokenContractAddress: string;
+  tokenAmount: number;
+  tokenDecimals: number;
+  chainId: number;
+  networkName: string;
+}
+
+/**
+ * Validates the inputs for the redeemDelegation function.
+ */
+function _validateRedemptionInputs(inputs: RedemptionValidationInputs): void {
+  if (!inputs.delegationData || inputs.delegationData.length === 0) throw new Error('Delegation data is required');
+  if (!inputs.merchantAddress || inputs.merchantAddress === '0x0000000000000000000000000000000000000000') throw new Error('Valid merchant address is required');
+  if (!inputs.tokenContractAddress || inputs.tokenContractAddress === '0x0000000000000000000000000000000000000000') throw new Error('Valid token contract address is required');
+  if (!inputs.tokenAmount || inputs.tokenAmount === 0) throw new Error('Valid token amount is required');
+  if (!inputs.tokenDecimals || inputs.tokenDecimals <= 0) throw new Error('Valid token decimals are required');
+  if (!inputs.chainId || inputs.chainId <= 0) throw new Error('Valid chainId is required');
+  if (!inputs.networkName) throw new Error('Valid networkName is required');
+}
+
+interface BlockchainClients {
+  publicClient: PublicClient;
+  bundlerClient: ReturnType<typeof createBundlerClient>;
+  pimlicoClient: ReturnType<typeof createPimlicoClient>;
+  // paymasterClient is created but not always directly returned if not used explicitly later by main flow
+}
+
+/**
+ * Initializes the necessary blockchain clients.
+ */
+async function _initializeBlockchainClients(networkName: string, chainId: number, chain: Chain): Promise<BlockchainClients> {
+  const { rpcUrl, bundlerUrl } = await getNetworkConfig(networkName, chainId);
+
+  const publicClient = createPublicClient({
+    chain,
+    transport: createTransport(rpcUrl)
+  });
+
+  const paymasterClient = createPaymasterClient({ // Needed for bundler client, even if not sponsoring
+      transport: createTransport(bundlerUrl)
+  });
+
+  const bundlerClient = createBundlerClient({
+      transport: createTransport(bundlerUrl),
+      chain,
+      paymaster: paymasterClient,
+  });
+
+  const pimlicoClient = createPimlicoClient({
+      chain,
+      transport: createTransport(bundlerUrl),
+  });
+
+  return { publicClient, bundlerClient, pimlicoClient };
+}
+
+/**
+ * Creates or gets the redeemer's MetaMask Smart Account.
+ */
+async function _getOrCreateRedeemerAccount(
+  publicClient: PublicClient,
+  chainId: number
+): Promise<MetaMaskSmartAccount<Implementation.Hybrid>> {
+  const privateKey = await getSecretValue('PRIVATE_KEY_ARN', "PRIVATE_KEY");
+  const formattedKey = formatPrivateKey(privateKey);
+  const account = privateKeyToAccount(formattedKey as `0x${string}`);
+
+  logger.info(`Creating MetaMask Smart Account for EOA: ${account.address} on chain ${chainId}`);
+  const redeemer = await toMetaMaskSmartAccount({
+    client: publicClient,
+    implementation: Implementation.Hybrid,
+    deployParams: [account.address, [], [], []],
+    deploySalt: "0x" as `0x${string}`,
+    signatory: { account }
+  });
+  logger.info(`Target Smart Account address: ${redeemer.address}`);
+  return redeemer;
+}
+
+/**
+ * Prepares the payload (calls array) for the redeemDelegations UserOperation.
+ */
+function _prepareRedemptionUserOperationPayload(
+  delegation: any, // Type it more strictly if possible, from parseDelegation
+  merchantAddress: string,
+  tokenContractAddress: string,
+  tokenAmount: number,
+  tokenDecimals: number,
+  redeemerAddress: Address
+): Call[] {
+  if (tokenDecimals <= 0) {
+    throw new Error('Token decimals must be positive for this parsing logic.');
+  }
+  const humanReadableAmountString = (tokenAmount / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals);
+  const tokenAmountBigInt = parseUnits(humanReadableAmountString, tokenDecimals);
+
+  const transferCalldata = encodeFunctionData({
+    abi: erc20Abi,
+    functionName: 'transfer',
+    args: [merchantAddress as Address, tokenAmountBigInt]
+  });
+  
+  const executions: ExecutionStruct[] = [{
+    target: tokenContractAddress as Address,
+    value: 0n,
+    callData: transferCalldata
+  }];
+
+  const delegationForFramework = delegation; // Potentially add 'as const' or a more specific type
+  const delegationChain = [delegationForFramework];
+
+  const redeemDelegationCalldata = DelegationFramework.encode.redeemDelegations({
+    delegations: [delegationChain],
+    modes: [SINGLE_DEFAULT_MODE],
+    executions: [executions]
+  });
+
+  return [{
+    to: redeemerAddress,
+    data: redeemDelegationCalldata,
+  }];
+}
+
+/**
+ * Sends the UserOperation, waits for its receipt, and handles confirmation/errors.
+ */
+async function _sendAndConfirmUserOperation(
+  bundlerClient: ReturnType<typeof createBundlerClient>,
+  pimlicoClient: ReturnType<typeof createPimlicoClient>,
+  redeemer: MetaMaskSmartAccount<Implementation.Hybrid>,
+  calls: Call[],
+  publicClient: PublicClient // Added for post-confirmation check
+): Promise<string> {
+  const { fast: gasPrices } = await pimlicoClient.getUserOperationGasPrice();
+  if (!gasPrices || !gasPrices.maxFeePerGas || !gasPrices.maxPriorityFeePerGas) {
+    throw new Error("Could not fetch gas prices for the UserOperation.");
+  }
+  logger.info(`Using gas prices: maxFeePerGas: ${formatEther(gasPrices.maxFeePerGas, "gwei")} gwei, maxPriorityFeePerGas: ${formatEther(gasPrices.maxPriorityFeePerGas, "gwei")} gwei`);
+
+  logger.info("Sending UserOperation (will include deployment if SA is not on-chain)...");
+  const overallStartTime = Date.now();
+  let userOpHash: Address | undefined;
+
+  try {
+    userOpHash = await bundlerClient.sendUserOperation({
+      account: redeemer, 
+      calls: calls,
+      maxFeePerGas: gasPrices.maxFeePerGas,
+      maxPriorityFeePerGas: gasPrices.maxPriorityFeePerGas,
+    });
+    logger.info(`UserOperation hash (sent in ${(Date.now() - overallStartTime) / 1000}s): ${userOpHash}`);
+    logger.info("Waiting for UserOperation receipt (includes potential deployment and redemption)...");
+    const receipt = await bundlerClient.waitForUserOperationReceipt({ hash: userOpHash, timeout: 120_000 }) as UserOperationReceipt;
+
+    if (!receipt.success) {
+      throw new Error(`UserOperation did not succeed. Receipt: ${JSON.stringify(receipt)}`);
+    }
+
+    const isNowDeployed = await redeemer.isDeployed();
+    if (isNowDeployed) {
+      logger.info(`Smart Account ${redeemer.address} is confirmed deployed.`);
+    } else {
+      const code = await publicClient.getBytecode({address: redeemer.address});
+      if (!code || code === "0x") {
+           logger.warn(`Warning: SA ${redeemer.address} bytecode not found after UserOp ${receipt.receipt.transactionHash}, but UserOp reported success.`);
+      } else {
+          logger.info(`Bytecode found at ${redeemer.address}. Assuming deployed despite isDeployed() returning false.`);
+      }
+    }
+
+    const transactionHash = receipt.receipt.transactionHash;
+    logger.info(`Redemption Transaction confirmed in ${(Date.now() - overallStartTime) / 1000}s total: ${transactionHash}`);
+    return transactionHash;
+  } catch (e: any) {
+      let errMsg = `Error during UserOperation (hash: ${userOpHash || 'N/A'}): ${e.message}`;
+      if (e instanceof UserOperationExecutionError) {
+           errMsg += ` Reason: ${e.cause?.details || e.cause?.message || 'N/A'}`;
+      }
+      logger.error(errMsg, e);
+      try {
+          const deployedStatusOnError = await redeemer.isDeployed();
+          logger.error(`SA ${redeemer.address} deployment status on error: ${deployedStatusOnError}`);
+      } catch (deployCheckError) {
+          logger.error(`Could not check SA deployment status on error: ${deployCheckError}`);
+      }
+      throw new Error(errMsg);
+  }
+}
+
+// --- Main Exported Function ---
+
 /**
  * Redeems a delegation, executing actions on behalf of the delegator
  * 
@@ -100,56 +296,21 @@ export const redeemDelegation = async (
   networkName: string
 ): Promise<string> => {
   try {
-    // --- 1. Validation & Config ---
-    if (!delegationData || delegationData.length === 0) throw new Error('Delegation data is required');
-    if (!merchantAddress || merchantAddress === '0x0000000000000000000000000000000000000000') throw new Error('Valid merchant address is required');
-    if (!tokenContractAddress || tokenContractAddress === '0x0000000000000000000000000000000000000000') throw new Error('Valid token contract address is required');
-    if (!tokenAmount || tokenAmount === 0) throw new Error('Valid token amount is required');
-    if (!tokenDecimals || tokenDecimals <= 0) throw new Error('Valid token decimals are required');
-    if (!chainId || chainId <= 0) throw new Error('Valid chainId is required');
-    if (!networkName) throw new Error('Valid networkName is required');
-
+    // 1. Validate all incoming parameters to ensure data integrity early.
+    _validateRedemptionInputs({ delegationData, merchantAddress, tokenContractAddress, tokenAmount, tokenDecimals, chainId, networkName });
     logger.info(`Starting delegation redemption for chainId: ${chainId}, network: ${networkName}`);
 
-    // Get dynamic network configuration
-    const { rpcUrl, bundlerUrl } = await getNetworkConfig(networkName, chainId);
+    // 2. Determine the correct blockchain and initialize necessary clients.
     const chain: Chain = getChainById(chainId);
-
-    // --- 2. Initialize Clients Dynamically ---
-    const publicClient: PublicClient = createPublicClient({
-      chain,
-      transport: createTransport(rpcUrl)
-    });
-
-    // Initialize Paymaster client (needed for bundler client setup, even if not sponsoring)
-    const paymasterClient = createPaymasterClient({
-        transport: createTransport(bundlerUrl)
-    });
-
-    // Initialize Bundler client
-    const bundlerClient = createBundlerClient({
-        transport: createTransport(bundlerUrl),
-        chain,
-        // entryPoint // Add if needed
-        paymaster: paymasterClient, // Add if sponsoring
-    });
-
-    // Initialize Pimlico client (for gas price fetching)
-    const pimlicoClient = createPimlicoClient({
-        chain,
-        transport: createTransport(bundlerUrl),
-    });
-
-    // --- Remaining logic (to be refactored step-by-step) ---
-
-    // Parse the delegation data using our helper
-    const delegation = parseDelegation(delegationData);
+    const { publicClient, bundlerClient, pimlicoClient } = await _initializeBlockchainClients(networkName, chainId, chain);
     
-    // Validate the delegation
-    validateDelegation(delegation);
+    // 3. Parse and validate the provided delegation data.
+    // validateDelegation will ensure the delegator (customer's) smart account is deployed.
+    const delegation = parseDelegation(delegationData);
+    await validateDelegation(delegation, publicClient); 
     
     logger.info("Redeeming delegation...");
-    logger.debug("Delegation details:", {
+    logger.debug("Delegation details for redemption:", {
       delegate: delegation.delegate,
       delegator: delegation.delegator,
       merchantAddress,
@@ -160,173 +321,50 @@ export const redeemDelegation = async (
       networkName
     });
 
-    // Get private key from AWS Secrets Manager
-    const privateKey = await getSecretValue('PRIVATE_KEY_ARN', "PRIVATE_KEY");
-    
-    // Create redeemer account from private key (Inline logic from old createMetaMaskAccount)
-    const formattedKey = formatPrivateKey(privateKey);
+    // 4. Get or create the smart account that will execute the redemption (the 'redeemer').
+    // This account is derived from a private key stored securely.
+    const redeemer = await _getOrCreateRedeemerAccount(publicClient, chainId);
 
-    const account = privateKeyToAccount(formattedKey as `0x${string}`);
-    logger.info(`Creating MetaMask Smart Account for address: ${account.address} on chain ${chainId}`);
-    // Use the local publicClient instance here
-    const redeemer: MetaMaskSmartAccount<Implementation.Hybrid> = await toMetaMaskSmartAccount({
-      client: publicClient,
-      implementation: Implementation.Hybrid,
-      deployParams: [account.address, [], [], []],
-      deploySalt: "0x" as `0x${string}`,
-      signatory: { account }
-    });
-    logger.info(`Target Smart Account address: ${redeemer.address}`);
-
+    // 5. Crucial check: Ensure the on-chain delegate matches the derived redeemer smart account address.
     if (!isAddressEqual(redeemer.address, delegation.delegate)) {
       throw new Error(
-        `Redeemer SA address (${redeemer.address}) does not match delegate (${delegation.delegate}) in delegation on chain ${chainId}.`
+        `Redeemer SA address (${redeemer.address}) does not match delegate (${delegation.delegate}) in delegation on chain ${chainId}. Mismatched delegate.`
       );
     }
 
-    // --- 5. Ensure Smart Account is Deployed ---
-    let isDeployed = await redeemer.isDeployed();
-    logger.info(`Is Smart Account ${redeemer.address} deployed? ${isDeployed}`);
-
-    if (!isDeployed) {
-      logger.info(`Smart Account ${redeemer.address} is not deployed. Sending UserOperation to trigger deployment...`);
-      const { fast: deploymentGasPrices } = await pimlicoClient.getUserOperationGasPrice();
-      if (!deploymentGasPrices || !deploymentGasPrices.maxFeePerGas || !deploymentGasPrices.maxPriorityFeePerGas) {
-        throw new Error("Could not fetch gas prices from Pimlico for SA deployment.");
-      }
-      logger.info(`Using gas prices for SA deployment: maxFeePerGas: ${formatEther(deploymentGasPrices.maxFeePerGas, "gwei")} gwei, maxPriorityFeePerGas: ${formatEther(deploymentGasPrices.maxPriorityFeePerGas, "gwei")} gwei`);
-      
-      const DUMMY_DEPLOY_RECEIVER_ADDRESS = redeemer.address; 
-      const DUMMY_DEPLOY_VALUE = parseEther("0"); 
-      let deployUserOpHash: Address | undefined;
-
-      try {
-        deployUserOpHash = await bundlerClient.sendUserOperation({
-          account: redeemer,
-          calls: [{ to: DUMMY_DEPLOY_RECEIVER_ADDRESS, value: DUMMY_DEPLOY_VALUE }],
-          maxFeePerGas: deploymentGasPrices.maxFeePerGas,
-          maxPriorityFeePerGas: deploymentGasPrices.maxPriorityFeePerGas,
-          verificationGasLimit: 150000n,
-        });
-        logger.info(`Deployment UserOperation sent. Hash: ${deployUserOpHash}`);
-        logger.info("Waiting for deployment UserOperation receipt...");
-        const deployReceipt = await bundlerClient.waitForUserOperationReceipt({ hash: deployUserOpHash, timeout: 120_000 });
-        
-        if (deployReceipt.success) {
-          logger.info(`Deployment UserOperation successful! Transaction Hash: ${deployReceipt.receipt.transactionHash}`);
-          isDeployed = await redeemer.isDeployed();
-          if (!isDeployed) {
-              const code = await publicClient.getBytecode({address: redeemer.address});
-              if (!code || code === "0x") {
-                   throw new Error(`SA deployment failed: No bytecode found at ${redeemer.address} after deployment UserOp ${deployReceipt.receipt.transactionHash}.`);
-              }
-              logger.info(`Bytecode found at ${redeemer.address}. Assuming deployed.`);
-              isDeployed = true; 
-          }
-        } else {
-          // This case should ideally be caught by the catch block if waitForUserOperationReceipt throws on failure
-          throw new Error(`SA Deployment UserOperation did not succeed. Receipt: ${JSON.stringify(deployReceipt)}`);
-        }
-      } catch (e: any) {
-        let errMsg = `Error during SA deployment UserOperation (hash: ${deployUserOpHash || 'N/A'}): ${e.message}`;
-        if (e instanceof UserOperationExecutionError) {
-            errMsg += ` Reason: ${e.cause?.details || e.cause?.message || 'N/A'}`;
-        }
-        logger.error(errMsg, e);
-        throw new Error(errMsg);
-      }
-    }
+    // 6. Prepare the UserOperation payload.
+    // This includes encoding the ERC20 transfer and the delegation redemption calls.
+    const callsForRedemption = _prepareRedemptionUserOperationPayload(
+      delegation,
+      merchantAddress,
+      tokenContractAddress,
+      tokenAmount,
+      tokenDecimals,
+      redeemer.address
+    );
     
-    if (!isDeployed) {
-        throw new Error(`Smart Account ${redeemer.address} could not be confirmed as deployed.`);
-    }
-
-    // --- 6. Prepare and Send RedeemDelegations UserOperation ---
-    logger.info(`Smart Account ${redeemer.address} is deployed. Proceeding with redeemDelegations.`);
-    // Convert tokenAmount (e.g., 499992) and tokenDecimals (e.g., 6)
-    // to a human-readable string representation (e.g., "0.499992")
-    // before parsing to BigInt for the contract call.
-    if (tokenDecimals <= 0) {
-      // Or handle as an error, depending on expected constraints
-      throw new Error('Token decimals must be positive for this parsing logic.');
-    }
-    const humanReadableAmountString = (tokenAmount / Math.pow(10, tokenDecimals)).toFixed(tokenDecimals);
-
-    const tokenAmountBigInt = parseUnits(humanReadableAmountString, tokenDecimals);
-
-    const transferCalldata = encodeFunctionData({
-      abi: erc20Abi,
-      functionName: 'transfer',
-      args: [merchantAddress as Address, tokenAmountBigInt]
-    });
-    
-    const executions: ExecutionStruct[] = [{
-      target: tokenContractAddress as Address,
-      value: 0n,
-      callData: transferCalldata
-    }];
-
-    const delegationForFramework = delegation as any;
-    const delegationChain = [delegationForFramework];
-
-    const redeemDelegationCalldata = DelegationFramework.encode.redeemDelegations({
-      delegations: [delegationChain],
-      modes: [SINGLE_DEFAULT_MODE],
-      executions: [executions]
-    });
-
-    const callsForRedemption: Call[] = [{
-      to: redeemer.address, // The SA calls itself to invoke DelegationFramework
-      data: redeemDelegationCalldata,
-      // value: 0n // No native value needed for the framework call itself
-    }];
-    
-    const { fast: redemptionGasPrices } = await pimlicoClient.getUserOperationGasPrice();
-    if (!redemptionGasPrices || !redemptionGasPrices.maxFeePerGas || !redemptionGasPrices.maxPriorityFeePerGas) {
-      throw new Error("Could not fetch gas prices for redemption UserOp.");
-    }
-    logger.info(`Using gas prices for redemption: maxFeePerGas: ${formatEther(redemptionGasPrices.maxFeePerGas, "gwei")} gwei, maxPriorityFeePerGas: ${formatEther(redemptionGasPrices.maxPriorityFeePerGas, "gwei")} gwei`);
-
-    logger.info("Sending redeemDelegations UserOperation...");
-    const overallStartTime = Date.now();
-    let redeemUserOpHash: Address | undefined;
-
-    try {
-      redeemUserOpHash = await bundlerClient.sendUserOperation({
-        account: redeemer, 
-        calls: callsForRedemption,
-        maxFeePerGas: redemptionGasPrices.maxFeePerGas,
-        maxPriorityFeePerGas: redemptionGasPrices.maxPriorityFeePerGas
-        // Optional: Increase gas limits if needed
-        // callGasLimit: 150000n,
-        // preVerificationGas: 50000n,
-        // verificationGasLimit: 150000n,
-      });
-      logger.info(`Redemption UserOperation hash (sent in ${(Date.now() - overallStartTime) / 1000}s): ${redeemUserOpHash}`);
-      logger.info("Waiting for redemption transaction receipt...");
-      const redeemReceipt = await bundlerClient.waitForUserOperationReceipt({ hash: redeemUserOpHash, timeout: 120_000 }) as UserOperationReceipt;
-
-      if (!redeemReceipt.success) {
-        // This case should ideally be caught by the catch block
-        throw new Error(`Redemption UserOperation did not succeed. Receipt: ${JSON.stringify(redeemReceipt)}`);
-      }
-      const transactionHash = redeemReceipt.receipt.transactionHash;
-      logger.info(`Redemption Transaction confirmed in ${(Date.now() - overallStartTime) / 1000}s total: ${transactionHash}`);
-      return transactionHash;
-    } catch (e: any) {
-        let errMsg = `Error during redeemDelegations UserOperation (hash: ${redeemUserOpHash || 'N/A'}): ${e.message}`;
-        if (e instanceof UserOperationExecutionError) {
-             errMsg += ` Reason: ${e.cause?.details || e.cause?.message || 'N/A'}`;
-        }
-        logger.error(errMsg, e);
-        throw new Error(errMsg);
-    }
+    // 7. Send the UserOperation to the bundler and wait for confirmation.
+    // This step will also handle the smart account deployment if it's not yet on-chain.
+    return await _sendAndConfirmUserOperation(
+      bundlerClient,
+      pimlicoClient,
+      redeemer,
+      callsForRedemption,
+      publicClient
+    );
 
   } catch (error) {
-    logger.error("Error in redeemDelegation service:", { message: (error as Error)?.message, stack: (error as Error)?.stack, error });
+    // Centralized error handling for the entire redemption process.
+    logger.error("Critical error in redeemDelegation service:", { 
+        message: (error as Error)?.message, 
+        stack: (error as Error)?.stack, 
+        // Include additional context if available, e.g., parts of the input if safe
+        errorObject: error 
+    });
     if (error instanceof Error) {
+        // Re-throw with a more specific prefix for easier upstream identification.
         throw new Error(`RedeemDelegation failed: ${error.message}`);
     }
-    throw new Error(`RedeemDelegation failed with unknown error.`);
+    throw new Error(`RedeemDelegation failed due to an unknown error.`);
   }
 }; 
