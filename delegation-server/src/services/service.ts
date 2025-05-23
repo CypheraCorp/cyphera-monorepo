@@ -13,25 +13,30 @@ let redeemDelegation: (
   networkName: string
 ) => Promise<string>;
 
+// Create a promise that resolves when the implementation is loaded
+let implementationReady: Promise<void>;
+
 logger.info('===== SERVICE.TS INITIALIZATION =====');
 logger.info(`MOCK_MODE from environment: "${process.env.MOCK_MODE || 'not set'}"`);
 logger.info(`MOCK_MODE from config: ${config.mockMode}`);
 
 if (config.mockMode) {
   logger.info('SERVICE.TS: Running in MOCK MODE - using mock blockchain service')
-  import('./mock-redeem-delegation').then(module => {
+  implementationReady = import('./mock-redeem-delegation').then(module => {
     redeemDelegation = module.redeemDelegation;
     logger.info('SERVICE.TS: Successfully loaded MOCK blockchain service')
   }).catch(error => {
     logger.error('SERVICE.TS: Failed to load mock blockchain service:', error);
+    throw error;
   });
 } else {
   logger.info('SERVICE.TS: Running in REAL MODE - using real blockchain service')
-  import('./redeem-delegation').then(module => {
+  implementationReady = import('./redeem-delegation').then(module => {
     redeemDelegation = module.redeemDelegation;
     logger.info('SERVICE.TS: Successfully loaded REAL blockchain service')
   }).catch(error => {
     logger.error('SERVICE.TS: Failed to load real blockchain service:', error);
+    throw error;
   });
 }
 
@@ -49,18 +54,8 @@ export const delegationService = {
     try {
       logger.info('Received RedeemDelegation request');
       
-      // Check if the implementation was loaded
-      if (!redeemDelegation) {
-        logger.error('Blockchain service implementation not loaded yet');
-        callback(null, {
-          transaction_hash: "",
-          transactionHash: "",
-          success: false,
-          error_message: "Service not ready yet, try again later",
-          errorMessage: "Service not ready yet, try again later"
-        });
-        return;
-      }
+      // Wait for the implementation to be ready
+      await implementationReady;
 
       // Extract request parameters
       const signature = call.request.signature;
