@@ -561,7 +561,6 @@ type processSubscriptionParams struct {
 	merchantWallet db.Wallet
 	token          db.Token
 	network        db.Network
-	isFinalPayment bool
 	now            time.Time
 	queries        db.Querier                     // Database queries interface (could be transaction or regular)
 	tx             pgx.Tx                         // Optional transaction for atomic operations
@@ -592,8 +591,8 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		}
 		return result, errors.New(errMsg)
 	}
-	log.Printf("processSubscription: Fetched current state for %s: Status=%s, NextRedemptionDate=%v",
-		currentDBSub.ID, currentDBSub.Status, currentDBSub.NextRedemptionDate.Time)
+	log.Printf("processSubscription: Fetched current state for %s: Status=%s, NextRedemptionDate=%v, TotalRedemptions=%d",
+		currentDBSub.ID, currentDBSub.Status, currentDBSub.NextRedemptionDate.Time, currentDBSub.TotalRedemptions)
 
 	// IDEMPOTENCY CHECKS:
 	// 1. Check for Terminal Status (Completed or Failed by a previous run)
@@ -632,8 +631,23 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 
 	log.Printf("processSubscription: Idempotency checks passed for subscription %s. Proceeding with redemption logic.", currentDBSub.ID)
 
-	// isFinalPayment is determined by the caller (ProcessDueSubscriptions) based on the subscription's state when queried.
-	// It indicates if the subscription term is considered complete if this redemption succeeds.
+	// IMPORTANT FIX: Determine if this will be the final payment using the CURRENT subscription state
+	// instead of the potentially stale data passed in params.isFinalPayment
+	isActualFinalPayment := false
+	if params.Price.Type == db.PriceTypeRecurring {
+		// Check if the current redemption will fulfill the term length using CURRENT TotalRedemptions
+		if params.Price.TermLength > 0 && (currentDBSub.TotalRedemptions+1) >= params.Price.TermLength {
+			isActualFinalPayment = true
+		}
+	} else if params.Price.Type == db.PriceTypeOneOff {
+		// For one-off, it's complete if this payment makes total_redemptions reach 1
+		if (currentDBSub.TotalRedemptions + 1) >= 1 {
+			isActualFinalPayment = true
+		}
+	}
+
+	log.Printf("processSubscription: Final payment determination for %s: TermLength=%d, CurrentTotalRedemptions=%d, WillBeFinal=%t",
+		currentDBSub.ID, params.Price.TermLength, currentDBSub.TotalRedemptions, isActualFinalPayment)
 
 	// Marshal delegation to JSON bytes for redemption
 	delegationBytes, err := json.Marshal(params.delegationData)
@@ -822,51 +836,144 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			params.results.Succeeded++ // Increment Succeeded here
 		}
 
-		// If this was the final payment (determined by ProcessDueSubscriptions and passed via params.isFinalPayment),
-		// also update status to Completed
-		if params.isFinalPayment {
+		// Use the ACTUAL final payment determination, not the potentially stale one from params
+		if isActualFinalPayment {
 			// Call CompleteSubscription which sets status and nullifies next_redemption_date
 			if _, updateErr := params.queries.CompleteSubscription(params.ctx, originalSubscription.ID); updateErr != nil {
-				log.Printf("Warning: Failed to mark subscription %s as completed using CompleteSubscription after successful final payment: %v", originalSubscription.ID, updateErr)
+				errMsg := fmt.Sprintf("CRITICAL: Failed to mark subscription %s as completed after successful final payment: %v", originalSubscription.ID, updateErr)
+				log.Printf(errMsg)
+				// This is critical for final payments - we need to ensure completion status is set
+				result.isProcessed = false
+				if params.results != nil {
+					params.results.Failed++
+				}
+				return result, fmt.Errorf(errMsg)
 			} else {
 				result.isCompleted = true // Internal flag for event type
-				log.Printf("Marked subscription %s as completed (via CompleteSubscription) after successful final payment", originalSubscription.ID)
+				log.Printf("Marked subscription %s as completed (via CompleteSubscription) after successful final payment. TotalRedemptions will be %d", originalSubscription.ID, currentDBSub.TotalRedemptions+1)
 			}
 		}
 
-		// Record successful event
-		eventType := db.SubscriptionEventTypeRedeemed
-		if result.isCompleted { // Use internal flag
-			eventType = db.SubscriptionEventTypeCompleted
-		}
+		// Record successful event(s)
+		// ALWAYS create a "redeemed" event for the successful redemption with transaction hash
+		redemptionMetadataBytes, _ := json.Marshal(map[string]interface{}{
+			"next_redemption":         nextRedemptionDate.Time,
+			"total_redemptions_after": currentDBSub.TotalRedemptions + 1,
+			"term_length":             params.Price.TermLength,
+			"is_final_payment":        isActualFinalPayment,
+		})
 
 		if params.tx != nil { // Transactional path
-			metadataBytes, _ := json.Marshal(map[string]interface{}{"next_redemption": nextRedemptionDate.Time, "is_final": result.isCompleted})
+			// 1. Create the "redeemed" event (always)
 			_, eventErr := params.queries.CreateSubscriptionEvent(params.ctx, db.CreateSubscriptionEventParams{
 				SubscriptionID:  originalSubscription.ID,
-				EventType:       eventType,
+				EventType:       db.SubscriptionEventTypeRedeemed,
 				TransactionHash: pgtype.Text{String: result.txHash, Valid: true},
 				AmountInCents:   params.Price.UnitAmountInPennies,
 				OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
-				Metadata:        metadataBytes,
+				Metadata:        redemptionMetadataBytes,
 			})
 			if eventErr != nil {
-				log.Printf("Warning: Failed to record success event for subscription %s: %v", originalSubscription.ID, eventErr)
+				errMsg := fmt.Sprintf("CRITICAL: Failed to record redeemed event for subscription %s after successful on-chain redemption. Transaction will be rolled back: %v", originalSubscription.ID, eventErr)
+				log.Printf(errMsg)
+				result.isProcessed = false
+				if params.results != nil {
+					params.results.Failed++
+				}
+				return result, fmt.Errorf(errMsg)
+			}
+
+			// Validate that the redeemed event was properly created
+			if validationErr := h.logAndValidateEventCreation(params.ctx, params.queries, originalSubscription.ID, db.SubscriptionEventTypeRedeemed, result.txHash); validationErr != nil {
+				errMsg := fmt.Sprintf("CRITICAL: Redeemed event creation validation failed for subscription %s: %v", originalSubscription.ID, validationErr)
+				log.Printf(errMsg)
+				result.isProcessed = false
+				if params.results != nil {
+					params.results.Failed++
+				}
+				return result, fmt.Errorf(errMsg)
+			}
+
+			// 2. If this is the final payment, ALSO create a "completed" event (separate from redemption)
+			if result.isCompleted {
+				completionMetadataBytes, _ := json.Marshal(map[string]interface{}{
+					"final_total_redemptions": currentDBSub.TotalRedemptions + 1,
+					"term_length":             params.Price.TermLength,
+					"subscription_completed":  time.Now(),
+				})
+
+				_, completionEventErr := params.queries.CreateSubscriptionEvent(params.ctx, db.CreateSubscriptionEventParams{
+					SubscriptionID:  originalSubscription.ID,
+					EventType:       db.SubscriptionEventTypeCompleted,
+					TransactionHash: pgtype.Text{Valid: false}, // No transaction hash for completion event
+					AmountInCents:   0,                         // Completion event doesn't represent a payment
+					OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
+					Metadata:        completionMetadataBytes,
+				})
+				if completionEventErr != nil {
+					errMsg := fmt.Sprintf("CRITICAL: Failed to record completion event for subscription %s after successful final payment. Transaction will be rolled back: %v", originalSubscription.ID, completionEventErr)
+					log.Printf(errMsg)
+					result.isProcessed = false
+					if params.results != nil {
+						params.results.Failed++
+					}
+					return result, fmt.Errorf(errMsg)
+				}
+
+				log.Printf("Created both redeemed and completed events for final payment of subscription %s", originalSubscription.ID)
 			}
 		} else { // Non-transactional path
-			metadataBytes, _ := json.Marshal(map[string]interface{}{"next_redemption": nextRedemptionDate.Time, "is_final": result.isCompleted})
+			// 1. Create the "redeemed" event (always)
 			_, eventErr := params.queries.CreateRedemptionEvent(params.ctx, db.CreateRedemptionEventParams{
 				SubscriptionID:  originalSubscription.ID,
 				TransactionHash: pgtype.Text{String: result.txHash, Valid: true},
 				AmountInCents:   params.Price.UnitAmountInPennies,
-				Metadata:        metadataBytes,
+				Metadata:        redemptionMetadataBytes,
 			})
 			if eventErr != nil {
-				log.Printf("Warning: Failed to record non-tx success event for subscription %s: %v", originalSubscription.ID, eventErr)
+				errMsg := fmt.Sprintf("CRITICAL: Failed to record non-tx redeemed event for subscription %s after successful on-chain redemption: %v", originalSubscription.ID, eventErr)
+				log.Printf(errMsg)
+				result.isProcessed = false
+				return result, fmt.Errorf(errMsg)
+			}
+
+			// Validate that the redeemed event was properly created
+			if validationErr := h.logAndValidateEventCreation(params.ctx, params.queries, originalSubscription.ID, db.SubscriptionEventTypeRedeemed, result.txHash); validationErr != nil {
+				errMsg := fmt.Sprintf("CRITICAL: Non-tx redeemed event creation validation failed for subscription %s: %v", originalSubscription.ID, validationErr)
+				log.Printf(errMsg)
+				result.isProcessed = false
+				return result, fmt.Errorf(errMsg)
+			}
+
+			// 2. If this is the final payment, ALSO create a "completed" event (separate from redemption)
+			if result.isCompleted {
+				completionMetadataBytes, _ := json.Marshal(map[string]interface{}{
+					"final_total_redemptions": currentDBSub.TotalRedemptions + 1,
+					"term_length":             params.Price.TermLength,
+					"subscription_completed":  time.Now(),
+				})
+
+				// For non-transactional path, we need to use CreateSubscriptionEvent manually since CreateRedemptionEvent hardcodes "redeemed" type
+				_, completionEventErr := params.queries.CreateSubscriptionEvent(params.ctx, db.CreateSubscriptionEventParams{
+					SubscriptionID:  originalSubscription.ID,
+					EventType:       db.SubscriptionEventTypeCompleted,
+					TransactionHash: pgtype.Text{Valid: false}, // No transaction hash for completion event
+					AmountInCents:   0,                         // Completion event doesn't represent a payment
+					OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
+					Metadata:        completionMetadataBytes,
+				})
+				if completionEventErr != nil {
+					errMsg := fmt.Sprintf("CRITICAL: Failed to record non-tx completion event for subscription %s after successful final payment: %v", originalSubscription.ID, completionEventErr)
+					log.Printf(errMsg)
+					result.isProcessed = false
+					return result, fmt.Errorf(errMsg)
+				}
+
+				log.Printf("Created both redeemed and completed events for final payment of subscription %s (non-tx path)", originalSubscription.ID)
 			}
 		}
 
-		log.Printf("Successfully processed subscription %s, next redemption at %s", originalSubscription.ID, nextRedemptionDate.Time)
+		log.Printf("Successfully processed subscription %s, next redemption at %s, isCompleted: %t", originalSubscription.ID, nextRedemptionDate.Time, result.isCompleted)
 
 	} else {
 		// Redemption failed (exhausted retries or hit permanent error)
@@ -879,7 +986,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 
 		// If this was the final payment and redemption failed, update status
 		var updateErr error
-		if params.isFinalPayment {
+		if isActualFinalPayment {
 			updateParams := db.UpdateSubscriptionStatusParams{
 				ID:     originalSubscription.ID,
 				Status: db.SubscriptionStatusOverdue, // Or Failed, depending on logic
@@ -1062,23 +1169,6 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 			continue
 		}
 
-		// Determine if this subscription's term is considered complete for this processing run
-		isTermComplete := false
-		if price.Type == db.PriceTypeRecurring {
-			// Check if the current redemption will fulfill the term length
-			if price.TermLength > 0 && (subscription.TotalRedemptions+1) >= price.TermLength {
-				isTermComplete = true
-			}
-		} else if price.Type == db.PriceTypeOneOff {
-			// For one-off, it's complete if this payment makes total_redemptions reach 1
-			if (subscription.TotalRedemptions + 1) >= 1 {
-				isTermComplete = true
-			}
-		}
-		// isFinalPayment is true if the term is complete according to its price,
-		// indicating this processing run handles the final payment of the term.
-		isFinalPaymentForThisProcessing := isTermComplete
-
 		// Process the subscription
 		params := processSubscriptionParams{
 			ctx:            ctx,
@@ -1090,7 +1180,6 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 			delegationData: delegationData,
 			merchantWallet: merchantWallet,
 			token:          token,
-			isFinalPayment: isFinalPaymentForThisProcessing,
 			now:            now,
 			queries:        qtx,
 			tx:             tx,
@@ -1486,4 +1575,27 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		return
 	}
 	sendSuccess(c, http.StatusCreated, updatedSubscription)
+}
+
+// logAndValidateEventCreation helps debug event creation issues by logging details and optionally validating the event was created
+func (h *SubscriptionHandler) logAndValidateEventCreation(ctx context.Context, queries db.Querier, subscriptionID uuid.UUID, eventType db.SubscriptionEventType, txHash string) error {
+	// Get the latest event for this subscription to validate it was created properly
+	latestEvent, err := queries.GetLatestSubscriptionEvent(ctx, subscriptionID)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve latest event for validation: %w", err)
+	}
+
+	// Validate the event matches what we just tried to create
+	if latestEvent.EventType != eventType {
+		return fmt.Errorf("event type mismatch: expected %s, got %s", eventType, latestEvent.EventType)
+	}
+
+	if txHash != "" && (!latestEvent.TransactionHash.Valid || latestEvent.TransactionHash.String != txHash) {
+		return fmt.Errorf("transaction hash mismatch: expected %s, got %v", txHash, latestEvent.TransactionHash)
+	}
+
+	log.Printf("Event creation validated: subscription %s, event_type %s, tx_hash %s, event_id %s",
+		subscriptionID, eventType, txHash, latestEvent.ID)
+
+	return nil
 }
