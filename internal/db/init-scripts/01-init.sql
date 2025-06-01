@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS circle_users (
     CONSTRAINT valid_security_question_status CHECK (security_question_status IN ('ENABLED', 'UNSET', 'LOCKED'))
 );
 
--- Customers table (depends on workspaces)
+-- Customers table (depends on workspaces) - WITH PAYMENT SYNC COLUMNS
 CREATE TABLE IF NOT EXISTS customers (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
@@ -131,6 +131,11 @@ CREATE TABLE IF NOT EXISTS customers (
     phone VARCHAR(255),
     description TEXT,
     metadata JSONB,
+    -- Payment sync tracking columns
+    payment_sync_status VARCHAR(20) DEFAULT 'pending',
+    payment_synced_at TIMESTAMP WITH TIME ZONE,
+    payment_sync_version INTEGER DEFAULT 1,
+    payment_provider VARCHAR(50), -- 'stripe', 'chargebee', etc.
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
@@ -222,26 +227,35 @@ CREATE TABLE customer_wallets (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
--- Products table (depends on workspaces, wallets)
+-- Products table (depends on workspaces, wallets) - WITH PAYMENT SYNC COLUMNS
 CREATE TABLE products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
     wallet_id UUID NOT NULL REFERENCES wallets(id),
+    external_id VARCHAR(255), -- Provider's ID (Stripe ID, etc.)
     name TEXT NOT NULL,
     description TEXT,
     image_url TEXT,
     url TEXT,
     active BOOLEAN NOT NULL DEFAULT true,
     metadata JSONB DEFAULT '{}'::jsonb,
+    -- Payment sync tracking columns
+    payment_sync_status VARCHAR(20) DEFAULT 'pending', 
+    payment_synced_at TIMESTAMP WITH TIME ZONE,
+    payment_sync_version INTEGER DEFAULT 1,
+    payment_provider VARCHAR(50), -- 'stripe', 'chargebee', etc.
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    -- Add unique constraint for external_id per workspace and provider
+    UNIQUE(workspace_id, external_id, payment_provider)
 );
 
--- Prices table (depends on products)
+-- Prices table (depends on products) - WITH PAYMENT SYNC COLUMNS
 CREATE TABLE prices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id UUID NOT NULL REFERENCES products(id),
+    external_id VARCHAR(255), -- Provider's ID (Stripe ID, etc.)
     active BOOLEAN NOT NULL DEFAULT true,
     type price_type NOT NULL, -- 'recurring' or 'one_off'
     nickname TEXT,
@@ -250,13 +264,20 @@ CREATE TABLE prices (
     interval_type interval_type NOT NULL,
     term_length INTEGER NOT NULL, -- Nullable, for 'recurring' type, e.g., 12 for 12 months
     metadata JSONB DEFAULT '{}'::jsonb,
+    -- Payment sync tracking columns
+    payment_sync_status VARCHAR(20) DEFAULT 'pending',
+    payment_synced_at TIMESTAMP WITH TIME ZONE, 
+    payment_sync_version INTEGER DEFAULT 1,
+    payment_provider VARCHAR(50), -- 'stripe', 'chargebee', etc.
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
     CONSTRAINT prices_recurring_fields_check CHECK (
         (type = 'recurring' AND interval_type IS NOT NULL AND term_length IS NOT NULL AND term_length > 0) OR
         (type = 'one_off' AND interval_type IS NULL AND term_length IS NULL)
-    )
+    ),
+    -- Add unique constraint for external_id per provider
+    UNIQUE(external_id, payment_provider)
 );
 
 -- Tokens table (depends on networks)
@@ -302,7 +323,7 @@ CREATE TABLE delegation_data (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
--- Subscriptions table (depends on customers, products, products_tokens, delegation_data, customer_wallets)
+-- Subscriptions table (depends on customers, products, products_tokens, delegation_data, customer_wallets) - WITH PAYMENT SYNC COLUMNS
 CREATE TABLE subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES customers(id),
@@ -310,6 +331,7 @@ CREATE TABLE subscriptions (
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
     price_id UUID NOT NULL REFERENCES prices(id),
     product_token_id UUID NOT NULL REFERENCES products_tokens(id),
+    external_id VARCHAR(255), -- Provider's ID (Stripe ID, etc.)
     token_amount INTEGER NOT NULL,
     delegation_id UUID NOT NULL REFERENCES delegation_data(id),
     customer_wallet_id UUID REFERENCES customer_wallets(id),
@@ -320,9 +342,16 @@ CREATE TABLE subscriptions (
     total_redemptions INT NOT NULL DEFAULT 0,
     total_amount_in_cents INT NOT NULL DEFAULT 0,
     metadata JSONB DEFAULT '{}'::jsonb,
+    -- Payment sync tracking columns
+    payment_sync_status VARCHAR(20) DEFAULT 'pending',
+    payment_synced_at TIMESTAMP WITH TIME ZONE,
+    payment_sync_version INTEGER DEFAULT 1,
+    payment_provider VARCHAR(50), -- 'stripe', 'chargebee', etc.
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    -- Add unique constraint for external_id per workspace and provider
+    UNIQUE(workspace_id, external_id, payment_provider)
 );
 
 -- Subscription Events table (depends on subscriptions)
@@ -355,6 +384,39 @@ CREATE TABLE failed_subscription_attempts (
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Payment Sync Sessions table (NEW - for tracking sync jobs)
+CREATE TABLE IF NOT EXISTS payment_sync_sessions (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    provider_name VARCHAR(50) NOT NULL, -- 'stripe', 'chargebee', 'recurly', etc.
+    session_type VARCHAR(50) NOT NULL, -- 'initial_sync', 'partial_sync', 'delta_sync'
+    status VARCHAR(20) NOT NULL DEFAULT 'pending', -- 'pending', 'running', 'completed', 'failed', 'cancelled'
+    entity_types TEXT[] NOT NULL, -- ['customers', 'products', 'prices', 'subscriptions', 'invoices']
+    config JSONB DEFAULT '{}',
+    progress JSONB DEFAULT '{}',
+    error_summary JSONB,
+    started_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Payment Sync Events table (NEW - for detailed sync tracking)
+CREATE TABLE IF NOT EXISTS payment_sync_events (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    session_id UUID NOT NULL REFERENCES payment_sync_sessions(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    provider_name VARCHAR(50) NOT NULL, -- 'stripe', 'chargebee', etc.
+    entity_type VARCHAR(50) NOT NULL, -- 'customer', 'product', 'price', 'subscription', 'invoice'
+    entity_id UUID, -- Reference to the actual entity (customer_id, product_id, etc.)
+    external_id VARCHAR(255), -- Provider's ID (Stripe ID, Chargebee ID, etc.)
+    event_type VARCHAR(50) NOT NULL, -- 'sync_started', 'sync_completed', 'sync_failed', 'sync_skipped'
+    event_message TEXT,
+    event_details JSONB,
+    occurred_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create trigger function to validate token network relationship
@@ -397,6 +459,8 @@ CREATE INDEX idx_circle_users_workspace_id ON circle_users(workspace_id);
 
 -- customers
 CREATE INDEX idx_customers_workspace_id ON customers(workspace_id);
+CREATE INDEX idx_customers_payment_provider ON customers(payment_provider) WHERE deleted_at IS NULL;
+CREATE INDEX idx_customers_payment_sync_status ON customers(payment_sync_status) WHERE deleted_at IS NULL;
 
 -- api_keys
 CREATE INDEX idx_api_keys_workspace_id ON api_keys(workspace_id);
@@ -432,12 +496,18 @@ CREATE INDEX idx_products_workspace_id ON products(workspace_id);
 CREATE INDEX idx_products_wallet_id ON products(wallet_id);
 CREATE INDEX idx_products_active ON products(active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_created_at ON products(created_at);
+CREATE INDEX idx_products_payment_provider ON products(payment_provider) WHERE deleted_at IS NULL;
+CREATE INDEX idx_products_payment_sync_status ON products(payment_sync_status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_products_external_id ON products(external_id) WHERE deleted_at IS NULL;
 
 -- prices
 CREATE INDEX idx_prices_product_id ON prices(product_id);
 CREATE INDEX idx_prices_active ON prices(active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_prices_type ON prices(type);
 CREATE INDEX idx_prices_currency ON prices(currency);
+CREATE INDEX idx_prices_payment_provider ON prices(payment_provider) WHERE deleted_at IS NULL;
+CREATE INDEX idx_prices_payment_sync_status ON prices(payment_sync_status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_prices_external_id ON prices(external_id) WHERE deleted_at IS NULL;
 
 -- tokens
 CREATE INDEX idx_tokens_network_id ON tokens(network_id);
@@ -464,6 +534,9 @@ CREATE INDEX idx_subscriptions_customer_wallet_id ON subscriptions(customer_wall
 CREATE INDEX idx_subscriptions_price_id ON subscriptions(price_id);
 CREATE INDEX idx_subscriptions_status ON subscriptions(status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_subscriptions_next_redemption_date ON subscriptions(next_redemption_date) WHERE status = 'active' AND deleted_at IS NULL;
+CREATE INDEX idx_subscriptions_payment_provider ON subscriptions(payment_provider) WHERE deleted_at IS NULL;
+CREATE INDEX idx_subscriptions_payment_sync_status ON subscriptions(payment_sync_status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_subscriptions_external_id ON subscriptions(external_id) WHERE deleted_at IS NULL;
 
 -- subscription_events
 CREATE INDEX idx_subscription_events_subscription_id ON subscription_events(subscription_id);
@@ -477,6 +550,17 @@ CREATE INDEX idx_failed_subscription_attempts_product_id ON failed_subscription_
 CREATE INDEX idx_failed_subscription_attempts_error_type ON failed_subscription_attempts(error_type);
 CREATE INDEX idx_failed_subscription_attempts_wallet_address ON failed_subscription_attempts(wallet_address);
 CREATE INDEX idx_failed_subscription_attempts_occurred_at ON failed_subscription_attempts(occurred_at);
+
+-- payment_sync_sessions (NEW INDEXES)
+CREATE INDEX idx_payment_sync_sessions_workspace_id ON payment_sync_sessions(workspace_id);
+CREATE INDEX idx_payment_sync_sessions_provider ON payment_sync_sessions(provider_name);
+CREATE INDEX idx_payment_sync_sessions_status ON payment_sync_sessions(status) WHERE deleted_at IS NULL;
+
+-- payment_sync_events (NEW INDEXES)
+CREATE INDEX idx_payment_sync_events_session_id ON payment_sync_events(session_id);
+CREATE INDEX idx_payment_sync_events_provider ON payment_sync_events(provider_name);
+CREATE INDEX idx_payment_sync_events_entity_type ON payment_sync_events(entity_type);
+CREATE INDEX idx_payment_sync_events_external_id ON payment_sync_events(external_id);
 
 
 -- Insert test data for development (Order matters!)
@@ -640,6 +724,12 @@ CREATE TRIGGER set_circle_wallets_updated_at
 
 CREATE TRIGGER set_prices_updated_at
     BEFORE UPDATE ON prices
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+-- Add triggers for payment sync tables
+CREATE TRIGGER set_payment_sync_sessions_updated_at
+    BEFORE UPDATE ON payment_sync_sessions
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 

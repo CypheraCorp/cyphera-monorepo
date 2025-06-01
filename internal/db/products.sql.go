@@ -18,7 +18,7 @@ SET
     active = true,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, workspace_id, wallet_id, name, description, image_url, url, active, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) ActivateProduct(ctx context.Context, id uuid.UUID) (Product, error) {
@@ -28,12 +28,17 @@ func (q *Queries) ActivateProduct(ctx context.Context, id uuid.UUID) (Product, e
 		&i.ID,
 		&i.WorkspaceID,
 		&i.WalletID,
+		&i.ExternalID,
 		&i.Name,
 		&i.Description,
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
 		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -62,22 +67,28 @@ INSERT INTO products (
     image_url,
     url,
     active,
-    metadata
+    metadata,
+    payment_sync_status,
+    payment_provider
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6, $7, $8,
+    COALESCE($9, 'pending'),
+    $10
 )
-RETURNING id, workspace_id, wallet_id, name, description, image_url, url, active, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type CreateProductParams struct {
-	WorkspaceID uuid.UUID   `json:"workspace_id"`
-	WalletID    uuid.UUID   `json:"wallet_id"`
-	Name        string      `json:"name"`
-	Description pgtype.Text `json:"description"`
-	ImageUrl    pgtype.Text `json:"image_url"`
-	Url         pgtype.Text `json:"url"`
-	Active      bool        `json:"active"`
-	Metadata    []byte      `json:"metadata"`
+	WorkspaceID     uuid.UUID   `json:"workspace_id"`
+	WalletID        uuid.UUID   `json:"wallet_id"`
+	Name            string      `json:"name"`
+	Description     pgtype.Text `json:"description"`
+	ImageUrl        pgtype.Text `json:"image_url"`
+	Url             pgtype.Text `json:"url"`
+	Active          bool        `json:"active"`
+	Metadata        []byte      `json:"metadata"`
+	Column9         interface{} `json:"column_9"`
+	PaymentProvider pgtype.Text `json:"payment_provider"`
 }
 
 func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error) {
@@ -90,18 +101,101 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 		arg.Url,
 		arg.Active,
 		arg.Metadata,
+		arg.Column9,
+		arg.PaymentProvider,
 	)
 	var i Product
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
 		&i.WalletID,
+		&i.ExternalID,
 		&i.Name,
 		&i.Description,
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
 		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const createProductWithSync = `-- name: CreateProductWithSync :one
+INSERT INTO products (
+    workspace_id,
+    wallet_id,
+    external_id,
+    name,
+    description,
+    image_url,
+    url,
+    active,
+    metadata,
+    payment_sync_status,
+    payment_synced_at,
+    payment_sync_version,
+    payment_provider
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+)
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+`
+
+type CreateProductWithSyncParams struct {
+	WorkspaceID        uuid.UUID          `json:"workspace_id"`
+	WalletID           uuid.UUID          `json:"wallet_id"`
+	ExternalID         pgtype.Text        `json:"external_id"`
+	Name               string             `json:"name"`
+	Description        pgtype.Text        `json:"description"`
+	ImageUrl           pgtype.Text        `json:"image_url"`
+	Url                pgtype.Text        `json:"url"`
+	Active             bool               `json:"active"`
+	Metadata           []byte             `json:"metadata"`
+	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider    pgtype.Text        `json:"payment_provider"`
+}
+
+func (q *Queries) CreateProductWithSync(ctx context.Context, arg CreateProductWithSyncParams) (Product, error) {
+	row := q.db.QueryRow(ctx, createProductWithSync,
+		arg.WorkspaceID,
+		arg.WalletID,
+		arg.ExternalID,
+		arg.Name,
+		arg.Description,
+		arg.ImageUrl,
+		arg.Url,
+		arg.Active,
+		arg.Metadata,
+		arg.PaymentSyncStatus,
+		arg.PaymentSyncedAt,
+		arg.PaymentSyncVersion,
+		arg.PaymentProvider,
+	)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.WalletID,
+		&i.ExternalID,
+		&i.Name,
+		&i.Description,
+		&i.ImageUrl,
+		&i.Url,
+		&i.Active,
+		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -115,7 +209,7 @@ SET
     active = false,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, workspace_id, wallet_id, name, description, image_url, url, active, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) DeactivateProduct(ctx context.Context, id uuid.UUID) (Product, error) {
@@ -125,12 +219,17 @@ func (q *Queries) DeactivateProduct(ctx context.Context, id uuid.UUID) (Product,
 		&i.ID,
 		&i.WorkspaceID,
 		&i.WalletID,
+		&i.ExternalID,
 		&i.Name,
 		&i.Description,
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
 		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -155,7 +254,7 @@ func (q *Queries) DeleteProduct(ctx context.Context, arg DeleteProductParams) er
 }
 
 const getActiveProductsByWalletID = `-- name: GetActiveProductsByWalletID :many
-SELECT id, workspace_id, wallet_id, name, description, image_url, url, active, metadata, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
 WHERE wallet_id = $1 AND deleted_at IS NULL
 `
 
@@ -172,12 +271,17 @@ func (q *Queries) GetActiveProductsByWalletID(ctx context.Context, walletID uuid
 			&i.ID,
 			&i.WorkspaceID,
 			&i.WalletID,
+			&i.ExternalID,
 			&i.Name,
 			&i.Description,
 			&i.ImageUrl,
 			&i.Url,
 			&i.Active,
 			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -193,7 +297,7 @@ func (q *Queries) GetActiveProductsByWalletID(ctx context.Context, walletID uuid
 }
 
 const getProduct = `-- name: GetProduct :one
-SELECT id, workspace_id, wallet_id, name, description, image_url, url, active, metadata, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -209,12 +313,56 @@ func (q *Queries) GetProduct(ctx context.Context, arg GetProductParams) (Product
 		&i.ID,
 		&i.WorkspaceID,
 		&i.WalletID,
+		&i.ExternalID,
 		&i.Name,
 		&i.Description,
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
 		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getProductByExternalID = `-- name: GetProductByExternalID :one
+SELECT p.id, p.workspace_id, p.wallet_id, p.external_id, p.name, p.description, p.image_url, p.url, p.active, p.metadata, p.payment_sync_status, p.payment_synced_at, p.payment_sync_version, p.payment_provider, p.created_at, p.updated_at, p.deleted_at FROM products p
+WHERE p.workspace_id = $1 
+  AND p.external_id = $2
+  AND p.payment_provider = $3
+  AND p.deleted_at IS NULL
+`
+
+type GetProductByExternalIDParams struct {
+	WorkspaceID     uuid.UUID   `json:"workspace_id"`
+	ExternalID      pgtype.Text `json:"external_id"`
+	PaymentProvider pgtype.Text `json:"payment_provider"`
+}
+
+func (q *Queries) GetProductByExternalID(ctx context.Context, arg GetProductByExternalIDParams) (Product, error) {
+	row := q.db.QueryRow(ctx, getProductByExternalID, arg.WorkspaceID, arg.ExternalID, arg.PaymentProvider)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.WalletID,
+		&i.ExternalID,
+		&i.Name,
+		&i.Description,
+		&i.ImageUrl,
+		&i.Url,
+		&i.Active,
+		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -223,7 +371,7 @@ func (q *Queries) GetProduct(ctx context.Context, arg GetProductParams) (Product
 }
 
 const getProductWithoutWorkspaceId = `-- name: GetProductWithoutWorkspaceId :one
-SELECT id, workspace_id, wallet_id, name, description, image_url, url, active, metadata, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -234,12 +382,17 @@ func (q *Queries) GetProductWithoutWorkspaceId(ctx context.Context, id uuid.UUID
 		&i.ID,
 		&i.WorkspaceID,
 		&i.WalletID,
+		&i.ExternalID,
 		&i.Name,
 		&i.Description,
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
 		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -247,8 +400,147 @@ func (q *Queries) GetProductWithoutWorkspaceId(ctx context.Context, id uuid.UUID
 	return i, err
 }
 
+const getProductsNeedingSync = `-- name: GetProductsNeedingSync :many
+
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products 
+WHERE workspace_id = $1 AND payment_sync_status = 'pending' AND deleted_at IS NULL
+ORDER BY created_at ASC
+`
+
+// Payment Sync Related Product Queries
+func (q *Queries) GetProductsNeedingSync(ctx context.Context, workspaceID uuid.UUID) ([]Product, error) {
+	rows, err := q.db.Query(ctx, getProductsNeedingSync, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Product{}
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.WalletID,
+			&i.ExternalID,
+			&i.Name,
+			&i.Description,
+			&i.ImageUrl,
+			&i.Url,
+			&i.Active,
+			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductsSyncedByProvider = `-- name: GetProductsSyncedByProvider :many
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products 
+WHERE workspace_id = $1 AND payment_provider = $2 AND payment_sync_status != 'pending' AND deleted_at IS NULL
+ORDER BY payment_synced_at DESC
+`
+
+type GetProductsSyncedByProviderParams struct {
+	WorkspaceID     uuid.UUID   `json:"workspace_id"`
+	PaymentProvider pgtype.Text `json:"payment_provider"`
+}
+
+func (q *Queries) GetProductsSyncedByProvider(ctx context.Context, arg GetProductsSyncedByProviderParams) ([]Product, error) {
+	rows, err := q.db.Query(ctx, getProductsSyncedByProvider, arg.WorkspaceID, arg.PaymentProvider)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Product{}
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.WalletID,
+			&i.ExternalID,
+			&i.Name,
+			&i.Description,
+			&i.ImageUrl,
+			&i.Url,
+			&i.Active,
+			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductsWithSyncConflicts = `-- name: GetProductsWithSyncConflicts :many
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products 
+WHERE workspace_id = $1 AND payment_sync_status = 'conflict' AND deleted_at IS NULL
+ORDER BY payment_synced_at DESC
+`
+
+func (q *Queries) GetProductsWithSyncConflicts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error) {
+	rows, err := q.db.Query(ctx, getProductsWithSyncConflicts, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Product{}
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.WalletID,
+			&i.ExternalID,
+			&i.Name,
+			&i.Description,
+			&i.ImageUrl,
+			&i.Url,
+			&i.Active,
+			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActiveProducts = `-- name: ListActiveProducts :many
-SELECT id, workspace_id, wallet_id, name, description, image_url, url, active, metadata, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
 WHERE workspace_id = $1 AND active = true AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -266,12 +558,17 @@ func (q *Queries) ListActiveProducts(ctx context.Context, workspaceID uuid.UUID)
 			&i.ID,
 			&i.WorkspaceID,
 			&i.WalletID,
+			&i.ExternalID,
 			&i.Name,
 			&i.Description,
 			&i.ImageUrl,
 			&i.Url,
 			&i.Active,
 			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -287,7 +584,7 @@ func (q *Queries) ListActiveProducts(ctx context.Context, workspaceID uuid.UUID)
 }
 
 const listProducts = `-- name: ListProducts :many
-SELECT id, workspace_id, wallet_id, name, description, image_url, url, active, metadata, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -305,12 +602,17 @@ func (q *Queries) ListProducts(ctx context.Context, workspaceID uuid.UUID) ([]Pr
 			&i.ID,
 			&i.WorkspaceID,
 			&i.WalletID,
+			&i.ExternalID,
 			&i.Name,
 			&i.Description,
 			&i.ImageUrl,
 			&i.Url,
 			&i.Active,
 			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -326,7 +628,7 @@ func (q *Queries) ListProducts(ctx context.Context, workspaceID uuid.UUID) ([]Pr
 }
 
 const listProductsWithPagination = `-- name: ListProductsWithPagination :many
-SELECT id, workspace_id, wallet_id, name, description, image_url, url, active, metadata, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -351,12 +653,17 @@ func (q *Queries) ListProductsWithPagination(ctx context.Context, arg ListProduc
 			&i.ID,
 			&i.WorkspaceID,
 			&i.WalletID,
+			&i.ExternalID,
 			&i.Name,
 			&i.Description,
 			&i.ImageUrl,
 			&i.Url,
 			&i.Active,
 			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -383,7 +690,7 @@ SET
     metadata = COALESCE($9, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, wallet_id, name, description, image_url, url, active, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type UpdateProductParams struct {
@@ -415,12 +722,139 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 		&i.ID,
 		&i.WorkspaceID,
 		&i.WalletID,
+		&i.ExternalID,
 		&i.Name,
 		&i.Description,
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
 		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const updateProductPaymentSyncStatus = `-- name: UpdateProductPaymentSyncStatus :one
+UPDATE products 
+SET payment_sync_status = $3, 
+    payment_synced_at = CASE WHEN $3 != 'pending' THEN CURRENT_TIMESTAMP ELSE payment_synced_at END,
+    payment_sync_version = CASE WHEN $3 != 'pending' THEN payment_sync_version + 1 ELSE payment_sync_version END,
+    payment_provider = COALESCE($4, payment_provider),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+`
+
+type UpdateProductPaymentSyncStatusParams struct {
+	ID                uuid.UUID   `json:"id"`
+	WorkspaceID       uuid.UUID   `json:"workspace_id"`
+	PaymentSyncStatus pgtype.Text `json:"payment_sync_status"`
+	PaymentProvider   pgtype.Text `json:"payment_provider"`
+}
+
+func (q *Queries) UpdateProductPaymentSyncStatus(ctx context.Context, arg UpdateProductPaymentSyncStatusParams) (Product, error) {
+	row := q.db.QueryRow(ctx, updateProductPaymentSyncStatus,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.PaymentSyncStatus,
+		arg.PaymentProvider,
+	)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.WalletID,
+		&i.ExternalID,
+		&i.Name,
+		&i.Description,
+		&i.ImageUrl,
+		&i.Url,
+		&i.Active,
+		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const updateProductWithSync = `-- name: UpdateProductWithSync :one
+UPDATE products
+SET
+    name = COALESCE($3, name),
+    wallet_id = COALESCE($4, wallet_id),
+    description = COALESCE($5, description),
+    image_url = COALESCE($6, image_url),
+    url = COALESCE($7, url),
+    active = COALESCE($8, active),
+    metadata = COALESCE($9, metadata),
+    payment_sync_status = COALESCE($10, payment_sync_status),
+    payment_synced_at = COALESCE($11, payment_synced_at),
+    payment_sync_version = COALESCE($12, payment_sync_version),
+    payment_provider = COALESCE($13, payment_provider),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+`
+
+type UpdateProductWithSyncParams struct {
+	ID                 uuid.UUID          `json:"id"`
+	WorkspaceID        uuid.UUID          `json:"workspace_id"`
+	Name               string             `json:"name"`
+	WalletID           uuid.UUID          `json:"wallet_id"`
+	Description        pgtype.Text        `json:"description"`
+	ImageUrl           pgtype.Text        `json:"image_url"`
+	Url                pgtype.Text        `json:"url"`
+	Active             bool               `json:"active"`
+	Metadata           []byte             `json:"metadata"`
+	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider    pgtype.Text        `json:"payment_provider"`
+}
+
+func (q *Queries) UpdateProductWithSync(ctx context.Context, arg UpdateProductWithSyncParams) (Product, error) {
+	row := q.db.QueryRow(ctx, updateProductWithSync,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Name,
+		arg.WalletID,
+		arg.Description,
+		arg.ImageUrl,
+		arg.Url,
+		arg.Active,
+		arg.Metadata,
+		arg.PaymentSyncStatus,
+		arg.PaymentSyncedAt,
+		arg.PaymentSyncVersion,
+		arg.PaymentProvider,
+	)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.WalletID,
+		&i.ExternalID,
+		&i.Name,
+		&i.Description,
+		&i.ImageUrl,
+		&i.Url,
+		&i.Active,
+		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
