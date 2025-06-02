@@ -253,10 +253,10 @@ type ListParams struct {
 	Filters       map[string]interface{}
 }
 
-// SubscriptionSyncService defines the interface for interacting with various subscription management platforms.
+// PaymentSyncService defines the interface for interacting with various subscription management platforms.
 // Implementations of this interface will handle the specifics of communicating with each platform (e.g., Stripe, Chargebee).
 // All methods should aim for idempotency where the external platform supports it or by internal tracking.
-type SubscriptionSyncService interface {
+type PaymentSyncService interface {
 	// GetServiceName returns a unique identifier for the service implementation (e.g., "stripe", "chargebee").
 	GetServiceName() string
 
@@ -334,4 +334,38 @@ type SubscriptionSyncService interface {
 	// Returns a structured WebhookEvent or an error if validation fails or parsing is not possible.
 	// The signatureHeader is the raw value from the HTTP header (e.g., "Stripe-Signature").
 	HandleWebhook(ctx context.Context, requestBody []byte, signatureHeader string) (WebhookEvent, error)
+
+	// --- Initial Sync Management ---
+	// StartInitialSync initiates a complete initial data synchronization from the payment provider.
+	// This method creates a sync session and processes all specified entity types.
+	// Returns the created sync session immediately, while the sync process runs asynchronously.
+	StartInitialSync(ctx context.Context, workspaceID string, config InitialSyncConfig) (SyncSession, error)
+}
+
+// InitialSyncConfig holds configuration for initial sync operations
+type InitialSyncConfig struct {
+	BatchSize     int      `json:"batch_size"`
+	EntityTypes   []string `json:"entity_types"`
+	FullSync      bool     `json:"full_sync"`
+	StartingAfter string   `json:"starting_after,omitempty"`
+	EndingBefore  string   `json:"ending_before,omitempty"`
+	MaxRetries    int      `json:"max_retries"`
+	RetryDelay    int      `json:"retry_delay_seconds"`
+}
+
+// SyncSession represents a sync session for tracking sync progress
+type SyncSession struct {
+	ID           string                 `json:"id"`
+	WorkspaceID  string                 `json:"workspace_id"`
+	Provider     string                 `json:"provider"`
+	SessionType  string                 `json:"session_type"`
+	Status       string                 `json:"status"`
+	EntityTypes  []string               `json:"entity_types"`
+	Config       map[string]interface{} `json:"config,omitempty"`
+	Progress     map[string]interface{} `json:"progress,omitempty"`
+	ErrorSummary map[string]interface{} `json:"error_summary,omitempty"`
+	StartedAt    *int64                 `json:"started_at,omitempty"`
+	CompletedAt  *int64                 `json:"completed_at,omitempty"`
+	CreatedAt    int64                  `json:"created_at"`
+	UpdatedAt    int64                  `json:"updated_at"`
 }

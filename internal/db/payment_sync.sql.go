@@ -12,6 +12,126 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const bulkUpdateCustomerSyncStatus = `-- name: BulkUpdateCustomerSyncStatus :exec
+
+UPDATE customers 
+SET payment_sync_status = $2, 
+    payment_synced_at = CURRENT_TIMESTAMP, 
+    payment_sync_version = payment_sync_version + 1, 
+    payment_provider = $3, 
+    updated_at = CURRENT_TIMESTAMP
+WHERE workspace_id = $1 
+  AND external_id = ANY($4::text[]) 
+  AND deleted_at IS NULL
+`
+
+type BulkUpdateCustomerSyncStatusParams struct {
+	WorkspaceID       uuid.UUID   `json:"workspace_id"`
+	PaymentSyncStatus pgtype.Text `json:"payment_sync_status"`
+	PaymentProvider   pgtype.Text `json:"payment_provider"`
+	Column4           []string    `json:"column_4"`
+}
+
+// Bulk Operations for Initial Sync
+func (q *Queries) BulkUpdateCustomerSyncStatus(ctx context.Context, arg BulkUpdateCustomerSyncStatusParams) error {
+	_, err := q.db.Exec(ctx, bulkUpdateCustomerSyncStatus,
+		arg.WorkspaceID,
+		arg.PaymentSyncStatus,
+		arg.PaymentProvider,
+		arg.Column4,
+	)
+	return err
+}
+
+const bulkUpdatePriceSyncStatus = `-- name: BulkUpdatePriceSyncStatus :exec
+UPDATE prices 
+SET payment_sync_status = $2, 
+    payment_synced_at = CURRENT_TIMESTAMP, 
+    payment_sync_version = payment_sync_version + 1, 
+    payment_provider = $3, 
+    updated_at = CURRENT_TIMESTAMP
+FROM products p
+WHERE prices.product_id = p.id
+  AND p.workspace_id = $1 
+  AND prices.external_id = ANY($4::text[])
+  AND prices.deleted_at IS NULL
+`
+
+type BulkUpdatePriceSyncStatusParams struct {
+	WorkspaceID       uuid.UUID   `json:"workspace_id"`
+	PaymentSyncStatus pgtype.Text `json:"payment_sync_status"`
+	PaymentProvider   pgtype.Text `json:"payment_provider"`
+	Column4           []string    `json:"column_4"`
+}
+
+func (q *Queries) BulkUpdatePriceSyncStatus(ctx context.Context, arg BulkUpdatePriceSyncStatusParams) error {
+	_, err := q.db.Exec(ctx, bulkUpdatePriceSyncStatus,
+		arg.WorkspaceID,
+		arg.PaymentSyncStatus,
+		arg.PaymentProvider,
+		arg.Column4,
+	)
+	return err
+}
+
+const bulkUpdateProductSyncStatus = `-- name: BulkUpdateProductSyncStatus :exec
+UPDATE products 
+SET payment_sync_status = $2, 
+    payment_synced_at = CURRENT_TIMESTAMP, 
+    payment_sync_version = payment_sync_version + 1, 
+    payment_provider = $3, 
+    updated_at = CURRENT_TIMESTAMP
+WHERE workspace_id = $1 
+  AND external_id = ANY($4::text[]) 
+  AND deleted_at IS NULL
+`
+
+type BulkUpdateProductSyncStatusParams struct {
+	WorkspaceID       uuid.UUID   `json:"workspace_id"`
+	PaymentSyncStatus pgtype.Text `json:"payment_sync_status"`
+	PaymentProvider   pgtype.Text `json:"payment_provider"`
+	Column4           []string    `json:"column_4"`
+}
+
+func (q *Queries) BulkUpdateProductSyncStatus(ctx context.Context, arg BulkUpdateProductSyncStatusParams) error {
+	_, err := q.db.Exec(ctx, bulkUpdateProductSyncStatus,
+		arg.WorkspaceID,
+		arg.PaymentSyncStatus,
+		arg.PaymentProvider,
+		arg.Column4,
+	)
+	return err
+}
+
+const bulkUpdateSubscriptionSyncStatus = `-- name: BulkUpdateSubscriptionSyncStatus :exec
+UPDATE subscriptions 
+SET payment_sync_status = $2, 
+    payment_synced_at = CURRENT_TIMESTAMP, 
+    payment_sync_version = payment_sync_version + 1, 
+    payment_provider = $3, 
+    updated_at = CURRENT_TIMESTAMP
+WHERE workspace_id = $1 
+  AND external_id = ANY($4::text[]) 
+  AND deleted_at IS NULL
+`
+
+type BulkUpdateSubscriptionSyncStatusParams struct {
+	WorkspaceID       uuid.UUID   `json:"workspace_id"`
+	PaymentSyncStatus pgtype.Text `json:"payment_sync_status"`
+	PaymentProvider   pgtype.Text `json:"payment_provider"`
+	Column4           []string    `json:"column_4"`
+}
+
+func (q *Queries) BulkUpdateSubscriptionSyncStatus(ctx context.Context, arg BulkUpdateSubscriptionSyncStatusParams) error {
+	_, err := q.db.Exec(ctx, bulkUpdateSubscriptionSyncStatus,
+		arg.WorkspaceID,
+		arg.PaymentSyncStatus,
+		arg.PaymentProvider,
+		arg.Column4,
+	)
+	return err
+}
+
 const countSyncEventsByEntityType = `-- name: CountSyncEventsByEntityType :one
 SELECT COUNT(*) FROM payment_sync_events 
 WHERE session_id = $1 AND entity_type = $2
@@ -87,6 +207,26 @@ func (q *Queries) CountSyncSessionsByProvider(ctx context.Context, arg CountSync
 	return count, err
 }
 
+const countWebhookEventsByProvider = `-- name: CountWebhookEventsByProvider :one
+SELECT COUNT(*) FROM payment_sync_events 
+WHERE workspace_id = $1 
+  AND provider_name = $2 
+  AND webhook_event_id IS NOT NULL
+`
+
+type CountWebhookEventsByProviderParams struct {
+	WorkspaceID  uuid.UUID `json:"workspace_id"`
+	ProviderName string    `json:"provider_name"`
+}
+
+// NEW: Count webhook events for a provider
+func (q *Queries) CountWebhookEventsByProvider(ctx context.Context, arg CountWebhookEventsByProviderParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countWebhookEventsByProvider, arg.WorkspaceID, arg.ProviderName)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createSyncEvent = `-- name: CreateSyncEvent :one
 
 INSERT INTO payment_sync_events (
@@ -101,7 +241,7 @@ INSERT INTO payment_sync_events (
     event_details
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9
-) RETURNING id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, occurred_at
+) RETURNING id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at
 `
 
 type CreateSyncEventParams struct {
@@ -141,6 +281,11 @@ func (q *Queries) CreateSyncEvent(ctx context.Context, arg CreateSyncEventParams
 		&i.EventType,
 		&i.EventMessage,
 		&i.EventDetails,
+		&i.WebhookEventID,
+		&i.ProviderAccountID,
+		&i.IdempotencyKey,
+		&i.ProcessingAttempts,
+		&i.SignatureValid,
 		&i.OccurredAt,
 	)
 	return i, err
@@ -195,6 +340,81 @@ func (q *Queries) CreateSyncSession(ctx context.Context, arg CreateSyncSessionPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const createWebhookEvent = `-- name: CreateWebhookEvent :one
+INSERT INTO payment_sync_events (
+    workspace_id, 
+    provider_name, 
+    entity_type, 
+    entity_id, 
+    external_id, 
+    event_type, 
+    event_message, 
+    event_details,
+    webhook_event_id,
+    provider_account_id,
+    idempotency_key,
+    processing_attempts,
+    signature_valid
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+) RETURNING id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at
+`
+
+type CreateWebhookEventParams struct {
+	WorkspaceID        uuid.UUID   `json:"workspace_id"`
+	ProviderName       string      `json:"provider_name"`
+	EntityType         string      `json:"entity_type"`
+	EntityID           pgtype.UUID `json:"entity_id"`
+	ExternalID         pgtype.Text `json:"external_id"`
+	EventType          string      `json:"event_type"`
+	EventMessage       pgtype.Text `json:"event_message"`
+	EventDetails       []byte      `json:"event_details"`
+	WebhookEventID     pgtype.Text `json:"webhook_event_id"`
+	ProviderAccountID  pgtype.Text `json:"provider_account_id"`
+	IdempotencyKey     pgtype.Text `json:"idempotency_key"`
+	ProcessingAttempts pgtype.Int4 `json:"processing_attempts"`
+	SignatureValid     pgtype.Bool `json:"signature_valid"`
+}
+
+// NEW: Create webhook-specific sync event with all webhook fields
+func (q *Queries) CreateWebhookEvent(ctx context.Context, arg CreateWebhookEventParams) (PaymentSyncEvent, error) {
+	row := q.db.QueryRow(ctx, createWebhookEvent,
+		arg.WorkspaceID,
+		arg.ProviderName,
+		arg.EntityType,
+		arg.EntityID,
+		arg.ExternalID,
+		arg.EventType,
+		arg.EventMessage,
+		arg.EventDetails,
+		arg.WebhookEventID,
+		arg.ProviderAccountID,
+		arg.IdempotencyKey,
+		arg.ProcessingAttempts,
+		arg.SignatureValid,
+	)
+	var i PaymentSyncEvent
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.WorkspaceID,
+		&i.ProviderName,
+		&i.EntityType,
+		&i.EntityID,
+		&i.ExternalID,
+		&i.EventType,
+		&i.EventMessage,
+		&i.EventDetails,
+		&i.WebhookEventID,
+		&i.ProviderAccountID,
+		&i.IdempotencyKey,
+		&i.ProcessingAttempts,
+		&i.SignatureValid,
+		&i.OccurredAt,
 	)
 	return i, err
 }
@@ -381,7 +601,7 @@ UNION ALL
 SELECT 
     'product' as entity_type,
     p.id as entity_id,
-    NULL as external_id,
+    p.external_id,
     p.payment_sync_status,
     p.payment_synced_at,
     p.payment_provider
@@ -393,7 +613,7 @@ UNION ALL
 SELECT 
     'price' as entity_type,
     pr.id as entity_id,
-    NULL as external_id,
+    pr.external_id,
     pr.payment_sync_status,
     pr.payment_synced_at,
     pr.payment_provider
@@ -406,7 +626,7 @@ UNION ALL
 SELECT 
     'subscription' as entity_type,
     s.id as entity_id,
-    NULL as external_id,
+    s.external_id,
     s.payment_sync_status,
     s.payment_synced_at,
     s.payment_provider
@@ -458,9 +678,69 @@ func (q *Queries) GetEntitiesBySyncStatusAndProvider(ctx context.Context, arg Ge
 	return items, nil
 }
 
+const getEntityByExternalID = `-- name: GetEntityByExternalID :one
+
+SELECT 
+    CASE 
+        WHEN c.id IS NOT NULL THEN 'customer'
+        WHEN p.id IS NOT NULL THEN 'product'
+        WHEN pr.id IS NOT NULL THEN 'price'
+        WHEN s.id IS NOT NULL THEN 'subscription'
+        ELSE 'unknown'
+    END as entity_type,
+    COALESCE(c.id, p.id, pr.id, s.id) as entity_id,
+    COALESCE(c.external_id, p.external_id, pr.external_id, s.external_id) as external_id,
+    COALESCE(c.payment_provider, p.payment_provider, pr.payment_provider, s.payment_provider) as payment_provider
+FROM (SELECT $1 as workspace_id, $2 as external_id, $3 as payment_provider) params
+LEFT JOIN customers c ON c.workspace_id = params.workspace_id 
+    AND c.external_id = params.external_id 
+    AND c.payment_provider = params.payment_provider 
+    AND c.deleted_at IS NULL
+LEFT JOIN products p ON p.workspace_id = params.workspace_id 
+    AND p.external_id = params.external_id 
+    AND p.payment_provider = params.payment_provider 
+    AND p.deleted_at IS NULL
+LEFT JOIN prices pr ON pr.external_id = params.external_id 
+    AND pr.payment_provider = params.payment_provider 
+    AND pr.deleted_at IS NULL
+    AND EXISTS (SELECT 1 FROM products prod WHERE prod.id = pr.product_id AND prod.workspace_id = params.workspace_id AND prod.deleted_at IS NULL)
+LEFT JOIN subscriptions s ON s.workspace_id = params.workspace_id 
+    AND s.external_id = params.external_id 
+    AND s.payment_provider = params.payment_provider 
+    AND s.deleted_at IS NULL
+WHERE COALESCE(c.id, p.id, pr.id, s.id) IS NOT NULL
+LIMIT 1
+`
+
+type GetEntityByExternalIDParams struct {
+	WorkspaceID     uuid.UUID   `json:"workspace_id"`
+	ExternalID      pgtype.Text `json:"external_id"`
+	PaymentProvider pgtype.Text `json:"payment_provider"`
+}
+
+type GetEntityByExternalIDRow struct {
+	EntityType      string      `json:"entity_type"`
+	EntityID        uuid.UUID   `json:"entity_id"`
+	ExternalID      pgtype.Text `json:"external_id"`
+	PaymentProvider pgtype.Text `json:"payment_provider"`
+}
+
+// Cross-Entity Lookup Queries for External IDs
+func (q *Queries) GetEntityByExternalID(ctx context.Context, arg GetEntityByExternalIDParams) (GetEntityByExternalIDRow, error) {
+	row := q.db.QueryRow(ctx, getEntityByExternalID, arg.WorkspaceID, arg.ExternalID, arg.PaymentProvider)
+	var i GetEntityByExternalIDRow
+	err := row.Scan(
+		&i.EntityType,
+		&i.EntityID,
+		&i.ExternalID,
+		&i.PaymentProvider,
+	)
+	return i, err
+}
+
 const getLatestSyncEventsByEntityType = `-- name: GetLatestSyncEventsByEntityType :many
 SELECT DISTINCT ON (entity_type, external_id) 
-    id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, occurred_at
+    id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at
 FROM payment_sync_events 
 WHERE session_id = $1
 ORDER BY entity_type, external_id, occurred_at DESC
@@ -486,6 +766,11 @@ func (q *Queries) GetLatestSyncEventsByEntityType(ctx context.Context, sessionID
 			&i.EventType,
 			&i.EventMessage,
 			&i.EventDetails,
+			&i.WebhookEventID,
+			&i.ProviderAccountID,
+			&i.IdempotencyKey,
+			&i.ProcessingAttempts,
+			&i.SignatureValid,
 			&i.OccurredAt,
 		); err != nil {
 			return nil, err
@@ -728,6 +1013,59 @@ func (q *Queries) GetProductsByPaymentSyncStatus(ctx context.Context, arg GetPro
 	return items, nil
 }
 
+const getProviderSyncStatusByWorkspace = `-- name: GetProviderSyncStatusByWorkspace :many
+SELECT 
+    provider_name,
+    COUNT(*) as total_sessions,
+    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_sessions,
+    COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_sessions,
+    COUNT(CASE WHEN status IN ('pending', 'running') THEN 1 END) as active_sessions,
+    MAX(completed_at) as last_successful_sync,
+    MIN(created_at) as first_sync_session
+FROM payment_sync_sessions
+WHERE workspace_id = $1 AND deleted_at IS NULL
+GROUP BY provider_name
+ORDER BY last_successful_sync DESC
+`
+
+type GetProviderSyncStatusByWorkspaceRow struct {
+	ProviderName       string      `json:"provider_name"`
+	TotalSessions      int64       `json:"total_sessions"`
+	CompletedSessions  int64       `json:"completed_sessions"`
+	FailedSessions     int64       `json:"failed_sessions"`
+	ActiveSessions     int64       `json:"active_sessions"`
+	LastSuccessfulSync interface{} `json:"last_successful_sync"`
+	FirstSyncSession   interface{} `json:"first_sync_session"`
+}
+
+func (q *Queries) GetProviderSyncStatusByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]GetProviderSyncStatusByWorkspaceRow, error) {
+	rows, err := q.db.Query(ctx, getProviderSyncStatusByWorkspace, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetProviderSyncStatusByWorkspaceRow{}
+	for rows.Next() {
+		var i GetProviderSyncStatusByWorkspaceRow
+		if err := rows.Scan(
+			&i.ProviderName,
+			&i.TotalSessions,
+			&i.CompletedSessions,
+			&i.FailedSessions,
+			&i.ActiveSessions,
+			&i.LastSuccessfulSync,
+			&i.FirstSyncSession,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSubscriptionsByPaymentProvider = `-- name: GetSubscriptionsByPaymentProvider :many
 SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM subscriptions 
 WHERE workspace_id = $1 AND payment_provider = $2 AND deleted_at IS NULL
@@ -839,7 +1177,7 @@ func (q *Queries) GetSubscriptionsByPaymentSyncStatus(ctx context.Context, arg G
 }
 
 const getSyncEvent = `-- name: GetSyncEvent :one
-SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, occurred_at FROM payment_sync_events 
+SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at FROM payment_sync_events 
 WHERE id = $1
 `
 
@@ -857,13 +1195,18 @@ func (q *Queries) GetSyncEvent(ctx context.Context, id uuid.UUID) (PaymentSyncEv
 		&i.EventType,
 		&i.EventMessage,
 		&i.EventDetails,
+		&i.WebhookEventID,
+		&i.ProviderAccountID,
+		&i.IdempotencyKey,
+		&i.ProcessingAttempts,
+		&i.SignatureValid,
 		&i.OccurredAt,
 	)
 	return i, err
 }
 
 const getSyncEventsByExternalID = `-- name: GetSyncEventsByExternalID :many
-SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, occurred_at FROM payment_sync_events 
+SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at FROM payment_sync_events 
 WHERE workspace_id = $1 AND provider_name = $2 AND external_id = $3
 ORDER BY occurred_at DESC
 `
@@ -894,6 +1237,11 @@ func (q *Queries) GetSyncEventsByExternalID(ctx context.Context, arg GetSyncEven
 			&i.EventType,
 			&i.EventMessage,
 			&i.EventDetails,
+			&i.WebhookEventID,
+			&i.ProviderAccountID,
+			&i.IdempotencyKey,
+			&i.ProcessingAttempts,
+			&i.SignatureValid,
 			&i.OccurredAt,
 		); err != nil {
 			return nil, err
@@ -1004,8 +1352,325 @@ func (q *Queries) GetSyncSessionByProvider(ctx context.Context, arg GetSyncSessi
 	return i, err
 }
 
+const getWebhookEventByIdempotencyKey = `-- name: GetWebhookEventByIdempotencyKey :one
+SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at FROM payment_sync_events 
+WHERE workspace_id = $1 
+  AND provider_name = $2 
+  AND idempotency_key = $3
+  AND idempotency_key IS NOT NULL
+ORDER BY occurred_at DESC
+LIMIT 1
+`
+
+type GetWebhookEventByIdempotencyKeyParams struct {
+	WorkspaceID    uuid.UUID   `json:"workspace_id"`
+	ProviderName   string      `json:"provider_name"`
+	IdempotencyKey pgtype.Text `json:"idempotency_key"`
+}
+
+// NEW: Check for duplicate webhook processing using idempotency key
+func (q *Queries) GetWebhookEventByIdempotencyKey(ctx context.Context, arg GetWebhookEventByIdempotencyKeyParams) (PaymentSyncEvent, error) {
+	row := q.db.QueryRow(ctx, getWebhookEventByIdempotencyKey, arg.WorkspaceID, arg.ProviderName, arg.IdempotencyKey)
+	var i PaymentSyncEvent
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.WorkspaceID,
+		&i.ProviderName,
+		&i.EntityType,
+		&i.EntityID,
+		&i.ExternalID,
+		&i.EventType,
+		&i.EventMessage,
+		&i.EventDetails,
+		&i.WebhookEventID,
+		&i.ProviderAccountID,
+		&i.IdempotencyKey,
+		&i.ProcessingAttempts,
+		&i.SignatureValid,
+		&i.OccurredAt,
+	)
+	return i, err
+}
+
+const getWebhookEventByProviderEventID = `-- name: GetWebhookEventByProviderEventID :one
+SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at FROM payment_sync_events 
+WHERE workspace_id = $1 
+  AND provider_name = $2 
+  AND webhook_event_id = $3
+  AND webhook_event_id IS NOT NULL
+ORDER BY occurred_at DESC
+LIMIT 1
+`
+
+type GetWebhookEventByProviderEventIDParams struct {
+	WorkspaceID    uuid.UUID   `json:"workspace_id"`
+	ProviderName   string      `json:"provider_name"`
+	WebhookEventID pgtype.Text `json:"webhook_event_id"`
+}
+
+// NEW: Get webhook event by provider's event ID
+func (q *Queries) GetWebhookEventByProviderEventID(ctx context.Context, arg GetWebhookEventByProviderEventIDParams) (PaymentSyncEvent, error) {
+	row := q.db.QueryRow(ctx, getWebhookEventByProviderEventID, arg.WorkspaceID, arg.ProviderName, arg.WebhookEventID)
+	var i PaymentSyncEvent
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.WorkspaceID,
+		&i.ProviderName,
+		&i.EntityType,
+		&i.EntityID,
+		&i.ExternalID,
+		&i.EventType,
+		&i.EventMessage,
+		&i.EventDetails,
+		&i.WebhookEventID,
+		&i.ProviderAccountID,
+		&i.IdempotencyKey,
+		&i.ProcessingAttempts,
+		&i.SignatureValid,
+		&i.OccurredAt,
+	)
+	return i, err
+}
+
+const getWebhookEventsSummaryByProvider = `-- name: GetWebhookEventsSummaryByProvider :one
+SELECT 
+    provider_name,
+    COUNT(*) as total_webhook_events,
+    COUNT(CASE WHEN event_type = 'webhook_processed_successfully' THEN 1 END) as successful_count,
+    COUNT(CASE WHEN event_type = 'webhook_processing_failed' THEN 1 END) as failed_count,
+    COUNT(CASE WHEN processing_attempts > 1 THEN 1 END) as retry_count,
+    COUNT(CASE WHEN signature_valid = false THEN 1 END) as invalid_signature_count,
+    MAX(occurred_at) as last_webhook_at
+FROM payment_sync_events 
+WHERE workspace_id = $1 
+  AND provider_name = $2 
+  AND webhook_event_id IS NOT NULL
+GROUP BY provider_name
+`
+
+type GetWebhookEventsSummaryByProviderParams struct {
+	WorkspaceID  uuid.UUID `json:"workspace_id"`
+	ProviderName string    `json:"provider_name"`
+}
+
+type GetWebhookEventsSummaryByProviderRow struct {
+	ProviderName          string      `json:"provider_name"`
+	TotalWebhookEvents    int64       `json:"total_webhook_events"`
+	SuccessfulCount       int64       `json:"successful_count"`
+	FailedCount           int64       `json:"failed_count"`
+	RetryCount            int64       `json:"retry_count"`
+	InvalidSignatureCount int64       `json:"invalid_signature_count"`
+	LastWebhookAt         interface{} `json:"last_webhook_at"`
+}
+
+// NEW: Get webhook processing summary for a provider
+func (q *Queries) GetWebhookEventsSummaryByProvider(ctx context.Context, arg GetWebhookEventsSummaryByProviderParams) (GetWebhookEventsSummaryByProviderRow, error) {
+	row := q.db.QueryRow(ctx, getWebhookEventsSummaryByProvider, arg.WorkspaceID, arg.ProviderName)
+	var i GetWebhookEventsSummaryByProviderRow
+	err := row.Scan(
+		&i.ProviderName,
+		&i.TotalWebhookEvents,
+		&i.SuccessfulCount,
+		&i.FailedCount,
+		&i.RetryCount,
+		&i.InvalidSignatureCount,
+		&i.LastWebhookAt,
+	)
+	return i, err
+}
+
+const getWorkspaceProviderConfig = `-- name: GetWorkspaceProviderConfig :one
+
+SELECT 
+    w.id,
+    w.metadata,
+    COALESCE(w.metadata ->> 'payment_providers', '{}') as provider_configs
+FROM workspaces w
+WHERE w.id = $1 AND w.deleted_at IS NULL
+`
+
+type GetWorkspaceProviderConfigRow struct {
+	ID              uuid.UUID   `json:"id"`
+	Metadata        []byte      `json:"metadata"`
+	ProviderConfigs interface{} `json:"provider_configs"`
+}
+
+// Workspace Provider Configuration Queries (using workspace metadata for now)
+func (q *Queries) GetWorkspaceProviderConfig(ctx context.Context, id uuid.UUID) (GetWorkspaceProviderConfigRow, error) {
+	row := q.db.QueryRow(ctx, getWorkspaceProviderConfig, id)
+	var i GetWorkspaceProviderConfigRow
+	err := row.Scan(&i.ID, &i.Metadata, &i.ProviderConfigs)
+	return i, err
+}
+
+const getWorkspaceSyncSummary = `-- name: GetWorkspaceSyncSummary :one
+
+SELECT 
+    w.id as workspace_id,
+    w.name as workspace_name,
+    COUNT(DISTINCT pss.id) as total_sync_sessions,
+    COUNT(DISTINCT CASE WHEN pss.status = 'completed' THEN pss.id END) as completed_sessions,
+    COUNT(DISTINCT CASE WHEN pss.status = 'failed' THEN pss.id END) as failed_sessions,
+    COUNT(DISTINCT CASE WHEN pss.status IN ('pending', 'running') THEN pss.id END) as active_sessions,
+    COUNT(DISTINCT CASE WHEN c.payment_sync_status = 'synced' THEN c.id END) as synced_customers,
+    COUNT(DISTINCT CASE WHEN p.payment_sync_status = 'synced' THEN p.id END) as synced_products,
+    COUNT(DISTINCT CASE WHEN pr.payment_sync_status = 'synced' THEN pr.id END) as synced_prices,
+    COUNT(DISTINCT CASE WHEN s.payment_sync_status = 'synced' THEN s.id END) as synced_subscriptions,
+    MAX(pss.completed_at) as last_successful_sync
+FROM workspaces w
+LEFT JOIN payment_sync_sessions pss ON w.id = pss.workspace_id AND pss.deleted_at IS NULL
+LEFT JOIN customers c ON w.id = c.workspace_id AND c.deleted_at IS NULL
+LEFT JOIN products p ON w.id = p.workspace_id AND p.deleted_at IS NULL
+LEFT JOIN prices pr ON p.id = pr.product_id AND pr.deleted_at IS NULL
+LEFT JOIN subscriptions s ON w.id = s.workspace_id AND s.deleted_at IS NULL
+WHERE w.id = $1 AND w.deleted_at IS NULL
+GROUP BY w.id, w.name
+`
+
+type GetWorkspaceSyncSummaryRow struct {
+	WorkspaceID         uuid.UUID   `json:"workspace_id"`
+	WorkspaceName       string      `json:"workspace_name"`
+	TotalSyncSessions   int64       `json:"total_sync_sessions"`
+	CompletedSessions   int64       `json:"completed_sessions"`
+	FailedSessions      int64       `json:"failed_sessions"`
+	ActiveSessions      int64       `json:"active_sessions"`
+	SyncedCustomers     int64       `json:"synced_customers"`
+	SyncedProducts      int64       `json:"synced_products"`
+	SyncedPrices        int64       `json:"synced_prices"`
+	SyncedSubscriptions int64       `json:"synced_subscriptions"`
+	LastSuccessfulSync  interface{} `json:"last_successful_sync"`
+}
+
+// Additional Workspace-specific Queries
+func (q *Queries) GetWorkspaceSyncSummary(ctx context.Context, id uuid.UUID) (GetWorkspaceSyncSummaryRow, error) {
+	row := q.db.QueryRow(ctx, getWorkspaceSyncSummary, id)
+	var i GetWorkspaceSyncSummaryRow
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.WorkspaceName,
+		&i.TotalSyncSessions,
+		&i.CompletedSessions,
+		&i.FailedSessions,
+		&i.ActiveSessions,
+		&i.SyncedCustomers,
+		&i.SyncedProducts,
+		&i.SyncedPrices,
+		&i.SyncedSubscriptions,
+		&i.LastSuccessfulSync,
+	)
+	return i, err
+}
+
+const getWorkspacesByProvider = `-- name: GetWorkspacesByProvider :many
+SELECT w.id, w.account_id, w.name, w.description, w.business_name, w.business_type, w.website_url, w.support_email, w.support_phone, w.metadata, w.livemode, w.created_at, w.updated_at, w.deleted_at
+FROM workspaces w
+WHERE w.metadata -> 'payment_providers' ? $1 
+  AND w.deleted_at IS NULL
+ORDER BY w.created_at DESC
+`
+
+func (q *Queries) GetWorkspacesByProvider(ctx context.Context, metadata []byte) ([]Workspace, error) {
+	rows, err := q.db.Query(ctx, getWorkspacesByProvider, metadata)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Workspace{}
+	for rows.Next() {
+		var i Workspace
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.Name,
+			&i.Description,
+			&i.BusinessName,
+			&i.BusinessType,
+			&i.WebsiteUrl,
+			&i.SupportEmail,
+			&i.SupportPhone,
+			&i.Metadata,
+			&i.Livemode,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFailedWebhookEvents = `-- name: ListFailedWebhookEvents :many
+SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at FROM payment_sync_events 
+WHERE workspace_id = $1 
+  AND provider_name = $2
+  AND webhook_event_id IS NOT NULL
+  AND event_type = 'webhook_processing_failed'
+  AND processing_attempts >= $3
+ORDER BY occurred_at DESC
+LIMIT $4 OFFSET $5
+`
+
+type ListFailedWebhookEventsParams struct {
+	WorkspaceID        uuid.UUID   `json:"workspace_id"`
+	ProviderName       string      `json:"provider_name"`
+	ProcessingAttempts pgtype.Int4 `json:"processing_attempts"`
+	Limit              int32       `json:"limit"`
+	Offset             int32       `json:"offset"`
+}
+
+// NEW: List webhook events that failed processing
+func (q *Queries) ListFailedWebhookEvents(ctx context.Context, arg ListFailedWebhookEventsParams) ([]PaymentSyncEvent, error) {
+	rows, err := q.db.Query(ctx, listFailedWebhookEvents,
+		arg.WorkspaceID,
+		arg.ProviderName,
+		arg.ProcessingAttempts,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PaymentSyncEvent{}
+	for rows.Next() {
+		var i PaymentSyncEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.WorkspaceID,
+			&i.ProviderName,
+			&i.EntityType,
+			&i.EntityID,
+			&i.ExternalID,
+			&i.EventType,
+			&i.EventMessage,
+			&i.EventDetails,
+			&i.WebhookEventID,
+			&i.ProviderAccountID,
+			&i.IdempotencyKey,
+			&i.ProcessingAttempts,
+			&i.SignatureValid,
+			&i.OccurredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSyncEventsByEntityType = `-- name: ListSyncEventsByEntityType :many
-SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, occurred_at FROM payment_sync_events 
+SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at FROM payment_sync_events 
 WHERE session_id = $1 AND entity_type = $2
 ORDER BY occurred_at DESC
 LIMIT $3 OFFSET $4
@@ -1043,6 +1708,11 @@ func (q *Queries) ListSyncEventsByEntityType(ctx context.Context, arg ListSyncEv
 			&i.EventType,
 			&i.EventMessage,
 			&i.EventDetails,
+			&i.WebhookEventID,
+			&i.ProviderAccountID,
+			&i.IdempotencyKey,
+			&i.ProcessingAttempts,
+			&i.SignatureValid,
 			&i.OccurredAt,
 		); err != nil {
 			return nil, err
@@ -1056,7 +1726,7 @@ func (q *Queries) ListSyncEventsByEntityType(ctx context.Context, arg ListSyncEv
 }
 
 const listSyncEventsByEventType = `-- name: ListSyncEventsByEventType :many
-SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, occurred_at FROM payment_sync_events 
+SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at FROM payment_sync_events 
 WHERE session_id = $1 AND event_type = $2
 ORDER BY occurred_at DESC
 LIMIT $3 OFFSET $4
@@ -1094,6 +1764,11 @@ func (q *Queries) ListSyncEventsByEventType(ctx context.Context, arg ListSyncEve
 			&i.EventType,
 			&i.EventMessage,
 			&i.EventDetails,
+			&i.WebhookEventID,
+			&i.ProviderAccountID,
+			&i.IdempotencyKey,
+			&i.ProcessingAttempts,
+			&i.SignatureValid,
 			&i.OccurredAt,
 		); err != nil {
 			return nil, err
@@ -1107,7 +1782,7 @@ func (q *Queries) ListSyncEventsByEventType(ctx context.Context, arg ListSyncEve
 }
 
 const listSyncEventsByProvider = `-- name: ListSyncEventsByProvider :many
-SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, occurred_at FROM payment_sync_events 
+SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at FROM payment_sync_events 
 WHERE workspace_id = $1 AND provider_name = $2
 ORDER BY occurred_at DESC
 LIMIT $3 OFFSET $4
@@ -1145,6 +1820,11 @@ func (q *Queries) ListSyncEventsByProvider(ctx context.Context, arg ListSyncEven
 			&i.EventType,
 			&i.EventMessage,
 			&i.EventDetails,
+			&i.WebhookEventID,
+			&i.ProviderAccountID,
+			&i.IdempotencyKey,
+			&i.ProcessingAttempts,
+			&i.SignatureValid,
 			&i.OccurredAt,
 		); err != nil {
 			return nil, err
@@ -1158,7 +1838,7 @@ func (q *Queries) ListSyncEventsByProvider(ctx context.Context, arg ListSyncEven
 }
 
 const listSyncEventsBySession = `-- name: ListSyncEventsBySession :many
-SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, occurred_at FROM payment_sync_events 
+SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at FROM payment_sync_events 
 WHERE session_id = $1
 ORDER BY occurred_at DESC
 LIMIT $2 OFFSET $3
@@ -1190,6 +1870,11 @@ func (q *Queries) ListSyncEventsBySession(ctx context.Context, arg ListSyncEvent
 			&i.EventType,
 			&i.EventMessage,
 			&i.EventDetails,
+			&i.WebhookEventID,
+			&i.ProviderAccountID,
+			&i.IdempotencyKey,
+			&i.ProcessingAttempts,
+			&i.SignatureValid,
 			&i.OccurredAt,
 		); err != nil {
 			return nil, err
@@ -1347,6 +2032,65 @@ func (q *Queries) ListSyncSessionsByStatus(ctx context.Context, arg ListSyncSess
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWebhookEventsByProvider = `-- name: ListWebhookEventsByProvider :many
+SELECT id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at FROM payment_sync_events 
+WHERE workspace_id = $1 
+  AND provider_name = $2
+  AND webhook_event_id IS NOT NULL
+ORDER BY occurred_at DESC
+LIMIT $3 OFFSET $4
+`
+
+type ListWebhookEventsByProviderParams struct {
+	WorkspaceID  uuid.UUID `json:"workspace_id"`
+	ProviderName string    `json:"provider_name"`
+	Limit        int32     `json:"limit"`
+	Offset       int32     `json:"offset"`
+}
+
+// NEW: List webhook events specifically (those with webhook_event_id)
+func (q *Queries) ListWebhookEventsByProvider(ctx context.Context, arg ListWebhookEventsByProviderParams) ([]PaymentSyncEvent, error) {
+	rows, err := q.db.Query(ctx, listWebhookEventsByProvider,
+		arg.WorkspaceID,
+		arg.ProviderName,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PaymentSyncEvent{}
+	for rows.Next() {
+		var i PaymentSyncEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.WorkspaceID,
+			&i.ProviderName,
+			&i.EntityType,
+			&i.EntityID,
+			&i.ExternalID,
+			&i.EventType,
+			&i.EventMessage,
+			&i.EventDetails,
+			&i.WebhookEventID,
+			&i.ProviderAccountID,
+			&i.IdempotencyKey,
+			&i.ProcessingAttempts,
+			&i.SignatureValid,
+			&i.OccurredAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1618,6 +2362,84 @@ func (q *Queries) UpdateSyncSessionStatus(ctx context.Context, arg UpdateSyncSes
 		&i.ErrorSummary,
 		&i.StartedAt,
 		&i.CompletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const updateWebhookEventProcessingAttempts = `-- name: UpdateWebhookEventProcessingAttempts :one
+UPDATE payment_sync_events
+SET 
+    processing_attempts = processing_attempts + 1,
+    event_details = COALESCE(event_details, '{}'::jsonb) || jsonb_build_object(
+        'last_attempt_at', EXTRACT(epoch FROM CURRENT_TIMESTAMP),
+        'retry_reason', $2
+    )
+WHERE id = $1
+RETURNING id, session_id, workspace_id, provider_name, entity_type, entity_id, external_id, event_type, event_message, event_details, webhook_event_id, provider_account_id, idempotency_key, processing_attempts, signature_valid, occurred_at
+`
+
+type UpdateWebhookEventProcessingAttemptsParams struct {
+	ID               uuid.UUID   `json:"id"`
+	JsonbBuildObject interface{} `json:"jsonb_build_object"`
+}
+
+// NEW: Update processing attempts for retry logic
+func (q *Queries) UpdateWebhookEventProcessingAttempts(ctx context.Context, arg UpdateWebhookEventProcessingAttemptsParams) (PaymentSyncEvent, error) {
+	row := q.db.QueryRow(ctx, updateWebhookEventProcessingAttempts, arg.ID, arg.JsonbBuildObject)
+	var i PaymentSyncEvent
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.WorkspaceID,
+		&i.ProviderName,
+		&i.EntityType,
+		&i.EntityID,
+		&i.ExternalID,
+		&i.EventType,
+		&i.EventMessage,
+		&i.EventDetails,
+		&i.WebhookEventID,
+		&i.ProviderAccountID,
+		&i.IdempotencyKey,
+		&i.ProcessingAttempts,
+		&i.SignatureValid,
+		&i.OccurredAt,
+	)
+	return i, err
+}
+
+const updateWorkspaceProviderConfig = `-- name: UpdateWorkspaceProviderConfig :one
+UPDATE workspaces
+SET 
+    metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('payment_providers', $2),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, created_at, updated_at, deleted_at
+`
+
+type UpdateWorkspaceProviderConfigParams struct {
+	ID               uuid.UUID   `json:"id"`
+	JsonbBuildObject interface{} `json:"jsonb_build_object"`
+}
+
+func (q *Queries) UpdateWorkspaceProviderConfig(ctx context.Context, arg UpdateWorkspaceProviderConfigParams) (Workspace, error) {
+	row := q.db.QueryRow(ctx, updateWorkspaceProviderConfig, arg.ID, arg.JsonbBuildObject)
+	var i Workspace
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Name,
+		&i.Description,
+		&i.BusinessName,
+		&i.BusinessType,
+		&i.WebsiteUrl,
+		&i.SupportEmail,
+		&i.SupportPhone,
+		&i.Metadata,
+		&i.Livemode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,

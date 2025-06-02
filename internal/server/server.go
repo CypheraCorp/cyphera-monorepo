@@ -8,6 +8,8 @@ import (
 	"cyphera-api/internal/client/circle"
 	"cyphera-api/internal/client/coinmarketcap" // Import CMC client
 	dsClient "cyphera-api/internal/client/delegation_server"
+	"cyphera-api/internal/client/payment_sync"
+	"cyphera-api/internal/client/payment_sync/stripe"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
 	"cyphera-api/internal/helpers" // Import helpers
@@ -42,6 +44,7 @@ var (
 	walletHandler            *handlers.WalletHandler
 	subscriptionHandler      *handlers.SubscriptionHandler
 	subscriptionEventHandler *handlers.SubscriptionEventHandler
+	paymentSyncHandler       *handlers.PaymentSyncHandlers
 	delegationClient         *dsClient.DelegationClient
 	redemptionProcessor      *handlers.RedemptionProcessor
 	circleHandler            *handlers.CircleHandler
@@ -173,6 +176,23 @@ func InitializeHandlers() {
 	// --- CoinMarketCap Client ---
 	cmcClient := coinmarketcap.NewClient(cmcApiKey)
 
+	// --- Stripe API Keys ---
+	stripeAPIKey, err := secretsClient.GetSecretString(ctx, "STRIPE_API_KEY_ARN", "STRIPE_API_KEY")
+	if err != nil || stripeAPIKey == "" {
+		logger.Fatal("Failed to get Stripe API Key", zap.Error(err))
+	}
+
+	stripeWebhookSecret, err := secretsClient.GetSecretString(ctx, "STRIPE_WEBHOOK_SECRET_ARN", "STRIPE_WEBHOOK_SECRET")
+	if err != nil || stripeWebhookSecret == "" {
+		logger.Fatal("Failed to get Stripe Webhook Secret", zap.Error(err))
+	}
+
+	// --- Payment Sync Encryption Key ---
+	paymentSyncEncryptionKey, err := secretsClient.GetSecretString(ctx, "PAYMENT_SYNC_ENCRYPTION_KEY_ARN", "PAYMENT_SYNC_ENCRYPTION_KEY")
+	if err != nil || paymentSyncEncryptionKey == "" {
+		logger.Fatal("Failed to get Payment Sync Encryption Key", zap.Error(err))
+	}
+
 	// --- Database Pool Initialization ---
 	// Parse the DSN configuration first
 	poolConfig, err := pgxpool.ParseConfig(dsn)
@@ -262,6 +282,24 @@ func InitializeHandlers() {
 	// Initialize subscription
 	subscriptionHandler = handlers.NewSubscriptionHandler(commonServices, delegationClient)
 	subscriptionEventHandler = handlers.NewSubscriptionEventHandler(commonServices)
+
+	// Payment Sync Service and Handlers
+	stripeService := stripe.NewStripeService(logger.Log, dbQueries)
+	if err := stripeService.Configure(context.Background(), map[string]string{
+		"api_key":        stripeAPIKey,
+		"webhook_secret": stripeWebhookSecret,
+	}); err != nil {
+		logger.Log.Fatal("Failed to configure Stripe service", zap.Error(err))
+	}
+
+	// Initialize PaymentSyncClient with encryption key
+	paymentSyncClient := payment_sync.NewPaymentSyncClient(dbQueries, logger.Log, paymentSyncEncryptionKey)
+
+	// Register Stripe as a payment provider
+	paymentSyncClient.RegisterProvider("stripe", stripeService)
+
+	// Initialize PaymentSyncHandlers with the unified client
+	paymentSyncHandler = handlers.NewPaymentSyncHandlers(dbQueries, logger.Log, paymentSyncClient)
 
 	// 3rd party handlers
 	circleHandler = handlers.NewCircleHandler(commonServices, circleClient)
@@ -387,18 +425,6 @@ func InitializeRoutes(router *gin.Engine) {
 					circle.GET("/:workspace_id/challenges/:challenge_id", circleHandler.GetChallenge)
 				}
 
-				// Product Tokens
-				// products := protected.Group("/products")
-				// {
-				// 	products.GET("/:product_id/tokens", productHandler.GetProductTokensByProduct)
-				// 	products.GET("/:product_id/tokens/active", productHandler.GetActiveProductTokensByProduct)
-				// 	products.POST("/:product_id/tokens", productHandler.CreateProductToken)
-				// 	products.GET("/:product_id/tokens/:token_id", productHandler.GetProductToken)
-				// 	products.GET("/:product_id/networks/:network_id/tokens", productHandler.GetProductTokensByNetwork)
-				// 	products.GET("/:product_id/networks/:network_id/tokens/active", productHandler.GetActiveProductTokensByNetwork)
-				// 	products.DELETE("/:product_id/tokens", productHandler.DeleteProductTokensByProduct)
-				// }
-
 				// Networks
 				networks := protected.Group("/networks")
 				{
@@ -410,12 +436,6 @@ func InitializeRoutes(router *gin.Engine) {
 				// Tokens
 				tokens := protected.Group("/tokens")
 				{
-					// tokens.GET("", tokenHandler.ListTokens)
-					// tokens.GET("/:token_id", tokenHandler.GetToken)
-					// tokens.GET("/networks/:network_id", tokenHandler.ListTokensByNetwork)
-					// tokens.GET("/networks/:network_id/active", tokenHandler.ListActiveTokensByNetwork)
-					// tokens.GET("/networks/:network_id/gas", tokenHandler.GetGasToken)
-					// tokens.GET("/networks/:network_id/address/:address", tokenHandler.GetTokenByAddress)
 					tokens.POST("/quote", tokenHandler.GetTokenQuote)
 				}
 			}
@@ -425,7 +445,6 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				accounts.GET("/:account_id", accountHandler.GetAccount)
 				accounts.POST("/onboard", accountHandler.OnboardAccount)
-				// accounts.PUT("/:account_id", accountHandler.UpdateAccount)
 			}
 
 			// Customers
@@ -530,11 +549,42 @@ func InitializeRoutes(router *gin.Engine) {
 			// 	failedAttempts.GET("/error-type/:error_type", failedSubscriptionAttemptHandler.ListFailedSubscriptionAttemptsByErrorType)
 			// }
 
-			// Delegations
-			// delegations := protected.Group("/delegations")
-			// {
-			// 	delegations.GET("/:delegation_id/subscriptions", subscriptionHandler.GetSubscriptionsByDelegation)
-			// }
+			// Payment sync routes
+			sync := protected.Group("/sync")
+			{
+				// Configuration management routes
+				config := sync.Group("/config")
+				{
+					config.POST("", paymentSyncHandler.CreateConfiguration)               // Create new configuration
+					config.GET("", paymentSyncHandler.ListConfigurations)                 // List all configurations for workspace
+					config.GET("/:provider", paymentSyncHandler.GetConfiguration)         // Get config by provider name
+					config.GET("/id/:config_id", paymentSyncHandler.GetConfigurationByID) // Get config by ID
+					config.PUT("/:config_id", paymentSyncHandler.UpdateConfiguration)     // Update configuration
+					config.DELETE("/:config_id", paymentSyncHandler.DeleteConfiguration)  // Delete configuration
+					config.POST("/:config_id/test", paymentSyncHandler.TestConnection)    // Test connection
+				}
+
+				// Provider account management routes (for webhook routing)
+				accounts := sync.Group("/accounts")
+				{
+					accounts.POST("", paymentSyncHandler.CreateProviderAccount) // Create provider account mapping
+					accounts.GET("", paymentSyncHandler.GetProviderAccounts)    // List provider accounts for workspace
+				}
+
+				// Provider information
+				sync.GET("/providers", paymentSyncHandler.GetAvailableProviders) // List available providers
+
+				// Initial sync for any provider
+				sync.POST("/:provider/initial", paymentSyncHandler.StartInitialSync)
+
+				// Sync session management
+				sessions := sync.Group("/sessions")
+				{
+					sessions.GET("", paymentSyncHandler.ListSyncSessions)                // List all sessions for workspace
+					sessions.GET("/:id", paymentSyncHandler.GetSyncSession)              // Get session details
+					sessions.GET("/:id/status", paymentSyncHandler.GetSyncSessionStatus) // Get session status and progress
+				}
+			}
 		}
 	}
 }

@@ -2,29 +2,37 @@ package stripe
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"time"
 
-	ps "cyphera-api/internal/client/payment_sync" // Re-instated for other method signatures
+	ps "cyphera-api/internal/client/payment_sync"
+	"cyphera-api/internal/db"
 
-	"github.com/stripe/stripe-go/v82" // Changed from client import
+	"github.com/google/uuid"
+	"github.com/stripe/stripe-go/v82"
 	"go.uber.org/zap"
 )
 
-// StripeService implements the SubscriptionSyncService for Stripe.
+// Ensure StripeService implements PaymentSyncService interface
+var _ ps.PaymentSyncService = (*StripeService)(nil)
+
+// StripeService implements the PaymentSyncService for Stripe.
 // Method implementations for specific resources (Customer, Product, etc.) are in separate files
 // within this package (e.g., customer.go, product.go).
-
 type StripeService struct {
-	client        *stripe.Client // Changed from *client.API
+	client        *stripe.Client
 	webhookSecret string
 	logger        *zap.Logger
+	db            *db.Queries
 }
 
 // NewStripeService creates a new instance of StripeService.
 // It does not yet configure the API key, that happens in Configure.
-func NewStripeService(logger *zap.Logger) *StripeService {
+func NewStripeService(logger *zap.Logger, dbQueries *db.Queries) *StripeService {
 	return &StripeService{
 		logger: logger,
+		db:     dbQueries,
 	}
 }
 
@@ -49,10 +57,9 @@ func (s *StripeService) Configure(ctx context.Context, config map[string]string)
 		return fmt.Errorf("stripe webhook secret not provided in configuration")
 	}
 
-	s.client = stripe.NewClient(apiKey, nil) // Updated client initialization
+	s.client = stripe.NewClient(apiKey, nil)
 	s.webhookSecret = webhookSecret
 
-	// You could potentially call CheckConnection here or leave it as a separate step.
 	return nil
 }
 
@@ -63,10 +70,7 @@ func (s *StripeService) CheckConnection(ctx context.Context) error {
 		return fmt.Errorf("stripe client not configured. Call Configure first")
 	}
 
-	// Use AccountParams for the Get method, passing context as the first argument.
-	// The specific params struct might vary slightly if not just default AccountParams,
-	// but AccountParams should exist for general account operations.
-	_, err := s.client.V1Accounts.Retrieve(ctx, &stripe.AccountRetrieveParams{}) // Changed from Get to Retrieve, using AccountRetrieveParams
+	_, err := s.client.V1Accounts.Retrieve(ctx, &stripe.AccountRetrieveParams{})
 	if err != nil {
 		return fmt.Errorf("failed to connect to Stripe: %w", err)
 	}
@@ -78,101 +82,164 @@ func (s *StripeService) CheckConnection(ctx context.Context) error {
 // external bank accounts for user payouts is diminished.
 // These methods might manage Stripe Customer Bank Accounts if Stripe is used for payouts *from Stripe balance*,
 // but not for user-provided accounts for Bridge off-ramps.
-func (s *StripeService) CreateExternalAccount(ctx context.Context, accountData ps.ExternalAccount) (ps.ExternalAccount, error) {
+
+func (s *StripeService) CreateExternalAccount(ctx context.Context, customerExternalID string, accountData ps.ExternalAccount, setAsDefault bool) (ps.ExternalAccount, error) {
 	// accountData.Provider should ideally be checked. If not 'stripe', this method might be incorrect.
 	// If Stripe is used, this would map to creating a BankAccount token and attaching to a Customer, or Connect external accounts.
 	return ps.ExternalAccount{}, fmt.Errorf("CreateExternalAccount via Stripe not fully implemented for the current off-ramp model; Bridge.xyz is primary")
 }
 
-func (s *StripeService) GetExternalAccount(ctx context.Context, externalAccountID string) (ps.ExternalAccount, error) {
+func (s *StripeService) GetExternalAccount(ctx context.Context, customerExternalID string, externalAccountID string) (ps.ExternalAccount, error) {
 	// This would involve fetching a BankAccount or Connect external account from Stripe.
 	return ps.ExternalAccount{}, fmt.Errorf("GetExternalAccount via Stripe not fully implemented for the current off-ramp model")
 }
 
-func (s *StripeService) UpdateExternalAccount(ctx context.Context, externalAccountID string, accountData ps.ExternalAccount) (ps.ExternalAccount, error) {
+func (s *StripeService) UpdateExternalAccount(ctx context.Context, customerExternalID string, externalAccountID string, accountData ps.ExternalAccount) (ps.ExternalAccount, error) {
 	return ps.ExternalAccount{}, fmt.Errorf("UpdateExternalAccount via Stripe not supported or not fully implemented")
 }
 
-func (s *StripeService) DeleteExternalAccount(ctx context.Context, externalAccountID string) error {
+func (s *StripeService) DeleteExternalAccount(ctx context.Context, customerExternalID string, externalAccountID string) error {
 	// This would involve detaching/deleting a BankAccount or Connect external account.
 	return fmt.Errorf("DeleteExternalAccount via Stripe not fully implemented for the current off-ramp model")
 }
 
-func (s *StripeService) ListExternalAccounts(ctx context.Context, userID string, params ps.ListParams) ([]ps.ExternalAccount, string, error) {
+func (s *StripeService) ListExternalAccounts(ctx context.Context, customerExternalID string, params ps.ListParams) ([]ps.ExternalAccount, string, error) {
 	// This would list BankAccounts for a Stripe Customer or Connect external accounts.
-	// Note: userID here is ps.Customer.ExternalID, map to Stripe Customer ID.
+	// Note: customerExternalID here is ps.Customer.ExternalID, map to Stripe Customer ID.
 	return nil, "", fmt.Errorf("ListExternalAccounts via Stripe not fully implemented for the current off-ramp model")
 }
 
-func (s *StripeService) SetDefaultExternalAccount(ctx context.Context, customerID string, externalAccountID string) error {
+func (s *StripeService) SetDefaultExternalAccount(ctx context.Context, customerExternalID string, externalAccountID string) error {
 	// This would set a default BankAccount on a Stripe Customer or Connect external account.
-	// Note: customerID here is ps.Customer.ExternalID.
+	// Note: customerExternalID here is ps.Customer.ExternalID.
 	return fmt.Errorf("SetDefaultExternalAccount via Stripe not fully implemented for the current off-ramp model")
 }
 
-// --- Webhook Handling ---
-// Implementation moved to webhook.go
-/*
-func (s *StripeService) HandleWebhook(ctx context.Context, requestBody []byte, signatureHeader string) (ps.WebhookEvent, error) {
-	// TODO: Use stripe.Webhook.ConstructEvent with s.webhookSecret
-	// TODO: Map stripe.Event to payment_sync.WebhookEvent
-	// TODO: Map stripe event.Data.Object to appropriate payment_sync canonical struct and place in WebhookEvent.Data
-	return ps.WebhookEvent{}, fmt.Errorf("HandleWebhook not implemented")
-}
-*/
+// Note: All other interface methods (webhook handling, invoice management, transaction management,
+// customer management, product management, price management, subscription management) are implemented
+// in their respective specialized files: webhook.go, invoice.go, transaction.go, customer.go, product.go,
+// price.go, subscription.go
 
-// --- Invoice Management ---
-// Implementations moved to invoice.go
-/*
-func (s *StripeService) GetInvoice(ctx context.Context, externalID string) (ps.Invoice, error) {
-	return ps.Invoice{}, fmt.Errorf("GetInvoice not implemented")
+// StartInitialSync initiates a complete initial sync session
+// @godoc StartInitialSync starts an initial data synchronization from Stripe to the database
+func (s *StripeService) StartInitialSync(ctx context.Context, workspaceID string, config ps.InitialSyncConfig) (ps.SyncSession, error) {
+	s.logger.Info("Starting initial sync",
+		zap.String("workspace_id", workspaceID),
+		zap.Any("config", config))
+
+	wsID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		return ps.SyncSession{}, fmt.Errorf("invalid workspace ID: %w", err)
+	}
+
+	// Use defaults if not provided
+	if config.BatchSize == 0 {
+		config.BatchSize = 100
+	}
+	if len(config.EntityTypes) == 0 {
+		config.EntityTypes = []string{"customers", "products", "prices", "subscriptions"}
+	}
+	if config.MaxRetries == 0 {
+		config.MaxRetries = 3
+	}
+	if config.RetryDelay == 0 {
+		config.RetryDelay = 2 // seconds
+	}
+
+	// Marshal config to JSON
+	configJSON, err := json.Marshal(map[string]interface{}{
+		"batch_size":     config.BatchSize,
+		"full_sync":      config.FullSync,
+		"starting_after": config.StartingAfter,
+		"ending_before":  config.EndingBefore,
+		"max_retries":    config.MaxRetries,
+		"retry_delay":    config.RetryDelay,
+	})
+	if err != nil {
+		return ps.SyncSession{}, fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Create sync session
+	session, err := s.db.CreateSyncSession(ctx, db.CreateSyncSessionParams{
+		WorkspaceID:  wsID,
+		ProviderName: s.GetServiceName(),
+		SessionType:  "initial_sync",
+		Status:       "pending",
+		EntityTypes:  config.EntityTypes,
+		Config:       configJSON,
+	})
+	if err != nil {
+		return ps.SyncSession{}, fmt.Errorf("failed to create sync session: %w", err)
+	}
+
+	// Update status to running
+	updatedSession, err := s.db.UpdateSyncSessionStatus(ctx, db.UpdateSyncSessionStatusParams{
+		ID:     session.ID,
+		Status: "running",
+	})
+	if err != nil {
+		s.logger.Error("Failed to update session status to running", zap.Error(err))
+		return s.mapDBSessionToPSSession(session), err
+	}
+
+	// Run the sync in the background
+	go func() {
+		syncCtx := context.Background() // Use background context for async operation
+		if err := s.runSyncProcess(syncCtx, &updatedSession, config); err != nil {
+			s.logger.Error("Initial sync process failed",
+				zap.String("session_id", updatedSession.ID.String()),
+				zap.Error(err))
+
+			// Marshal error summary
+			errorJSON, _ := json.Marshal(map[string]interface{}{
+				"error":     err.Error(),
+				"failed_at": time.Now(),
+			})
+
+			// Update session with error
+			s.db.UpdateSyncSessionError(syncCtx, db.UpdateSyncSessionErrorParams{
+				ID:           updatedSession.ID,
+				ErrorSummary: errorJSON,
+			})
+		}
+	}()
+
+	return s.mapDBSessionToPSSession(updatedSession), nil
 }
 
-func (s *StripeService) ListInvoices(ctx context.Context, params ps.ListParams) ([]ps.Invoice, string, error) {
-	return nil, "", fmt.Errorf("ListInvoices not implemented")
-}
+// Helper method to convert database session to interface session
+func (s *StripeService) mapDBSessionToPSSession(dbSession db.PaymentSyncSession) ps.SyncSession {
+	session := ps.SyncSession{
+		ID:          dbSession.ID.String(),
+		WorkspaceID: dbSession.WorkspaceID.String(),
+		Provider:    dbSession.ProviderName,
+		SessionType: dbSession.SessionType,
+		Status:      dbSession.Status,
+		EntityTypes: dbSession.EntityTypes,
+		CreatedAt:   dbSession.CreatedAt.Time.Unix(),
+		UpdatedAt:   dbSession.UpdatedAt.Time.Unix(),
+	}
 
-func (s *StripeService) CreateInvoice(ctx context.Context, customerExternalID string, subscriptionExternalID string, items []ps.InvoiceLineItem, autoAdvance bool) (ps.Invoice, error) {
-	return ps.Invoice{}, fmt.Errorf("CreateInvoice not implemented")
-}
+	// Parse JSON fields
+	if len(dbSession.Config) > 0 {
+		json.Unmarshal(dbSession.Config, &session.Config)
+	}
+	if len(dbSession.Progress) > 0 {
+		json.Unmarshal(dbSession.Progress, &session.Progress)
+	}
+	if len(dbSession.ErrorSummary) > 0 {
+		json.Unmarshal(dbSession.ErrorSummary, &session.ErrorSummary)
+	}
 
-func (s *StripeService) PayInvoice(ctx context.Context, externalInvoiceID string, paymentMethodExternalID string) (ps.Invoice, error) {
-	return ps.Invoice{}, fmt.Errorf("PayInvoice not implemented")
-}
+	// Handle nullable timestamps
+	if dbSession.StartedAt.Valid {
+		startedAt := dbSession.StartedAt.Time.Unix()
+		session.StartedAt = &startedAt
+	}
+	if dbSession.CompletedAt.Valid {
+		completedAt := dbSession.CompletedAt.Time.Unix()
+		session.CompletedAt = &completedAt
+	}
 
-func (s *StripeService) VoidInvoice(ctx context.Context, externalInvoiceID string) (ps.Invoice, error) {
-	return ps.Invoice{}, fmt.Errorf("VoidInvoice not implemented")
+	return session
 }
-
-func (s *StripeService) FinalizeInvoice(ctx context.Context, externalInvoiceID string) (ps.Invoice, error) {
-	return ps.Invoice{}, fmt.Errorf("FinalizeInvoice not implemented")
-}
-
-func (s *StripeService) SendInvoice(ctx context.Context, externalInvoiceID string) (ps.Invoice, error) {
-	return ps.Invoice{}, fmt.Errorf("SendInvoice not implemented")
-}
-*/
-
-// --- Transaction/Payment Management ---
-// Implementations moved to transaction.go
-/*
-func (s *StripeService) GetTransaction(ctx context.Context, externalID string) (ps.Transaction, error) {
-	return ps.Transaction{}, fmt.Errorf("GetTransaction not implemented")
-}
-
-func (s *StripeService) ListTransactions(ctx context.Context, params ps.ListParams) ([]ps.Transaction, string, error) {
-	return nil, "", fmt.Errorf("ListTransactions not implemented")
-}
-
-func (s *StripeService) CreatePaymentIntent(ctx context.Context, amount int64, currency string, customerExternalID string, paymentMethodExternalID string, confirm bool, offSession bool, metadata map[string]string) (ps.Transaction, error) {
-	return ps.Transaction{}, fmt.Errorf("CreatePaymentIntent not implemented")
-}
-
-func (s *StripeService) CapturePaymentIntent(ctx context.Context, paymentIntentExternalID string, amountToCapture int64) (ps.Transaction, error) {
-	return ps.Transaction{}, fmt.Errorf("CapturePaymentIntent not implemented")
-}
-
-func (s *StripeService) CreateRefund(ctx context.Context, chargeExternalID string, amount int64, reason string, metadata map[string]string) (ps.Transaction, error) {
-	return ps.Transaction{}, fmt.Errorf("CreateRefund not implemented")
-}
-*/

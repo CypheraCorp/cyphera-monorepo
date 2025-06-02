@@ -89,4 +89,29 @@ variable "delegation_private_key_value" {
   default     = ""
 }
 
+# ===============================================
+# Stripe Webhook Variables
+# ===============================================
+
+variable "stripe_api_key_value" {
+  description = "The Stripe API Key (secret key) for webhook and sync operations"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "stripe_webhook_secret_value" {
+  description = "The Stripe Webhook Signing Secret for validating webhook signatures"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "payment_sync_encryption_key_value" {
+  description = "AES-256 encryption key for encrypting payment sync configuration data"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 # ACM / Route53 Variables 

@@ -19,112 +19,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// InitialSyncConfig holds configuration for initial sync operations
-type InitialSyncConfig struct {
-	BatchSize     int           `json:"batch_size"`
-	EntityTypes   []string      `json:"entity_types"`
-	FullSync      bool          `json:"full_sync"`
-	StartingAfter string        `json:"starting_after,omitempty"`
-	EndingBefore  string        `json:"ending_before,omitempty"`
-	MaxRetries    int           `json:"max_retries"`
-	RetryDelay    time.Duration `json:"retry_delay"`
-}
-
-// DefaultInitialSyncConfig returns sensible defaults for initial sync
-func DefaultInitialSyncConfig() InitialSyncConfig {
-	return InitialSyncConfig{
-		BatchSize:   100,
-		EntityTypes: []string{"customers", "products", "prices", "subscriptions"},
-		FullSync:    true,
-		MaxRetries:  3,
-		RetryDelay:  time.Second * 2,
-	}
-}
-
-// InitialSyncService handles the initial data synchronization from Stripe to Cyphera
-type InitialSyncService struct {
-	stripeService *StripeService
-	db            *db.Queries
-	logger        *zap.Logger
-}
-
-// NewInitialSyncService creates a new initial sync service
-func NewInitialSyncService(stripeService *StripeService, dbQueries *db.Queries, logger *zap.Logger) *InitialSyncService {
-	return &InitialSyncService{
-		stripeService: stripeService,
-		db:            dbQueries,
-		logger:        logger,
-	}
-}
-
-// StartInitialSync initiates a complete initial sync session
-func (s *InitialSyncService) StartInitialSync(ctx context.Context, workspaceID uuid.UUID, config InitialSyncConfig) (*db.PaymentSyncSession, error) {
-	s.logger.Info("Starting initial sync",
-		zap.String("workspace_id", workspaceID.String()),
-		zap.Any("config", config))
-
-	// Marshal config to JSON
-	configJSON, err := json.Marshal(map[string]interface{}{
-		"batch_size":     config.BatchSize,
-		"full_sync":      config.FullSync,
-		"starting_after": config.StartingAfter,
-		"ending_before":  config.EndingBefore,
-		"max_retries":    config.MaxRetries,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal config: %w", err)
-	}
-
-	// Create sync session
-	session, err := s.db.CreateSyncSession(ctx, db.CreateSyncSessionParams{
-		WorkspaceID:  workspaceID,
-		ProviderName: s.stripeService.GetServiceName(),
-		SessionType:  "initial_sync",
-		Status:       "pending",
-		EntityTypes:  config.EntityTypes,
-		Config:       configJSON,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create sync session: %w", err)
-	}
-
-	// Update status to running
-	updatedSession, err := s.db.UpdateSyncSessionStatus(ctx, db.UpdateSyncSessionStatusParams{
-		ID:     session.ID,
-		Status: "running",
-	})
-	if err != nil {
-		s.logger.Error("Failed to update session status to running", zap.Error(err))
-		return &session, err
-	}
-
-	// Run the sync in the background (could be async)
-	go func() {
-		syncCtx := context.Background() // Use background context for async operation
-		if err := s.runSyncProcess(syncCtx, &updatedSession, config); err != nil {
-			s.logger.Error("Initial sync process failed",
-				zap.String("session_id", updatedSession.ID.String()),
-				zap.Error(err))
-
-			// Marshal error summary
-			errorJSON, _ := json.Marshal(map[string]interface{}{
-				"error":     err.Error(),
-				"failed_at": time.Now(),
-			})
-
-			// Update session with error
-			s.db.UpdateSyncSessionError(syncCtx, db.UpdateSyncSessionErrorParams{
-				ID:           updatedSession.ID,
-				ErrorSummary: errorJSON,
-			})
-		}
-	}()
-
-	return &updatedSession, nil
-}
-
 // runSyncProcess executes the actual sync process
-func (s *InitialSyncService) runSyncProcess(ctx context.Context, session *db.PaymentSyncSession, config InitialSyncConfig) error {
+func (s *StripeService) runSyncProcess(ctx context.Context, session *db.PaymentSyncSession, config ps.InitialSyncConfig) error {
 	totalProcessed := 0
 	var lastError error
 
@@ -220,7 +116,7 @@ func (s *InitialSyncService) runSyncProcess(ctx context.Context, session *db.Pay
 }
 
 // syncCustomers syncs all customers from Stripe
-func (s *InitialSyncService) syncCustomers(ctx context.Context, session *db.PaymentSyncSession, config InitialSyncConfig) (int, error) {
+func (s *StripeService) syncCustomers(ctx context.Context, session *db.PaymentSyncSession, config ps.InitialSyncConfig) (int, error) {
 	s.logSyncEvent(ctx, session, "customer", "", "sync_started", "Starting customer sync", nil)
 
 	processed := 0
@@ -242,7 +138,7 @@ func (s *InitialSyncService) syncCustomers(ctx context.Context, session *db.Paym
 		psCustomer := mapStripeCustomerToPSCustomer(stripeCustomer)
 
 		// Create or update customer in database
-		err := s.upsertCustomer(ctx, session, psCustomer)
+		err := s.UpsertCustomer(ctx, session, psCustomer)
 		if err != nil {
 			s.logger.Error("Failed to upsert customer",
 				zap.String("stripe_id", stripeCustomer.ID),
@@ -269,7 +165,7 @@ func (s *InitialSyncService) syncCustomers(ctx context.Context, session *db.Paym
 }
 
 // syncProducts syncs all products from Stripe
-func (s *InitialSyncService) syncProducts(ctx context.Context, session *db.PaymentSyncSession, config InitialSyncConfig) (int, error) {
+func (s *StripeService) syncProducts(ctx context.Context, session *db.PaymentSyncSession, config ps.InitialSyncConfig) (int, error) {
 	s.logSyncEvent(ctx, session, "product", "", "sync_started", "Starting product sync", nil)
 
 	processed := 0
@@ -287,7 +183,7 @@ func (s *InitialSyncService) syncProducts(ctx context.Context, session *db.Payme
 		psProduct := mapStripeProductToPSProduct(stripeProduct)
 
 		// Create or update product in database
-		err := s.upsertProduct(ctx, session, psProduct)
+		err := s.UpsertProduct(ctx, session, psProduct)
 		if err != nil {
 			s.logger.Error("Failed to upsert product",
 				zap.String("stripe_id", stripeProduct.ID),
@@ -314,7 +210,7 @@ func (s *InitialSyncService) syncProducts(ctx context.Context, session *db.Payme
 }
 
 // syncPrices syncs all prices from Stripe
-func (s *InitialSyncService) syncPrices(ctx context.Context, session *db.PaymentSyncSession, config InitialSyncConfig) (int, error) {
+func (s *StripeService) syncPrices(ctx context.Context, session *db.PaymentSyncSession, config ps.InitialSyncConfig) (int, error) {
 	s.logSyncEvent(ctx, session, "price", "", "sync_started", "Starting price sync", nil)
 
 	processed := 0
@@ -332,7 +228,7 @@ func (s *InitialSyncService) syncPrices(ctx context.Context, session *db.Payment
 		psPrice := mapStripePriceToPSPrice(stripePrice)
 
 		// Create or update price in database
-		err := s.upsertPrice(ctx, session, psPrice)
+		err := s.UpsertPrice(ctx, session, psPrice)
 		if err != nil {
 			s.logger.Error("Failed to upsert price",
 				zap.String("stripe_id", stripePrice.ID),
@@ -359,7 +255,7 @@ func (s *InitialSyncService) syncPrices(ctx context.Context, session *db.Payment
 }
 
 // syncSubscriptions syncs all subscriptions from Stripe
-func (s *InitialSyncService) syncSubscriptions(ctx context.Context, session *db.PaymentSyncSession, config InitialSyncConfig) (int, error) {
+func (s *StripeService) syncSubscriptions(ctx context.Context, session *db.PaymentSyncSession, config ps.InitialSyncConfig) (int, error) {
 	s.logSyncEvent(ctx, session, "subscription", "", "sync_started", "Starting subscription sync", nil)
 
 	processed := 0
@@ -377,7 +273,7 @@ func (s *InitialSyncService) syncSubscriptions(ctx context.Context, session *db.
 		psSubscription := mapStripeSubscriptionToPSSubscription(stripeSubscription)
 
 		// Create or update subscription in database
-		err := s.upsertSubscription(ctx, session, psSubscription)
+		err := s.UpsertSubscription(ctx, session, psSubscription)
 		if err != nil {
 			s.logger.Error("Failed to upsert subscription",
 				zap.String("stripe_id", stripeSubscription.ID),
@@ -404,7 +300,7 @@ func (s *InitialSyncService) syncSubscriptions(ctx context.Context, session *db.
 }
 
 // logSyncEvent logs a sync event to the database
-func (s *InitialSyncService) logSyncEvent(ctx context.Context, session *db.PaymentSyncSession, entityType, entityID, eventType, message string, details map[string]interface{}) {
+func (s *StripeService) logSyncEvent(ctx context.Context, session *db.PaymentSyncSession, entityType, entityID, eventType, message string, details map[string]interface{}) {
 	var entityUUID pgtype.UUID
 	if entityID != "" {
 		if parsed, err := uuid.Parse(entityID); err == nil {
@@ -437,8 +333,8 @@ func (s *InitialSyncService) logSyncEvent(ctx context.Context, session *db.Payme
 	}
 }
 
-// Helper methods for upserting entities
-func (s *InitialSyncService) upsertCustomer(ctx context.Context, session *db.PaymentSyncSession, customer ps.Customer) error {
+// UpsertCustomer creates or updates a customer from payment sync data
+func (s *StripeService) UpsertCustomer(ctx context.Context, session *db.PaymentSyncSession, customer ps.Customer) error {
 	s.logger.Debug("Upserting customer",
 		zap.String("external_id", customer.ExternalID),
 		zap.String("email", customer.Email))
@@ -508,7 +404,8 @@ func (s *InitialSyncService) upsertCustomer(ctx context.Context, session *db.Pay
 	return nil
 }
 
-func (s *InitialSyncService) upsertProduct(ctx context.Context, session *db.PaymentSyncSession, product ps.Product) error {
+// UpsertProduct creates or updates a product from payment sync data
+func (s *StripeService) UpsertProduct(ctx context.Context, session *db.PaymentSyncSession, product ps.Product) error {
 	s.logger.Debug("Upserting product",
 		zap.String("external_id", product.ExternalID),
 		zap.String("name", product.Name))
@@ -591,7 +488,8 @@ func (s *InitialSyncService) upsertProduct(ctx context.Context, session *db.Paym
 	return nil
 }
 
-func (s *InitialSyncService) upsertPrice(ctx context.Context, session *db.PaymentSyncSession, price ps.Price) error {
+// UpsertPrice creates or updates a price from payment sync data
+func (s *StripeService) UpsertPrice(ctx context.Context, session *db.PaymentSyncSession, price ps.Price) error {
 	s.logger.Debug("Upserting price",
 		zap.String("external_id", price.ExternalID),
 		zap.String("product_id", price.ProductID))
@@ -720,7 +618,8 @@ func (s *InitialSyncService) upsertPrice(ctx context.Context, session *db.Paymen
 	return nil
 }
 
-func (s *InitialSyncService) upsertSubscription(ctx context.Context, session *db.PaymentSyncSession, subscription ps.Subscription) error {
+// UpsertSubscription creates or updates a subscription from payment sync data
+func (s *StripeService) UpsertSubscription(ctx context.Context, session *db.PaymentSyncSession, subscription ps.Subscription) error {
 	s.logger.Debug("Upserting subscription",
 		zap.String("external_id", subscription.ExternalID),
 		zap.String("customer_id", subscription.CustomerID))
@@ -885,6 +784,155 @@ func (s *InitialSyncService) upsertSubscription(ctx context.Context, session *db
 
 		s.logger.Debug("Successfully updated subscription", zap.String("external_id", subscription.ExternalID))
 	}
+
+	return nil
+}
+
+// UpsertInvoice creates or updates an invoice from payment sync data
+func (s *StripeService) UpsertInvoice(ctx context.Context, session *db.PaymentSyncSession, invoice ps.Invoice) error {
+	s.logger.Debug("Upserting invoice",
+		zap.String("external_id", invoice.ExternalID),
+		zap.String("customer_id", invoice.CustomerID),
+		zap.String("status", invoice.Status))
+
+	// Marshal line items to JSON
+	lineItemsJSON, err := json.Marshal(invoice.Lines)
+	if err != nil {
+		return fmt.Errorf("failed to marshal invoice line items: %w", err)
+	}
+
+	// Marshal total tax amounts to JSON
+	totalTaxAmountsJSON, err := json.Marshal(invoice.TotalTaxAmounts)
+	if err != nil {
+		return fmt.Errorf("failed to marshal total tax amounts: %w", err)
+	}
+
+	// Marshal metadata to JSON
+	metadataJSON, err := json.Marshal(invoice.Metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal invoice metadata: %w", err)
+	}
+
+	// Try to find corresponding customer by external ID
+	var customerID *uuid.UUID
+	if invoice.CustomerID != "" {
+		existingCustomer, err := s.db.GetCustomerByExternalID(ctx, db.GetCustomerByExternalIDParams{
+			WorkspaceID: session.WorkspaceID,
+			ExternalID:  pgtype.Text{String: invoice.CustomerID, Valid: true},
+		})
+		if err == nil {
+			customerID = &existingCustomer.ID
+		}
+		// If customer not found, we continue without linking (customerID remains nil)
+	}
+
+	// Try to find corresponding subscription by external ID
+	var subscriptionID *uuid.UUID
+	if invoice.SubscriptionID != "" {
+		existingSubscription, err := s.db.GetSubscriptionByExternalID(ctx, db.GetSubscriptionByExternalIDParams{
+			WorkspaceID:     session.WorkspaceID,
+			ExternalID:      pgtype.Text{String: invoice.SubscriptionID, Valid: true},
+			PaymentProvider: pgtype.Text{String: "stripe", Valid: true},
+		})
+		if err == nil {
+			subscriptionID = &existingSubscription.ID
+		}
+		// If subscription not found, we continue without linking
+	}
+
+	// Convert timestamps
+	dueDate := pgtype.Timestamptz{Valid: false}
+	if invoice.DueDate > 0 {
+		dueDate = pgtype.Timestamptz{
+			Time:  time.Unix(invoice.DueDate, 0),
+			Valid: true,
+		}
+	}
+
+	paidAt := pgtype.Timestamptz{Valid: false}
+	if invoice.PaidAt > 0 {
+		paidAt = pgtype.Timestamptz{
+			Time:  time.Unix(invoice.PaidAt, 0),
+			Valid: true,
+		}
+	}
+
+	createdDate := time.Now() // Default to now
+	// Note: ps.Invoice doesn't have CreatedAt, might need to be added to the interface
+	// For now, we'll use the current time
+
+	nextPaymentAttempt := pgtype.Timestamptz{Valid: false}
+	if invoice.NextPaymentAttempt > 0 {
+		nextPaymentAttempt = pgtype.Timestamptz{
+			Time:  time.Unix(invoice.NextPaymentAttempt, 0),
+			Valid: true,
+		}
+	}
+
+	// Convert optional customer and subscription IDs to pgtype.UUID
+	customerUUID := pgtype.UUID{Valid: false}
+	if customerID != nil {
+		customerUUID = pgtype.UUID{Bytes: *customerID, Valid: true}
+	}
+
+	subscriptionUUID := pgtype.UUID{Valid: false}
+	if subscriptionID != nil {
+		subscriptionUUID = pgtype.UUID{Bytes: *subscriptionID, Valid: true}
+	}
+
+	// Convert optional string fields to pgtype.Text
+	externalCustomerID := pgtype.Text{String: invoice.CustomerID, Valid: invoice.CustomerID != ""}
+	externalSubscriptionID := pgtype.Text{String: invoice.SubscriptionID, Valid: invoice.SubscriptionID != ""}
+	collectionMethod := pgtype.Text{String: invoice.CollectionMethod, Valid: invoice.CollectionMethod != ""}
+	invoicePDF := pgtype.Text{String: invoice.InvoicePDF, Valid: invoice.InvoicePDF != ""}
+	hostedInvoiceURL := pgtype.Text{String: invoice.HostedInvoiceURL, Valid: invoice.HostedInvoiceURL != ""}
+	chargeID := pgtype.Text{String: invoice.ChargeID, Valid: invoice.ChargeID != ""}
+	paymentIntentID := pgtype.Text{String: invoice.PaymentIntentID, Valid: invoice.PaymentIntentID != ""}
+	billingReason := pgtype.Text{String: invoice.BillingReason, Valid: invoice.BillingReason != ""}
+	paymentProvider := pgtype.Text{String: "stripe", Valid: true}
+	paymentSyncStatus := pgtype.Text{String: "synced", Valid: true}
+
+	// Call UpsertInvoice function
+	_, err = s.db.UpsertInvoice(ctx, db.UpsertInvoiceParams{
+		WorkspaceID:            session.WorkspaceID,                                          // $1
+		CustomerID:             customerUUID,                                                 // $2
+		SubscriptionID:         subscriptionUUID,                                             // $3
+		ExternalID:             invoice.ExternalID,                                           // $4
+		ExternalCustomerID:     externalCustomerID,                                           // $5
+		ExternalSubscriptionID: externalSubscriptionID,                                       // $6
+		Status:                 invoice.Status,                                               // $7
+		CollectionMethod:       collectionMethod,                                             // $8
+		AmountDue:              int32(invoice.AmountDue),                                     // $9
+		AmountPaid:             int32(invoice.AmountPaid),                                    // $10
+		AmountRemaining:        int32(invoice.AmountRemaining),                               // $11
+		Currency:               invoice.Currency,                                             // $12
+		DueDate:                dueDate,                                                      // $13
+		PaidAt:                 paidAt,                                                       // $14
+		CreatedDate:            pgtype.Timestamptz{Time: createdDate, Valid: true},           // $15
+		InvoicePdf:             invoicePDF,                                                   // $16
+		HostedInvoiceUrl:       hostedInvoiceURL,                                             // $17
+		ChargeID:               chargeID,                                                     // $18
+		PaymentIntentID:        paymentIntentID,                                              // $19
+		LineItems:              lineItemsJSON,                                                // $20
+		TaxAmount:              pgtype.Int4{Int32: int32(invoice.Tax), Valid: true},          // $21
+		TotalTaxAmounts:        totalTaxAmountsJSON,                                          // $22
+		BillingReason:          billingReason,                                                // $23
+		PaidOutOfBand:          pgtype.Bool{Bool: invoice.PaidOutOfBand, Valid: true},        // $24
+		PaymentProvider:        paymentProvider,                                              // $25
+		PaymentSyncStatus:      paymentSyncStatus,                                            // $26
+		PaymentSyncedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},            // $27
+		AttemptCount:           pgtype.Int4{Int32: int32(invoice.AttemptCount), Valid: true}, // $28
+		NextPaymentAttempt:     nextPaymentAttempt,                                           // $29
+		Metadata:               metadataJSON,                                                 // $30
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to upsert invoice: %w", err)
+	}
+
+	s.logger.Debug("Successfully upserted invoice",
+		zap.String("external_id", invoice.ExternalID),
+		zap.String("status", invoice.Status))
 
 	return nil
 }

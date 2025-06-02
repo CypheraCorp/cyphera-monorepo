@@ -260,7 +260,7 @@ func (s *StripeService) CapturePaymentIntent(ctx context.Context, stripePaymentI
 }
 
 // CreateRefund creates a refund for a charge in Stripe.
-func (s *StripeService) CreateRefund(ctx context.Context, chargeExternalID string, paymentIntentExternalID string, amount int64, reason string, metadata map[string]string) (ps.Transaction, error) {
+func (s *StripeService) CreateRefund(ctx context.Context, chargeExternalID string, amount int64, reason string, metadata map[string]string) (ps.Transaction, error) {
 	if s.client == nil {
 		return ps.Transaction{}, fmt.Errorf("stripe client not configured")
 	}
@@ -268,12 +268,11 @@ func (s *StripeService) CreateRefund(ctx context.Context, chargeExternalID strin
 	params := &stripe.RefundCreateParams{
 		Metadata: metadata,
 	}
+
 	if chargeExternalID != "" {
 		params.Charge = stripe.String(chargeExternalID)
-	} else if paymentIntentExternalID != "" {
-		params.PaymentIntent = stripe.String(paymentIntentExternalID)
 	} else {
-		return ps.Transaction{}, fmt.Errorf("either chargeExternalID or paymentIntentExternalID is required to create a refund")
+		return ps.Transaction{}, fmt.Errorf("chargeExternalID is required to create a refund")
 	}
 
 	if amount > 0 {
@@ -336,4 +335,48 @@ func (s *StripeService) CreateRefund(ctx context.Context, chargeExternalID strin
 		ProviderFiatCurrency:  string(stripeRefund.Currency),
 		ProviderStatus:        string(stripeRefund.Status),
 	}, nil
+}
+
+// CreatePaymentIntent creates an intent to collect payment (interface method).
+func (s *StripeService) CreatePaymentIntent(ctx context.Context, amount int64, currency string, customerExternalID string, paymentMethodExternalID string, confirm bool, offSession bool, metadata map[string]string) (ps.Transaction, error) {
+	if s.client == nil {
+		return ps.Transaction{}, fmt.Errorf("stripe client not configured")
+	}
+
+	params := &stripe.PaymentIntentCreateParams{
+		Amount:   stripe.Int64(amount),
+		Currency: stripe.String(currency),
+		Metadata: metadata,
+	}
+
+	if customerExternalID != "" {
+		params.Customer = stripe.String(customerExternalID)
+	}
+
+	if paymentMethodExternalID != "" {
+		params.PaymentMethod = stripe.String(paymentMethodExternalID)
+	}
+
+	if confirm {
+		params.Confirm = stripe.Bool(true)
+	}
+
+	if offSession {
+		params.OffSession = stripe.Bool(true)
+	}
+
+	params.AddExpand("customer")
+	params.AddExpand("payment_method")
+	params.AddExpand("latest_charge.customer")
+	params.AddExpand("invoice")
+
+	s.logger.Info("Creating Stripe PaymentIntent", zap.Any("params", params))
+	newPI, err := s.client.V1PaymentIntents.Create(ctx, params)
+	if err != nil {
+		s.logger.Error("Failed to create Stripe PaymentIntent", zap.Error(err), zap.Any("params", params))
+		return ps.Transaction{}, fmt.Errorf("stripe_service.CreatePaymentIntent: %w", err)
+	}
+
+	s.logger.Info("Successfully created Stripe PaymentIntent", zap.String("stripe_pi_id", newPI.ID))
+	return mapStripePaymentIntentToPSTransaction(newPI), nil
 }

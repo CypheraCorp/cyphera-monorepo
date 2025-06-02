@@ -17,7 +17,15 @@ type Querier interface {
 	ActivateProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	ActivateProductToken(ctx context.Context, id uuid.UUID) (ProductsToken, error)
 	ActivateToken(ctx context.Context, id uuid.UUID) (Token, error)
+	// Bulk Operations for Initial Sync
+	BulkUpdateCustomerSyncStatus(ctx context.Context, arg BulkUpdateCustomerSyncStatusParams) error
+	BulkUpdateInvoiceSyncStatus(ctx context.Context, arg BulkUpdateInvoiceSyncStatusParams) error
+	BulkUpdatePriceSyncStatus(ctx context.Context, arg BulkUpdatePriceSyncStatusParams) error
+	BulkUpdateProductSyncStatus(ctx context.Context, arg BulkUpdateProductSyncStatusParams) error
+	BulkUpdateSubscriptionSyncStatus(ctx context.Context, arg BulkUpdateSubscriptionSyncStatusParams) error
 	CancelSubscription(ctx context.Context, id uuid.UUID) (Subscription, error)
+	// Validation and utility queries
+	CheckWorkspaceHasPaymentProvider(ctx context.Context, arg CheckWorkspaceHasPaymentProviderParams) (bool, error)
 	CompleteSubscription(ctx context.Context, id uuid.UUID) (Subscription, error)
 	CountActiveSubscriptions(ctx context.Context) (int64, error)
 	CountCustomerWallets(ctx context.Context, customerID uuid.UUID) (int64, error)
@@ -27,9 +35,14 @@ type Querier interface {
 	CountDelegationsByDelegator(ctx context.Context, delegator string) (int64, error)
 	CountFailedSubscriptionAttempts(ctx context.Context) (int64, error)
 	CountFailedSubscriptionAttemptsByErrorType(ctx context.Context, errorType SubscriptionEventType) (int64, error)
+	CountInvoicesByProvider(ctx context.Context, arg CountInvoicesByProviderParams) (int64, error)
+	CountInvoicesByStatus(ctx context.Context, arg CountInvoicesByStatusParams) (int64, error)
+	CountInvoicesByWorkspace(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountPricesByProduct(ctx context.Context, productID uuid.UUID) (int64, error)
 	CountPricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountProducts(ctx context.Context, workspaceID uuid.UUID) (int64, error)
+	CountProviderAccountsByProvider(ctx context.Context, providerName string) (int64, error)
+	CountProviderAccountsByWorkspace(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountSubscriptionEventDetails(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountSubscriptionEvents(ctx context.Context) (int64, error)
 	CountSubscriptionEventsBySubscription(ctx context.Context, subscriptionID uuid.UUID) (int64, error)
@@ -42,7 +55,10 @@ type Querier interface {
 	CountSyncSessions(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountSyncSessionsByProvider(ctx context.Context, arg CountSyncSessionsByProviderParams) (int64, error)
 	CountVerifiedCustomerWallets(ctx context.Context, customerID uuid.UUID) (int64, error)
+	// NEW: Count webhook events for a provider
+	CountWebhookEventsByProvider(ctx context.Context, arg CountWebhookEventsByProviderParams) (int64, error)
 	CountWorkspaceCustomers(ctx context.Context, workspaceID uuid.UUID) (int64, error)
+	CountWorkspacePaymentConfigurations(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	CreateCircleUser(ctx context.Context, arg CreateCircleUserParams) (CircleUser, error)
@@ -53,6 +69,7 @@ type Querier interface {
 	CreateDelegationData(ctx context.Context, arg CreateDelegationDataParams) (DelegationDatum, error)
 	CreateFailedRedemptionEvent(ctx context.Context, arg CreateFailedRedemptionEventParams) (SubscriptionEvent, error)
 	CreateFailedSubscriptionAttempt(ctx context.Context, arg CreateFailedSubscriptionAttemptParams) (FailedSubscriptionAttempt, error)
+	CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (Invoice, error)
 	CreateNetwork(ctx context.Context, arg CreateNetworkParams) (Network, error)
 	CreatePrice(ctx context.Context, arg CreatePriceParams) (Price, error)
 	CreatePriceWithSync(ctx context.Context, arg CreatePriceWithSyncParams) (Price, error)
@@ -70,7 +87,14 @@ type Querier interface {
 	CreateToken(ctx context.Context, arg CreateTokenParams) (Token, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWallet(ctx context.Context, arg CreateWalletParams) (Wallet, error)
+	// NEW: Create webhook-specific sync event with all webhook fields
+	CreateWebhookEvent(ctx context.Context, arg CreateWebhookEventParams) (PaymentSyncEvent, error)
 	CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams) (Workspace, error)
+	// Workspace Payment Configuration Queries
+	CreateWorkspacePaymentConfiguration(ctx context.Context, arg CreateWorkspacePaymentConfigurationParams) (WorkspacePaymentConfiguration, error)
+	// workspace_provider_accounts.sql
+	// SQLC queries for generic provider account mapping (Stripe, Chargebee, PayPal, etc.)
+	CreateWorkspaceProviderAccount(ctx context.Context, arg CreateWorkspaceProviderAccountParams) (WorkspaceProviderAccount, error)
 	DeactivateAllProductTokens(ctx context.Context, productID uuid.UUID) error
 	DeactivateAllProductTokensForNetwork(ctx context.Context, arg DeactivateAllProductTokensForNetworkParams) error
 	DeactivateNetwork(ctx context.Context, id uuid.UUID) (Network, error)
@@ -78,6 +102,8 @@ type Querier interface {
 	DeactivateProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	DeactivateProductToken(ctx context.Context, id uuid.UUID) (ProductsToken, error)
 	DeactivateToken(ctx context.Context, id uuid.UUID) (Token, error)
+	DeactivateWorkspacePaymentConfiguration(ctx context.Context, arg DeactivateWorkspacePaymentConfigurationParams) (WorkspacePaymentConfiguration, error)
+	DeactivateWorkspaceProviderAccount(ctx context.Context, arg DeactivateWorkspaceProviderAccountParams) (WorkspaceProviderAccount, error)
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) error
 	DeleteAccount(ctx context.Context, id uuid.UUID) error
 	DeleteCircleUser(ctx context.Context, id uuid.UUID) error
@@ -87,6 +113,7 @@ type Querier interface {
 	DeleteCustomerWalletsByCustomer(ctx context.Context, customerID uuid.UUID) error
 	DeleteDelegationData(ctx context.Context, id uuid.UUID) error
 	DeleteFailedSubscriptionAttempt(ctx context.Context, id uuid.UUID) error
+	DeleteInvoice(ctx context.Context, arg DeleteInvoiceParams) error
 	DeleteNetwork(ctx context.Context, id uuid.UUID) error
 	DeletePrice(ctx context.Context, id uuid.UUID) error
 	DeleteProduct(ctx context.Context, arg DeleteProductParams) error
@@ -99,6 +126,8 @@ type Querier interface {
 	DeleteToken(ctx context.Context, id uuid.UUID) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	DeleteWorkspace(ctx context.Context, id uuid.UUID) error
+	DeleteWorkspacePaymentConfiguration(ctx context.Context, arg DeleteWorkspacePaymentConfigurationParams) (WorkspacePaymentConfiguration, error)
+	DeleteWorkspaceProviderAccount(ctx context.Context, arg DeleteWorkspaceProviderAccountParams) error
 	GetAPIKey(ctx context.Context, arg GetAPIKeyParams) (ApiKey, error)
 	GetAPIKeyByKey(ctx context.Context, keyHash string) (ApiKey, error)
 	GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
@@ -137,20 +166,35 @@ type Querier interface {
 	GetCustomersSyncedByProvider(ctx context.Context, arg GetCustomersSyncedByProviderParams) ([]Customer, error)
 	GetCustomersWithSyncConflicts(ctx context.Context, workspaceID uuid.UUID) ([]Customer, error)
 	GetCustomersWithWorkspaceInfo(ctx context.Context, workspaceID uuid.UUID) ([]GetCustomersWithWorkspaceInfoRow, error)
+	// Get statistics about DLQ processing for monitoring
+	GetDLQProcessingStats(ctx context.Context, arg GetDLQProcessingStatsParams) (GetDLQProcessingStatsRow, error)
 	GetDelegationData(ctx context.Context, id uuid.UUID) (DelegationDatum, error)
 	GetDelegationDataBySignature(ctx context.Context, signature string) (DelegationDatum, error)
 	GetDelegationsByDelegate(ctx context.Context, delegate string) ([]DelegationDatum, error)
 	GetDelegationsByDelegator(ctx context.Context, delegator string) ([]DelegationDatum, error)
+	// Find duplicate webhook events for debugging
+	GetDuplicateWebhookEvents(ctx context.Context, arg GetDuplicateWebhookEventsParams) ([]GetDuplicateWebhookEventsRow, error)
 	GetEntitiesBySyncStatusAndProvider(ctx context.Context, arg GetEntitiesBySyncStatusAndProviderParams) ([]GetEntitiesBySyncStatusAndProviderRow, error)
+	// Cross-Entity Lookup Queries for External IDs
+	GetEntityByExternalID(ctx context.Context, arg GetEntityByExternalIDParams) (GetEntityByExternalIDRow, error)
 	GetExpiredAPIKeys(ctx context.Context) ([]ApiKey, error)
 	GetFailedSubscriptionAttempt(ctx context.Context, id uuid.UUID) (FailedSubscriptionAttempt, error)
+	// Get failed or incomplete sync sessions that can be resumed
+	GetFailedSyncSessionsForRecovery(ctx context.Context, arg GetFailedSyncSessionsForRecoveryParams) ([]GetFailedSyncSessionsForRecoveryRow, error)
+	// Get failed webhook events that are eligible for retry
+	GetFailedWebhooksForRetry(ctx context.Context, arg GetFailedWebhooksForRetryParams) ([]GetFailedWebhooksForRetryRow, error)
 	GetGasToken(ctx context.Context, networkID uuid.UUID) (Token, error)
+	GetInvoiceByExternalID(ctx context.Context, arg GetInvoiceByExternalIDParams) (Invoice, error)
+	GetInvoiceByID(ctx context.Context, arg GetInvoiceByIDParams) (Invoice, error)
+	GetInvoicesByExternalCustomerID(ctx context.Context, arg GetInvoicesByExternalCustomerIDParams) ([]Invoice, error)
+	GetInvoicesByExternalSubscriptionID(ctx context.Context, arg GetInvoicesByExternalSubscriptionIDParams) ([]Invoice, error)
 	GetLatestSubscriptionEvent(ctx context.Context, subscriptionID uuid.UUID) (SubscriptionEvent, error)
 	GetLatestSyncEventsByEntityType(ctx context.Context, sessionID uuid.UUID) ([]PaymentSyncEvent, error)
 	GetLatestSyncSessionByProvider(ctx context.Context, arg GetLatestSyncSessionByProviderParams) (PaymentSyncSession, error)
 	GetNetwork(ctx context.Context, id uuid.UUID) (Network, error)
 	GetNetworkByChainID(ctx context.Context, chainID int32) (Network, error)
 	GetNetworkByCircleNetworkType(ctx context.Context, circleNetworkType CircleNetworkType) (Network, error)
+	GetOverdueInvoices(ctx context.Context, arg GetOverdueInvoicesParams) ([]Invoice, error)
 	GetOverdueSubscriptions(ctx context.Context) ([]Subscription, error)
 	GetPrice(ctx context.Context, id uuid.UUID) (Price, error)
 	GetPriceByExternalID(ctx context.Context, arg GetPriceByExternalIDParams) (Price, error)
@@ -176,6 +220,13 @@ type Querier interface {
 	GetProductsNeedingSync(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	GetProductsSyncedByProvider(ctx context.Context, arg GetProductsSyncedByProviderParams) ([]Product, error)
 	GetProductsWithSyncConflicts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
+	GetProviderAccountByID(ctx context.Context, arg GetProviderAccountByIDParams) (WorkspaceProviderAccount, error)
+	// Get a specific provider account for a workspace
+	GetProviderAccountByWorkspace(ctx context.Context, arg GetProviderAccountByWorkspaceParams) (WorkspaceProviderAccount, error)
+	GetProviderSyncStatusByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]GetProviderSyncStatusByWorkspaceRow, error)
+	GetRecentInvoices(ctx context.Context, arg GetRecentInvoicesParams) ([]Invoice, error)
+	// Get recent webhook processing errors for monitoring
+	GetRecentWebhookErrors(ctx context.Context, arg GetRecentWebhookErrorsParams) ([]GetRecentWebhookErrorsRow, error)
 	GetRecentlyUsedWallets(ctx context.Context, arg GetRecentlyUsedWalletsParams) ([]Wallet, error)
 	GetRecentlyUsedWalletsWithCircleData(ctx context.Context, arg GetRecentlyUsedWalletsWithCircleDataParams) ([]GetRecentlyUsedWalletsWithCircleDataRow, error)
 	GetSubscription(ctx context.Context, id uuid.UUID) (Subscription, error)
@@ -195,11 +246,14 @@ type Querier interface {
 	GetSyncEvent(ctx context.Context, id uuid.UUID) (PaymentSyncEvent, error)
 	GetSyncEventsByExternalID(ctx context.Context, arg GetSyncEventsByExternalIDParams) ([]PaymentSyncEvent, error)
 	GetSyncEventsSummaryBySession(ctx context.Context, sessionID uuid.UUID) (GetSyncEventsSummaryBySessionRow, error)
+	// Get detailed progress for a sync session by entity type
+	GetSyncProgressByEntityType(ctx context.Context, sessionID uuid.UUID) ([]GetSyncProgressByEntityTypeRow, error)
 	GetSyncSession(ctx context.Context, arg GetSyncSessionParams) (PaymentSyncSession, error)
 	GetSyncSessionByProvider(ctx context.Context, arg GetSyncSessionByProviderParams) (PaymentSyncSession, error)
 	GetToken(ctx context.Context, id uuid.UUID) (Token, error)
 	GetTokenByAddress(ctx context.Context, arg GetTokenByAddressParams) (Token, error)
 	GetTotalAmountBySubscription(ctx context.Context, subscriptionID uuid.UUID) (interface{}, error)
+	GetUnpaidInvoices(ctx context.Context, arg GetUnpaidInvoicesParams) ([]Invoice, error)
 	GetUserAccount(ctx context.Context, id uuid.UUID) (GetUserAccountRow, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
@@ -211,7 +265,39 @@ type Querier interface {
 	GetWalletWithCircleDataByID(ctx context.Context, arg GetWalletWithCircleDataByIDParams) (GetWalletWithCircleDataByIDRow, error)
 	GetWalletsByENS(ctx context.Context, workspaceID uuid.UUID) ([]Wallet, error)
 	GetWalletsWithSimilarAddress(ctx context.Context, arg GetWalletsWithSimilarAddressParams) ([]CustomerWallet, error)
+	// NEW: Check for duplicate webhook processing using idempotency key
+	GetWebhookEventByIdempotencyKey(ctx context.Context, arg GetWebhookEventByIdempotencyKeyParams) (PaymentSyncEvent, error)
+	// NEW: Get webhook event by provider's event ID
+	GetWebhookEventByProviderEventID(ctx context.Context, arg GetWebhookEventByProviderEventIDParams) (PaymentSyncEvent, error)
+	// Get full webhook event details for replay functionality
+	GetWebhookEventForReplay(ctx context.Context, arg GetWebhookEventForReplayParams) (GetWebhookEventForReplayRow, error)
+	// Get webhook events within a specific time range for analysis
+	GetWebhookEventsByTimeRange(ctx context.Context, arg GetWebhookEventsByTimeRangeParams) ([]GetWebhookEventsByTimeRangeRow, error)
+	// NEW: Get webhook processing summary for a provider
+	GetWebhookEventsSummaryByProvider(ctx context.Context, arg GetWebhookEventsSummaryByProviderParams) (GetWebhookEventsSummaryByProviderRow, error)
+	// Get overall webhook health for a workspace and provider
+	GetWebhookHealthStatus(ctx context.Context, arg GetWebhookHealthStatusParams) (GetWebhookHealthStatusRow, error)
+	// Get webhook processing statistics for monitoring
+	GetWebhookProcessingStats(ctx context.Context, arg GetWebhookProcessingStatsParams) (GetWebhookProcessingStatsRow, error)
 	GetWorkspace(ctx context.Context, id uuid.UUID) (Workspace, error)
+	GetWorkspaceActiveProviders(ctx context.Context, workspaceID uuid.UUID) ([]string, error)
+	// Critical query for webhook routing - maps provider account ID to workspace
+	GetWorkspaceByProviderAccount(ctx context.Context, arg GetWorkspaceByProviderAccountParams) (GetWorkspaceByProviderAccountRow, error)
+	// webhook_management.sql
+	// Specialized queries for multi-provider webhook processing in AWS Lambda
+	// Combined query to get workspace and configuration for webhook processing
+	GetWorkspaceConfigForWebhook(ctx context.Context, arg GetWorkspaceConfigForWebhookParams) (GetWorkspaceConfigForWebhookRow, error)
+	GetWorkspacePaymentConfiguration(ctx context.Context, arg GetWorkspacePaymentConfigurationParams) (WorkspacePaymentConfiguration, error)
+	GetWorkspacePaymentConfigurationByConnectedAccount(ctx context.Context, arg GetWorkspacePaymentConfigurationByConnectedAccountParams) (WorkspacePaymentConfiguration, error)
+	GetWorkspacePaymentConfigurationByID(ctx context.Context, arg GetWorkspacePaymentConfigurationByIDParams) (WorkspacePaymentConfiguration, error)
+	GetWorkspacePaymentConfigurationByWebhookURL(ctx context.Context, webhookEndpointUrl pgtype.Text) (WorkspacePaymentConfiguration, error)
+	// Optimized query for webhook processing - includes all needed data
+	GetWorkspaceProviderAccountForWebhook(ctx context.Context, arg GetWorkspaceProviderAccountForWebhookParams) (GetWorkspaceProviderAccountForWebhookRow, error)
+	// Workspace Provider Configuration Queries (using workspace metadata for now)
+	GetWorkspaceProviderConfig(ctx context.Context, id uuid.UUID) (GetWorkspaceProviderConfigRow, error)
+	// Additional Workspace-specific Queries
+	GetWorkspaceSyncSummary(ctx context.Context, id uuid.UUID) (GetWorkspaceSyncSummaryRow, error)
+	GetWorkspacesByProvider(ctx context.Context, metadata []byte) ([]Workspace, error)
 	HardDeleteAccount(ctx context.Context, id uuid.UUID) error
 	HardDeleteWorkspace(ctx context.Context, id uuid.UUID) error
 	IncrementSubscriptionRedemption(ctx context.Context, arg IncrementSubscriptionRedemptionParams) (Subscription, error)
@@ -222,8 +308,11 @@ type Querier interface {
 	ListActivePricesByProduct(ctx context.Context, productID uuid.UUID) ([]Price, error)
 	ListActivePricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]Price, error)
 	ListActiveProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
+	// Get list of active providers for a workspace
+	ListActiveProviders(ctx context.Context, workspaceID uuid.UUID) ([]string, error)
 	ListActiveSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListActiveTokensByNetwork(ctx context.Context, networkID uuid.UUID) ([]Token, error)
+	ListActiveWorkspacePaymentConfigurations(ctx context.Context, workspaceID uuid.UUID) ([]WorkspacePaymentConfiguration, error)
 	ListCircleUsers(ctx context.Context) ([]CircleUser, error)
 	ListCircleWalletsByCircleUserID(ctx context.Context, circleUserID uuid.UUID) ([]ListCircleWalletsByCircleUserIDRow, error)
 	ListCircleWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListCircleWalletsByWorkspaceIDRow, error)
@@ -238,6 +327,14 @@ type Querier interface {
 	ListFailedSubscriptionAttemptsByWalletAddress(ctx context.Context, walletAddress string) ([]FailedSubscriptionAttempt, error)
 	ListFailedSubscriptionAttemptsWithPagination(ctx context.Context, arg ListFailedSubscriptionAttemptsWithPaginationParams) ([]FailedSubscriptionAttempt, error)
 	ListFailedSubscriptionEvents(ctx context.Context) ([]SubscriptionEvent, error)
+	// NEW: List webhook events that failed processing
+	ListFailedWebhookEvents(ctx context.Context, arg ListFailedWebhookEventsParams) ([]PaymentSyncEvent, error)
+	ListInvoicesByCustomer(ctx context.Context, arg ListInvoicesByCustomerParams) ([]Invoice, error)
+	ListInvoicesByProvider(ctx context.Context, arg ListInvoicesByProviderParams) ([]Invoice, error)
+	ListInvoicesByStatus(ctx context.Context, arg ListInvoicesByStatusParams) ([]Invoice, error)
+	ListInvoicesBySubscription(ctx context.Context, arg ListInvoicesBySubscriptionParams) ([]Invoice, error)
+	ListInvoicesBySyncStatus(ctx context.Context, arg ListInvoicesBySyncStatusParams) ([]Invoice, error)
+	ListInvoicesByWorkspace(ctx context.Context, arg ListInvoicesByWorkspaceParams) ([]Invoice, error)
 	ListNetworks(ctx context.Context, arg ListNetworksParams) ([]Network, error)
 	ListPricesByProduct(ctx context.Context, productID uuid.UUID) ([]Price, error)
 	ListPricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]Price, error)
@@ -246,6 +343,10 @@ type Querier interface {
 	ListPrimaryWalletsWithCircleDataByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListPrimaryWalletsWithCircleDataByWorkspaceIDRow, error)
 	ListProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	ListProductsWithPagination(ctx context.Context, arg ListProductsWithPaginationParams) ([]Product, error)
+	// List all accounts for a specific provider across workspaces
+	ListProviderAccountsByProvider(ctx context.Context, arg ListProviderAccountsByProviderParams) ([]WorkspaceProviderAccount, error)
+	// List all provider accounts for a workspace
+	ListProviderAccountsByWorkspace(ctx context.Context, arg ListProviderAccountsByWorkspaceParams) ([]WorkspaceProviderAccount, error)
 	ListRecentFailedSubscriptionAttempts(ctx context.Context, occurredAt pgtype.Timestamptz) ([]FailedSubscriptionAttempt, error)
 	ListRecentSubscriptionEvents(ctx context.Context, occurredAt pgtype.Timestamptz) ([]SubscriptionEvent, error)
 	ListRecentSubscriptionEventsByType(ctx context.Context, arg ListRecentSubscriptionEventsByTypeParams) ([]SubscriptionEvent, error)
@@ -276,13 +377,27 @@ type Querier interface {
 	ListWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]Wallet, error)
 	ListWalletsWithCircleDataByNetworkType(ctx context.Context, arg ListWalletsWithCircleDataByNetworkTypeParams) ([]ListWalletsWithCircleDataByNetworkTypeRow, error)
 	ListWalletsWithCircleDataByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListWalletsWithCircleDataByWorkspaceIDRow, error)
+	// NEW: List webhook events specifically (those with webhook_event_id)
+	ListWebhookEventsByProvider(ctx context.Context, arg ListWebhookEventsByProviderParams) ([]PaymentSyncEvent, error)
 	ListWorkspaceCustomers(ctx context.Context, id uuid.UUID) ([]Customer, error)
 	ListWorkspaceCustomersWithPagination(ctx context.Context, arg ListWorkspaceCustomersWithPaginationParams) ([]Customer, error)
+	ListWorkspacePaymentConfigurations(ctx context.Context, arg ListWorkspacePaymentConfigurationsParams) ([]WorkspacePaymentConfiguration, error)
+	ListWorkspacePaymentConfigurationsByProvider(ctx context.Context, providerName string) ([]WorkspacePaymentConfiguration, error)
 	ListWorkspaces(ctx context.Context) ([]Workspace, error)
 	ListWorkspacesByAccountID(ctx context.Context, accountID uuid.UUID) ([]Workspace, error)
 	LockSubscriptionForProcessing(ctx context.Context, id uuid.UUID) (Subscription, error)
+	// Log DLQ processing attempt
+	LogDLQProcessingAttempt(ctx context.Context, arg LogDLQProcessingAttemptParams) (PaymentSyncEvent, error)
+	// Log incoming webhook before processing
+	LogWebhookReceived(ctx context.Context, arg LogWebhookReceivedParams) (PaymentSyncEvent, error)
 	// Set a specific customer wallet as primary
 	MarkCustomerWalletAsPrimary(ctx context.Context, id uuid.UUID) (CustomerWallet, error)
+	// Mark a webhook event for retry processing
+	MarkWebhookForRetry(ctx context.Context, id uuid.UUID) (PaymentSyncEvent, error)
+	// Create a new event record for webhook replay
+	ReplayWebhookEvent(ctx context.Context, arg ReplayWebhookEventParams) (PaymentSyncEvent, error)
+	// Resume a failed sync session by updating its status
+	ResumeSyncSession(ctx context.Context, arg ResumeSyncSessionParams) (PaymentSyncSession, error)
 	SearchAccounts(ctx context.Context, arg SearchAccountsParams) ([]Account, error)
 	SearchWallets(ctx context.Context, arg SearchWalletsParams) ([]Wallet, error)
 	SearchWalletsWithCircleData(ctx context.Context, arg SearchWalletsWithCircleDataParams) ([]SearchWalletsWithCircleDataRow, error)
@@ -302,6 +417,10 @@ type Querier interface {
 	UpdateCustomerWalletUsageTime(ctx context.Context, id uuid.UUID) (CustomerWallet, error)
 	UpdateCustomerWithSync(ctx context.Context, arg UpdateCustomerWithSyncParams) (Customer, error)
 	UpdateDelegationData(ctx context.Context, arg UpdateDelegationDataParams) (DelegationDatum, error)
+	UpdateInvoice(ctx context.Context, arg UpdateInvoiceParams) (Invoice, error)
+	UpdateInvoiceSyncStatus(ctx context.Context, arg UpdateInvoiceSyncStatusParams) (Invoice, error)
+	// Update the last webhook received time for a workspace configuration
+	UpdateLastWebhookTime(ctx context.Context, arg UpdateLastWebhookTimeParams) error
 	UpdateNetwork(ctx context.Context, arg UpdateNetworkParams) (Network, error)
 	UpdatePrice(ctx context.Context, arg UpdatePriceParams) (Price, error)
 	UpdatePricePaymentSyncStatus(ctx context.Context, arg UpdatePricePaymentSyncStatusParams) (Price, error)
@@ -327,7 +446,20 @@ type Querier interface {
 	UpdateWallet(ctx context.Context, arg UpdateWalletParams) (Wallet, error)
 	UpdateWalletLastUsed(ctx context.Context, id uuid.UUID) error
 	UpdateWalletVerificationStatus(ctx context.Context, arg UpdateWalletVerificationStatusParams) (Wallet, error)
+	// NEW: Update processing attempts for retry logic
+	UpdateWebhookEventProcessingAttempts(ctx context.Context, arg UpdateWebhookEventProcessingAttemptsParams) (PaymentSyncEvent, error)
+	// Update webhook processing status (success/failure)
+	UpdateWebhookProcessingStatus(ctx context.Context, arg UpdateWebhookProcessingStatusParams) (PaymentSyncEvent, error)
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
+	UpdateWorkspacePaymentConfiguration(ctx context.Context, arg UpdateWorkspacePaymentConfigurationParams) (WorkspacePaymentConfiguration, error)
+	UpdateWorkspacePaymentConfigurationConfig(ctx context.Context, arg UpdateWorkspacePaymentConfigurationConfigParams) (WorkspacePaymentConfiguration, error)
+	UpdateWorkspacePaymentConfigurationLastSync(ctx context.Context, arg UpdateWorkspacePaymentConfigurationLastSyncParams) (WorkspacePaymentConfiguration, error)
+	UpdateWorkspacePaymentConfigurationLastWebhook(ctx context.Context, arg UpdateWorkspacePaymentConfigurationLastWebhookParams) (WorkspacePaymentConfiguration, error)
+	UpdateWorkspaceProviderAccount(ctx context.Context, arg UpdateWorkspaceProviderAccountParams) (WorkspaceProviderAccount, error)
+	UpdateWorkspaceProviderConfig(ctx context.Context, arg UpdateWorkspaceProviderConfigParams) (Workspace, error)
+	UpsertInvoice(ctx context.Context, arg UpsertInvoiceParams) (Invoice, error)
+	// Check if provider account ID already exists (for constraint validation)
+	ValidateProviderAccountUnique(ctx context.Context, arg ValidateProviderAccountUniqueParams) (int64, error)
 	VerifyCustomerWallet(ctx context.Context, id uuid.UUID) (CustomerWallet, error)
 }
 

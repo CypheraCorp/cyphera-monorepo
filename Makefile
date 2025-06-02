@@ -1,4 +1,4 @@
-.PHONY: all build install test clean lint run swag deploy test-all test-integration stop-integration-server ensure-executable proto-build-go proto-build-js proto-build-all subscription-processor delegation-server delegation-server-setup delegation-server-build delegation-server-start delegation-server-mock delegation-server-test delegation-server-lint
+.PHONY: all build install test clean lint run swag deploy test-all test-integration stop-integration-server ensure-executable proto-build-go proto-build-js proto-build-all subscription-processor delegation-server delegation-server-setup delegation-server-build delegation-server-start delegation-server-mock delegation-server-test delegation-server-lint build-webhook-receiver build-webhook-processor build-webhook-receiver-sam-local build-webhook-processor-sam-local
 
 # Go parameters
 BINARY_NAME=cyphera-api
@@ -175,6 +175,10 @@ help:
 	@echo "  make subscription-processor - Run the subscription processor"
 	@echo "  make build-subprocessor - Build the subscription processor binary for Linux/AMD64"
 	@echo "  make build-subprocessor-sam-local - Build bootstrap for SAM local testing (subprocessor)"
+	@echo "  make build-webhook-receiver - Build the webhook receiver binary for Linux/AMD64"
+	@echo "  make build-webhook-processor - Build the webhook processor binary for Linux/AMD64"
+	@echo "  make build-webhook-receiver-sam-local - Build bootstrap for SAM local testing (webhook receiver)"
+	@echo "  make build-webhook-processor-sam-local - Build bootstrap for SAM local testing (webhook processor)"
 	@echo "  make gen            - Generate SQLC code"
 	@echo "  make proto-build-go - Generate Go gRPC code from proto definitions"
 	@echo "  make proto-build-js - Generate Node.js gRPC code from proto definitions"
@@ -214,3 +218,55 @@ build-api-sam-local:
 	@echo "Building main API for SAM local..."
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o bin/bootstrap-api $(MAIN_PACKAGE)
 	@echo "Main API SAM local bootstrap built at bin/bootstrap-api"
+
+# --- Webhook Functions --- #
+WEBHOOK_RECEIVER_PACKAGE=./cmd/webhook-receiver
+WEBHOOK_PROCESSOR_PACKAGE=./cmd/webhook-processor
+
+# Build target for Webhook Receiver (general)
+build-webhook-receiver:
+	@echo "Building webhook receiver binary..."
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o bin/webhook-receiver $(WEBHOOK_RECEIVER_PACKAGE)
+	@echo "Webhook receiver binary built at bin/webhook-receiver"
+
+# Build target for Webhook Processor (general)
+build-webhook-processor:
+	@echo "Building webhook processor binary..."
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o bin/webhook-processor $(WEBHOOK_PROCESSOR_PACKAGE)
+	@echo "Webhook processor binary built at bin/webhook-processor"
+
+# Target for SAM Build Process (WebhookReceiverFunction matches template Logical ID)
+build-WebhookReceiverFunction:
+	@echo "Building webhook receiver directly into SAM artifacts dir: $(ARTIFACTS_DIR)"
+	mkdir -p $(ARTIFACTS_DIR)
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o $(ARTIFACTS_DIR)/webhook-receiver $(WEBHOOK_RECEIVER_PACKAGE)
+	@echo "Webhook receiver built successfully in $(ARTIFACTS_DIR)"
+
+# Target for SAM Build Process (WebhookProcessorFunction matches template Logical ID)
+build-WebhookProcessorFunction:
+	@echo "Building webhook processor directly into SAM artifacts dir: $(ARTIFACTS_DIR)"
+	mkdir -p $(ARTIFACTS_DIR)
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o $(ARTIFACTS_DIR)/webhook-processor $(WEBHOOK_PROCESSOR_PACKAGE)
+	@echo "Webhook processor built successfully in $(ARTIFACTS_DIR)"
+
+# Build target for Webhook Processor SAM deployment (creates bootstrap)
+build-webhook-processor-sam-local:
+	@echo "Building webhook processor bootstrap for SAM local..."
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o $(ARTIFACTS_DIR)/bootstrap $(WEBHOOK_PROCESSOR_PACKAGE)
+	@echo "Webhook processor bootstrap built successfully in $(ARTIFACTS_DIR)"
+
+# Build target for Webhook Receiver SAM deployment (creates bootstrap)  
+build-webhook-receiver-sam-local:
+	@echo "Building webhook receiver bootstrap for SAM local..."
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o $(ARTIFACTS_DIR)/bootstrap $(WEBHOOK_RECEIVER_PACKAGE)
+	@echo "Webhook receiver bootstrap built successfully in $(ARTIFACTS_DIR)"
+
+# Build DLQ processor binary for Lambda deployment
+build-dlq-processor:
+	@echo "Building DLQ processor binary..."
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/dlq-processor ./cmd/dlq-processor
+	@echo "DLQ processor binary built at bin/dlq-processor"
+
+# Build all Lambda functions
+build-lambda-all: build-webhook-receiver build-webhook-processor build-dlq-processor
+	@echo "All Lambda functions built successfully"
