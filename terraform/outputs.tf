@@ -10,6 +10,47 @@ output "rds_arn" {
   value       = aws_db_instance.main.arn
 }
 
+# Output for RDS secret ARN (required by SAM)
+output "rds_secret_arn" {
+  description = "The ARN of the RDS master user secret"
+  value       = aws_db_instance.main.master_user_secret[0].secret_arn
+}
+
+# Output for RDS host (without port)
+output "db_host" {
+  description = "The RDS host without port"
+  value       = aws_db_instance.main.address
+}
+
+# Output for Lambda Security Group ID (required by SAM)
+output "lambda_security_group_id" {
+  description = "The Security Group ID for Lambda functions"
+  value       = aws_security_group.lambda.id
+}
+
+# Output for Private Subnet IDs (required by SAM)
+output "private_subnet_1_id" {
+  description = "The ID of the first private subnet"
+  value       = module.vpc.private_subnets[0]
+}
+
+output "private_subnet_2_id" {
+  description = "The ID of the second private subnet"
+  value       = module.vpc.private_subnets[1]
+}
+
+# Output for Payment Sync Encryption Key ARN (required by SAM)
+output "payment_sync_encryption_key_secret_arn" {
+  description = "The ARN of the payment sync encryption key secret"
+  value       = aws_secretsmanager_secret.payment_sync_encryption_key.arn
+}
+
+# Output for Webhook Secrets Manager Policy ARN (required by SAM)
+output "webhook_secrets_manager_policy_arn" {
+  description = "The ARN of the webhook secrets manager policy"
+  value       = aws_iam_policy.webhook_secrets_policy.arn
+}
+
 # --- SSM Parameter for Lambda Security Group ID ---
 # Store the Lambda SG ID in SSM for lookup by Serverless Framework
 resource "aws_ssm_parameter" "lambda_sg_id" {
@@ -109,4 +150,13 @@ output "pimlico_api_key_secret_arn" {
 output "pimlico_api_key_ssm_parameter_name" {
   description = "Name of the SSM parameter storing the Pimlico API Key secret ARN"
   value       = aws_ssm_parameter.pimlico_api_key_arn.name
+}
+
+# ===============================================
+# Note: Webhook infrastructure outputs moved to SAM template
+# ===============================================
+
+output "webhook_infrastructure_note" {
+  description = "Webhook infrastructure deployment information"
+  value = "Webhook API Gateway, Lambda functions, and related resources are deployed via SAM. See deployment/template-webhook.yaml"
 } 

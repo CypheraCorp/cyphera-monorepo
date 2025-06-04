@@ -34,6 +34,12 @@ bin/
 .env
 .env.prod
 
+# Payment sync encryption secrets (NEVER COMMIT THESE!)
+*_encryption_secret.txt
+dev_encryption_secret.txt
+prod_encryption_secret.txt
+staging_encryption_secret.txt
+
 # Terraform
 terraform/.terraform/
 
@@ -59,3 +65,7 @@ cmd/delegation-integration-test/integration-test
 
 bootstrap
 .aws-sam/
+
+# Test results
+*.xml
+coverage.txt

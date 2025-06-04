@@ -33,7 +33,7 @@ variable "prod_backup_retention_period" {
 
 variable "nate_machine_ip" {
   description = "Development machine IP address for RDS access"
-  default     = "151.204.139.74/32"  # Your current IP
+  default     = "151.204.139.74/32" # Your current IP
 }
 
 variable "service_prefix" {
@@ -84,6 +84,17 @@ variable "pimlico_api_key_value" {
 
 variable "delegation_private_key_value" {
   description = "The actual private key string for the delegation server. Used to create the secret in AWS Secrets Manager."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+# ===============================================
+# Multi-Provider Webhook Variables
+# ===============================================
+
+variable "payment_sync_encryption_key_value" {
+  description = "AES-256 encryption key for encrypting payment sync configuration data"
   type        = string
   sensitive   = true
   default     = ""

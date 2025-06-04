@@ -208,7 +208,7 @@ func (q *Queries) HardDeleteWorkspace(ctx context.Context, id uuid.UUID) error {
 }
 
 const listWorkspaceCustomers = `-- name: ListWorkspaceCustomers :many
-SELECT c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.created_at, c.updated_at, c.deleted_at FROM customers c
+SELECT c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at FROM customers c
 INNER JOIN workspaces w ON c.workspace_id = w.id
 WHERE w.id = $1 AND c.deleted_at IS NULL
 ORDER BY c.created_at DESC
@@ -232,6 +232,10 @@ func (q *Queries) ListWorkspaceCustomers(ctx context.Context, id uuid.UUID) ([]C
 			&i.Phone,
 			&i.Description,
 			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -248,7 +252,7 @@ func (q *Queries) ListWorkspaceCustomers(ctx context.Context, id uuid.UUID) ([]C
 
 const listWorkspaceCustomersWithPagination = `-- name: ListWorkspaceCustomersWithPagination :many
 SELECT 
-    c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.created_at, c.updated_at, c.deleted_at
+    c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at
 FROM customers c
 JOIN workspaces w ON c.workspace_id = w.id
 WHERE w.id = $1 AND c.deleted_at IS NULL
@@ -280,6 +284,10 @@ func (q *Queries) ListWorkspaceCustomersWithPagination(ctx context.Context, arg 
 			&i.Phone,
 			&i.Description,
 			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,

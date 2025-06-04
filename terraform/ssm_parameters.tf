@@ -3,7 +3,7 @@
 resource "aws_ssm_parameter" "supabase_url" {
   name        = "/cyphera/supabase/url-${var.stage}"
   description = "Supabase URL for stage ${var.stage}"
-  type        = "SecureString" # Store as SecureString
+  type        = "SecureString"                # Store as SecureString
   value       = "dummy-value-update-manually" # Placeholder - **MUST BE UPDATED MANUALLY IN AWS CONSOLE**
   tags        = local.common_tags
   # Ignore subsequent changes to value, allow manual updates
@@ -15,7 +15,7 @@ resource "aws_ssm_parameter" "supabase_url" {
 resource "aws_ssm_parameter" "smart_wallet_address" {
   name        = "/cyphera/wallet/smart-wallet-address-${var.stage}"
   description = "Cyphera Smart Wallet Address for stage ${var.stage}"
-  type        = "SecureString" # Store as SecureString
+  type        = "SecureString"                # Store as SecureString
   value       = "dummy-value-update-manually" # Placeholder - **MUST BE UPDATED MANUALLY IN AWS CONSOLE**
   tags        = local.common_tags
   # Ignore subsequent changes to value, allow manual updates
@@ -27,7 +27,7 @@ resource "aws_ssm_parameter" "smart_wallet_address" {
 resource "aws_ssm_parameter" "cors_allowed_origins" {
   name        = "/cyphera/cors/allowed-origins-${var.stage}"
   description = "CORS Allowed Origins for stage ${var.stage} (comma-separated)"
-  type        = "String" # Can be String or SecureString
+  type        = "String"                                                                    # Can be String or SecureString
   value       = var.stage == "dev" ? "http://localhost:3000" : "https://app.cypherapay.com" # Example default, adjust prod
   tags        = local.common_tags
 }
@@ -115,7 +115,7 @@ resource "aws_ssm_parameter" "coin_market_cap_api_key_arn" {
   description = "ARN of the CoinMarketCap API Key secret for Cyphera API - ${var.stage}"
   type        = "String"
   value       = aws_secretsmanager_secret.coin_market_cap_api_key.arn
-  tags = local.common_tags
+  tags        = local.common_tags
   lifecycle {
     ignore_changes = [value] # Avoid unnecessary updates if ARN doesn't change
   }
@@ -149,7 +149,7 @@ resource "aws_ssm_parameter" "delegation_private_key_arn" {
   type        = "String"
   value       = aws_secretsmanager_secret.delegation_private_key.arn # Changed to reference the managed resource
   tags        = local.common_tags
-  lifecycle { 
-    ignore_changes = [value] 
+  lifecycle {
+    ignore_changes = [value]
   }
 }

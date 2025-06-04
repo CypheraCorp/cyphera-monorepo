@@ -611,17 +611,21 @@ type CircleWallet struct {
 }
 
 type Customer struct {
-	ID          uuid.UUID          `json:"id"`
-	WorkspaceID uuid.UUID          `json:"workspace_id"`
-	ExternalID  pgtype.Text        `json:"external_id"`
-	Email       pgtype.Text        `json:"email"`
-	Name        pgtype.Text        `json:"name"`
-	Phone       pgtype.Text        `json:"phone"`
-	Description pgtype.Text        `json:"description"`
-	Metadata    []byte             `json:"metadata"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+	ID                 uuid.UUID          `json:"id"`
+	WorkspaceID        uuid.UUID          `json:"workspace_id"`
+	ExternalID         pgtype.Text        `json:"external_id"`
+	Email              pgtype.Text        `json:"email"`
+	Name               pgtype.Text        `json:"name"`
+	Phone              pgtype.Text        `json:"phone"`
+	Description        pgtype.Text        `json:"description"`
+	Metadata           []byte             `json:"metadata"`
+	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider    pgtype.Text        `json:"payment_provider"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type CustomerWallet struct {
@@ -670,6 +674,43 @@ type FailedSubscriptionAttempt struct {
 	UpdatedAt           pgtype.Timestamptz    `json:"updated_at"`
 }
 
+type Invoice struct {
+	ID                     uuid.UUID          `json:"id"`
+	WorkspaceID            uuid.UUID          `json:"workspace_id"`
+	CustomerID             pgtype.UUID        `json:"customer_id"`
+	SubscriptionID         pgtype.UUID        `json:"subscription_id"`
+	ExternalID             string             `json:"external_id"`
+	ExternalCustomerID     pgtype.Text        `json:"external_customer_id"`
+	ExternalSubscriptionID pgtype.Text        `json:"external_subscription_id"`
+	Status                 string             `json:"status"`
+	CollectionMethod       pgtype.Text        `json:"collection_method"`
+	AmountDue              int32              `json:"amount_due"`
+	AmountPaid             int32              `json:"amount_paid"`
+	AmountRemaining        int32              `json:"amount_remaining"`
+	Currency               string             `json:"currency"`
+	DueDate                pgtype.Timestamptz `json:"due_date"`
+	PaidAt                 pgtype.Timestamptz `json:"paid_at"`
+	CreatedDate            pgtype.Timestamptz `json:"created_date"`
+	InvoicePdf             pgtype.Text        `json:"invoice_pdf"`
+	HostedInvoiceUrl       pgtype.Text        `json:"hosted_invoice_url"`
+	ChargeID               pgtype.Text        `json:"charge_id"`
+	PaymentIntentID        pgtype.Text        `json:"payment_intent_id"`
+	LineItems              []byte             `json:"line_items"`
+	TaxAmount              pgtype.Int4        `json:"tax_amount"`
+	TotalTaxAmounts        []byte             `json:"total_tax_amounts"`
+	BillingReason          pgtype.Text        `json:"billing_reason"`
+	PaidOutOfBand          pgtype.Bool        `json:"paid_out_of_band"`
+	PaymentProvider        pgtype.Text        `json:"payment_provider"`
+	PaymentSyncStatus      pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt        pgtype.Timestamptz `json:"payment_synced_at"`
+	AttemptCount           pgtype.Int4        `json:"attempt_count"`
+	NextPaymentAttempt     pgtype.Timestamptz `json:"next_payment_attempt"`
+	Metadata               []byte             `json:"metadata"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt              pgtype.Timestamptz `json:"deleted_at"`
+}
+
 type Network struct {
 	ID                uuid.UUID          `json:"id"`
 	Name              string             `json:"name"`
@@ -685,9 +726,46 @@ type Network struct {
 	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
 }
 
+type PaymentSyncEvent struct {
+	ID                 uuid.UUID          `json:"id"`
+	SessionID          uuid.UUID          `json:"session_id"`
+	WorkspaceID        uuid.UUID          `json:"workspace_id"`
+	ProviderName       string             `json:"provider_name"`
+	EntityType         string             `json:"entity_type"`
+	EntityID           pgtype.UUID        `json:"entity_id"`
+	ExternalID         pgtype.Text        `json:"external_id"`
+	EventType          string             `json:"event_type"`
+	EventMessage       pgtype.Text        `json:"event_message"`
+	EventDetails       []byte             `json:"event_details"`
+	WebhookEventID     pgtype.Text        `json:"webhook_event_id"`
+	ProviderAccountID  pgtype.Text        `json:"provider_account_id"`
+	IdempotencyKey     pgtype.Text        `json:"idempotency_key"`
+	ProcessingAttempts pgtype.Int4        `json:"processing_attempts"`
+	SignatureValid     pgtype.Bool        `json:"signature_valid"`
+	OccurredAt         pgtype.Timestamptz `json:"occurred_at"`
+}
+
+type PaymentSyncSession struct {
+	ID           uuid.UUID          `json:"id"`
+	WorkspaceID  uuid.UUID          `json:"workspace_id"`
+	ProviderName string             `json:"provider_name"`
+	SessionType  string             `json:"session_type"`
+	Status       string             `json:"status"`
+	EntityTypes  []string           `json:"entity_types"`
+	Config       []byte             `json:"config"`
+	Progress     []byte             `json:"progress"`
+	ErrorSummary []byte             `json:"error_summary"`
+	StartedAt    pgtype.Timestamptz `json:"started_at"`
+	CompletedAt  pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+}
+
 type Price struct {
 	ID                  uuid.UUID          `json:"id"`
 	ProductID           uuid.UUID          `json:"product_id"`
+	ExternalID          pgtype.Text        `json:"external_id"`
 	Active              bool               `json:"active"`
 	Type                PriceType          `json:"type"`
 	Nickname            pgtype.Text        `json:"nickname"`
@@ -696,24 +774,33 @@ type Price struct {
 	IntervalType        IntervalType       `json:"interval_type"`
 	TermLength          int32              `json:"term_length"`
 	Metadata            []byte             `json:"metadata"`
+	PaymentSyncStatus   pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt     pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion  pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider     pgtype.Text        `json:"payment_provider"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type Product struct {
-	ID          uuid.UUID          `json:"id"`
-	WorkspaceID uuid.UUID          `json:"workspace_id"`
-	WalletID    uuid.UUID          `json:"wallet_id"`
-	Name        string             `json:"name"`
-	Description pgtype.Text        `json:"description"`
-	ImageUrl    pgtype.Text        `json:"image_url"`
-	Url         pgtype.Text        `json:"url"`
-	Active      bool               `json:"active"`
-	Metadata    []byte             `json:"metadata"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+	ID                 uuid.UUID          `json:"id"`
+	WorkspaceID        uuid.UUID          `json:"workspace_id"`
+	WalletID           uuid.UUID          `json:"wallet_id"`
+	ExternalID         pgtype.Text        `json:"external_id"`
+	Name               string             `json:"name"`
+	Description        pgtype.Text        `json:"description"`
+	ImageUrl           pgtype.Text        `json:"image_url"`
+	Url                pgtype.Text        `json:"url"`
+	Active             bool               `json:"active"`
+	Metadata           []byte             `json:"metadata"`
+	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider    pgtype.Text        `json:"payment_provider"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type ProductsToken struct {
@@ -734,6 +821,7 @@ type Subscription struct {
 	WorkspaceID        uuid.UUID          `json:"workspace_id"`
 	PriceID            uuid.UUID          `json:"price_id"`
 	ProductTokenID     uuid.UUID          `json:"product_token_id"`
+	ExternalID         pgtype.Text        `json:"external_id"`
 	TokenAmount        int32              `json:"token_amount"`
 	DelegationID       uuid.UUID          `json:"delegation_id"`
 	CustomerWalletID   pgtype.UUID        `json:"customer_wallet_id"`
@@ -744,6 +832,10 @@ type Subscription struct {
 	TotalRedemptions   int32              `json:"total_redemptions"`
 	TotalAmountInCents int32              `json:"total_amount_in_cents"`
 	Metadata           []byte             `json:"metadata"`
+	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider    pgtype.Text        `json:"payment_provider"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
@@ -839,4 +931,37 @@ type Workspace struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type WorkspacePaymentConfiguration struct {
+	ID                 uuid.UUID          `json:"id"`
+	WorkspaceID        uuid.UUID          `json:"workspace_id"`
+	ProviderName       string             `json:"provider_name"`
+	IsActive           bool               `json:"is_active"`
+	IsTestMode         bool               `json:"is_test_mode"`
+	Configuration      json.RawMessage    `json:"configuration"`
+	WebhookEndpointUrl pgtype.Text        `json:"webhook_endpoint_url"`
+	WebhookSecretKey   pgtype.Text        `json:"webhook_secret_key"`
+	ConnectedAccountID pgtype.Text        `json:"connected_account_id"`
+	LastSyncAt         pgtype.Timestamptz `json:"last_sync_at"`
+	LastWebhookAt      pgtype.Timestamptz `json:"last_webhook_at"`
+	Metadata           []byte             `json:"metadata"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type WorkspaceProviderAccount struct {
+	ID                uuid.UUID          `json:"id"`
+	WorkspaceID       uuid.UUID          `json:"workspace_id"`
+	ProviderName      string             `json:"provider_name"`
+	ProviderAccountID string             `json:"provider_account_id"`
+	AccountType       string             `json:"account_type"`
+	IsActive          bool               `json:"is_active"`
+	Environment       string             `json:"environment"`
+	DisplayName       pgtype.Text        `json:"display_name"`
+	Metadata          []byte             `json:"metadata"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
 }
