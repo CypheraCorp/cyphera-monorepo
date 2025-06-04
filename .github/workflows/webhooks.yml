@@ -415,37 +415,50 @@ jobs:
       run: |
         echo "🧪 Testing webhook receiver function..."
         
-        # Create proper API Gateway event payload for webhook receiver
+        # Create proper API Gateway v1 event payload for webhook receiver
         cat > health_payload.json << 'EOF'
         {
-          "version": "1.0",
-          "routeKey": "GET /health",
-          "rawPath": "/health",
-          "rawQueryString": "",
+          "resource": "/health",
+          "path": "/health",
+          "httpMethod": "GET",
           "headers": {
-            "accept": "application/json",
-            "content-type": "application/json",
-            "user-agent": "GitHub-Actions-HealthCheck/1.0"
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "GitHub-Actions-HealthCheck/1.0"
           },
+          "multiValueHeaders": {},
+          "queryStringParameters": null,
+          "multiValueQueryStringParameters": null,
+          "pathParameters": null,
+          "stageVariables": null,
           "requestContext": {
             "accountId": "123456789012",
             "apiId": "test-api",
-            "domainName": "test.execute-api.us-east-1.amazonaws.com",
-            "http": {
-              "method": "GET",
-              "path": "/health",
-              "protocol": "HTTP/1.1",
-              "sourceIp": "127.0.0.1",
-              "userAgent": "GitHub-Actions-HealthCheck/1.0"
-            },
-            "requestId": "health-check-test",
-            "routeKey": "GET /health",
+            "protocol": "HTTP/1.1",
+            "httpMethod": "GET",
+            "path": "/health",
             "stage": "${{ env.STAGE }}",
-            "time": "01/Jan/2024:00:00:00 +0000",
-            "timeEpoch": 1704067200000
+            "requestId": "health-check-test",
+            "requestTime": "01/Jan/2024:00:00:00 +0000",
+            "requestTimeEpoch": 1704067200,
+            "identity": {
+              "cognitoIdentityPoolId": null,
+              "cognitoIdentityId": null,
+              "apiKey": null,
+              "principalOrgId": null,
+              "cognitoAuthenticationType": null,
+              "userArn": null,
+              "apiKeyId": null,
+              "userAgent": "GitHub-Actions-HealthCheck/1.0",
+              "accountId": null,
+              "cognitoAuthenticationProvider": null,
+              "sourceIp": "127.0.0.1",
+              "accessKey": null
+            },
+            "resourcePath": "/health",
+            "authorizer": null
           },
-          "pathParameters": null,
-          "body": "",
+          "body": null,
           "isBase64Encoded": false
         }
         EOF
@@ -459,19 +472,24 @@ jobs:
           --cli-read-timeout 60 \
           --cli-connect-timeout 60 \
           health_response.json; then
-          
+        
           echo "✅ Webhook receiver invocation successful"
           echo "Response:"
           cat health_response.json
-          
+        
           # Check for successful response
-          if grep -q '"statusCode": 200' health_response.json; then
+          if grep -q '"StatusCode": 200' health_response.json || grep -q '"statusCode": 200' health_response.json; then
             echo "✅ Webhook receiver health check passed with HTTP 200"
-          elif grep -q '"statusCode"' health_response.json; then
-            STATUS_CODE=$(grep -o '"statusCode": [0-9]*' health_response.json | grep -o '[0-9]*')
+          elif grep -q '"StatusCode"' health_response.json || grep -q '"statusCode"' health_response.json; then
+            STATUS_CODE=$(grep -o '"[Ss]tatusCode": [0-9]*' health_response.json | grep -o '[0-9]*')
             echo "⚠️ Webhook receiver responded with status code: $STATUS_CODE"
+            # Print the response body for debugging
+            BODY=$(grep -o '"Body": "[^"]*"' health_response.json | cut -d'"' -f4)
+            echo "Response body: $BODY"
           else
             echo "⚠️ Webhook receiver health check inconclusive - no status code found"
+            echo "Full response for debugging:"
+            cat health_response.json
           fi
         else
           echo "❌ Failed to invoke webhook receiver function"
@@ -498,11 +516,11 @@ jobs:
           --cli-read-timeout 60 \
           --cli-connect-timeout 60 \
           processor_response.json; then
-          
+        
           echo "✅ Webhook processor invocation successful"
           echo "Response:"
-          cat processor_response.json
-          
+        cat processor_response.json
+        
           # Check for errors in response
           if grep -q '"errorMessage"' processor_response.json; then
             echo "⚠️ Webhook processor returned an error - this might be expected for empty event"
@@ -535,11 +553,11 @@ jobs:
           --cli-read-timeout 60 \
           --cli-connect-timeout 60 \
           dlq_response.json; then
-          
+        
           echo "✅ DLQ processor invocation successful"
           echo "Response:"
-          cat dlq_response.json
-          
+        cat dlq_response.json
+        
           # Check for errors in response
           if grep -q '"errorMessage"' dlq_response.json; then
             echo "⚠️ DLQ processor returned an error - this might be expected for empty event"

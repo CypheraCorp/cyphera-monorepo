@@ -41,11 +41,17 @@ type Application struct {
 func (app *Application) HandleAPIGatewayRequest(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	logger.Info("Webhook receiver handling API Gateway request",
 		zap.String("path", request.Path),
-		zap.String("method", request.HTTPMethod))
+		zap.String("method", request.HTTPMethod),
+		zap.Any("pathParameters", request.PathParameters))
 
-	// Handle health check requests
-	if request.Path == "/health" && request.HTTPMethod == "GET" {
-		logger.Info("Health check requested")
+	// Handle health check requests - check multiple path formats
+	isHealthCheck := request.HTTPMethod == "GET" && (request.Path == "/health" ||
+		strings.HasSuffix(request.Path, "/health") ||
+		strings.Contains(request.Path, "/health"))
+
+	if isHealthCheck {
+		logger.Info("Health check requested",
+			zap.String("path", request.Path))
 		return events.APIGatewayProxyResponse{
 			StatusCode: 200,
 			Body:       `{"status": "healthy", "service": "webhook-receiver", "timestamp": "` + time.Now().Format(time.RFC3339) + `"}`,
@@ -56,21 +62,16 @@ func (app *Application) HandleAPIGatewayRequest(ctx context.Context, request eve
 	}
 
 	// Extract provider from path (e.g., /webhooks/stripe)
-	provider := request.PathParameters["provider"]
-	if provider == "" {
-		// Check if this is a health check request with provider in path
-		if strings.Contains(request.Path, "/health") {
-			logger.Info("Health check requested via provider path")
-			return events.APIGatewayProxyResponse{
-				StatusCode: 200,
-				Body:       `{"status": "healthy", "service": "webhook-receiver", "timestamp": "` + time.Now().Format(time.RFC3339) + `"}`,
-				Headers: map[string]string{
-					"Content-Type": "application/json",
-				},
-			}, nil
-		}
+	// Handle nil PathParameters safely
+	var provider string
+	if request.PathParameters != nil {
+		provider = request.PathParameters["provider"]
+	}
 
-		logger.Error("No provider specified in webhook path")
+	if provider == "" {
+		logger.Error("No provider specified in webhook path",
+			zap.String("path", request.Path),
+			zap.Any("pathParameters", request.PathParameters))
 		return events.APIGatewayProxyResponse{
 			StatusCode: 400,
 			Body:       `{"error": "provider not specified"}`,
