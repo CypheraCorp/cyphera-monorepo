@@ -221,7 +221,7 @@ Resources:
       FunctionName: !Sub "cyphera-dlq-processor-${Stage}"
       CodeUri: ../ # Point to project root relative to template location
       Handler: bootstrap # Standard handler for Go custom runtime
-      Timeout: 900 # Maximum timeout for retry processing
+      Timeout: 300 # Reduced from 900 to 300 seconds to work with SQS visibility timeout
       MemorySize: 1024 # More memory for complex retry logic
       Environment:
         Variables:
