@@ -35,12 +35,17 @@ on:
       - 'internal/client/payment_sync/**'
       - 'internal/handlers/payment_sync_handlers.go'
       - 'internal/handlers/error_recovery_handlers.go'
+      - 'internal/db/webhook_management.sql.go'
+      - 'internal/db/workspace_payment_configurations.sql.go'
+      - 'internal/db/workspace_provider_accounts.sql.go'
+      - 'internal/db/payment_sync.sql.go'
       - '.github/workflows/webhooks.yml'
       - '.github/workflows/deploy-webhook-sam.yml'
       - 'Dockerfile'
       - 'Dockerfile.webhook-receiver'
       - 'Dockerfile.webhook-processor'
       - '.dockerignore'
+      - 'Makefile'
   workflow_dispatch:
     inputs:
       stage:
@@ -109,7 +114,7 @@ jobs:
   test:
     name: Test Webhook Components
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || github.event.inputs.force_deploy == 'true'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
 
     services:
       postgres:
@@ -140,7 +145,6 @@ jobs:
       run: go mod download
 
     - name: Run webhook component tests
-      if: github.event_name == 'pull_request' || github.event.inputs.force_deploy == 'true'
       env:
         DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
         PAYMENT_SYNC_ENCRYPTION_KEY: fake_encryption_key_for_testing_32chars
@@ -160,8 +164,8 @@ jobs:
     name: Deploy Webhook SAM Infrastructure
     needs: [validate, test]
     runs-on: ubuntu-latest
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.event_name == 'workflow_dispatch') && (needs.test.result == 'success' || needs.test.result == 'skipped')
-    environment: ${{ github.event.inputs.stage || (github.ref == 'refs/heads/main' && 'prod' || 'dev') }}
+    if: github.event_name == 'workflow_dispatch' && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    environment: ${{ github.event.inputs.stage || 'dev' }}
 
     steps:
     - uses: actions/checkout@v4
@@ -291,7 +295,7 @@ jobs:
     needs: [deploy]
     runs-on: ubuntu-latest
     if: success()
-    environment: ${{ github.event.inputs.stage || (github.ref == 'refs/heads/main' && 'prod' || 'dev') }}
+    environment: ${{ github.event.inputs.stage || 'dev' }}
 
     steps:
     - uses: actions/checkout@v4
