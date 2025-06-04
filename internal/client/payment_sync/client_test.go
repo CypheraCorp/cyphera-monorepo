@@ -2,6 +2,7 @@ package payment_sync
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"testing"
 
 	"go.uber.org/zap"
@@ -16,9 +17,9 @@ func TestWebhookSecretEncryption(t *testing.T) {
 	_, err := rand.Read(encryptionKey)
 	require.NoError(t, err)
 
-	// Create payment sync client with test key
+	// Create payment sync client with test key (base64 encoded as expected by the function)
 	logger := zap.NewNop()
-	client := NewPaymentSyncClient(nil, logger, string(encryptionKey))
+	client := NewPaymentSyncClient(nil, logger, base64.StdEncoding.EncodeToString(encryptionKey))
 
 	testCases := []struct {
 		name          string
@@ -68,9 +69,9 @@ func TestWebhookSecretEncryptionConsistency(t *testing.T) {
 	_, err := rand.Read(encryptionKey)
 	require.NoError(t, err)
 
-	// Create payment sync client with test key
+	// Create payment sync client with test key (base64 encoded as expected by the function)
 	logger := zap.NewNop()
-	client := NewPaymentSyncClient(nil, logger, string(encryptionKey))
+	client := NewPaymentSyncClient(nil, logger, base64.StdEncoding.EncodeToString(encryptionKey))
 
 	testSecret := "whsec_test_consistency_check"
 
@@ -95,9 +96,9 @@ func TestWebhookSecretDecryptionFailure(t *testing.T) {
 	_, err := rand.Read(encryptionKey)
 	require.NoError(t, err)
 
-	// Create payment sync client with test key
+	// Create payment sync client with test key (base64 encoded as expected by the function)
 	logger := zap.NewNop()
-	client := NewPaymentSyncClient(nil, logger, string(encryptionKey))
+	client := NewPaymentSyncClient(nil, logger, base64.StdEncoding.EncodeToString(encryptionKey))
 
 	testCases := []struct {
 		name      string
