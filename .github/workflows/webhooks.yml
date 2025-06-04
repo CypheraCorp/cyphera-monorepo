@@ -158,13 +158,89 @@ jobs:
         echo "✅ Tests completed"
 
   # ============================================================================
-  # Deploy webhook infrastructure using deployment script
+  # Build webhook Lambda functions (separate job for caching/reuse)
+  # ============================================================================
+  build:
+    name: Build Webhook Lambda Functions
+    needs: [validate]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup SAM CLI
+      uses: aws-actions/setup-sam@v2
+      with:
+        use-installer: true
+
+    - name: Cache SAM build artifacts
+      uses: actions/cache@v3
+      with:
+        path: |
+          .aws-sam/build
+          .aws-sam/cache
+        key: sam-build-${{ runner.os }}-${{ hashFiles('cmd/webhook-receiver/**', 'cmd/webhook-processor/**', 'cmd/dlq-processor/**', 'go.mod', 'go.sum', 'deployment/template-webhook.yaml') }}
+        restore-keys: |
+          sam-build-${{ runner.os }}-
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: go-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          go-${{ runner.os }}-
+
+    - name: SAM Build with optimizations
+      env:
+        SAM_CLI_TELEMETRY: 0
+      run: |
+        echo "🔨 Building webhook Lambda functions with optimizations..."
+        
+        # Use cached build if available and no changes detected
+        if [ -d .aws-sam/build ] && [ -f .aws-sam/build/template.yaml ]; then
+          echo "📦 Found cached build artifacts, checking if rebuild needed..."
+          
+          # Check if any source files are newer than the build
+          if find cmd/webhook-receiver cmd/webhook-processor cmd/dlq-processor -newer .aws-sam/build/template.yaml 2>/dev/null | grep -q .; then
+            echo "🔄 Source files changed, rebuilding..."
+            rm -rf .aws-sam/build
+          else
+            echo "✅ Using cached build artifacts"
+            exit 0
+          fi
+        fi
+        
+        # Build with optimizations
+        sam build \
+          --template deployment/template-webhook.yaml \
+          --use-container \
+          --parallel \
+          --cached \
+          --skip-pull-image
+        
+        echo "✅ Build completed successfully"
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: sam-build-artifacts
+        path: |
+          .aws-sam/build/
+          deployment/template-webhook.yaml
+        retention-days: 1
+
+  # ============================================================================
+  # Deploy webhook infrastructure (separate job, reuses build artifacts)
   # ============================================================================
   deploy:
     name: Deploy Webhook SAM Infrastructure
-    needs: [validate, test]
+    needs: [validate, test, build]
     runs-on: ubuntu-latest
-    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')) || (github.event_name == 'workflow_dispatch') && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')) || (github.event_name == 'workflow_dispatch') && (needs.test.result == 'success' || needs.test.result == 'skipped') && (needs.build.result == 'success')
     environment: ${{ github.event.inputs.stage || (github.ref == 'refs/heads/main' && 'prod' || 'dev') }}
 
     steps:
@@ -182,9 +258,32 @@ jobs:
       with:
         use-installer: true
 
-    # SAM Build: Use the specific template and build inside container
-    - name: SAM Build for Webhook Infrastructure
-      run: sam build --template ${{ env.SAM_TEMPLATE }} --use-container --no-cached
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: sam-build-artifacts
+        path: .
+
+    - name: Verify build artifacts
+      run: |
+        echo "🔍 Verifying downloaded build artifacts..."
+        ls -la .aws-sam/build/
+        
+        if [ ! -f .aws-sam/build/template.yaml ]; then
+          echo "❌ Build template not found"
+          exit 1
+        fi
+        
+        # Check that all function artifacts exist
+        for func in WebhookReceiverFunction WebhookProcessorFunction DLQProcessorFunction; do
+          if [ ! -d ".aws-sam/build/$func" ]; then
+            echo "❌ Function $func build artifacts not found"
+            exit 1
+          fi
+          echo "✅ Function $func artifacts found"
+        done
+        
+        echo "✅ All build artifacts verified"
 
     # ============================================================================
     # Deploy webhook infrastructure using deployment script
@@ -199,14 +298,14 @@ jobs:
         PRIVATE_SUBNET_1_ID: ${{ secrets.PRIVATE_SUBNET_1_ID }}
         PRIVATE_SUBNET_2_ID: ${{ secrets.PRIVATE_SUBNET_2_ID }}
       run: |
-        echo "🚀 Deploying webhook SAM infrastructure using deployment script..."
+        echo "🚀 Deploying webhook SAM infrastructure using pre-built artifacts..."
         echo "Stage: ${{ env.STAGE }}"
         echo "Region: ${{ env.AWS_REGION }}"
         
         # Make script executable (in case not set in repo)
         chmod +x scripts/deploy_webhook_lambdas.sh
         
-        # Execute the deployment script
+        # Execute the deployment script (it will use existing .aws-sam/build)
         ./scripts/deploy_webhook_lambdas.sh
         
         # Set output for verification steps
@@ -294,7 +393,7 @@ jobs:
     name: Health Check Webhook Infrastructure
     needs: [deploy]
     runs-on: ubuntu-latest
-    if: success()
+    if: success() && needs.deploy.result == 'success'
     environment: ${{ github.event.inputs.stage || (github.ref == 'refs/heads/main' && 'prod' || 'dev') }}
 
     steps:
@@ -369,4 +468,41 @@ jobs:
         echo "✅ All Lambda functions are responsive"
         echo "✅ API Gateway and SQS integration confirmed"
         echo ""
-        echo "🎉 Webhook SAM infrastructure is ready for use!" 
+        echo "🎉 Webhook SAM infrastructure is ready for use!"
+
+  # ============================================================================
+  # Workflow summary and cleanup
+  # ============================================================================
+  summary:
+    name: Workflow Summary
+    needs: [validate, test, build, deploy, health-check]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Workflow Summary
+      run: |
+        echo "📋 Webhook Infrastructure Deployment Summary"
+        echo "============================================="
+        echo ""
+        echo "Job Status:"
+        echo "- Validate: ${{ needs.validate.result }}"
+        echo "- Test: ${{ needs.test.result }}"
+        echo "- Build: ${{ needs.build.result }}"
+        echo "- Deploy: ${{ needs.deploy.result }}"
+        echo "- Health Check: ${{ needs.health-check.result }}"
+        echo ""
+        
+        # Determine overall status
+        if [[ "${{ needs.deploy.result }}" == "success" && "${{ needs.health-check.result }}" == "success" ]]; then
+          echo "🎉 Overall Status: SUCCESS"
+          echo "✅ Webhook infrastructure deployed and verified"
+        elif [[ "${{ needs.build.result }}" == "success" && "${{ needs.deploy.result }}" == "failure" ]]; then
+          echo "⚠️  Overall Status: DEPLOY FAILED (Build artifacts preserved)"
+          echo "💡 Tip: You can re-run just the deploy job to use cached build artifacts"
+        elif [[ "${{ needs.build.result }}" == "failure" ]]; then
+          echo "❌ Overall Status: BUILD FAILED"
+          echo "🔧 Fix build issues and re-run the workflow"
+        else
+          echo "⚠️  Overall Status: PARTIAL SUCCESS"
+          echo "📝 Check individual job logs for details" 
