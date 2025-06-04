@@ -563,18 +563,54 @@ jobs:
           "cyphera-dlq-processor-${{ env.STAGE }}"
         )
         
+        FATAL_ERRORS_FOUND=false
+        
         for func in "${FUNCTIONS[@]}"; do
           echo ""
           echo "📊 Recent logs for $func:"
-          # Get the most recent log events (last 5 minutes)
-          aws logs filter-log-events \
+          # Get the most recent log events (last 5 minutes) and check for FATAL errors
+          LOG_OUTPUT=$(aws logs filter-log-events \
             --log-group-name "/aws/lambda/$func" \
             --start-time $(date -d '5 minutes ago' +%s)000 \
-            --limit 10 \
+            --limit 20 \
             --region ${{ env.AWS_REGION }} \
             --query 'events[*].message' \
-            --output text 2>/dev/null || echo "No recent logs found for $func"
+            --output text 2>/dev/null || echo "No recent logs found for $func")
+          
+          echo "$LOG_OUTPUT"
+          
+          # Check for specific error patterns
+          if echo "$LOG_OUTPUT" | grep -q "FATAL"; then
+            echo "🚨 FATAL error detected in $func logs!"
+            FATAL_ERRORS_FOUND=true
+          fi
+          
+          if echo "$LOG_OUTPUT" | grep -q "DATABASE_URL environment variable is required"; then
+            echo "🚨 Database configuration error in $func!"
+            FATAL_ERRORS_FOUND=true
+          fi
+          
+          if echo "$LOG_OUTPUT" | grep -q "Encryption key must be 32 bytes"; then
+            echo "🚨 Encryption key format error in $func!"
+            FATAL_ERRORS_FOUND=true
+          fi
+          
+          if echo "$LOG_OUTPUT" | grep -q "Failed to create application"; then
+            echo "🚨 Application initialization error in $func!"
+            FATAL_ERRORS_FOUND=true
+          fi
         done
+        
+        if [[ "$FATAL_ERRORS_FOUND" == "true" ]]; then
+          echo ""
+          echo "❌ FATAL errors detected in Lambda function logs!"
+          echo "💡 Health check passed basic invocation but functions have startup errors"
+          echo "🔧 Check the specific error messages above and fix configuration issues"
+          exit 1
+        else
+          echo ""
+          echo "✅ No FATAL errors found in recent Lambda logs"
+        fi
 
     - name: Final health check summary
       if: always()
@@ -631,3 +667,4 @@ jobs:
         else
           echo "⚠️  Overall Status: PARTIAL SUCCESS"
           echo "📝 Check individual job logs for details"
+        fi
