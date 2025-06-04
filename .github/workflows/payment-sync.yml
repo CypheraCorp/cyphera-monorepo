@@ -1,7 +1,4 @@
-# ============================================================================
-# Deploy webhook infrastructure using deployment script
-# ============================================================================
-name: Deploy Webhook SAM Infrastructure
+name: Payment Sync CI/CD
 
 on:
   push:
@@ -141,11 +138,51 @@ jobs:
         echo "✅ Tests completed"
 
   # ============================================================================
+  # Build webhook Lambda functions
+  # ============================================================================
+  build:
+    name: Build Webhook Lambda Functions
+    needs: [validate]
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        cache-dependency-path: go.sum
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Setup SAM CLI
+      uses: aws-actions/setup-sam@v2
+      with:
+        use-installer: true
+
+    - name: SAM Build
+      run: |
+        echo "🔨 Building webhook Lambda functions with SAM..."
+        sam build --template ${{ env.SAM_TEMPLATE }} --use-container
+        echo "✅ SAM build completed successfully"
+
+    - name: Archive SAM build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: sam-build-${{ env.STAGE }}
+        path: |
+          .aws-sam/
+        retention-days: 7
+
+  # ============================================================================
   # Deploy webhook infrastructure using deployment script
   # ============================================================================
   deploy:
     name: Deploy Webhook SAM Infrastructure
-    needs: [validate, test]
+    needs: [build, test]
     runs-on: ubuntu-latest
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.event_name == 'workflow_dispatch') && (needs.test.result == 'success' || needs.test.result == 'skipped')
     environment: ${{ github.event.inputs.stage || (github.ref == 'refs/heads/main' && 'prod' || 'dev') }}
@@ -165,9 +202,11 @@ jobs:
       with:
         use-installer: true
 
-    # SAM Build: Use the specific template and build inside container
-    - name: SAM Build for Webhook Infrastructure
-      run: sam build --template ${{ env.SAM_TEMPLATE }} --use-container --no-cached
+    - name: Download SAM build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: sam-build-${{ env.STAGE }}
+        path: .aws-sam/
 
     # ============================================================================
     # Deploy webhook infrastructure using deployment script
@@ -250,6 +289,23 @@ jobs:
           --region ${{ env.AWS_REGION }})
         
         echo "📋 Webhook endpoint URL: $WEBHOOK_URL"
+
+    - name: Verify SQS integration
+      run: |
+        echo "🔍 Verifying SQS queue integration..."
+        
+        # Test SQS queue accessibility (don't send actual messages)
+        aws sqs get-queue-attributes \
+          --queue-url "${{ steps.terraform-outputs.outputs.WEBHOOK_SQS_URL }}" \
+          --attribute-names All \
+          --region ${{ env.AWS_REGION }} > /dev/null
+        
+        aws sqs get-queue-attributes \
+          --queue-url "${{ steps.terraform-outputs.outputs.WEBHOOK_DLQ_URL }}" \
+          --attribute-names All \
+          --region ${{ env.AWS_REGION }} > /dev/null
+        
+        echo "✅ SQS queues are accessible"
 
     # ============================================================================
     # Show deployment summary
