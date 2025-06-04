@@ -13,11 +13,17 @@ on:
       - 'deployment/template-webhook.yaml'
       - 'internal/client/payment_sync/**'
       - 'internal/handlers/payment_sync_handlers.go'
+      - 'internal/handlers/error_recovery_handlers.go'
       - 'internal/db/webhook_management.sql.go'
       - 'internal/db/workspace_payment_configurations.sql.go'
       - 'internal/db/workspace_provider_accounts.sql.go'
       - 'internal/db/payment_sync.sql.go'
+      - '.github/workflows/webhooks.yml'
       - '.github/workflows/deploy-webhook-sam.yml'
+      - 'Dockerfile'
+      - 'Dockerfile.webhook-receiver'
+      - 'Dockerfile.webhook-processor'
+      - '.dockerignore'
       - 'Makefile'
   pull_request:
     branches: [ dev, main ]
@@ -28,7 +34,13 @@ on:
       - 'deployment/template-webhook.yaml'
       - 'internal/client/payment_sync/**'
       - 'internal/handlers/payment_sync_handlers.go'
+      - 'internal/handlers/error_recovery_handlers.go'
+      - '.github/workflows/webhooks.yml'
       - '.github/workflows/deploy-webhook-sam.yml'
+      - 'Dockerfile'
+      - 'Dockerfile.webhook-receiver'
+      - 'Dockerfile.webhook-processor'
+      - '.dockerignore'
   workflow_dispatch:
     inputs:
       stage:
@@ -47,7 +59,7 @@ on:
         type: boolean
 
 env:
-  GO_VERSION: '1.22'
+  GO_VERSION: '1.23'
   AWS_REGION: us-east-1
   STAGE: ${{ github.event.inputs.stage || (github.ref == 'refs/heads/main' && 'prod' || 'dev') }}
   SAM_TEMPLATE: deployment/template-webhook.yaml
