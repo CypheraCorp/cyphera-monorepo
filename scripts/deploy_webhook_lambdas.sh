@@ -62,7 +62,30 @@ DB_HOST_VALUE=$(echo "${PARAM_RDS_ENDPOINT_VALUE}" | cut -d':' -f1)
 
 echo "Extracted DB Host: ${DB_HOST_VALUE}"
 
-# 6. Construct Parameter Overrides String for Webhook SAM template
+# 6. Convert SQS Queue URLs to ARNs for Lambda Event Source Mappings
+# SQS Event Source Mappings require ARNs, not URLs
+# URL format: https://sqs.region.amazonaws.com/account-id/queue-name
+# ARN format: arn:aws:sqs:region:account-id:queue-name
+
+convert_sqs_url_to_arn() {
+    local queue_url="$1"
+    # Extract components from URL
+    # Example: https://sqs.us-east-1.amazonaws.com/699475955358/cyphera-provider-webhook-events-dev
+    local queue_name=$(basename "${queue_url}")
+    local account_id=$(echo "${queue_url}" | cut -d'/' -f4)
+    local region=$(echo "${queue_url}" | cut -d'.' -f2)
+    
+    echo "arn:aws:sqs:${region}:${account_id}:${queue_name}"
+}
+
+WEBHOOK_SQS_QUEUE_ARN=$(convert_sqs_url_to_arn "${PARAM_WEBHOOK_SQS_QUEUE_URL_VALUE}")
+WEBHOOK_DLQ_QUEUE_ARN=$(convert_sqs_url_to_arn "${PARAM_WEBHOOK_DLQ_QUEUE_URL_VALUE}")
+
+echo "Converted SQS URLs to ARNs:"
+echo "  Webhook Queue ARN: ${WEBHOOK_SQS_QUEUE_ARN}"
+echo "  Webhook DLQ ARN: ${WEBHOOK_DLQ_QUEUE_ARN}"
+
+# 7. Construct Parameter Overrides String for Webhook SAM template
 OVERRIDES="Stage=${STAGE}"
 OVERRIDES="${OVERRIDES} LambdaSecurityGroupId=${LAMBDA_SG_ID}"
 OVERRIDES="${OVERRIDES} PrivateSubnet1Id=${PRIVATE_SUBNET_1_ID}"
@@ -70,15 +93,15 @@ OVERRIDES="${OVERRIDES} PrivateSubnet2Id=${PRIVATE_SUBNET_2_ID}"
 # Pass the *actual fetched values* to the template parameters
 OVERRIDES="${OVERRIDES} RdsSecretArnValue=${PARAM_RDS_SECRET_ARN_VALUE}"
 OVERRIDES="${OVERRIDES} DbHostValue=${DB_HOST_VALUE}"
-OVERRIDES="${OVERRIDES} WebhookSqsQueueUrl=${PARAM_WEBHOOK_SQS_QUEUE_URL_VALUE}"
-OVERRIDES="${OVERRIDES} WebhookDlqQueueUrl=${PARAM_WEBHOOK_DLQ_QUEUE_URL_VALUE}"
+OVERRIDES="${OVERRIDES} WebhookSqsQueueUrl=${WEBHOOK_SQS_QUEUE_ARN}"
+OVERRIDES="${OVERRIDES} WebhookDlqQueueUrl=${WEBHOOK_DLQ_QUEUE_ARN}"
 OVERRIDES="${OVERRIDES} PaymentSyncEncryptionKeySecretArn=${PARAM_PAYMENT_SYNC_ENCRYPTION_KEY_ARN_VALUE}"
 OVERRIDES="${OVERRIDES} WebhookSecretsManagerPolicyArn=${PARAM_WEBHOOK_SECRETS_POLICY_ARN_VALUE}"
 
 echo "Constructed Parameter Overrides for Webhook deployment."
 echo "Overrides: ${OVERRIDES}"
 
-# 7. Execute SAM Deploy for Webhook Infrastructure
+# 8. Execute SAM Deploy for Webhook Infrastructure
 echo "Executing sam deploy for ${STACK_NAME}..."
 sam deploy \
   --template-file "${BUILD_TEMPLATE_FILE}" \
@@ -92,7 +115,7 @@ sam deploy \
 
 echo "--- Webhook SAM Deployment script finished successfully ---"
 
-# 8. Display Deployment Information
+# 9. Display Deployment Information
 echo ""
 echo "=== Webhook Deployment Complete ==="
 echo "Stack Name: ${STACK_NAME}"

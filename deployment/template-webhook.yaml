@@ -24,11 +24,11 @@ Parameters:
   # Terraform-managed Infrastructure References
   WebhookSqsQueueUrl:
     Type: String
-    Description: URL of the SQS queue for webhook events (from Terraform)
+    Description: ARN of the SQS queue for webhook events (converted from URL by deployment script)
 
   WebhookDlqQueueUrl:
     Type: String
-    Description: URL of the SQS DLQ for failed webhook events (from Terraform)
+    Description: ARN of the SQS DLQ for failed webhook events (converted from URL by deployment script)
 
   # Global encryption key for workspace credentials
   PaymentSyncEncryptionKeySecretArn:
