@@ -68,12 +68,12 @@ resource "aws_security_group_rule" "rds_public_ingress_dev" {
 }
 
 resource "aws_db_instance" "main" {
-  identifier        = "${var.app_name}-db-${var.stage}"
-  engine           = "postgres"
-  engine_version   = "15.10"
-  instance_class   = var.stage == "dev" ? "db.t3.micro" : "db.t4g.micro" 
-  allocated_storage = var.stage == "dev" ? 20 : 50
-  storage_type      = "gp3"
+  identifier            = "${var.app_name}-db-${var.stage}"
+  engine                = "postgres"
+  engine_version        = "15.10"
+  instance_class        = var.stage == "dev" ? "db.t3.micro" : "db.t4g.micro"
+  allocated_storage     = var.stage == "dev" ? 20 : 50
+  storage_type          = "gp3"
   max_allocated_storage = var.stage == "dev" ? 20 : 100
 
   db_name  = var.db_name
@@ -87,18 +87,18 @@ resource "aws_db_instance" "main" {
 
   # --- Production vs Non-Production Settings ---
   backup_retention_period = var.stage == "prod" ? var.prod_backup_retention_period : 0
-  multi_az              = var.stage == "prod" ? true : false
-  skip_final_snapshot    = var.stage == "prod" ? false : true
-  deletion_protection = var.stage == "prod" ? true : false
+  multi_az                = var.stage == "prod" ? true : false
+  skip_final_snapshot     = var.stage == "prod" ? false : true
+  deletion_protection     = var.stage == "prod" ? true : false
   # ---------------------------------------------
 
   # Set public access based on stage (This is the only change we want in Step 1)
-  publicly_accessible    = var.stage == "dev" ? true : false
-  storage_encrypted     = true
-  performance_insights_enabled = var.stage == "dev" ? false : true
-  performance_insights_retention_period = var.stage == "dev" ? null : 7 
-  auto_minor_version_upgrade = true
-  maintenance_window = "Sun:03:00-Sun:04:00"
+  publicly_accessible                   = var.stage == "dev" ? true : false
+  storage_encrypted                     = true
+  performance_insights_enabled          = var.stage == "dev" ? false : true
+  performance_insights_retention_period = var.stage == "dev" ? null : 7
+  auto_minor_version_upgrade            = true
+  maintenance_window                    = "Sun:03:00-Sun:04:00"
 
   tags = merge(local.common_tags, {
     Name = "${var.service_prefix}-rds-${var.stage}"

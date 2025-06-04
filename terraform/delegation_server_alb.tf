@@ -76,7 +76,7 @@ resource "aws_lb" "delegation_server" {
   internal           = true # Crucial: Keep it private within the VPC
   load_balancer_type = "application"
   security_groups    = [aws_security_group.delegation_server_alb.id] # Attach ALB SG
-  subnets            = module.vpc.private_subnets # Place ALB in private subnets
+  subnets            = module.vpc.private_subnets                    # Place ALB in private subnets
 
   enable_deletion_protection = false # Set to true for prod if desired
   tags                       = local.common_tags
@@ -85,9 +85,9 @@ resource "aws_lb" "delegation_server" {
 # --- ALB Target Group --- 
 resource "aws_lb_target_group" "delegation_server" {
   name        = "${var.service_prefix}-ds-tg-${var.stage}"
-  port        = 50051    # Port tasks listen on
-  protocol    = "HTTP"     # ALB talks HTTP to tasks for gRPC health checks
-  target_type = "ip"       # Required for Fargate
+  port        = 50051  # Port tasks listen on
+  protocol    = "HTTP" # ALB talks HTTP to tasks for gRPC health checks
+  target_type = "ip"   # Required for Fargate
   vpc_id      = module.vpc.vpc_id
 
   # gRPC Health Check (requires server implementation: https://github.com/grpc/grpc/blob/master/doc/health-checking.md)
@@ -95,8 +95,8 @@ resource "aws_lb_target_group" "delegation_server" {
     enabled             = true
     interval            = 30
     path                = "/grpc.health.v1.Health/Check" # Standard gRPC path
-    protocol            = "HTTP" # Health checks use HTTP
-    matcher             = "0-19" # Match gRPC status codes (0 = OK, others might be unready but not unhealthy for ALB)
+    protocol            = "HTTP"                         # Health checks use HTTP
+    matcher             = "0-19"                         # Match gRPC status codes (0 = OK, others might be unready but not unhealthy for ALB)
     healthy_threshold   = 2
     unhealthy_threshold = 3 # Increase slightly to tolerate transient issues
     timeout             = 10
@@ -113,11 +113,11 @@ resource "aws_lb_target_group" "delegation_server" {
 resource "aws_lb_listener" "delegation_server_grpc" {
   load_balancer_arn = aws_lb.delegation_server.arn
   # Use standard HTTPS port
-  port              = 443
+  port = 443
   # Use HTTPS protocol for gRPC via ALB
-  protocol          = "HTTPS"
+  protocol = "HTTPS"
   # Attach the wildcard certificate managed in acm.tf
-  certificate_arn   = aws_acm_certificate.wildcard_api.arn 
+  certificate_arn = aws_acm_certificate.wildcard_api.arn
 
   default_action {
     type             = "forward"

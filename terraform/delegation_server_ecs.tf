@@ -24,7 +24,7 @@ resource "aws_iam_role" "delegation_server_task_execution_role" {
 }
 
 resource "aws_iam_role_policy_attachment" "delegation_server_task_execution_policy" {
-  role       = aws_iam_role.delegation_server_task_execution_role.name
+  role = aws_iam_role.delegation_server_task_execution_role.name
   # Grants permissions to pull images from ECR and send logs to CloudWatch
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
@@ -71,18 +71,18 @@ resource "aws_cloudwatch_log_group" "delegation_server" {
 # --- ECS Task Definition ---
 resource "aws_ecs_task_definition" "delegation_server" {
   family                   = "${var.service_prefix}-delegation-server-${var.stage}"
-  network_mode             = "awsvpc"         # Required for Fargate
-  requires_compatibilities = ["FARGATE"]      # Specify Fargate compatibility
+  network_mode             = "awsvpc"    # Required for Fargate
+  requires_compatibilities = ["FARGATE"] # Specify Fargate compatibility
   # Use minimal resources for dev
-  cpu                      = var.stage == "dev" ? "256" : "1024" # Example prod: 1 vCPU
-  memory                   = var.stage == "dev" ? "512" : "2048" # Example prod: 2GB Memory
-  execution_role_arn       = aws_iam_role.delegation_server_task_execution_role.arn
-  task_role_arn            = aws_iam_role.delegation_server_task_role.arn
+  cpu                = var.stage == "dev" ? "256" : "1024" # Example prod: 1 vCPU
+  memory             = var.stage == "dev" ? "512" : "2048" # Example prod: 2GB Memory
+  execution_role_arn = aws_iam_role.delegation_server_task_execution_role.arn
+  task_role_arn      = aws_iam_role.delegation_server_task_role.arn
 
   # Define the container(s) for the task
   container_definitions = jsonencode([
     {
-      name      = "${var.service_prefix}-delegation-server-${var.stage}" # Unique name for the container
+      name = "${var.service_prefix}-delegation-server-${var.stage}" # Unique name for the container
       # Use the ECR repo URL. Tag will be specified/updated by CI/CD or Service definition.
       image     = "${aws_ecr_repository.delegation_server.repository_url}:latest" # Placeholder image, CI/CD updates service
       essential = true
@@ -99,7 +99,7 @@ resource "aws_ecs_task_definition" "delegation_server" {
         options = {
           "awslogs-group"         = aws_cloudwatch_log_group.delegation_server.name
           "awslogs-region"        = var.aws_region # Use region variable
-          "awslogs-stream-prefix" = "ecs" # Prefix for log streams
+          "awslogs-stream-prefix" = "ecs"          # Prefix for log streams
         }
       }
       secrets = [
@@ -154,7 +154,7 @@ resource "aws_ecs_service" "delegation_server" {
   task_definition = aws_ecs_task_definition.delegation_server.arn
   launch_type     = "FARGATE"
   # Run only one task for dev
-  desired_count   = var.stage == "dev" ? 1 : 2 # Example prod: 2 tasks for HA
+  desired_count = var.stage == "dev" ? 1 : 2 # Example prod: 2 tasks for HA
 
   # Configure networking to place tasks in private subnets
   network_configuration {
@@ -195,13 +195,13 @@ data "aws_ssm_parameter" "delegation_server_alb_dns" {
 }
 
 resource "aws_iam_role" "delegation_server_task_role" {
-  name               = "delegation-server-task-role-${var.stage}"
+  name = "delegation-server-task-role-${var.stage}"
   assume_role_policy = jsonencode({
-    Version   = "2012-10-17"
+    Version = "2012-10-17"
     Statement = [
       {
-        Action    = "sts:AssumeRole"
-        Effect    = "Allow"
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
         Principal = {
           Service = "ecs-tasks.amazonaws.com"
         }

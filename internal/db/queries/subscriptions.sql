@@ -100,9 +100,40 @@ INSERT INTO subscriptions (
     next_redemption_date,
     total_redemptions,
     total_amount_in_cents,
-    metadata
+    metadata,
+    payment_sync_status,
+    payment_provider
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+    COALESCE($16, 'pending'),
+    $17
+)
+RETURNING *;
+
+-- name: CreateSubscriptionWithSync :one
+INSERT INTO subscriptions (
+    customer_id,
+    product_id,
+    workspace_id,
+    price_id,
+    product_token_id,
+    external_id,
+    token_amount,
+    delegation_id,
+    customer_wallet_id,
+    status,
+    current_period_start,
+    current_period_end,
+    next_redemption_date,
+    total_redemptions,
+    total_amount_in_cents,
+    metadata,
+    payment_sync_status,
+    payment_synced_at,
+    payment_sync_version,
+    payment_provider
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
 )
 RETURNING *;
 
@@ -124,6 +155,32 @@ SET
     total_redemptions = COALESCE($14, total_redemptions),
     total_amount_in_cents = COALESCE($15, total_amount_in_cents),
     metadata = COALESCE($16, metadata),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: UpdateSubscriptionWithSync :one
+UPDATE subscriptions
+SET
+    customer_id = COALESCE($2, customer_id),
+    product_id = COALESCE($3, product_id),
+    workspace_id = COALESCE($4, workspace_id),
+    price_id = COALESCE($5, price_id),
+    product_token_id = COALESCE($6, product_token_id),
+    token_amount = COALESCE($7, token_amount),
+    delegation_id = COALESCE($8, delegation_id),
+    customer_wallet_id = COALESCE($9, customer_wallet_id),
+    status = COALESCE($10, status),
+    current_period_start = COALESCE($11, current_period_start),
+    current_period_end = COALESCE($12, current_period_end),
+    next_redemption_date = COALESCE($13, next_redemption_date),
+    total_redemptions = COALESCE($14, total_redemptions),
+    total_amount_in_cents = COALESCE($15, total_amount_in_cents),
+    metadata = COALESCE($16, metadata),
+    payment_sync_status = COALESCE($17, payment_sync_status),
+    payment_synced_at = COALESCE($18, payment_synced_at),
+    payment_sync_version = COALESCE($19, payment_sync_version),
+    payment_provider = COALESCE($20, payment_provider),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
@@ -266,3 +323,37 @@ WHERE s.deleted_at IS NULL
     AND p.workspace_id = $3
 ORDER BY s.created_at DESC
 LIMIT $1 OFFSET $2; 
+
+-- Payment Sync Related Subscription Queries
+
+-- name: GetSubscriptionsNeedingSync :many
+SELECT * FROM subscriptions 
+WHERE workspace_id = $1 AND payment_sync_status = 'pending' AND deleted_at IS NULL
+ORDER BY created_at ASC;
+
+-- name: GetSubscriptionsSyncedByProvider :many
+SELECT * FROM subscriptions 
+WHERE workspace_id = $1 AND payment_provider = $2 AND payment_sync_status != 'pending' AND deleted_at IS NULL
+ORDER BY payment_synced_at DESC;
+
+-- name: UpdateSubscriptionPaymentSyncStatus :one
+UPDATE subscriptions 
+SET payment_sync_status = $3, 
+    payment_synced_at = CASE WHEN $3 != 'pending' THEN CURRENT_TIMESTAMP ELSE payment_synced_at END,
+    payment_sync_version = CASE WHEN $3 != 'pending' THEN payment_sync_version + 1 ELSE payment_sync_version END,
+    payment_provider = COALESCE($4, payment_provider),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: GetSubscriptionsWithSyncConflicts :many
+SELECT * FROM subscriptions 
+WHERE workspace_id = $1 AND payment_sync_status = 'conflict' AND deleted_at IS NULL
+ORDER BY payment_synced_at DESC;
+
+-- name: GetSubscriptionByExternalID :one
+SELECT s.* FROM subscriptions s
+WHERE s.workspace_id = $1
+  AND s.external_id = $2
+  AND s.payment_provider = $3
+  AND s.deleted_at IS NULL; 

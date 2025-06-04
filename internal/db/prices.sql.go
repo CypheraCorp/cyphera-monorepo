@@ -18,7 +18,7 @@ SET
     active = true,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at
+RETURNING id, product_id, external_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) ActivatePrice(ctx context.Context, id uuid.UUID) (Price, error) {
@@ -27,6 +27,7 @@ func (q *Queries) ActivatePrice(ctx context.Context, id uuid.UUID) (Price, error
 	err := row.Scan(
 		&i.ID,
 		&i.ProductID,
+		&i.ExternalID,
 		&i.Active,
 		&i.Type,
 		&i.Nickname,
@@ -35,6 +36,10 @@ func (q *Queries) ActivatePrice(ctx context.Context, id uuid.UUID) (Price, error
 		&i.IntervalType,
 		&i.TermLength,
 		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -78,11 +83,15 @@ INSERT INTO prices (
     unit_amount_in_pennies,
     interval_type, -- interval_type enum (nullable)
     term_length, -- (nullable)
-    metadata
+    metadata,
+    payment_sync_status,
+    payment_provider
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8, $9,
+    COALESCE($10, 'pending'),
+    $11
 )
-RETURNING id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at
+RETURNING id, product_id, external_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type CreatePriceParams struct {
@@ -95,6 +104,8 @@ type CreatePriceParams struct {
 	IntervalType        IntervalType `json:"interval_type"`
 	TermLength          int32        `json:"term_length"`
 	Metadata            []byte       `json:"metadata"`
+	Column10            interface{}  `json:"column_10"`
+	PaymentProvider     pgtype.Text  `json:"payment_provider"`
 }
 
 func (q *Queries) CreatePrice(ctx context.Context, arg CreatePriceParams) (Price, error) {
@@ -108,11 +119,14 @@ func (q *Queries) CreatePrice(ctx context.Context, arg CreatePriceParams) (Price
 		arg.IntervalType,
 		arg.TermLength,
 		arg.Metadata,
+		arg.Column10,
+		arg.PaymentProvider,
 	)
 	var i Price
 	err := row.Scan(
 		&i.ID,
 		&i.ProductID,
+		&i.ExternalID,
 		&i.Active,
 		&i.Type,
 		&i.Nickname,
@@ -121,6 +135,90 @@ func (q *Queries) CreatePrice(ctx context.Context, arg CreatePriceParams) (Price
 		&i.IntervalType,
 		&i.TermLength,
 		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const createPriceWithSync = `-- name: CreatePriceWithSync :one
+INSERT INTO prices (
+    product_id,
+    external_id,
+    active,
+    type, -- price_type enum
+    nickname,
+    currency, -- currency enum
+    unit_amount_in_pennies,
+    interval_type, -- interval_type enum (nullable)
+    term_length, -- (nullable)
+    metadata,
+    payment_sync_status,
+    payment_synced_at,
+    payment_sync_version,
+    payment_provider
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+)
+RETURNING id, product_id, external_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+`
+
+type CreatePriceWithSyncParams struct {
+	ProductID           uuid.UUID          `json:"product_id"`
+	ExternalID          pgtype.Text        `json:"external_id"`
+	Active              bool               `json:"active"`
+	Type                PriceType          `json:"type"`
+	Nickname            pgtype.Text        `json:"nickname"`
+	Currency            Currency           `json:"currency"`
+	UnitAmountInPennies int32              `json:"unit_amount_in_pennies"`
+	IntervalType        IntervalType       `json:"interval_type"`
+	TermLength          int32              `json:"term_length"`
+	Metadata            []byte             `json:"metadata"`
+	PaymentSyncStatus   pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt     pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion  pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider     pgtype.Text        `json:"payment_provider"`
+}
+
+func (q *Queries) CreatePriceWithSync(ctx context.Context, arg CreatePriceWithSyncParams) (Price, error) {
+	row := q.db.QueryRow(ctx, createPriceWithSync,
+		arg.ProductID,
+		arg.ExternalID,
+		arg.Active,
+		arg.Type,
+		arg.Nickname,
+		arg.Currency,
+		arg.UnitAmountInPennies,
+		arg.IntervalType,
+		arg.TermLength,
+		arg.Metadata,
+		arg.PaymentSyncStatus,
+		arg.PaymentSyncedAt,
+		arg.PaymentSyncVersion,
+		arg.PaymentProvider,
+	)
+	var i Price
+	err := row.Scan(
+		&i.ID,
+		&i.ProductID,
+		&i.ExternalID,
+		&i.Active,
+		&i.Type,
+		&i.Nickname,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -134,7 +232,7 @@ SET
     active = false,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at
+RETURNING id, product_id, external_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) DeactivatePrice(ctx context.Context, id uuid.UUID) (Price, error) {
@@ -143,6 +241,7 @@ func (q *Queries) DeactivatePrice(ctx context.Context, id uuid.UUID) (Price, err
 	err := row.Scan(
 		&i.ID,
 		&i.ProductID,
+		&i.ExternalID,
 		&i.Active,
 		&i.Type,
 		&i.Nickname,
@@ -151,6 +250,10 @@ func (q *Queries) DeactivatePrice(ctx context.Context, id uuid.UUID) (Price, err
 		&i.IntervalType,
 		&i.TermLength,
 		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -170,7 +273,7 @@ func (q *Queries) DeletePrice(ctx context.Context, id uuid.UUID) error {
 }
 
 const getPrice = `-- name: GetPrice :one
-SELECT id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at FROM prices
+SELECT id, product_id, external_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM prices
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -180,6 +283,7 @@ func (q *Queries) GetPrice(ctx context.Context, id uuid.UUID) (Price, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.ProductID,
+		&i.ExternalID,
 		&i.Active,
 		&i.Type,
 		&i.Nickname,
@@ -188,6 +292,48 @@ func (q *Queries) GetPrice(ctx context.Context, id uuid.UUID) (Price, error) {
 		&i.IntervalType,
 		&i.TermLength,
 		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getPriceByExternalID = `-- name: GetPriceByExternalID :one
+SELECT p.id, p.product_id, p.external_id, p.active, p.type, p.nickname, p.currency, p.unit_amount_in_pennies, p.interval_type, p.term_length, p.metadata, p.payment_sync_status, p.payment_synced_at, p.payment_sync_version, p.payment_provider, p.created_at, p.updated_at, p.deleted_at FROM prices p
+WHERE p.external_id = $1
+  AND p.payment_provider = $2
+  AND p.deleted_at IS NULL
+`
+
+type GetPriceByExternalIDParams struct {
+	ExternalID      pgtype.Text `json:"external_id"`
+	PaymentProvider pgtype.Text `json:"payment_provider"`
+}
+
+func (q *Queries) GetPriceByExternalID(ctx context.Context, arg GetPriceByExternalIDParams) (Price, error) {
+	row := q.db.QueryRow(ctx, getPriceByExternalID, arg.ExternalID, arg.PaymentProvider)
+	var i Price
+	err := row.Scan(
+		&i.ID,
+		&i.ProductID,
+		&i.ExternalID,
+		&i.Active,
+		&i.Type,
+		&i.Nickname,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -196,7 +342,7 @@ func (q *Queries) GetPrice(ctx context.Context, id uuid.UUID) (Price, error) {
 }
 
 const getPriceWithProduct = `-- name: GetPriceWithProduct :one
-SELECT pr.id, pr.product_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.term_length, pr.metadata, pr.created_at, pr.updated_at, pr.deleted_at, p.name as product_name, p.workspace_id
+SELECT pr.id, pr.product_id, pr.external_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.term_length, pr.metadata, pr.payment_sync_status, pr.payment_synced_at, pr.payment_sync_version, pr.payment_provider, pr.created_at, pr.updated_at, pr.deleted_at, p.name as product_name, p.workspace_id
 FROM prices pr
 JOIN products p ON pr.product_id = p.id
 WHERE pr.id = $1 AND pr.deleted_at IS NULL AND p.deleted_at IS NULL
@@ -205,6 +351,7 @@ WHERE pr.id = $1 AND pr.deleted_at IS NULL AND p.deleted_at IS NULL
 type GetPriceWithProductRow struct {
 	ID                  uuid.UUID          `json:"id"`
 	ProductID           uuid.UUID          `json:"product_id"`
+	ExternalID          pgtype.Text        `json:"external_id"`
 	Active              bool               `json:"active"`
 	Type                PriceType          `json:"type"`
 	Nickname            pgtype.Text        `json:"nickname"`
@@ -213,6 +360,10 @@ type GetPriceWithProductRow struct {
 	IntervalType        IntervalType       `json:"interval_type"`
 	TermLength          int32              `json:"term_length"`
 	Metadata            []byte             `json:"metadata"`
+	PaymentSyncStatus   pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt     pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion  pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider     pgtype.Text        `json:"payment_provider"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
@@ -226,6 +377,7 @@ func (q *Queries) GetPriceWithProduct(ctx context.Context, id uuid.UUID) (GetPri
 	err := row.Scan(
 		&i.ID,
 		&i.ProductID,
+		&i.ExternalID,
 		&i.Active,
 		&i.Type,
 		&i.Nickname,
@@ -234,6 +386,10 @@ func (q *Queries) GetPriceWithProduct(ctx context.Context, id uuid.UUID) (GetPri
 		&i.IntervalType,
 		&i.TermLength,
 		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -243,8 +399,156 @@ func (q *Queries) GetPriceWithProduct(ctx context.Context, id uuid.UUID) (GetPri
 	return i, err
 }
 
+const getPricesNeedingSync = `-- name: GetPricesNeedingSync :many
+
+SELECT pr.id, pr.product_id, pr.external_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.term_length, pr.metadata, pr.payment_sync_status, pr.payment_synced_at, pr.payment_sync_version, pr.payment_provider, pr.created_at, pr.updated_at, pr.deleted_at
+FROM prices pr
+JOIN products p ON pr.product_id = p.id
+WHERE p.workspace_id = $1 AND pr.payment_sync_status = 'pending' AND pr.deleted_at IS NULL AND p.deleted_at IS NULL
+ORDER BY pr.created_at ASC
+`
+
+// Payment Sync Related Price Queries
+func (q *Queries) GetPricesNeedingSync(ctx context.Context, workspaceID uuid.UUID) ([]Price, error) {
+	rows, err := q.db.Query(ctx, getPricesNeedingSync, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Price{}
+	for rows.Next() {
+		var i Price
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProductID,
+			&i.ExternalID,
+			&i.Active,
+			&i.Type,
+			&i.Nickname,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPricesSyncedByProvider = `-- name: GetPricesSyncedByProvider :many
+SELECT pr.id, pr.product_id, pr.external_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.term_length, pr.metadata, pr.payment_sync_status, pr.payment_synced_at, pr.payment_sync_version, pr.payment_provider, pr.created_at, pr.updated_at, pr.deleted_at
+FROM prices pr
+JOIN products p ON pr.product_id = p.id
+WHERE p.workspace_id = $1 AND pr.payment_provider = $2 AND pr.payment_sync_status != 'pending' AND pr.deleted_at IS NULL AND p.deleted_at IS NULL
+ORDER BY pr.payment_synced_at DESC
+`
+
+type GetPricesSyncedByProviderParams struct {
+	WorkspaceID     uuid.UUID   `json:"workspace_id"`
+	PaymentProvider pgtype.Text `json:"payment_provider"`
+}
+
+func (q *Queries) GetPricesSyncedByProvider(ctx context.Context, arg GetPricesSyncedByProviderParams) ([]Price, error) {
+	rows, err := q.db.Query(ctx, getPricesSyncedByProvider, arg.WorkspaceID, arg.PaymentProvider)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Price{}
+	for rows.Next() {
+		var i Price
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProductID,
+			&i.ExternalID,
+			&i.Active,
+			&i.Type,
+			&i.Nickname,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPricesWithSyncConflicts = `-- name: GetPricesWithSyncConflicts :many
+SELECT pr.id, pr.product_id, pr.external_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.term_length, pr.metadata, pr.payment_sync_status, pr.payment_synced_at, pr.payment_sync_version, pr.payment_provider, pr.created_at, pr.updated_at, pr.deleted_at
+FROM prices pr
+JOIN products p ON pr.product_id = p.id
+WHERE p.workspace_id = $1 AND pr.payment_sync_status = 'conflict' AND pr.deleted_at IS NULL AND p.deleted_at IS NULL
+ORDER BY pr.payment_synced_at DESC
+`
+
+func (q *Queries) GetPricesWithSyncConflicts(ctx context.Context, workspaceID uuid.UUID) ([]Price, error) {
+	rows, err := q.db.Query(ctx, getPricesWithSyncConflicts, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Price{}
+	for rows.Next() {
+		var i Price
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProductID,
+			&i.ExternalID,
+			&i.Active,
+			&i.Type,
+			&i.Nickname,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActivePricesByProduct = `-- name: ListActivePricesByProduct :many
-SELECT id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at FROM prices
+SELECT id, product_id, external_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM prices
 WHERE product_id = $1 AND active = true AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -261,6 +565,7 @@ func (q *Queries) ListActivePricesByProduct(ctx context.Context, productID uuid.
 		if err := rows.Scan(
 			&i.ID,
 			&i.ProductID,
+			&i.ExternalID,
 			&i.Active,
 			&i.Type,
 			&i.Nickname,
@@ -269,6 +574,10 @@ func (q *Queries) ListActivePricesByProduct(ctx context.Context, productID uuid.
 			&i.IntervalType,
 			&i.TermLength,
 			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -284,7 +593,7 @@ func (q *Queries) ListActivePricesByProduct(ctx context.Context, productID uuid.
 }
 
 const listActivePricesByWorkspace = `-- name: ListActivePricesByWorkspace :many
-SELECT pr.id, pr.product_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.term_length, pr.metadata, pr.created_at, pr.updated_at, pr.deleted_at
+SELECT pr.id, pr.product_id, pr.external_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.term_length, pr.metadata, pr.payment_sync_status, pr.payment_synced_at, pr.payment_sync_version, pr.payment_provider, pr.created_at, pr.updated_at, pr.deleted_at
 FROM prices pr
 JOIN products p ON pr.product_id = p.id
 WHERE p.workspace_id = $1 AND pr.active = true AND pr.deleted_at IS NULL AND p.deleted_at IS NULL
@@ -303,6 +612,7 @@ func (q *Queries) ListActivePricesByWorkspace(ctx context.Context, workspaceID u
 		if err := rows.Scan(
 			&i.ID,
 			&i.ProductID,
+			&i.ExternalID,
 			&i.Active,
 			&i.Type,
 			&i.Nickname,
@@ -311,6 +621,10 @@ func (q *Queries) ListActivePricesByWorkspace(ctx context.Context, workspaceID u
 			&i.IntervalType,
 			&i.TermLength,
 			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -326,7 +640,7 @@ func (q *Queries) ListActivePricesByWorkspace(ctx context.Context, workspaceID u
 }
 
 const listPricesByProduct = `-- name: ListPricesByProduct :many
-SELECT id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at FROM prices
+SELECT id, product_id, external_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM prices
 WHERE product_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -343,6 +657,7 @@ func (q *Queries) ListPricesByProduct(ctx context.Context, productID uuid.UUID) 
 		if err := rows.Scan(
 			&i.ID,
 			&i.ProductID,
+			&i.ExternalID,
 			&i.Active,
 			&i.Type,
 			&i.Nickname,
@@ -351,6 +666,10 @@ func (q *Queries) ListPricesByProduct(ctx context.Context, productID uuid.UUID) 
 			&i.IntervalType,
 			&i.TermLength,
 			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -366,7 +685,7 @@ func (q *Queries) ListPricesByProduct(ctx context.Context, productID uuid.UUID) 
 }
 
 const listPricesByWorkspace = `-- name: ListPricesByWorkspace :many
-SELECT pr.id, pr.product_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.term_length, pr.metadata, pr.created_at, pr.updated_at, pr.deleted_at
+SELECT pr.id, pr.product_id, pr.external_id, pr.active, pr.type, pr.nickname, pr.currency, pr.unit_amount_in_pennies, pr.interval_type, pr.term_length, pr.metadata, pr.payment_sync_status, pr.payment_synced_at, pr.payment_sync_version, pr.payment_provider, pr.created_at, pr.updated_at, pr.deleted_at
 FROM prices pr
 JOIN products p ON pr.product_id = p.id
 WHERE p.workspace_id = $1 AND pr.deleted_at IS NULL AND p.deleted_at IS NULL
@@ -385,6 +704,7 @@ func (q *Queries) ListPricesByWorkspace(ctx context.Context, workspaceID uuid.UU
 		if err := rows.Scan(
 			&i.ID,
 			&i.ProductID,
+			&i.ExternalID,
 			&i.Active,
 			&i.Type,
 			&i.Nickname,
@@ -393,6 +713,10 @@ func (q *Queries) ListPricesByWorkspace(ctx context.Context, workspaceID uuid.UU
 			&i.IntervalType,
 			&i.TermLength,
 			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -415,7 +739,7 @@ SET
     metadata = COALESCE($4, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, product_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, created_at, updated_at, deleted_at
+RETURNING id, product_id, external_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type UpdatePriceParams struct {
@@ -436,6 +760,7 @@ func (q *Queries) UpdatePrice(ctx context.Context, arg UpdatePriceParams) (Price
 	err := row.Scan(
 		&i.ID,
 		&i.ProductID,
+		&i.ExternalID,
 		&i.Active,
 		&i.Type,
 		&i.Nickname,
@@ -444,6 +769,114 @@ func (q *Queries) UpdatePrice(ctx context.Context, arg UpdatePriceParams) (Price
 		&i.IntervalType,
 		&i.TermLength,
 		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const updatePricePaymentSyncStatus = `-- name: UpdatePricePaymentSyncStatus :one
+UPDATE prices 
+SET payment_sync_status = $2, 
+    payment_synced_at = CASE WHEN $2 != 'pending' THEN CURRENT_TIMESTAMP ELSE payment_synced_at END,
+    payment_sync_version = CASE WHEN $2 != 'pending' THEN payment_sync_version + 1 ELSE payment_sync_version END,
+    payment_provider = COALESCE($3, payment_provider),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, product_id, external_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+`
+
+type UpdatePricePaymentSyncStatusParams struct {
+	ID                uuid.UUID   `json:"id"`
+	PaymentSyncStatus pgtype.Text `json:"payment_sync_status"`
+	PaymentProvider   pgtype.Text `json:"payment_provider"`
+}
+
+func (q *Queries) UpdatePricePaymentSyncStatus(ctx context.Context, arg UpdatePricePaymentSyncStatusParams) (Price, error) {
+	row := q.db.QueryRow(ctx, updatePricePaymentSyncStatus, arg.ID, arg.PaymentSyncStatus, arg.PaymentProvider)
+	var i Price
+	err := row.Scan(
+		&i.ID,
+		&i.ProductID,
+		&i.ExternalID,
+		&i.Active,
+		&i.Type,
+		&i.Nickname,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const updatePriceWithSync = `-- name: UpdatePriceWithSync :one
+UPDATE prices
+SET
+    active = COALESCE($2, active),
+    nickname = COALESCE($3, nickname),
+    metadata = COALESCE($4, metadata),
+    payment_sync_status = COALESCE($5, payment_sync_status),
+    payment_synced_at = COALESCE($6, payment_synced_at),
+    payment_sync_version = COALESCE($7, payment_sync_version),
+    payment_provider = COALESCE($8, payment_provider),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, product_id, external_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+`
+
+type UpdatePriceWithSyncParams struct {
+	ID                 uuid.UUID          `json:"id"`
+	Active             bool               `json:"active"`
+	Nickname           pgtype.Text        `json:"nickname"`
+	Metadata           []byte             `json:"metadata"`
+	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider    pgtype.Text        `json:"payment_provider"`
+}
+
+func (q *Queries) UpdatePriceWithSync(ctx context.Context, arg UpdatePriceWithSyncParams) (Price, error) {
+	row := q.db.QueryRow(ctx, updatePriceWithSync,
+		arg.ID,
+		arg.Active,
+		arg.Nickname,
+		arg.Metadata,
+		arg.PaymentSyncStatus,
+		arg.PaymentSyncedAt,
+		arg.PaymentSyncVersion,
+		arg.PaymentProvider,
+	)
+	var i Price
+	err := row.Scan(
+		&i.ID,
+		&i.ProductID,
+		&i.ExternalID,
+		&i.Active,
+		&i.Type,
+		&i.Nickname,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
