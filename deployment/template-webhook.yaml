@@ -63,12 +63,62 @@ Globals:
       - x86_64
     MemorySize: 512
     Timeout: 60
-    ReservedConcurrencyLimit: 50
+    ReservedConcurrentExecutions: 50
 
 # ============================================================================
 # Lambda Functions
 # ============================================================================
 Resources:
+  # ============================================================================
+  # API Gateway for Webhook Endpoints
+  # ============================================================================
+  WebhookApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "cyphera-webhook-api-${Stage}"
+      StageName: !Ref Stage
+      Description: !Sub "Multi-provider webhook endpoints for ${Stage}"
+      
+      # Enable CORS for webhook endpoints
+      Cors:
+        AllowMethods: "'OPTIONS,POST'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Workspace-ID,Stripe-Signature'"
+        AllowOrigin: "'*'"
+        
+      # API Gateway configuration
+      EndpointConfiguration:
+        Type: EDGE
+      
+      # Enable access logging
+      AccessLogSetting:
+        DestinationArn: !GetAtt WebhookApiLogGroup.Arn
+        Format: >
+          {
+            "requestId": "$context.requestId",
+            "ip": "$context.identity.sourceIp", 
+            "requestTime": "$context.requestTime",
+            "httpMethod": "$context.httpMethod",
+            "resourcePath": "$context.resourcePath",
+            "status": "$context.status",
+            "protocol": "$context.protocol",
+            "responseLength": "$context.responseLength"
+          }
+          
+      # Enable X-Ray tracing
+      TracingEnabled: true
+      
+      # Binary media types for webhook payloads
+      BinaryMediaTypes:
+        - application/octet-stream
+        - application/json
+
+  # CloudWatch Log Group for API Gateway
+  WebhookApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/apigateway/cyphera-webhook-api-${Stage}"
+      RetentionInDays: 7
+
   # Webhook Receiver Function - Receives webhooks from API Gateway
   WebhookReceiverFunction:
     Type: AWS::Serverless::Function
@@ -84,8 +134,8 @@ Resources:
           DB_HOST: !Ref DbHostValue
           DB_NAME: cyphera
           DB_SSLMODE: require
-          # Webhook configuration
-          WEBHOOK_SQS_QUEUE_URL: !Ref WebhookSqsQueueUrl
+          # Webhook configuration - using the variable names expected by the Go code
+          SQS_QUEUE_URL: !Ref WebhookSqsQueueUrl
           PAYMENT_SYNC_ENCRYPTION_KEY_ARN: !Ref PaymentSyncEncryptionKeySecretArn
           # Lambda Function Type for routing
           LAMBDA_FUNCTION_TYPE: webhook_receiver
@@ -102,6 +152,14 @@ Resources:
         - AWSLambdaVPCAccessExecutionRole
         # Attach Terraform-managed policies
         - !Ref WebhookSecretsManagerPolicyArn
+      # API Gateway Events
+      Events:
+        WebhookEndpoint:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WebhookApi
+            Path: /webhooks/{provider}
+            Method: POST
     Metadata:
       BuildMethod: makefile
 
@@ -166,7 +224,7 @@ Resources:
       Handler: bootstrap # Standard handler for Go custom runtime
       Timeout: 900 # Maximum timeout for retry processing
       MemorySize: 1024 # More memory for complex retry logic
-      ReservedConcurrencyLimit: 10 # Limit concurrency for DLQ processing
+      ReservedConcurrentExecutions: 10 # Limit concurrency for DLQ processing
       Environment:
         Variables:
           STAGE: !Ref Stage
@@ -272,4 +330,22 @@ Outputs:
     Description: "DLQ Processor Lambda Function ARN"
     Value: !GetAtt DLQProcessorFunction.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-DLQProcessorFunctionArn" 
+      Name: !Sub "${AWS::StackName}-DLQProcessorFunctionArn"
+
+  WebhookApiId:
+    Description: "Webhook API Gateway ID"
+    Value: !Ref WebhookApi
+    Export:
+      Name: !Sub "${AWS::StackName}-WebhookApiId"
+
+  WebhookApiUrl:
+    Description: "Webhook API Gateway URL"
+    Value: !Sub "https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+    Export:
+      Name: !Sub "${AWS::StackName}-WebhookApiUrl"
+
+  WebhookEndpoint:
+    Description: "Webhook endpoint URL for providers"
+    Value: !Sub "https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/webhooks/{provider}"
+    Export:
+      Name: !Sub "${AWS::StackName}-WebhookEndpoint" 

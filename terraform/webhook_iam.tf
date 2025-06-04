@@ -63,6 +63,26 @@ resource "aws_iam_policy" "webhook_sqs_policy" {
 }
 
 # ===============================================
+# SSM Parameters for Webhook IAM (for SAM deployment)
+# ===============================================
+
+resource "aws_ssm_parameter" "webhook_secrets_policy_arn" {
+  name        = "/cyphera/webhook-secrets-policy-arn-${var.stage}"
+  description = "ARN of the webhook secrets manager policy for stage ${var.stage}"
+  type        = "String"
+  value       = aws_iam_policy.webhook_secrets_policy.arn
+  tags        = local.common_tags
+}
+
+resource "aws_ssm_parameter" "webhook_sqs_policy_arn" {
+  name        = "/cyphera/webhook-sqs-policy-arn-${var.stage}"
+  description = "ARN of the webhook SQS policy for stage ${var.stage}"
+  type        = "String"
+  value       = aws_iam_policy.webhook_sqs_policy.arn
+  tags        = local.common_tags
+}
+
+# ===============================================
 # Outputs
 # ===============================================
 

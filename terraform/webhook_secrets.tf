@@ -8,8 +8,8 @@ resource "aws_secretsmanager_secret" "payment_sync_encryption_key" {
   name        = "/cyphera/cyphera-api/payment-sync-encryption-key-${var.stage}"
   description = "AES-256 encryption key for payment sync configuration data - ${var.stage}"
   tags = merge(local.common_tags, {
-    Service     = "cyphera-api"
-    Component   = "webhook-infrastructure"
+    Service   = "cyphera-api"
+    Component = "webhook-infrastructure"
   })
 }
 
@@ -25,13 +25,20 @@ resource "aws_secretsmanager_secret_version" "payment_sync_encryption_key_versio
 }
 
 # ===============================================
-# Outputs
+# SSM Parameters for Webhook Secrets (for SAM deployment)
 # ===============================================
 
-output "payment_sync_encryption_key_secret_arn" {
-  description = "ARN of the payment sync encryption key secret"
+resource "aws_ssm_parameter" "payment_sync_encryption_key_arn" {
+  name        = "/cyphera/payment-sync-encryption-key-arn-${var.stage}"
+  description = "ARN of the payment sync encryption key secret for stage ${var.stage}"
+  type        = "String"
   value       = aws_secretsmanager_secret.payment_sync_encryption_key.arn
+  tags        = local.common_tags
 }
+
+# ===============================================
+# Outputs
+# ===============================================
 
 # NOTE: Stripe API keys and webhook secrets are now managed per-workspace
 # in the workspace_payment_configurations table (encrypted with the key above)

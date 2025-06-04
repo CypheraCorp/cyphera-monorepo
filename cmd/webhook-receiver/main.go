@@ -12,7 +12,6 @@ import (
 
 	awsclient "cyphera-api/internal/client/aws"
 	"cyphera-api/internal/client/payment_sync"
-	"cyphera-api/internal/client/payment_sync/stripe"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/helpers"
 	"cyphera-api/internal/logger"
@@ -380,36 +379,16 @@ func main() {
 
 	dbQueries := db.New(connPool)
 
-	// --- Get Payment Provider Secrets ---
-	stripeAPIKey, err := secretsClient.GetSecretString(ctx, "STRIPE_API_KEY_ARN", "STRIPE_API_KEY")
-	if err != nil || stripeAPIKey == "" {
-		logger.Fatal("Failed to get Stripe API Key", zap.Error(err))
-	}
-
-	stripeWebhookSecret, err := secretsClient.GetSecretString(ctx, "STRIPE_WEBHOOK_SECRET_ARN", "STRIPE_WEBHOOK_SECRET")
-	if err != nil || stripeWebhookSecret == "" {
-		logger.Fatal("Failed to get Stripe Webhook Secret", zap.Error(err))
-	}
-
+	// --- Get Payment Sync Encryption Key ---
+	// Only need encryption key for workspace credential management
 	paymentSyncEncryptionKey, err := secretsClient.GetSecretString(ctx, "PAYMENT_SYNC_ENCRYPTION_KEY_ARN", "PAYMENT_SYNC_ENCRYPTION_KEY")
 	if err != nil || paymentSyncEncryptionKey == "" {
 		logger.Fatal("Failed to get Payment Sync Encryption Key", zap.Error(err))
 	}
 
-	// --- Initialize Payment Sync Service ---
-	stripeService := stripe.NewStripeService(logger.Log, dbQueries)
-	if err := stripeService.Configure(ctx, map[string]string{
-		"api_key":        stripeAPIKey,
-		"webhook_secret": stripeWebhookSecret,
-	}); err != nil {
-		logger.Fatal("Failed to configure Stripe service", zap.Error(err))
-	}
-
-	// Initialize PaymentSyncClient with encryption key
+	// --- Initialize Payment Sync Client ---
+	// Note: No global Stripe service needed - webhooks are routed by workspace resolution
 	paymentSyncClient := payment_sync.NewPaymentSyncClient(dbQueries, logger.Log, paymentSyncEncryptionKey)
-
-	// Register Stripe as a payment provider
-	paymentSyncClient.RegisterProvider("stripe", stripeService)
 
 	// --- Initialize SQS Client (for deployed stages) ---
 	var sqsClient *sqs.Client

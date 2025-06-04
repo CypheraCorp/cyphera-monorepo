@@ -239,15 +239,22 @@ build-webhook-processor:
 build-WebhookReceiverFunction:
 	@echo "Building webhook receiver directly into SAM artifacts dir: $(ARTIFACTS_DIR)"
 	mkdir -p $(ARTIFACTS_DIR)
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o $(ARTIFACTS_DIR)/webhook-receiver $(WEBHOOK_RECEIVER_PACKAGE)
-	@echo "Webhook receiver built successfully in $(ARTIFACTS_DIR)"
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o $(ARTIFACTS_DIR)/bootstrap $(WEBHOOK_RECEIVER_PACKAGE)
+	@echo "Webhook receiver bootstrap built successfully in $(ARTIFACTS_DIR)"
 
 # Target for SAM Build Process (WebhookProcessorFunction matches template Logical ID)
 build-WebhookProcessorFunction:
 	@echo "Building webhook processor directly into SAM artifacts dir: $(ARTIFACTS_DIR)"
 	mkdir -p $(ARTIFACTS_DIR)
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o $(ARTIFACTS_DIR)/webhook-processor $(WEBHOOK_PROCESSOR_PACKAGE)
-	@echo "Webhook processor built successfully in $(ARTIFACTS_DIR)"
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o $(ARTIFACTS_DIR)/bootstrap $(WEBHOOK_PROCESSOR_PACKAGE)
+	@echo "Webhook processor bootstrap built successfully in $(ARTIFACTS_DIR)"
+
+# Target for SAM Build Process (DLQProcessorFunction matches template Logical ID)
+build-DLQProcessorFunction:
+	@echo "Building DLQ processor directly into SAM artifacts dir: $(ARTIFACTS_DIR)"
+	mkdir -p $(ARTIFACTS_DIR)
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o $(ARTIFACTS_DIR)/bootstrap ./cmd/dlq-processor
+	@echo "DLQ processor bootstrap built successfully in $(ARTIFACTS_DIR)"
 
 # Build target for Webhook Processor SAM deployment (creates bootstrap)
 build-webhook-processor-sam-local:
@@ -270,3 +277,10 @@ build-dlq-processor:
 # Build all Lambda functions
 build-lambda-all: build-webhook-receiver build-webhook-processor build-dlq-processor
 	@echo "All Lambda functions built successfully"
+
+# Build DLQ processor function for SAM
+build-DLQProcessorFunction:
+	@echo "Building DLQ processor directly into SAM artifacts dir: $(ARTIFACTS_DIR)"
+	mkdir -p $(ARTIFACTS_DIR)
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o $(ARTIFACTS_DIR)/bootstrap ./cmd/dlq-processor
+	@echo "DLQ processor bootstrap built successfully in $(ARTIFACTS_DIR)"

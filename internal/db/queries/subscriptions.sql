@@ -322,7 +322,7 @@ WHERE s.deleted_at IS NULL
     AND (cw.id IS NULL OR cw.deleted_at IS NULL) -- Correct handling for LEFT JOIN on deletable table
     AND p.workspace_id = $3
 ORDER BY s.created_at DESC
-LIMIT $1 OFFSET $2;
+LIMIT $1 OFFSET $2; 
 
 -- Payment Sync Related Subscription Queries
 

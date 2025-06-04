@@ -9,7 +9,6 @@ import (
 	"cyphera-api/internal/client/coinmarketcap" // Import CMC client
 	dsClient "cyphera-api/internal/client/delegation_server"
 	"cyphera-api/internal/client/payment_sync"
-	"cyphera-api/internal/client/payment_sync/stripe"
 	"cyphera-api/internal/db"
 	"cyphera-api/internal/handlers"
 	"cyphera-api/internal/helpers" // Import helpers
@@ -176,17 +175,6 @@ func InitializeHandlers() {
 	// --- CoinMarketCap Client ---
 	cmcClient := coinmarketcap.NewClient(cmcApiKey)
 
-	// --- Stripe API Keys ---
-	stripeAPIKey, err := secretsClient.GetSecretString(ctx, "STRIPE_API_KEY_ARN", "STRIPE_API_KEY")
-	if err != nil || stripeAPIKey == "" {
-		logger.Fatal("Failed to get Stripe API Key", zap.Error(err))
-	}
-
-	stripeWebhookSecret, err := secretsClient.GetSecretString(ctx, "STRIPE_WEBHOOK_SECRET_ARN", "STRIPE_WEBHOOK_SECRET")
-	if err != nil || stripeWebhookSecret == "" {
-		logger.Fatal("Failed to get Stripe Webhook Secret", zap.Error(err))
-	}
-
 	// --- Payment Sync Encryption Key ---
 	paymentSyncEncryptionKey, err := secretsClient.GetSecretString(ctx, "PAYMENT_SYNC_ENCRYPTION_KEY_ARN", "PAYMENT_SYNC_ENCRYPTION_KEY")
 	if err != nil || paymentSyncEncryptionKey == "" {
@@ -284,19 +272,11 @@ func InitializeHandlers() {
 	subscriptionEventHandler = handlers.NewSubscriptionEventHandler(commonServices)
 
 	// Payment Sync Service and Handlers
-	stripeService := stripe.NewStripeService(logger.Log, dbQueries)
-	if err := stripeService.Configure(context.Background(), map[string]string{
-		"api_key":        stripeAPIKey,
-		"webhook_secret": stripeWebhookSecret,
-	}); err != nil {
-		logger.Log.Fatal("Failed to configure Stripe service", zap.Error(err))
-	}
+	// Note: Stripe services are now configured per-workspace dynamically,
+	// no global Stripe service configuration needed
 
 	// Initialize PaymentSyncClient with encryption key
 	paymentSyncClient := payment_sync.NewPaymentSyncClient(dbQueries, logger.Log, paymentSyncEncryptionKey)
-
-	// Register Stripe as a payment provider
-	paymentSyncClient.RegisterProvider("stripe", stripeService)
 
 	// Initialize PaymentSyncHandlers with the unified client
 	paymentSyncHandler = handlers.NewPaymentSyncHandlers(dbQueries, logger.Log, paymentSyncClient)

@@ -1,11 +1,11 @@
 # ===============================================
-# Multi-Provider Webhook Monitoring & Alerting
+# Multi-Provider Webhook Monitoring (Terraform-managed resources only)
 # ===============================================
 
-# CloudWatch Log Groups for Webhook API Gateway
-# (Note: Lambda log groups are managed by SAM)
+# NOTE: API Gateway monitoring is now handled by SAM template
+# This file only covers SQS queue monitoring for Terraform-managed resources
 
-# CloudWatch Alarms for SQS Queue Monitoring
+# SQS Queue Depth Alarm
 resource "aws_cloudwatch_metric_alarm" "webhook_queue_high_depth" {
   alarm_name          = "${var.service_prefix}-webhook-queue-high-depth-${var.stage}"
   comparison_operator = "GreaterThanThreshold"
@@ -16,7 +16,7 @@ resource "aws_cloudwatch_metric_alarm" "webhook_queue_high_depth" {
   statistic           = "Average"
   threshold           = "100"
   alarm_description   = "This metric monitors webhook SQS queue depth"
-  alarm_actions       = []
+  treat_missing_data  = "missing"
 
   dimensions = {
     QueueName = aws_sqs_queue.provider_webhook_events.name
@@ -28,6 +28,7 @@ resource "aws_cloudwatch_metric_alarm" "webhook_queue_high_depth" {
   })
 }
 
+# DLQ Messages Alarm (Critical - should always be zero)
 resource "aws_cloudwatch_metric_alarm" "webhook_dlq_messages" {
   alarm_name          = "${var.service_prefix}-webhook-dlq-messages-${var.stage}"
   comparison_operator = "GreaterThanThreshold"
@@ -38,7 +39,7 @@ resource "aws_cloudwatch_metric_alarm" "webhook_dlq_messages" {
   statistic           = "Sum"
   threshold           = "0"
   alarm_description   = "This metric monitors messages in webhook DLQ"
-  alarm_actions       = []
+  treat_missing_data  = "missing"
 
   dimensions = {
     QueueName = aws_sqs_queue.provider_webhook_events_dlq.name
@@ -50,56 +51,9 @@ resource "aws_cloudwatch_metric_alarm" "webhook_dlq_messages" {
   })
 }
 
-# API Gateway Monitoring
-resource "aws_cloudwatch_metric_alarm" "webhook_api_4xx_errors" {
-  alarm_name          = "${var.service_prefix}-webhook-api-4xx-errors-${var.stage}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "4XXError"
-  namespace           = "AWS/ApiGateway"
-  period              = "300"
-  statistic           = "Sum"
-  threshold           = "10"
-  alarm_description   = "This metric monitors 4XX errors from webhook API Gateway"
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    ApiName = aws_api_gateway_rest_api.webhook_api.name
-    Stage   = var.stage
-  }
-
-  tags = merge(local.common_tags, {
-    Component = "webhook-infrastructure"
-    AlertType = "operational"
-  })
-}
-
-resource "aws_cloudwatch_metric_alarm" "webhook_api_5xx_errors" {
-  alarm_name          = "${var.service_prefix}-webhook-api-5xx-errors-${var.stage}"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "1"
-  metric_name         = "5XXError"
-  namespace           = "AWS/ApiGateway"
-  period              = "300"
-  statistic           = "Sum"
-  threshold           = "0"
-  alarm_description   = "This metric monitors 5XX errors from webhook API Gateway"
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    ApiName = aws_api_gateway_rest_api.webhook_api.name
-    Stage   = var.stage
-  }
-
-  tags = merge(local.common_tags, {
-    Component = "webhook-infrastructure"
-    AlertType = "critical"
-  })
-}
-
-# Custom CloudWatch Dashboard for Webhook Infrastructure
-resource "aws_cloudwatch_dashboard" "webhook_dashboard" {
-  dashboard_name = "${var.service_prefix}-webhook-dashboard-${var.stage}"
+# CloudWatch Dashboard for SQS metrics
+resource "aws_cloudwatch_dashboard" "webhook_sqs_dashboard" {
+  dashboard_name = "${var.service_prefix}-webhook-sqs-dashboard-${var.stage}"
 
   dashboard_body = jsonencode({
     widgets = [
@@ -114,7 +68,7 @@ resource "aws_cloudwatch_dashboard" "webhook_dashboard" {
           metrics = [
             ["AWS/SQS", "ApproximateNumberOfVisibleMessages", "QueueName", aws_sqs_queue.provider_webhook_events.name],
             [".", "NumberOfMessagesSent", ".", "."],
-            [".", "NumberOfMessagesReceived", ".", "."]
+            [".", "NumberOfMessagesReceived", ".", "."],
           ]
           view    = "timeSeries"
           stacked = false
@@ -132,28 +86,7 @@ resource "aws_cloudwatch_dashboard" "webhook_dashboard" {
 
         properties = {
           metrics = [
-            ["AWS/ApiGateway", "Count", "ApiName", aws_api_gateway_rest_api.webhook_api.name, "Stage", var.stage],
-            [".", "4XXError", ".", ".", ".", "."],
-            [".", "5XXError", ".", ".", ".", "."],
-            [".", "Latency", ".", ".", ".", "."]
-          ]
-          view    = "timeSeries"
-          stacked = false
-          region  = var.aws_region
-          title   = "API Gateway Metrics"
-          period  = 300
-        }
-      },
-      {
-        type   = "metric"
-        x      = 0
-        y      = 6
-        width  = 24
-        height = 6
-
-        properties = {
-          metrics = [
-            ["AWS/SQS", "ApproximateNumberOfVisibleMessages", "QueueName", aws_sqs_queue.provider_webhook_events_dlq.name]
+            ["AWS/SQS", "ApproximateNumberOfVisibleMessages", "QueueName", aws_sqs_queue.provider_webhook_events_dlq.name],
           ]
           view    = "timeSeries"
           stacked = false
@@ -171,33 +104,11 @@ resource "aws_cloudwatch_dashboard" "webhook_dashboard" {
   })
 }
 
-# Log Insights Saved Queries for troubleshooting
-resource "aws_cloudwatch_query_definition" "webhook_api_errors" {
-  name = "${var.service_prefix}-webhook-api-errors-${var.stage}"
+# ===============================================
+# Note about SAM-managed monitoring
+# ===============================================
 
-  log_group_names = [
-    aws_cloudwatch_log_group.webhook_api_logs.name
-  ]
-
-  query_string = <<EOF
-fields @timestamp, @message, @requestId
-| filter @message like /ERROR/
-| sort @timestamp desc
-| limit 100
-EOF
-}
-
-resource "aws_cloudwatch_query_definition" "webhook_provider_analysis" {
-  name = "${var.service_prefix}-webhook-provider-analysis-${var.stage}"
-
-  log_group_names = [
-    aws_cloudwatch_log_group.webhook_api_logs.name
-  ]
-
-  query_string = <<EOF
-fields @timestamp, resourcePath, httpMethod, status, responseLength
-| filter resourcePath like /webhooks/
-| stats count() by resourcePath
-| sort count desc
-EOF
+output "webhook_monitoring_note" {
+  description = "Information about webhook monitoring coverage"
+  value = "SQS monitoring managed by Terraform. API Gateway and Lambda monitoring managed by SAM template."
 } 

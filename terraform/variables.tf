@@ -33,7 +33,7 @@ variable "prod_backup_retention_period" {
 
 variable "nate_machine_ip" {
   description = "Development machine IP address for RDS access"
-  default     = "151.204.139.74/32"  # Your current IP
+  default     = "151.204.139.74/32" # Your current IP
 }
 
 variable "service_prefix" {
@@ -90,22 +90,8 @@ variable "delegation_private_key_value" {
 }
 
 # ===============================================
-# Stripe Webhook Variables
+# Multi-Provider Webhook Variables
 # ===============================================
-
-variable "stripe_api_key_value" {
-  description = "The Stripe API Key (secret key) for webhook and sync operations"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "stripe_webhook_secret_value" {
-  description = "The Stripe Webhook Signing Secret for validating webhook signatures"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
 
 variable "payment_sync_encryption_key_value" {
   description = "AES-256 encryption key for encrypting payment sync configuration data"

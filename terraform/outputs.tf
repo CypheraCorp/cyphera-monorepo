@@ -10,6 +10,47 @@ output "rds_arn" {
   value       = aws_db_instance.main.arn
 }
 
+# Output for RDS secret ARN (required by SAM)
+output "rds_secret_arn" {
+  description = "The ARN of the RDS master user secret"
+  value       = aws_db_instance.main.master_user_secret[0].secret_arn
+}
+
+# Output for RDS host (without port)
+output "db_host" {
+  description = "The RDS host without port"
+  value       = aws_db_instance.main.address
+}
+
+# Output for Lambda Security Group ID (required by SAM)
+output "lambda_security_group_id" {
+  description = "The Security Group ID for Lambda functions"
+  value       = aws_security_group.lambda.id
+}
+
+# Output for Private Subnet IDs (required by SAM)
+output "private_subnet_1_id" {
+  description = "The ID of the first private subnet"
+  value       = module.vpc.private_subnets[0]
+}
+
+output "private_subnet_2_id" {
+  description = "The ID of the second private subnet"
+  value       = module.vpc.private_subnets[1]
+}
+
+# Output for Payment Sync Encryption Key ARN (required by SAM)
+output "payment_sync_encryption_key_secret_arn" {
+  description = "The ARN of the payment sync encryption key secret"
+  value       = aws_secretsmanager_secret.payment_sync_encryption_key.arn
+}
+
+# Output for Webhook Secrets Manager Policy ARN (required by SAM)
+output "webhook_secrets_manager_policy_arn" {
+  description = "The ARN of the webhook secrets manager policy"
+  value       = aws_iam_policy.webhook_secrets_policy.arn
+}
+
 # --- SSM Parameter for Lambda Security Group ID ---
 # Store the Lambda SG ID in SSM for lookup by Serverless Framework
 resource "aws_ssm_parameter" "lambda_sg_id" {
@@ -111,134 +152,11 @@ output "pimlico_api_key_ssm_parameter_name" {
   value       = aws_ssm_parameter.pimlico_api_key_arn.name
 }
 
-# Delegation server ALB outputs
-output "delegation_server_alb_dns_name" {
-  description = "DNS name of the delegation server ALB"
-  value       = aws_lb.delegation_server.dns_name
-}
-
-output "delegation_server_alb_zone_id" {
-  description = "Zone ID of the delegation server ALB"
-  value       = aws_lb.delegation_server.zone_id
-}
-
 # ===============================================
-# Stripe Webhook Infrastructure Outputs
+# Note: Webhook infrastructure outputs moved to SAM template
 # ===============================================
 
-output "stripe_webhook_api_url" {
-  description = "URL for the Stripe webhook API Gateway endpoint"
-  value       = "${aws_api_gateway_stage.stripe_webhooks.invoke_url}/webhooks/stripe"
-}
-
-output "stripe_webhook_api_gateway_id" {
-  description = "ID of the Stripe webhooks API Gateway"
-  value       = aws_api_gateway_rest_api.stripe_webhooks.id
-}
-
-output "stripe_webhook_events_queue_url" {
-  description = "URL of the main Stripe webhook events SQS queue"
-  value       = aws_sqs_queue.stripe_webhook_events.url
-}
-
-output "stripe_webhook_events_queue_arn" {
-  description = "ARN of the main Stripe webhook events SQS queue"
-  value       = aws_sqs_queue.stripe_webhook_events.arn
-}
-
-output "stripe_webhook_events_dlq_url" {
-  description = "URL of the Stripe webhook events dead letter queue"
-  value       = aws_sqs_queue.stripe_webhook_events_dlq.url
-}
-
-output "stripe_webhook_receiver_lambda_arn" {
-  description = "ARN of the Stripe webhook receiver Lambda function"
-  value       = aws_lambda_function.stripe_webhook_receiver.arn
-}
-
-output "stripe_webhook_processor_lambda_arn" {
-  description = "ARN of the Stripe webhook processor Lambda function"
-  value       = aws_lambda_function.stripe_webhook_processor.arn
-}
-
-output "stripe_webhook_receiver_lambda_name" {
-  description = "Name of the Stripe webhook receiver Lambda function"
-  value       = aws_lambda_function.stripe_webhook_receiver.function_name
-}
-
-output "stripe_webhook_processor_lambda_name" {
-  description = "Name of the Stripe webhook processor Lambda function"
-  value       = aws_lambda_function.stripe_webhook_processor.function_name
-}
-
-# ===============================================
-# Webhook Infrastructure Outputs (for SAM)
-# ===============================================
-
-# SQS Outputs
-output "webhook_sqs_queue_url" {
-  description = "URL of the webhook events SQS queue"
-  value       = aws_sqs_queue.provider_webhook_events.url
-}
-
-output "webhook_sqs_queue_arn" {
-  description = "ARN of the webhook events SQS queue"
-  value       = aws_sqs_queue.provider_webhook_events.arn
-}
-
-output "webhook_sqs_dlq_arn" {
-  description = "ARN of the webhook events DLQ"
-  value       = aws_sqs_queue.provider_webhook_events_dlq.arn
-}
-
-# Secrets Manager Outputs
-output "stripe_api_key_secret_arn" {
-  description = "ARN of Stripe API key secret"
-  value       = aws_secretsmanager_secret.stripe_api_key.arn
-}
-
-output "stripe_webhook_secret_arn" {
-  description = "ARN of Stripe webhook secret"
-  value       = aws_secretsmanager_secret.stripe_webhook_secret.arn
-}
-
-output "payment_sync_encryption_key_secret_arn" {
-  description = "ARN of payment sync encryption key secret"
-  value       = aws_secretsmanager_secret.payment_sync_encryption_key.arn
-}
-
-# IAM Policy Outputs (for SAM to attach to Lambda roles)
-output "webhook_secrets_policy_arn" {
-  description = "ARN of webhook secrets access policy"
-  value       = aws_iam_policy.webhook_secrets_policy.arn
-}
-
-output "webhook_sqs_policy_arn" {
-  description = "ARN of webhook SQS access policy"
-  value       = aws_iam_policy.webhook_sqs_policy.arn
-}
-
-# API Gateway Outputs
-output "webhook_api_gateway_id" {
-  description = "ID of the webhook API Gateway"
-  value       = aws_api_gateway_rest_api.webhook_api.id
-}
-
-output "webhook_api_gateway_root_resource_id" {
-  description = "Root resource ID of the webhook API Gateway"
-  value       = aws_api_gateway_rest_api.webhook_api.root_resource_id
-}
-
-output "webhook_api_endpoint" {
-  description = "Webhook API Gateway endpoint URL"
-  value       = "https://${aws_api_gateway_rest_api.webhook_api.id}.execute-api.${var.aws_region}.amazonaws.com/${var.stage}"
-}
-
-# VPC/Network Outputs (that SAM Lambda functions might need)
-# Note: VPC configuration should be passed via SAM parameters from your deployment script
-output "webhook_vpc_config" {
-  description = "VPC configuration placeholder for webhook Lambda functions"
-  value = {
-    note = "VPC configuration should be provided via SAM template parameters"
-  }
+output "webhook_infrastructure_note" {
+  description = "Webhook infrastructure deployment information"
+  value = "Webhook API Gateway, Lambda functions, and related resources are deployed via SAM. See deployment/template-webhook.yaml"
 } 
