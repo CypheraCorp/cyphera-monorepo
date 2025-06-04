@@ -175,7 +175,7 @@ jobs:
         use-installer: true
 
     - name: Cache SAM build artifacts
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           .aws-sam/build
@@ -185,7 +185,7 @@ jobs:
           sam-build-${{ runner.os }}-
 
     - name: Cache Go modules
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cache/go-build
@@ -225,7 +225,7 @@ jobs:
         echo "✅ Build completed successfully"
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: sam-build-artifacts
         path: |
@@ -259,7 +259,7 @@ jobs:
         use-installer: true
 
     - name: Download build artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: sam-build-artifacts
         path: .
