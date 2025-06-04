@@ -69,7 +69,7 @@ jobs:
     - name: Validate SAM template
       run: |
         echo "🔍 Validating SAM template..."
-        sam validate --template ${{ env.SAM_TEMPLATE }}
+        sam validate --template ${{ env.SAM_TEMPLATE }} --region ${{ env.AWS_REGION }}
         echo "✅ SAM template is valid"
 
     - name: Check required Go files exist
