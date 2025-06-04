@@ -63,7 +63,6 @@ Globals:
       - x86_64
     MemorySize: 512
     Timeout: 60
-    ReservedConcurrentExecutions: 50
 
 # ============================================================================
 # Lambda Functions
