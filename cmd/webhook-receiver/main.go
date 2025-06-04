@@ -43,9 +43,33 @@ func (app *Application) HandleAPIGatewayRequest(ctx context.Context, request eve
 		zap.String("path", request.Path),
 		zap.String("method", request.HTTPMethod))
 
+	// Handle health check requests
+	if request.Path == "/health" && request.HTTPMethod == "GET" {
+		logger.Info("Health check requested")
+		return events.APIGatewayProxyResponse{
+			StatusCode: 200,
+			Body:       `{"status": "healthy", "service": "webhook-receiver", "timestamp": "` + time.Now().Format(time.RFC3339) + `"}`,
+			Headers: map[string]string{
+				"Content-Type": "application/json",
+			},
+		}, nil
+	}
+
 	// Extract provider from path (e.g., /webhooks/stripe)
 	provider := request.PathParameters["provider"]
 	if provider == "" {
+		// Check if this is a health check request with provider in path
+		if strings.Contains(request.Path, "/health") {
+			logger.Info("Health check requested via provider path")
+			return events.APIGatewayProxyResponse{
+				StatusCode: 200,
+				Body:       `{"status": "healthy", "service": "webhook-receiver", "timestamp": "` + time.Now().Format(time.RFC3339) + `"}`,
+				Headers: map[string]string{
+					"Content-Type": "application/json",
+				},
+			}, nil
+		}
+
 		logger.Error("No provider specified in webhook path")
 		return events.APIGatewayProxyResponse{
 			StatusCode: 400,
