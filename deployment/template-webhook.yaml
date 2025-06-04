@@ -223,7 +223,6 @@ Resources:
       Handler: bootstrap # Standard handler for Go custom runtime
       Timeout: 900 # Maximum timeout for retry processing
       MemorySize: 1024 # More memory for complex retry logic
-      ReservedConcurrentExecutions: 10 # Limit concurrency for DLQ processing
       Environment:
         Variables:
           STAGE: !Ref Stage
