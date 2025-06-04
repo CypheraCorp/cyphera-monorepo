@@ -42,6 +42,53 @@ type DetailedSuccessResponse struct {
 	Data    interface{} `json:"data,omitempty"`
 }
 
+// WebhookReplayRequest represents a webhook replay request for swagger documentation
+type WebhookReplayRequest struct {
+	WorkspaceID    string `json:"workspace_id" binding:"required"`
+	ProviderName   string `json:"provider_name" binding:"required"`
+	WebhookEventID string `json:"webhook_event_id" binding:"required"`
+	ForceReplay    bool   `json:"force_replay"`
+	ReplayReason   string `json:"replay_reason,omitempty"`
+}
+
+// WebhookReplayResponse represents the result of webhook replay for swagger documentation
+type WebhookReplayResponse struct {
+	Success         bool   `json:"success"`
+	ReplayEventID   string `json:"replay_event_id,omitempty"`
+	OriginalEventID string `json:"original_event_id"`
+	ReplayedAt      string `json:"replayed_at"`
+	Message         string `json:"message"`
+	Error           string `json:"error,omitempty"`
+}
+
+// SyncRecoveryRequest represents a sync session recovery request for swagger documentation
+type SyncRecoveryRequest struct {
+	WorkspaceID  string   `json:"workspace_id" binding:"required"`
+	SessionID    string   `json:"session_id" binding:"required"`
+	RecoveryMode string   `json:"recovery_mode"` // "resume", "restart"
+	EntityTypes  []string `json:"entity_types,omitempty"`
+}
+
+// SyncRecoveryResponse represents the result of sync recovery for swagger documentation
+type SyncRecoveryResponse struct {
+	Success     bool                   `json:"success"`
+	SessionID   string                 `json:"session_id"`
+	RecoveredAt string                 `json:"recovered_at"`
+	Progress    map[string]interface{} `json:"progress,omitempty"`
+	Message     string                 `json:"message"`
+	Error       string                 `json:"error,omitempty"`
+}
+
+// DLQProcessingStats represents DLQ processing statistics for swagger documentation
+type DLQProcessingStats struct {
+	TotalMessages         int64   `json:"total_messages"`
+	SuccessfullyProcessed int64   `json:"successfully_processed"`
+	ProcessingFailed      int64   `json:"processing_failed"`
+	MaxRetriesExceeded    int64   `json:"max_retries_exceeded"`
+	LastProcessedAt       string  `json:"last_processed_at"`
+	SuccessRate           float64 `json:"success_rate"`
+}
+
 // ReplayWebhook godoc
 // @Summary Replay a failed webhook event
 // @Description Manually replay a webhook event that failed processing
@@ -49,8 +96,8 @@ type DetailedSuccessResponse struct {
 // @Accept json
 // @Produce json
 // @Param workspace_id path string true "Workspace ID"
-// @Param request body services.WebhookReplayRequest true "Webhook replay request"
-// @Success 200 {object} services.WebhookReplayResponse
+// @Param request body WebhookReplayRequest true "Webhook replay request"
+// @Success 200 {object} WebhookReplayResponse
 // @Failure 400 {object} DetailedErrorResponse
 // @Failure 500 {object} DetailedErrorResponse
 // @Router /api/v1/workspaces/{workspace_id}/webhooks/replay [post]
@@ -64,7 +111,7 @@ func (h *ErrorRecoveryHandlers) ReplayWebhook(c *gin.Context) {
 		return
 	}
 
-	var req services.WebhookReplayRequest
+	var req WebhookReplayRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warn("Invalid webhook replay request", zap.Error(err))
 		c.JSON(http.StatusBadRequest, DetailedErrorResponse{
@@ -84,7 +131,16 @@ func (h *ErrorRecoveryHandlers) ReplayWebhook(c *gin.Context) {
 		zap.String("webhook_event_id", req.WebhookEventID),
 		zap.Bool("force_replay", req.ForceReplay))
 
-	response, err := h.errorRecoveryService.ReplayWebhookEvent(c.Request.Context(), req)
+	// Convert to services type
+	serviceReq := services.WebhookReplayRequest{
+		WorkspaceID:    req.WorkspaceID,
+		ProviderName:   req.ProviderName,
+		WebhookEventID: req.WebhookEventID,
+		ForceReplay:    req.ForceReplay,
+		ReplayReason:   req.ReplayReason,
+	}
+
+	response, err := h.errorRecoveryService.ReplayWebhookEvent(c.Request.Context(), serviceReq)
 	if err != nil {
 		h.logger.Error("Failed to replay webhook", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, DetailedErrorResponse{
@@ -109,8 +165,8 @@ func (h *ErrorRecoveryHandlers) ReplayWebhook(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param workspace_id path string true "Workspace ID"
-// @Param request body services.SyncRecoveryRequest true "Sync recovery request"
-// @Success 200 {object} services.SyncRecoveryResponse
+// @Param request body SyncRecoveryRequest true "Sync recovery request"
+// @Success 200 {object} SyncRecoveryResponse
 // @Failure 400 {object} DetailedErrorResponse
 // @Failure 500 {object} DetailedErrorResponse
 // @Router /api/v1/workspaces/{workspace_id}/sync/recover [post]
@@ -124,7 +180,7 @@ func (h *ErrorRecoveryHandlers) RecoverSyncSession(c *gin.Context) {
 		return
 	}
 
-	var req services.SyncRecoveryRequest
+	var req SyncRecoveryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warn("Invalid sync recovery request", zap.Error(err))
 		c.JSON(http.StatusBadRequest, DetailedErrorResponse{
@@ -148,7 +204,15 @@ func (h *ErrorRecoveryHandlers) RecoverSyncSession(c *gin.Context) {
 		zap.String("session_id", req.SessionID),
 		zap.String("recovery_mode", req.RecoveryMode))
 
-	response, err := h.errorRecoveryService.RecoverSyncSession(c.Request.Context(), req)
+	// Convert to services type
+	serviceReq := services.SyncRecoveryRequest{
+		WorkspaceID:  req.WorkspaceID,
+		SessionID:    req.SessionID,
+		RecoveryMode: req.RecoveryMode,
+		EntityTypes:  req.EntityTypes,
+	}
+
+	response, err := h.errorRecoveryService.RecoverSyncSession(c.Request.Context(), serviceReq)
 	if err != nil {
 		h.logger.Error("Failed to recover sync session", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, DetailedErrorResponse{
@@ -174,7 +238,7 @@ func (h *ErrorRecoveryHandlers) RecoverSyncSession(c *gin.Context) {
 // @Param workspace_id path string true "Workspace ID"
 // @Param provider query string true "Provider name (e.g., stripe)"
 // @Param since query string false "Since timestamp (Unix timestamp or RFC3339)"
-// @Success 200 {object} services.DLQProcessingStats
+// @Success 200 {object} DLQProcessingStats
 // @Failure 400 {object} DetailedErrorResponse
 // @Failure 500 {object} DetailedErrorResponse
 // @Router /api/v1/workspaces/{workspace_id}/dlq/stats [get]

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"time"
@@ -19,6 +20,10 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -569,12 +574,155 @@ func (app *Application) processSubscriptionEvent(ctx context.Context, workspaceI
 	return nil
 }
 
-// LocalHandleRequest handles local testing
+// LocalHandleRequest handles local testing with SQS polling
 func (app *Application) LocalHandleRequest(ctx context.Context) error {
-	logger.Info("Webhook processor running in local mode")
-	// For local testing, just log that the service is ready
-	logger.Info("Webhook processor initialized successfully")
-	return nil
+	logger.Info("Webhook processor running in local mode, starting HTTP server and SQS polling...")
+
+	// Start health check server in a goroutine
+	go app.startHealthServer()
+
+	// Start SQS polling
+	return app.startSQSPolling(ctx)
+}
+
+// startHealthServer starts an HTTP server for health checks
+func (app *Application) startHealthServer() {
+	mux := http.NewServeMux()
+
+	// Health check endpoint
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "healthy",
+			"service":   "webhook-processor",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+	})
+
+	// Status endpoint
+	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "polling",
+			"service":   "webhook-processor",
+			"mode":      "sqs-polling",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+	})
+
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: mux,
+	}
+
+	logger.Info("Starting webhook processor health server on port 8080")
+	if err := server.ListenAndServe(); err != nil {
+		logger.Error("Health server error", zap.Error(err))
+	}
+}
+
+// startSQSPolling starts polling SQS for webhook events
+func (app *Application) startSQSPolling(ctx context.Context) error {
+	// Initialize LocalStack SQS client for local development
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion("us-east-1"),
+		config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
+			func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+				return aws.Endpoint{
+					URL: "http://localhost:4566", // LocalStack endpoint
+				}, nil
+			})),
+		config.WithCredentialsProvider(credentials.StaticCredentialsProvider{
+			Value: aws.Credentials{
+				AccessKeyID:     "test",
+				SecretAccessKey: "test",
+			},
+		}),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to load AWS config for local SQS: %w", err)
+	}
+
+	sqsClient := sqs.NewFromConfig(cfg)
+	queueURL := "http://localhost:4566/000000000000/webhook-queue"
+
+	logger.Info("Starting SQS polling", zap.String("queue_url", queueURL))
+
+	// Poll SQS continuously
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("Context cancelled, stopping SQS polling")
+			return ctx.Err()
+		default:
+			// Poll for messages
+			result, err := sqsClient.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+				QueueUrl:              &queueURL,
+				MaxNumberOfMessages:   10,
+				WaitTimeSeconds:       20, // Long polling
+				MessageAttributeNames: []string{"All"},
+			})
+			if err != nil {
+				logger.Error("Failed to receive SQS messages", zap.Error(err))
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			if len(result.Messages) == 0 {
+				continue
+			}
+
+			logger.Info("Received SQS messages", zap.Int("count", len(result.Messages)))
+
+			// Convert SQS messages to SQS event format
+			sqsEvent := events.SQSEvent{
+				Records: make([]events.SQSMessage, len(result.Messages)),
+			}
+
+			for i, msg := range result.Messages {
+				// Convert SQS message attributes
+				attrs := make(map[string]events.SQSMessageAttribute)
+				for k, v := range msg.MessageAttributes {
+					attr := events.SQSMessageAttribute{}
+					if v.StringValue != nil {
+						attr.StringValue = v.StringValue
+					}
+					if v.DataType != nil {
+						attr.DataType = *v.DataType
+					}
+					attrs[k] = attr
+				}
+
+				sqsEvent.Records[i] = events.SQSMessage{
+					MessageId:         *msg.MessageId,
+					Body:              *msg.Body,
+					MessageAttributes: attrs,
+					ReceiptHandle:     *msg.ReceiptHandle,
+				}
+			}
+
+			// Process the event
+			err = app.HandleSQSEvent(ctx, sqsEvent)
+			if err != nil {
+				logger.Error("Failed to process SQS event", zap.Error(err))
+				// Don't delete messages on error - they'll be retried
+				continue
+			}
+
+			// Delete processed messages
+			for _, msg := range result.Messages {
+				_, err := sqsClient.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+					QueueUrl:      &queueURL,
+					ReceiptHandle: msg.ReceiptHandle,
+				})
+				if err != nil {
+					logger.Error("Failed to delete SQS message", zap.Error(err))
+				}
+			}
+		}
+	}
 }
 
 func main() {

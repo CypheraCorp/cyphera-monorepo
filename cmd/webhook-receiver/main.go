@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -276,12 +278,109 @@ func (app *Application) queueWebhookEvent(ctx context.Context, webhookEvent paym
 	return nil
 }
 
-// LocalHandleRequest handles local testing
+// LocalHandleRequest handles local testing with HTTP server
 func (app *Application) LocalHandleRequest(ctx context.Context) error {
-	logger.Info("Webhook receiver running in local mode")
-	// For local testing, just log that the service is ready
-	logger.Info("Webhook receiver initialized successfully")
-	return nil
+	logger.Info("Webhook receiver running in local mode, starting HTTP server...")
+
+	// Get port from environment
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3001"
+	}
+
+	// Create HTTP router
+	mux := http.NewServeMux()
+
+	// Health check endpoint
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "healthy",
+			"service":   "webhook-receiver",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+	})
+
+	// Webhook endpoints
+	mux.HandleFunc("/webhooks/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Parse path to get provider and workspace ID
+		pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(pathParts) < 2 {
+			http.Error(w, "Invalid webhook path", http.StatusBadRequest)
+			return
+		}
+
+		provider := pathParts[1]
+		var workspaceID string
+		if len(pathParts) >= 3 {
+			workspaceID = pathParts[2]
+		}
+
+		// Read request body
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			logger.Error("Failed to read request body", zap.Error(err))
+			http.Error(w, "Failed to read request body", http.StatusBadRequest)
+			return
+		}
+
+		// Get signature header
+		var signatureHeader string
+		switch provider {
+		case "stripe":
+			signatureHeader = r.Header.Get("Stripe-Signature")
+		default:
+			http.Error(w, "Unsupported provider", http.StatusBadRequest)
+			return
+		}
+
+		// Convert HTTP request to API Gateway event format
+		apiGatewayEvent := events.APIGatewayProxyRequest{
+			HTTPMethod: r.Method,
+			Path:       r.URL.Path,
+			PathParameters: map[string]string{
+				"provider": provider,
+			},
+			Headers: map[string]string{
+				"stripe-signature": signatureHeader,
+				"Stripe-Signature": signatureHeader,
+			},
+			Body: string(body),
+		}
+
+		// If workspace ID is in path, add it to path parameters
+		if workspaceID != "" {
+			apiGatewayEvent.PathParameters["workspaceId"] = workspaceID
+		}
+
+		// Process the webhook
+		response, err := app.HandleAPIGatewayRequest(ctx, apiGatewayEvent)
+		if err != nil {
+			logger.Error("Error processing webhook", zap.Error(err))
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		// Write response
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(response.StatusCode)
+		w.Write([]byte(response.Body))
+	})
+
+	// Start server
+	server := &http.Server{
+		Addr:    ":" + port,
+		Handler: mux,
+	}
+
+	logger.Info("Starting webhook receiver HTTP server", zap.String("port", port))
+	return server.ListenAndServe()
 }
 
 func main() {
