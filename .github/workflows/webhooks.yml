@@ -97,7 +97,6 @@ jobs:
   test:
     name: Test Webhook Components
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || github.event.inputs.force_deploy == 'true'
 
     services:
       postgres:
@@ -128,6 +127,7 @@ jobs:
       run: go mod download
 
     - name: Run webhook component tests
+      if: github.event_name == 'pull_request' || github.event.inputs.force_deploy == 'true'
       env:
         DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
         PAYMENT_SYNC_ENCRYPTION_KEY: fake_encryption_key_for_testing_32chars
@@ -139,6 +139,12 @@ jobs:
         go test -v ./internal/client/payment_sync/...
         go test -v ./internal/handlers -run ".*PaymentSync.*"
         echo "✅ Tests completed"
+
+    - name: Skip tests for push to main/dev
+      if: github.event_name != 'pull_request' && github.event.inputs.force_deploy != 'true'
+      run: |
+        echo "⏭️ Skipping tests for push to main/dev branch"
+        echo "✅ Tests skipped (not required for deployment)"
 
   # ============================================================================
   # Deploy webhook infrastructure using deployment script
