@@ -277,10 +277,3 @@ build-dlq-processor:
 # Build all Lambda functions
 build-lambda-all: build-webhook-receiver build-webhook-processor build-dlq-processor
 	@echo "All Lambda functions built successfully"
-
-# Build DLQ processor function for SAM
-build-DLQProcessorFunction:
-	@echo "Building DLQ processor directly into SAM artifacts dir: $(ARTIFACTS_DIR)"
-	mkdir -p $(ARTIFACTS_DIR)
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) build -o $(ARTIFACTS_DIR)/bootstrap ./cmd/dlq-processor
-	@echo "DLQ processor bootstrap built successfully in $(ARTIFACTS_DIR)"
