@@ -478,14 +478,19 @@ jobs:
           cat health_response.json
         
           # Check for successful response
-          if grep -q '"StatusCode": 200' health_response.json || grep -q '"statusCode": 200' health_response.json; then
+          if grep -q '"StatusCode": *200' health_response.json || grep -q '"statusCode": *200' health_response.json; then
             echo "✅ Webhook receiver health check passed with HTTP 200"
           elif grep -q '"StatusCode"' health_response.json || grep -q '"statusCode"' health_response.json; then
-            STATUS_CODE=$(grep -o '"[Ss]tatusCode": [0-9]*' health_response.json | grep -o '[0-9]*')
+            STATUS_CODE=$(grep -o '"[Ss]tatusCode": *[0-9]*' health_response.json | grep -o '[0-9][0-9]*')
             echo "⚠️ Webhook receiver responded with status code: $STATUS_CODE"
             # Print the response body for debugging
-            BODY=$(grep -o '"Body": "[^"]*"' health_response.json | cut -d'"' -f4)
-            echo "Response body: $BODY"
+            if grep -q '"Body":' health_response.json; then
+              BODY=$(grep -o '"Body": *"[^"]*"' health_response.json | sed 's/.*"Body": *"\([^"]*\)".*/\1/')
+              echo "Response body: $BODY"
+            elif grep -q '"body":' health_response.json; then
+              BODY=$(grep -o '"body": *"[^"]*"' health_response.json | sed 's/.*"body": *"\([^"]*\)".*/\1/')
+              echo "Response body: $BODY"
+            fi
           else
             echo "⚠️ Webhook receiver health check inconclusive - no status code found"
             echo "Full response for debugging:"
