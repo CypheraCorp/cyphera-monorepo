@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
 
+	"cyphera-api/internal/client/aws"
 	"cyphera-api/internal/client/payment_sync"
 	"cyphera-api/internal/db"
+	"cyphera-api/internal/helpers"
 	"cyphera-api/internal/logger"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -65,36 +68,92 @@ func main() {
 	lambda.Start(app.handleDLQEvent)
 }
 
+// @godoc createApplication creates a new Application instance with proper AWS configuration for Lambda environment
 func createApplication(logger *zap.Logger) (*Application, error) {
-	// Get configuration from environment variables
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		return nil, fmt.Errorf("DATABASE_URL environment variable is required")
+	ctx := context.Background()
+
+	// Initialize AWS Secrets Manager Client
+	secretsClient, err := aws.NewSecretsManagerClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize AWS Secrets Manager client: %w", err)
 	}
 
-	encryptionKey := os.Getenv("PAYMENT_SYNC_ENCRYPTION_KEY")
-	if encryptionKey == "" {
-		return nil, fmt.Errorf("PAYMENT_SYNC_ENCRYPTION_KEY environment variable is required")
+	// Get stage from environment
+	stage := os.Getenv("STAGE")
+	if stage == "" {
+		stage = helpers.StageLocal
+	}
+
+	// Database Connection Setup (consistent with other Lambda functions)
+	var dsn string
+	if stage == helpers.StageProd || stage == helpers.StageDev {
+		logger.Info("Running in deployed stage, fetching DB credentials from Secrets Manager", zap.String("stage", stage))
+		dbEndpoint := os.Getenv("DB_HOST")
+		dbName := os.Getenv("DB_NAME")
+		dbSecretArn := os.Getenv("RDS_SECRET_ARN")
+		dbSSLMode := os.Getenv("DB_SSLMODE")
+
+		if dbEndpoint == "" || dbName == "" || dbSecretArn == "" {
+			return nil, fmt.Errorf("missing required DB environment variables for deployed environment (DB_HOST, DB_NAME, RDS_SECRET_ARN)")
+		}
+		if dbSSLMode == "" {
+			dbSSLMode = "require"
+			logger.Warn("DB_SSLMODE not set, defaulting to 'require'")
+		}
+
+		type RdsSecret struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+		var secretData RdsSecret
+		err = secretsClient.GetSecretJSON(ctx, "RDS_SECRET_ARN", "", &secretData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to retrieve or parse RDS secret: %w", err)
+		}
+		if secretData.Username == "" || secretData.Password == "" {
+			return nil, fmt.Errorf("username or password not found in RDS secret data")
+		}
+
+		dsn = fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=%s",
+			url.QueryEscape(secretData.Username), url.QueryEscape(secretData.Password),
+			dbEndpoint, dbName, dbSSLMode)
+		logger.Info("Constructed DSN from Secrets Manager credentials")
+	} else {
+		// Local development
+		logger.Info("Running in local stage, using DATABASE_URL from env/secrets")
+		dsn, err = secretsClient.GetSecretString(ctx, "DATABASE_URL_ARN", "DATABASE_URL")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get DATABASE_URL: %w", err)
+		}
+		if dsn == "" {
+			return nil, fmt.Errorf("DATABASE_URL is required for local development and not found")
+		}
+	}
+
+	// Get Payment Sync Encryption Key
+	encryptionKey, err := secretsClient.GetSecretString(ctx, "PAYMENT_SYNC_ENCRYPTION_KEY_ARN", "PAYMENT_SYNC_ENCRYPTION_KEY")
+	if err != nil || encryptionKey == "" {
+		return nil, fmt.Errorf("failed to get Payment Sync Encryption Key: %w", err)
 	}
 
 	// Parse max retries (default: 3)
 	maxRetries := 3
-	if maxRetriesStr := os.Getenv("DLQ_MAX_RETRIES"); maxRetriesStr != "" {
+	if maxRetriesStr := os.Getenv("MAX_RETRY_ATTEMPTS"); maxRetriesStr != "" {
 		if parsed, err := strconv.Atoi(maxRetriesStr); err == nil && parsed > 0 {
 			maxRetries = parsed
 		}
 	}
 
-	// Parse retry backoff (default: 5000ms)
-	retryBackoffMs := 5000
-	if backoffStr := os.Getenv("DLQ_RETRY_BACKOFF_MS"); backoffStr != "" {
+	// Parse retry backoff (default: 1000ms)
+	retryBackoffMs := 1000
+	if backoffStr := os.Getenv("RETRY_BACKOFF_MS"); backoffStr != "" {
 		if parsed, err := strconv.Atoi(backoffStr); err == nil && parsed > 0 {
 			retryBackoffMs = parsed
 		}
 	}
 
 	// Create database connection
-	pool, err := pgxpool.New(context.Background(), databaseURL)
+	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database pool: %w", err)
 	}
