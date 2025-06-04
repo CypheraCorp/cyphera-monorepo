@@ -6,6 +6,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -54,10 +55,11 @@ type WorkspacePaymentConfig struct {
 
 // NewPaymentSyncClient creates a new workspace payment client
 func NewPaymentSyncClient(dbQueries *db.Queries, logger *zap.Logger, encryptionKey string) *PaymentSyncClient {
-	// Convert base64 encryption key to bytes
-	key, err := base64.StdEncoding.DecodeString(encryptionKey)
+	// Convert hex encryption key to bytes
+	// The encryption key is expected to be hex-encoded (64 hex characters for 32 bytes)
+	key, err := hex.DecodeString(encryptionKey)
 	if err != nil {
-		logger.Fatal("Invalid encryption key format", zap.Error(err))
+		logger.Fatal("Invalid encryption key format - expected hex", zap.Error(err))
 	}
 	if len(key) != 32 { // AES-256 requires 32-byte key
 		logger.Fatal("Encryption key must be 32 bytes for AES-256", zap.Int("length", len(key)))
