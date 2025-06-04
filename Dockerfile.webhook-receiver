@@ -1,0 +1,20 @@
+FROM golang:1.23-alpine AS builder
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o webhook-receiver ./cmd/webhook-receiver
+
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates tzdata curl
+WORKDIR /app
+COPY --from=builder /app/webhook-receiver .
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:3001/health || exit 1
+
+EXPOSE 3001
+CMD ["./webhook-receiver"]

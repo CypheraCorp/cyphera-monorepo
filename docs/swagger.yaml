@@ -74,6 +74,36 @@ definitions:
       state:
         type: string
     type: object
+  handlers.ConfigurationResponse:
+    properties:
+      connected_account_id:
+        type: string
+      created_at:
+        type: integer
+      id:
+        type: string
+      is_active:
+        type: boolean
+      is_test_mode:
+        type: boolean
+      last_sync_at:
+        type: integer
+      last_webhook_at:
+        type: integer
+      metadata:
+        additionalProperties: true
+        type: object
+      provider_name:
+        type: string
+      updated_at:
+        type: integer
+      webhook_endpoint_url:
+        type: string
+      workspace_id:
+        type: string
+    type: object
+  handlers.CreateConfigurationRequest:
+    type: object
   handlers.CreatePriceRequest:
     properties:
       active:
@@ -213,6 +243,38 @@ definitions:
       workspace_name:
         type: string
     type: object
+  handlers.DLQProcessingStats:
+    properties:
+      last_processed_at:
+        type: string
+      max_retries_exceeded:
+        type: integer
+      processing_failed:
+        type: integer
+      success_rate:
+        type: number
+      successfully_processed:
+        type: integer
+      total_messages:
+        type: integer
+    type: object
+  handlers.DetailedErrorResponse:
+    properties:
+      code:
+        type: string
+      details:
+        type: string
+      error:
+        type: string
+    type: object
+  handlers.DetailedSuccessResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
   handlers.ErrorResponse:
     properties:
       error:
@@ -235,6 +297,39 @@ definitions:
       token_amount_in_fiat:
         type: number
       token_symbol:
+        type: string
+    type: object
+  handlers.InitialSyncRequest:
+    properties:
+      batch_size:
+        type: integer
+      ending_before:
+        type: string
+      entity_types:
+        items:
+          type: string
+        type: array
+      full_sync:
+        type: boolean
+      starting_after:
+        type: string
+    type: object
+  handlers.InitialSyncResponse:
+    properties:
+      config:
+        additionalProperties: true
+        type: object
+      created_at:
+        type: string
+      entity_types:
+        items:
+          type: string
+        type: array
+      provider:
+        type: string
+      session_id:
+        type: string
+      status:
         type: string
     type: object
   handlers.ListAPIKeysResponse:
@@ -550,6 +645,73 @@ definitions:
       message:
         type: string
     type: object
+  handlers.SyncRecoveryRequest:
+    properties:
+      entity_types:
+        items:
+          type: string
+        type: array
+      recovery_mode:
+        description: '"resume", "restart"'
+        type: string
+      session_id:
+        type: string
+      workspace_id:
+        type: string
+    required:
+    - session_id
+    - workspace_id
+    type: object
+  handlers.SyncRecoveryResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+      progress:
+        additionalProperties: true
+        type: object
+      recovered_at:
+        type: string
+      session_id:
+        type: string
+      success:
+        type: boolean
+    type: object
+  handlers.SyncSessionResponse:
+    properties:
+      completed_at:
+        type: string
+      config:
+        additionalProperties: true
+        type: object
+      created_at:
+        type: string
+      entity_types:
+        items:
+          type: string
+        type: array
+      error_summary:
+        additionalProperties: true
+        type: object
+      id:
+        type: string
+      progress:
+        additionalProperties: true
+        type: object
+      provider:
+        type: string
+      session_type:
+        type: string
+      started_at:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+      workspace_id:
+        type: string
+    type: object
   handlers.TokenResponse:
     properties:
       active:
@@ -576,6 +738,8 @@ definitions:
         type: string
       updated_at:
         type: integer
+    type: object
+  handlers.UpdateConfigurationRequest:
     type: object
   handlers.UpdateProductRequest:
     properties:
@@ -695,6 +859,38 @@ definitions:
         type: string
       workspace_id:
         type: string
+    type: object
+  handlers.WebhookReplayRequest:
+    properties:
+      force_replay:
+        type: boolean
+      provider_name:
+        type: string
+      replay_reason:
+        type: string
+      webhook_event_id:
+        type: string
+      workspace_id:
+        type: string
+    required:
+    - provider_name
+    - webhook_event_id
+    - workspace_id
+    type: object
+  handlers.WebhookReplayResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+      original_event_id:
+        type: string
+      replay_event_id:
+        type: string
+      replayed_at:
+        type: string
+      success:
+        type: boolean
     type: object
   handlers.WorkspaceResponse:
     description: Workspace response
@@ -848,6 +1044,201 @@ paths:
       summary: Get an API key
       tags:
       - api-keys
+  /api/v1/error-recovery/health:
+    get:
+      description: Check the health and status of the error recovery service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.DetailedSuccessResponse'
+      summary: Check error recovery service health
+      tags:
+      - error-recovery
+  /api/v1/workspaces/{workspace_id}/dlq/stats:
+    get:
+      description: Get statistics about dead letter queue processing for a workspace
+        and provider
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      - description: Provider name (e.g., stripe)
+        in: query
+        name: provider
+        required: true
+        type: string
+      - description: Since timestamp (Unix timestamp or RFC3339)
+        in: query
+        name: since
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.DLQProcessingStats'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.DetailedErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.DetailedErrorResponse'
+      summary: Get DLQ processing statistics
+      tags:
+      - error-recovery
+  /api/v1/workspaces/{workspace_id}/sync/recover:
+    post:
+      consumes:
+      - application/json
+      description: Resume or restart a failed or incomplete sync session
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      - description: Sync recovery request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.SyncRecoveryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.SyncRecoveryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.DetailedErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.DetailedErrorResponse'
+      summary: Recover a failed sync session
+      tags:
+      - error-recovery
+  /api/v1/workspaces/{workspace_id}/sync/recoverable:
+    get:
+      description: Get a list of sync sessions that failed and can be resumed or restarted
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      - description: 'Limit number of results (default: 20, max: 50)'
+        in: query
+        name: limit
+        type: integer
+      - description: 'Offset for pagination (default: 0)'
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.DetailedSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.DetailedErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.DetailedErrorResponse'
+      summary: Get failed sync sessions that can be recovered
+      tags:
+      - error-recovery
+  /api/v1/workspaces/{workspace_id}/webhooks/failed:
+    get:
+      description: Get a list of failed webhook events that can be retried
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      - description: Provider name (e.g., stripe)
+        in: query
+        name: provider
+        required: true
+        type: string
+      - description: 'Limit number of results (default: 50, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      - description: 'Maximum processing attempts (default: 3)'
+        in: query
+        name: max_attempts
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.DetailedSuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.DetailedErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.DetailedErrorResponse'
+      summary: Get failed webhook events for retry
+      tags:
+      - error-recovery
+  /api/v1/workspaces/{workspace_id}/webhooks/replay:
+    post:
+      consumes:
+      - application/json
+      description: Manually replay a webhook event that failed processing
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace_id
+        required: true
+        type: string
+      - description: Webhook replay request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.WebhookReplayRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.WebhookReplayResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.DetailedErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.DetailedErrorResponse'
+      summary: Replay a failed webhook event
+      tags:
+      - error-recovery
   /customers:
     get:
       consumes:
@@ -1472,6 +1863,417 @@ paths:
       summary: List events for a subscription
       tags:
       - subscription-events
+  /sync/{provider}/initial:
+    post:
+      consumes:
+      - application/json
+      description: Initiates an initial data synchronization from payment provider
+        to Cyphera
+      parameters:
+      - description: Payment provider name (e.g., stripe, chargebee)
+        in: path
+        name: provider
+        required: true
+        type: string
+      - description: Initial sync configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.InitialSyncRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.InitialSyncResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Start initial sync for any payment provider
+      tags:
+      - payment-sync
+  /sync/config:
+    get:
+      description: Lists all payment provider configurations for a workspace
+      parameters:
+      - default: 50
+        description: Number of results to return
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Number of results to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              configurations:
+                items:
+                  $ref: '#/definitions/handlers.ConfigurationResponse'
+                type: array
+              total:
+                type: integer
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List payment provider configurations
+      tags:
+      - payment-sync
+    post:
+      consumes:
+      - application/json
+      description: Creates a new payment provider configuration for a workspace
+      parameters:
+      - description: Configuration details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateConfigurationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.ConfigurationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create payment provider configuration
+      tags:
+      - payment-sync
+  /sync/config/{config_id}:
+    delete:
+      description: Deletes a payment provider configuration
+      parameters:
+      - description: Configuration ID
+        in: path
+        name: config_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete payment provider configuration
+      tags:
+      - payment-sync
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing payment provider configuration
+      parameters:
+      - description: Configuration ID
+        in: path
+        name: config_id
+        required: true
+        type: string
+      - description: Configuration updates
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateConfigurationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ConfigurationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update payment provider configuration
+      tags:
+      - payment-sync
+  /sync/config/{config_id}/test:
+    post:
+      description: Tests the connection to a payment provider using the configuration
+      parameters:
+      - description: Configuration ID
+        in: path
+        name: config_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              message:
+                type: string
+              status:
+                type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Test payment provider connection
+      tags:
+      - payment-sync
+  /sync/config/{provider}:
+    get:
+      description: Retrieves a payment provider configuration by provider name
+      parameters:
+      - description: Provider name
+        in: path
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ConfigurationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get payment provider configuration
+      tags:
+      - payment-sync
+  /sync/config/id/{config_id}:
+    get:
+      description: Retrieves a payment provider configuration by ID
+      parameters:
+      - description: Configuration ID
+        in: path
+        name: config_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ConfigurationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get payment provider configuration by ID
+      tags:
+      - payment-sync
+  /sync/providers:
+    get:
+      description: Lists all available payment providers that can be configured
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              providers:
+                items:
+                  type: string
+                type: array
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get available payment providers
+      tags:
+      - payment-sync
+  /sync/sessions:
+    get:
+      description: Retrieves a list of sync sessions for the workspace
+      parameters:
+      - description: Filter by provider name
+        in: query
+        name: provider
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - default: 50
+        description: Number of results to return
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Number of results to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              sessions:
+                items:
+                  $ref: '#/definitions/handlers.SyncSessionResponse'
+                type: array
+              total:
+                type: integer
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: List sync sessions
+      tags:
+      - payment-sync
+  /sync/sessions/{id}:
+    get:
+      description: Retrieves details of a specific sync session
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.SyncSessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Get sync session details
+      tags:
+      - payment-sync
+  /sync/sessions/{id}/status:
+    get:
+      description: Retrieves the current status and progress of a sync session
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              error_summary:
+                type: object
+              progress:
+                type: object
+              status:
+                type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Get sync session status
+      tags:
+      - payment-sync
   /tokens:
     get:
       consumes:

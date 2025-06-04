@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  # Extend the existing API service
+  cyphera-api:
+    extends:
+      file: docker-compose.yml
+      service: cyphera-api
+    environment:
+      - WEBHOOK_RECEIVER_URL=http://webhook-receiver:3001
+      - LOCALSTACK_ENDPOINT=http://localstack:4566
+      - SQS_QUEUE_URL=http://localstack:4566/000000000000/webhook-queue
+      - PAYMENT_SYNC_ENCRYPTION_KEY=B0vVBjr392K2g3d8y1A3B6dPwW39J0vb+9lMlcj7Mug=
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      webhook-receiver:
+        condition: service_healthy
+
+  # PostgreSQL (from base docker-compose.yml)
+  postgres:
+    extends:
+      file: docker-compose.yml
+      service: postgres
+
+  # LocalStack for AWS service simulation
+  localstack:
+    container_name: cyphera-localstack
+    image: localstack/localstack:2.0
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=sqs,secretsmanager
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "/tmp/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - cyphera-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Webhook Receiver Service
+  webhook-receiver:
+    build:
+      context: .
+      dockerfile: Dockerfile.webhook-receiver
+    container_name: cyphera-webhook-receiver
+    ports:
+      - "3001:3001"
+    environment:
+      - STAGE=local
+      - DATABASE_URL=postgresql://apiuser:apipassword@postgres:5432/cyphera
+      - PAYMENT_SYNC_ENCRYPTION_KEY=B0vVBjr392K2g3d8y1A3B6dPwW39J0vb+9lMlcj7Mug=
+      - LOCALSTACK_ENDPOINT=http://localstack:4566
+      - SQS_QUEUE_URL=http://localstack:4566/000000000000/webhook-queue
+      - WEBHOOK_RECEIVER_PORT=3001
+      - LOG_LEVEL=debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    networks:
+      - cyphera-network
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Webhook Processor Service
+  webhook-processor:
+    build:
+      context: .
+      dockerfile: Dockerfile.webhook-processor
+    container_name: cyphera-webhook-processor
+    environment:
+      - STAGE=local
+      - DATABASE_URL=postgresql://apiuser:apipassword@postgres:5432/cyphera
+      - PAYMENT_SYNC_ENCRYPTION_KEY=B0vVBjr392K2g3d8y1A3B6dPwW39J0vb+9lMlcj7Mug=
+      - LOCALSTACK_ENDPOINT=http://localstack:4566
+      - SQS_QUEUE_URL=http://localstack:4566/000000000000/webhook-queue
+      - WEBHOOK_PROCESSOR_ENABLED=true
+      - LOG_LEVEL=debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    networks:
+      - cyphera-network
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+networks:
+  cyphera-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

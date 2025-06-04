@@ -2,8 +2,9 @@ FROM golang:1.23-alpine
 
 WORKDIR /app
 
-# Install git and build dependencies
+# Install git, build dependencies, and swag
 RUN apk add --no-cache git build-base
+RUN go install github.com/swaggo/swag/cmd/swag@latest
 
 # Copy go mod and sum files
 COPY go.mod go.sum ./
@@ -13,6 +14,9 @@ RUN go mod download
 
 # Copy the source code
 COPY . .
+
+# Generate swagger documentation
+RUN swag init --dir ./internal/handlers --generalInfo ../../cmd/api/main/main.go --output ./docs --tags='!exclude'
 
 # Set environment variables
 ENV GIN_MODE=debug

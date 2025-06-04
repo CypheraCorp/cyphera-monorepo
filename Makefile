@@ -1,4 +1,4 @@
-.PHONY: all build install test clean lint run swag deploy test-all test-integration stop-integration-server ensure-executable proto-build-go proto-build-js proto-build-all subscription-processor delegation-server delegation-server-setup delegation-server-build delegation-server-start delegation-server-mock delegation-server-test delegation-server-lint build-webhook-receiver build-webhook-processor build-webhook-receiver-sam-local build-webhook-processor-sam-local
+.PHONY: all build install test clean lint run swag deploy test-all test-integration stop-integration-server ensure-executable proto-build-go proto-build-js proto-build-all subscription-processor delegation-server delegation-server-setup delegation-server-build delegation-server-start delegation-server-mock delegation-server-test delegation-server-lint build-webhook-receiver build-webhook-processor build-webhook-receiver-sam-local build-webhook-processor-sam-local local-webhooks-up local-webhooks-down local-webhooks-logs local-webhooks-reset local-webhooks-test local-webhooks-health
 
 # Go parameters
 BINARY_NAME=cyphera-api
@@ -81,6 +81,143 @@ swag:
 deploy:
 	# Add deployment steps here
 
+# ===============================================
+# Local Webhook Development Commands
+# ===============================================
+
+# Main command: Set up complete local webhook development environment
+local-webhooks-up: ensure-executable
+	@echo "🚀 Setting up local webhook development environment..."
+	@chmod +x scripts/setup-local-webhooks.sh
+	./scripts/setup-local-webhooks.sh
+
+# Alternative with options
+local-webhooks-up-force: ensure-executable
+	@echo "🚀 Setting up local webhook environment (force rebuild)..."
+	@chmod +x scripts/setup-local-webhooks.sh
+	FORCE_REBUILD=true ./scripts/setup-local-webhooks.sh
+
+local-webhooks-up-skip-tests: ensure-executable
+	@echo "🚀 Setting up local webhook environment (skip tests)..."
+	@chmod +x scripts/setup-local-webhooks.sh
+	SKIP_TESTS=true ./scripts/setup-local-webhooks.sh
+
+# Stop local webhook services
+local-webhooks-down:
+	@echo "🛑 Stopping local webhook services..."
+	docker-compose -f docker-compose.webhooks.yml down
+
+# View logs from all webhook services
+local-webhooks-logs:
+	@echo "📋 Viewing webhook service logs (Ctrl+C to exit)..."
+	docker-compose -f docker-compose.webhooks.yml logs -f
+
+# View logs from specific service
+local-webhooks-logs-receiver:
+	docker-compose -f docker-compose.webhooks.yml logs -f webhook-receiver
+
+local-webhooks-logs-processor:
+	docker-compose -f docker-compose.webhooks.yml logs -f webhook-processor
+
+local-webhooks-logs-api:
+	docker-compose -f docker-compose.webhooks.yml logs -f cyphera-api
+
+local-webhooks-logs-db:
+	docker-compose -f docker-compose.webhooks.yml logs -f postgres
+
+local-webhooks-logs-localstack:
+	docker-compose -f docker-compose.webhooks.yml logs -f localstack
+
+# Reset the entire local webhook environment
+local-webhooks-reset: ensure-executable
+	@echo "🔄 Resetting local webhook environment..."
+	@if [ -f "scripts/reset-local-webhooks.sh" ]; then \
+		chmod +x scripts/reset-local-webhooks.sh; \
+		./scripts/reset-local-webhooks.sh; \
+	else \
+		echo "Reset script not found. Running manual reset..."; \
+		docker-compose -f docker-compose.webhooks.yml down -v; \
+		docker system prune -f; \
+		rm -rf /tmp/localstack/* 2>/dev/null || true; \
+		make local-webhooks-up; \
+	fi
+
+# Run health checks on local webhook services
+local-webhooks-health: ensure-executable
+	@echo "🏥 Running webhook service health checks..."
+	@if [ -f "scripts/health-check-local.sh" ]; then \
+		chmod +x scripts/health-check-local.sh; \
+		./scripts/health-check-local.sh; \
+	else \
+		echo "Health check script not found. Install with 'make local-webhooks-up' first."; \
+	fi
+
+# Run webhook tests
+local-webhooks-test: ensure-executable
+	@echo "🧪 Running local webhook tests..."
+	@if [ -f "scripts/test-multi-workspace.sh" ]; then \
+		chmod +x scripts/test-multi-workspace.sh; \
+		./scripts/test-multi-workspace.sh; \
+	else \
+		echo "Test script not found. Setting up test environment..."; \
+		make local-webhooks-up; \
+	fi
+
+# Quick webhook test with curl
+local-webhooks-test-quick:
+	@echo "🧪 Running quick webhook test..."
+	@WORKSPACE_ID=$$(cat .local-workspace-id 2>/dev/null || echo "test-workspace-id"); \
+	echo "Testing with workspace ID: $$WORKSPACE_ID"; \
+	curl -X POST http://localhost:3001/webhooks/stripe/$$WORKSPACE_ID \
+		-H "Content-Type: application/json" \
+		-H "Stripe-Signature: t=$$(date +%s),v1=test_signature" \
+		-d '{"id":"evt_quick_test","type":"customer.created","data":{"object":{"id":"cus_quick_test","email":"test@example.com"}}}' \
+		-w "\nHTTP Status: %{http_code}\n"
+
+# Check SQS queue status
+local-webhooks-sqs-status:
+	@echo "📊 Checking SQS queue status..."
+	@AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url=http://localhost:4566 sqs get-queue-attributes \
+		--queue-url http://localhost:4566/000000000000/webhook-queue \
+		--attribute-names ApproximateNumberOfMessages,ApproximateNumberOfMessagesNotVisible \
+		--region us-east-1 \
+		--output table || echo "❌ Failed to connect to LocalStack SQS"
+
+# Purge SQS queue (clear all messages)
+local-webhooks-sqs-purge:
+	@echo "🧹 Purging SQS queue..."
+	@AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url=http://localhost:4566 sqs purge-queue \
+		--queue-url http://localhost:4566/000000000000/webhook-queue \
+		--region us-east-1 && echo "✅ Queue purged successfully"
+
+# Connect to local database
+local-webhooks-db:
+	@echo "🗄️ Connecting to local database..."
+	psql postgresql://apiuser:apipassword@localhost:5432/cyphera
+
+# Show webhook service status
+local-webhooks-status:
+	@echo "📊 Webhook services status:"
+	@echo "=================================="
+	docker-compose -f docker-compose.webhooks.yml ps
+
+# Restart specific service
+local-webhooks-restart-receiver:
+	@echo "🔄 Restarting webhook receiver..."
+	docker-compose -f docker-compose.webhooks.yml restart webhook-receiver
+
+local-webhooks-restart-processor:
+	@echo "🔄 Restarting webhook processor..."
+	docker-compose -f docker-compose.webhooks.yml restart webhook-processor
+
+local-webhooks-restart-api:
+	@echo "🔄 Restarting API service..."
+	docker-compose -f docker-compose.webhooks.yml restart cyphera-api
+
+# ===============================================
+# End Local Webhook Development Commands
+# ===============================================
+
 # Build proto definitions for Go
 proto-build-go:
 	@echo "Generating Go gRPC code from proto definitions..."
@@ -156,33 +293,77 @@ delegation-server-lint:
 help:
 	@echo "Usage: make [target]"
 	@echo ""
-	@echo "Targets:"
+	@echo "Core Development Targets:"
 	@echo "  make all            - Run default targets: lint, test, and build"
 	@echo "  make build          - Build the binary"
 	@echo "  make test           - Run all unit tests"
 	@echo "  make test-all       - Run all tests, including integration tests"
 	@echo "  make test-integration - Run integration tests with mock server"
-	@echo "  make stop-integration-server - Stop integration server processes"
 	@echo "  make clean          - Clean build files"
 	@echo "  make lint           - Run linter"
 	@echo "  make run            - Run the application"
-	@echo "  make swag        - Generate Swagger documentation"
-	@echo "  make deploy         - Deploy the application"
 	@echo "  make dev            - Run the application in development mode (loads .env)"
+	@echo ""
+	@echo "Local Webhook Development:"
+	@echo "  make local-webhooks-up - 🚀 Set up complete local webhook environment (MAIN COMMAND)"
+	@echo "  make local-webhooks-up-force - Set up with force rebuild"
+	@echo "  make local-webhooks-up-skip-tests - Set up skipping tests"
+	@echo "  make local-webhooks-down - Stop all webhook services"
+	@echo "  make local-webhooks-logs - View all service logs"
+	@echo "  make local-webhooks-health - Run health checks"
+	@echo "  make local-webhooks-test - Run multi-workspace tests"
+	@echo "  make local-webhooks-test-quick - Quick webhook test with curl"
+	@echo "  make local-webhooks-reset - Reset entire environment"
+	@echo "  make local-webhooks-status - Show service status"
+	@echo ""
+	@echo "Webhook Service Management:"
+	@echo "  make local-webhooks-logs-receiver - Webhook receiver logs"
+	@echo "  make local-webhooks-logs-processor - Webhook processor logs"
+	@echo "  make local-webhooks-logs-api - API service logs"
+	@echo "  make local-webhooks-logs-db - Database logs"
+	@echo "  make local-webhooks-logs-localstack - LocalStack logs"
+	@echo "  make local-webhooks-restart-receiver - Restart webhook receiver"
+	@echo "  make local-webhooks-restart-processor - Restart webhook processor"
+	@echo "  make local-webhooks-restart-api - Restart API service"
+	@echo ""
+	@echo "Webhook Utilities:"
+	@echo "  make local-webhooks-sqs-status - Check SQS queue status"
+	@echo "  make local-webhooks-sqs-purge - Clear SQS queue"
+	@echo "  make local-webhooks-db - Connect to local database"
+	@echo ""
+	@echo "Build Targets:"
+	@echo "  make build-webhook-receiver - Build webhook receiver binary"
+	@echo "  make build-webhook-processor - Build webhook processor binary"
+	@echo "  make build-dlq-processor - Build DLQ processor binary"
+	@echo "  make build-lambda-all - Build all Lambda functions"
+	@echo "  make build-subprocessor - Build subscription processor binary"
+	@echo ""
+	@echo "SAM Deployment:"
+	@echo "  make build-webhook-receiver-sam-local - Build bootstrap for SAM local testing (webhook receiver)"
+	@echo "  make build-webhook-processor-sam-local - Build bootstrap for SAM local testing (webhook processor)"
+	@echo "  make build-subprocessor-sam-local - Build bootstrap for SAM local testing (subprocessor)"
+	@echo ""
+	@echo "Other Services:"
 	@echo "  make api-server     - Run the API server without live reload"
 	@echo "  make api-server-air - Run the API server with air for live reload"
 	@echo "  make delegation-server - Run the delegation server" 
 	@echo "  make subscription-processor - Run the subscription processor"
-	@echo "  make build-subprocessor - Build the subscription processor binary for Linux/AMD64"
-	@echo "  make build-subprocessor-sam-local - Build bootstrap for SAM local testing (subprocessor)"
-	@echo "  make build-webhook-receiver - Build the webhook receiver binary for Linux/AMD64"
-	@echo "  make build-webhook-processor - Build the webhook processor binary for Linux/AMD64"
-	@echo "  make build-webhook-receiver-sam-local - Build bootstrap for SAM local testing (webhook receiver)"
-	@echo "  make build-webhook-processor-sam-local - Build bootstrap for SAM local testing (webhook processor)"
+	@echo "  make stop-integration-server - Stop integration server processes"
+	@echo ""
+	@echo "Code Generation:"
 	@echo "  make gen            - Generate SQLC code"
+	@echo "  make swag           - Generate Swagger documentation"
 	@echo "  make proto-build-go - Generate Go gRPC code from proto definitions"
 	@echo "  make proto-build-js - Generate Node.js gRPC code from proto definitions"
 	@echo "  make proto-build-all - Generate both Go and Node.js gRPC code"
+	@echo ""
+	@echo "🚀 Quick Start for Webhook Development:"
+	@echo "  1. make local-webhooks-up    # Set up everything"
+	@echo "  2. make local-webhooks-test-quick  # Test it works"
+	@echo "  3. make local-webhooks-logs  # Monitor logs"
+	@echo ""
+	@echo "📚 See docs/local_webhook_development_guide.md for detailed instructions"
+
 gen:
 	sqlc generate
 
