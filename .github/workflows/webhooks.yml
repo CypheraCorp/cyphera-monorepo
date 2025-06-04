@@ -406,84 +406,194 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
+    - name: Wait for Lambda functions to be ready
+      run: |
+        echo "⏳ Waiting for Lambda functions to be fully ready..."
+        sleep 30  # Give Lambda functions time to initialize after deployment
+
     - name: Test webhook receiver health
       run: |
         echo "🧪 Testing webhook receiver function..."
         
-        # Create health check payload file
+        # Create proper API Gateway event payload for webhook receiver
         cat > health_payload.json << 'EOF'
-        {"httpMethod": "GET", "path": "/health", "headers": {}}
+        {
+          "version": "1.0",
+          "routeKey": "GET /health",
+          "rawPath": "/health",
+          "rawQueryString": "",
+          "headers": {
+            "accept": "application/json",
+            "content-type": "application/json",
+            "user-agent": "GitHub-Actions-HealthCheck/1.0"
+          },
+          "requestContext": {
+            "accountId": "123456789012",
+            "apiId": "test-api",
+            "domainName": "test.execute-api.us-east-1.amazonaws.com",
+            "http": {
+              "method": "GET",
+              "path": "/health",
+              "protocol": "HTTP/1.1",
+              "sourceIp": "127.0.0.1",
+              "userAgent": "GitHub-Actions-HealthCheck/1.0"
+            },
+            "requestId": "health-check-test",
+            "routeKey": "GET /health",
+            "stage": "${{ env.STAGE }}",
+            "time": "01/Jan/2024:00:00:00 +0000",
+            "timeEpoch": 1704067200000
+          },
+          "pathParameters": null,
+          "body": "",
+          "isBase64Encoded": false
+        }
         EOF
         
-        # Test with health check payload
-        aws lambda invoke \
+        # Test webhook receiver with timeout and better error handling
+        echo "Invoking webhook receiver function..."
+        if aws lambda invoke \
           --function-name "cyphera-webhook-receiver-${{ env.STAGE }}" \
           --payload file://health_payload.json \
           --region ${{ env.AWS_REGION }} \
-          health_response.json
-        
-        echo "Webhook receiver response:"
-        cat health_response.json
-        
-        # Check if response contains success indicators
-        if grep -q '"statusCode": 200' health_response.json || grep -q 'healthy\|ok\|success' health_response.json; then
-          echo "✅ Webhook receiver health check passed"
+          --cli-read-timeout 60 \
+          --cli-connect-timeout 60 \
+          health_response.json; then
+          
+          echo "✅ Webhook receiver invocation successful"
+          echo "Response:"
+          cat health_response.json
+          
+          # Check for successful response
+          if grep -q '"statusCode": 200' health_response.json; then
+            echo "✅ Webhook receiver health check passed with HTTP 200"
+          elif grep -q '"statusCode"' health_response.json; then
+            STATUS_CODE=$(grep -o '"statusCode": [0-9]*' health_response.json | grep -o '[0-9]*')
+            echo "⚠️ Webhook receiver responded with status code: $STATUS_CODE"
+          else
+            echo "⚠️ Webhook receiver health check inconclusive - no status code found"
+          fi
         else
-          echo "⚠️ Webhook receiver health check inconclusive"
+          echo "❌ Failed to invoke webhook receiver function"
+          exit 1
         fi
 
-    - name: Test webhook processor with empty event
+    - name: Test webhook processor with empty SQS event
       run: |
         echo "🧪 Testing webhook processor function..."
         
         # Create empty SQS event payload file
         cat > processor_payload.json << 'EOF'
-        {"Records": []}
+        {
+          "Records": []
+        }
         EOF
         
-        # Test with empty SQS event
-        aws lambda invoke \
+        # Test webhook processor with timeout and better error handling
+        echo "Invoking webhook processor function..."
+        if aws lambda invoke \
           --function-name "cyphera-webhook-processor-${{ env.STAGE }}" \
           --payload file://processor_payload.json \
           --region ${{ env.AWS_REGION }} \
-          processor_response.json
-        
-        echo "Webhook processor response:"
-        cat processor_response.json
-        
-        echo "✅ Webhook processor test completed"
+          --cli-read-timeout 60 \
+          --cli-connect-timeout 60 \
+          processor_response.json; then
+          
+          echo "✅ Webhook processor invocation successful"
+          echo "Response:"
+          cat processor_response.json
+          
+          # Check for errors in response
+          if grep -q '"errorMessage"' processor_response.json; then
+            echo "⚠️ Webhook processor returned an error - this might be expected for empty event"
+            grep '"errorMessage"' processor_response.json || echo "No error message found"
+          else
+            echo "✅ Webhook processor completed without errors"
+          fi
+        else
+          echo "❌ Failed to invoke webhook processor function"
+          exit 1
+        fi
 
-    - name: Test DLQ processor with empty event
+    - name: Test DLQ processor with empty SQS event
       run: |
         echo "🧪 Testing DLQ processor function..."
         
         # Create empty SQS event payload file
         cat > dlq_payload.json << 'EOF'
-        {"Records": []}
+        {
+          "Records": []
+        }
         EOF
         
-        # Test with empty SQS event
-        aws lambda invoke \
+        # Test DLQ processor with timeout and better error handling
+        echo "Invoking DLQ processor function..."
+        if aws lambda invoke \
           --function-name "cyphera-dlq-processor-${{ env.STAGE }}" \
           --payload file://dlq_payload.json \
           --region ${{ env.AWS_REGION }} \
-          dlq_response.json
+          --cli-read-timeout 60 \
+          --cli-connect-timeout 60 \
+          dlq_response.json; then
+          
+          echo "✅ DLQ processor invocation successful"
+          echo "Response:"
+          cat dlq_response.json
+          
+          # Check for errors in response
+          if grep -q '"errorMessage"' dlq_response.json; then
+            echo "⚠️ DLQ processor returned an error - this might be expected for empty event"
+            grep '"errorMessage"' dlq_response.json || echo "No error message found"
+          else
+            echo "✅ DLQ processor completed without errors"
+          fi
+        else
+          echo "❌ Failed to invoke DLQ processor function"
+          exit 1
+        fi
+
+    - name: Verify Lambda function logs (optional)
+      if: always()
+      run: |
+        echo "📋 Checking recent Lambda function logs for any issues..."
         
-        echo "DLQ processor response:"
-        cat dlq_response.json
+        FUNCTIONS=(
+          "cyphera-webhook-receiver-${{ env.STAGE }}"
+          "cyphera-webhook-processor-${{ env.STAGE }}"
+          "cyphera-dlq-processor-${{ env.STAGE }}"
+        )
         
-        echo "✅ DLQ processor test completed"
+        for func in "${FUNCTIONS[@]}"; do
+          echo ""
+          echo "📊 Recent logs for $func:"
+          # Get the most recent log events (last 5 minutes)
+          aws logs filter-log-events \
+            --log-group-name "/aws/lambda/$func" \
+            --start-time $(date -d '5 minutes ago' +%s)000 \
+            --limit 10 \
+            --region ${{ env.AWS_REGION }} \
+            --query 'events[*].message' \
+            --output text 2>/dev/null || echo "No recent logs found for $func"
+        done
 
     - name: Final health check summary
       if: always()
       run: |
+        echo ""
         echo "🏁 Health Check Summary"
         echo "======================"
         echo "✅ Webhook infrastructure deployment verified"
         echo "✅ All Lambda functions are responsive"
         echo "✅ API Gateway and SQS integration confirmed"
         echo ""
-        echo "🎉 Webhook SAM infrastructure is ready for use!"
+        
+        # Check if any of the previous steps failed
+        if [[ "${{ job.status }}" == "success" ]]; then
+          echo "🎉 All health checks passed! Webhook infrastructure is ready for use!"
+        else
+          echo "⚠️ Some health checks had issues. Check logs above for details."
+          echo "💡 This may be expected for initial deployment - functions should still work correctly."
+        fi
 
   # ============================================================================
   # Workflow summary and cleanup

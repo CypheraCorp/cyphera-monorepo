@@ -131,6 +131,12 @@ Resources:
         - !Ref WebhookSecretsManagerPolicyArn
       # API Gateway Events
       Events:
+        HealthCheck:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WebhookApi
+            Path: /health
+            Method: GET
         WebhookEndpoint:
           Type: Api
           Properties:
