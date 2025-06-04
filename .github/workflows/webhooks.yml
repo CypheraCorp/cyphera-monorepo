@@ -505,4 +505,4 @@ jobs:
           echo "🔧 Fix build issues and re-run the workflow"
         else
           echo "⚠️  Overall Status: PARTIAL SUCCESS"
-          echo "📝 Check individual job logs for details" 
+          echo "📝 Check individual job logs for details" # Trigger optimized webhook deployment - Wed Jun  4 01:29:59 EDT 2025
