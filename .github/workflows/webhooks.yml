@@ -454,7 +454,7 @@ jobs:
         echo "Invoking webhook receiver function..."
         if aws lambda invoke \
           --function-name "cyphera-webhook-receiver-${{ env.STAGE }}" \
-          --payload file://health_payload.json \
+          --payload fileb://health_payload.json \
           --region ${{ env.AWS_REGION }} \
           --cli-read-timeout 60 \
           --cli-connect-timeout 60 \
@@ -493,7 +493,7 @@ jobs:
         echo "Invoking webhook processor function..."
         if aws lambda invoke \
           --function-name "cyphera-webhook-processor-${{ env.STAGE }}" \
-          --payload file://processor_payload.json \
+          --payload fileb://processor_payload.json \
           --region ${{ env.AWS_REGION }} \
           --cli-read-timeout 60 \
           --cli-connect-timeout 60 \
@@ -530,7 +530,7 @@ jobs:
         echo "Invoking DLQ processor function..."
         if aws lambda invoke \
           --function-name "cyphera-dlq-processor-${{ env.STAGE }}" \
-          --payload file://dlq_payload.json \
+          --payload fileb://dlq_payload.json \
           --region ${{ env.AWS_REGION }} \
           --cli-read-timeout 60 \
           --cli-connect-timeout 60 \
@@ -630,4 +630,4 @@ jobs:
           echo "🔧 Fix build issues and re-run the workflow"
         else
           echo "⚠️  Overall Status: PARTIAL SUCCESS"
-          echo "📝 Check individual job logs for details" # Trigger optimized webhook deployment - Wed Jun  4 01:29:59 EDT 2025
+          echo "📝 Check individual job logs for details"
