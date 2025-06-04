@@ -410,10 +410,15 @@ jobs:
       run: |
         echo "🧪 Testing webhook receiver function..."
         
+        # Create health check payload file
+        cat > health_payload.json << 'EOF'
+        {"httpMethod": "GET", "path": "/health", "headers": {}}
+        EOF
+        
         # Test with health check payload
         aws lambda invoke \
           --function-name "cyphera-webhook-receiver-${{ env.STAGE }}" \
-          --payload '{"httpMethod": "GET", "path": "/health", "headers": {}}' \
+          --payload file://health_payload.json \
           --region ${{ env.AWS_REGION }} \
           health_response.json
         
@@ -431,10 +436,15 @@ jobs:
       run: |
         echo "🧪 Testing webhook processor function..."
         
+        # Create empty SQS event payload file
+        cat > processor_payload.json << 'EOF'
+        {"Records": []}
+        EOF
+        
         # Test with empty SQS event
         aws lambda invoke \
           --function-name "cyphera-webhook-processor-${{ env.STAGE }}" \
-          --payload '{"Records": []}' \
+          --payload file://processor_payload.json \
           --region ${{ env.AWS_REGION }} \
           processor_response.json
         
@@ -447,10 +457,15 @@ jobs:
       run: |
         echo "🧪 Testing DLQ processor function..."
         
+        # Create empty SQS event payload file
+        cat > dlq_payload.json << 'EOF'
+        {"Records": []}
+        EOF
+        
         # Test with empty SQS event
         aws lambda invoke \
           --function-name "cyphera-dlq-processor-${{ env.STAGE }}" \
-          --payload '{"Records": []}' \
+          --payload file://dlq_payload.json \
           --region ${{ env.AWS_REGION }} \
           dlq_response.json
         
