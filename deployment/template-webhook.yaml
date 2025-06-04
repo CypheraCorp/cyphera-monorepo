@@ -88,21 +88,6 @@ Resources:
       EndpointConfiguration:
         Type: EDGE
       
-      # Enable access logging
-      AccessLogSetting:
-        DestinationArn: !GetAtt WebhookApiLogGroup.Arn
-        Format: >
-          {
-            "requestId": "$context.requestId",
-            "ip": "$context.identity.sourceIp", 
-            "requestTime": "$context.requestTime",
-            "httpMethod": "$context.httpMethod",
-            "resourcePath": "$context.resourcePath",
-            "status": "$context.status",
-            "protocol": "$context.protocol",
-            "responseLength": "$context.responseLength"
-          }
-          
       # Enable X-Ray tracing
       TracingEnabled: true
       
@@ -110,13 +95,6 @@ Resources:
       BinaryMediaTypes:
         - application/octet-stream
         - application/json
-
-  # CloudWatch Log Group for API Gateway
-  WebhookApiLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/apigateway/cyphera-webhook-api-${Stage}"
-      RetentionInDays: 7
 
   # Webhook Receiver Function - Receives webhooks from API Gateway
   WebhookReceiverFunction:
