@@ -14,23 +14,11 @@ import (
 
 const countCustomers = `-- name: CountCustomers :one
 SELECT COUNT(*) FROM customers
-WHERE workspace_id = $1 AND deleted_at IS NULL
+WHERE deleted_at IS NULL
 `
 
-func (q *Queries) CountCustomers(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countCustomers, workspaceID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countCustomersByWorkspaceID = `-- name: CountCustomersByWorkspaceID :one
-SELECT COUNT(*) FROM customers
-WHERE workspace_id = $1 AND deleted_at IS NULL
-`
-
-func (q *Queries) CountCustomersByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countCustomersByWorkspaceID, workspaceID)
+func (q *Queries) CountCustomers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countCustomers)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -38,7 +26,6 @@ func (q *Queries) CountCustomersByWorkspaceID(ctx context.Context, workspaceID u
 
 const createCustomer = `-- name: CreateCustomer :one
 INSERT INTO customers (
-    workspace_id,
     external_id,
     email,
     name,
@@ -48,41 +35,39 @@ INSERT INTO customers (
     payment_sync_status,
     payment_provider
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, 
-    COALESCE($8, 'pending'), 
-    $9
+    $1, $2, $3, $4, $5, $6, 
+    COALESCE($7, 'pending'), 
+    $8
 )
-RETURNING id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type CreateCustomerParams struct {
-	WorkspaceID     uuid.UUID   `json:"workspace_id"`
 	ExternalID      pgtype.Text `json:"external_id"`
 	Email           pgtype.Text `json:"email"`
 	Name            pgtype.Text `json:"name"`
 	Phone           pgtype.Text `json:"phone"`
 	Description     pgtype.Text `json:"description"`
 	Metadata        []byte      `json:"metadata"`
-	Column8         interface{} `json:"column_8"`
+	Column7         interface{} `json:"column_7"`
 	PaymentProvider pgtype.Text `json:"payment_provider"`
 }
 
 func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, createCustomer,
-		arg.WorkspaceID,
 		arg.ExternalID,
 		arg.Email,
 		arg.Name,
 		arg.Phone,
 		arg.Description,
 		arg.Metadata,
-		arg.Column8,
+		arg.Column7,
 		arg.PaymentProvider,
 	)
 	var i Customer
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
+		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
 		&i.Name,
@@ -102,7 +87,6 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 
 const createCustomerWithSync = `-- name: CreateCustomerWithSync :one
 INSERT INTO customers (
-    workspace_id,
     external_id,
     email,
     name,
@@ -114,13 +98,12 @@ INSERT INTO customers (
     payment_sync_version,
     payment_provider
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 )
-RETURNING id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type CreateCustomerWithSyncParams struct {
-	WorkspaceID        uuid.UUID          `json:"workspace_id"`
 	ExternalID         pgtype.Text        `json:"external_id"`
 	Email              pgtype.Text        `json:"email"`
 	Name               pgtype.Text        `json:"name"`
@@ -135,7 +118,6 @@ type CreateCustomerWithSyncParams struct {
 
 func (q *Queries) CreateCustomerWithSync(ctx context.Context, arg CreateCustomerWithSyncParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, createCustomerWithSync,
-		arg.WorkspaceID,
 		arg.ExternalID,
 		arg.Email,
 		arg.Name,
@@ -150,7 +132,60 @@ func (q *Queries) CreateCustomerWithSync(ctx context.Context, arg CreateCustomer
 	var i Customer
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
+		&i.Web3authID,
+		&i.ExternalID,
+		&i.Email,
+		&i.Name,
+		&i.Phone,
+		&i.Description,
+		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const createCustomerWithWeb3Auth = `-- name: CreateCustomerWithWeb3Auth :one
+INSERT INTO customers (
+    web3auth_id,
+    email,
+    name,
+    phone,
+    description,
+    metadata
+) VALUES (
+    $1, $2, $3, $4, $5, $6
+)
+RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+`
+
+type CreateCustomerWithWeb3AuthParams struct {
+	Web3authID  pgtype.Text `json:"web3auth_id"`
+	Email       pgtype.Text `json:"email"`
+	Name        pgtype.Text `json:"name"`
+	Phone       pgtype.Text `json:"phone"`
+	Description pgtype.Text `json:"description"`
+	Metadata    []byte      `json:"metadata"`
+}
+
+func (q *Queries) CreateCustomerWithWeb3Auth(ctx context.Context, arg CreateCustomerWithWeb3AuthParams) (Customer, error) {
+	row := q.db.QueryRow(ctx, createCustomerWithWeb3Auth,
+		arg.Web3authID,
+		arg.Email,
+		arg.Name,
+		arg.Phone,
+		arg.Description,
+		arg.Metadata,
+	)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
 		&i.Name,
@@ -171,21 +206,16 @@ func (q *Queries) CreateCustomerWithSync(ctx context.Context, arg CreateCustomer
 const deleteCustomer = `-- name: DeleteCustomer :exec
 UPDATE customers
 SET deleted_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+WHERE id = $1 AND deleted_at IS NULL
 `
 
-type DeleteCustomerParams struct {
-	ID          uuid.UUID `json:"id"`
-	WorkspaceID uuid.UUID `json:"workspace_id"`
-}
-
-func (q *Queries) DeleteCustomer(ctx context.Context, arg DeleteCustomerParams) error {
-	_, err := q.db.Exec(ctx, deleteCustomer, arg.ID, arg.WorkspaceID)
+func (q *Queries) DeleteCustomer(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteCustomer, id)
 	return err
 }
 
 const getAllCustomers = `-- name: GetAllCustomers :many
-SELECT id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers
+SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers
 ORDER BY created_at DESC
 `
 
@@ -200,7 +230,7 @@ func (q *Queries) GetAllCustomers(ctx context.Context) ([]Customer, error) {
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
-			&i.WorkspaceID,
+			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
 			&i.Name,
@@ -226,21 +256,16 @@ func (q *Queries) GetAllCustomers(ctx context.Context) ([]Customer, error) {
 }
 
 const getCustomer = `-- name: GetCustomer :one
-SELECT id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers
-WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL LIMIT 1
+SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers
+WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
-type GetCustomerParams struct {
-	ID          uuid.UUID `json:"id"`
-	WorkspaceID uuid.UUID `json:"workspace_id"`
-}
-
-func (q *Queries) GetCustomer(ctx context.Context, arg GetCustomerParams) (Customer, error) {
-	row := q.db.QueryRow(ctx, getCustomer, arg.ID, arg.WorkspaceID)
+func (q *Queries) GetCustomer(ctx context.Context, id uuid.UUID) (Customer, error) {
+	row := q.db.QueryRow(ctx, getCustomer, id)
 	var i Customer
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
+		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
 		&i.Name,
@@ -259,21 +284,16 @@ func (q *Queries) GetCustomer(ctx context.Context, arg GetCustomerParams) (Custo
 }
 
 const getCustomerByEmail = `-- name: GetCustomerByEmail :one
-SELECT id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers
-WHERE workspace_id = $1 AND email = $2 AND deleted_at IS NULL LIMIT 1
+SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers
+WHERE email = $1 AND deleted_at IS NULL LIMIT 1
 `
 
-type GetCustomerByEmailParams struct {
-	WorkspaceID uuid.UUID   `json:"workspace_id"`
-	Email       pgtype.Text `json:"email"`
-}
-
-func (q *Queries) GetCustomerByEmail(ctx context.Context, arg GetCustomerByEmailParams) (Customer, error) {
-	row := q.db.QueryRow(ctx, getCustomerByEmail, arg.WorkspaceID, arg.Email)
+func (q *Queries) GetCustomerByEmail(ctx context.Context, email pgtype.Text) (Customer, error) {
+	row := q.db.QueryRow(ctx, getCustomerByEmail, email)
 	var i Customer
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
+		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
 		&i.Name,
@@ -292,21 +312,44 @@ func (q *Queries) GetCustomerByEmail(ctx context.Context, arg GetCustomerByEmail
 }
 
 const getCustomerByExternalID = `-- name: GetCustomerByExternalID :one
-SELECT id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers
-WHERE workspace_id = $1 AND external_id = $2 AND deleted_at IS NULL LIMIT 1
+SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers
+WHERE external_id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
-type GetCustomerByExternalIDParams struct {
-	WorkspaceID uuid.UUID   `json:"workspace_id"`
-	ExternalID  pgtype.Text `json:"external_id"`
-}
-
-func (q *Queries) GetCustomerByExternalID(ctx context.Context, arg GetCustomerByExternalIDParams) (Customer, error) {
-	row := q.db.QueryRow(ctx, getCustomerByExternalID, arg.WorkspaceID, arg.ExternalID)
+func (q *Queries) GetCustomerByExternalID(ctx context.Context, externalID pgtype.Text) (Customer, error) {
+	row := q.db.QueryRow(ctx, getCustomerByExternalID, externalID)
 	var i Customer
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
+		&i.Web3authID,
+		&i.ExternalID,
+		&i.Email,
+		&i.Name,
+		&i.Phone,
+		&i.Description,
+		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getCustomerByWeb3AuthID = `-- name: GetCustomerByWeb3AuthID :one
+SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers
+WHERE web3auth_id = $1 AND deleted_at IS NULL LIMIT 1
+`
+
+func (q *Queries) GetCustomerByWeb3AuthID(ctx context.Context, web3authID pgtype.Text) (Customer, error) {
+	row := q.db.QueryRow(ctx, getCustomerByWeb3AuthID, web3authID)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
 		&i.Name,
@@ -326,18 +369,13 @@ func (q *Queries) GetCustomerByExternalID(ctx context.Context, arg GetCustomerBy
 
 const getCustomersByExternalIDs = `-- name: GetCustomersByExternalIDs :many
 
-SELECT id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers 
-WHERE workspace_id = $1 AND external_id = ANY($2::text[]) AND deleted_at IS NULL
+SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers 
+WHERE external_id = ANY($1::text[]) AND deleted_at IS NULL
 `
 
-type GetCustomersByExternalIDsParams struct {
-	WorkspaceID uuid.UUID `json:"workspace_id"`
-	Column2     []string  `json:"column_2"`
-}
-
 // Payment Sync Related Customer Queries
-func (q *Queries) GetCustomersByExternalIDs(ctx context.Context, arg GetCustomersByExternalIDsParams) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, getCustomersByExternalIDs, arg.WorkspaceID, arg.Column2)
+func (q *Queries) GetCustomersByExternalIDs(ctx context.Context, dollar_1 []string) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, getCustomersByExternalIDs, dollar_1)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +385,7 @@ func (q *Queries) GetCustomersByExternalIDs(ctx context.Context, arg GetCustomer
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
-			&i.WorkspaceID,
+			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
 			&i.Name,
@@ -373,13 +411,13 @@ func (q *Queries) GetCustomersByExternalIDs(ctx context.Context, arg GetCustomer
 }
 
 const getCustomersNeedingSync = `-- name: GetCustomersNeedingSync :many
-SELECT id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers 
-WHERE workspace_id = $1 AND payment_sync_status = 'pending' AND deleted_at IS NULL
+SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers 
+WHERE payment_sync_status = 'pending' AND deleted_at IS NULL
 ORDER BY created_at ASC
 `
 
-func (q *Queries) GetCustomersNeedingSync(ctx context.Context, workspaceID uuid.UUID) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, getCustomersNeedingSync, workspaceID)
+func (q *Queries) GetCustomersNeedingSync(ctx context.Context) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, getCustomersNeedingSync)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +427,7 @@ func (q *Queries) GetCustomersNeedingSync(ctx context.Context, workspaceID uuid.
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
-			&i.WorkspaceID,
+			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
 			&i.Name,
@@ -415,18 +453,13 @@ func (q *Queries) GetCustomersNeedingSync(ctx context.Context, workspaceID uuid.
 }
 
 const getCustomersSyncedByProvider = `-- name: GetCustomersSyncedByProvider :many
-SELECT id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers 
-WHERE workspace_id = $1 AND payment_provider = $2 AND payment_sync_status != 'pending' AND deleted_at IS NULL
+SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers 
+WHERE payment_provider = $1 AND payment_sync_status != 'pending' AND deleted_at IS NULL
 ORDER BY payment_synced_at DESC
 `
 
-type GetCustomersSyncedByProviderParams struct {
-	WorkspaceID     uuid.UUID   `json:"workspace_id"`
-	PaymentProvider pgtype.Text `json:"payment_provider"`
-}
-
-func (q *Queries) GetCustomersSyncedByProvider(ctx context.Context, arg GetCustomersSyncedByProviderParams) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, getCustomersSyncedByProvider, arg.WorkspaceID, arg.PaymentProvider)
+func (q *Queries) GetCustomersSyncedByProvider(ctx context.Context, paymentProvider pgtype.Text) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, getCustomersSyncedByProvider, paymentProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +469,7 @@ func (q *Queries) GetCustomersSyncedByProvider(ctx context.Context, arg GetCusto
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
-			&i.WorkspaceID,
+			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
 			&i.Name,
@@ -462,13 +495,13 @@ func (q *Queries) GetCustomersSyncedByProvider(ctx context.Context, arg GetCusto
 }
 
 const getCustomersWithSyncConflicts = `-- name: GetCustomersWithSyncConflicts :many
-SELECT id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers 
-WHERE workspace_id = $1 AND payment_sync_status = 'conflict' AND deleted_at IS NULL
+SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers 
+WHERE payment_sync_status = 'conflict' AND deleted_at IS NULL
 ORDER BY payment_synced_at DESC
 `
 
-func (q *Queries) GetCustomersWithSyncConflicts(ctx context.Context, workspaceID uuid.UUID) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, getCustomersWithSyncConflicts, workspaceID)
+func (q *Queries) GetCustomersWithSyncConflicts(ctx context.Context) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, getCustomersWithSyncConflicts)
 	if err != nil {
 		return nil, err
 	}
@@ -478,7 +511,7 @@ func (q *Queries) GetCustomersWithSyncConflicts(ctx context.Context, workspaceID
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
-			&i.WorkspaceID,
+			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
 			&i.Name,
@@ -492,78 +525,6 @@ func (q *Queries) GetCustomersWithSyncConflicts(ctx context.Context, workspaceID
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getCustomersWithWorkspaceInfo = `-- name: GetCustomersWithWorkspaceInfo :many
-SELECT 
-    c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at,
-    w.name as workspace_name,
-    w.business_name as workspace_business_name,
-    w.support_email as workspace_support_email
-FROM customers c
-INNER JOIN workspaces w ON c.workspace_id = w.id
-WHERE c.workspace_id = $1 AND c.deleted_at IS NULL
-ORDER BY c.created_at DESC
-`
-
-type GetCustomersWithWorkspaceInfoRow struct {
-	ID                    uuid.UUID          `json:"id"`
-	WorkspaceID           uuid.UUID          `json:"workspace_id"`
-	ExternalID            pgtype.Text        `json:"external_id"`
-	Email                 pgtype.Text        `json:"email"`
-	Name                  pgtype.Text        `json:"name"`
-	Phone                 pgtype.Text        `json:"phone"`
-	Description           pgtype.Text        `json:"description"`
-	Metadata              []byte             `json:"metadata"`
-	PaymentSyncStatus     pgtype.Text        `json:"payment_sync_status"`
-	PaymentSyncedAt       pgtype.Timestamptz `json:"payment_synced_at"`
-	PaymentSyncVersion    pgtype.Int4        `json:"payment_sync_version"`
-	PaymentProvider       pgtype.Text        `json:"payment_provider"`
-	CreatedAt             pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt             pgtype.Timestamptz `json:"deleted_at"`
-	WorkspaceName         string             `json:"workspace_name"`
-	WorkspaceBusinessName pgtype.Text        `json:"workspace_business_name"`
-	WorkspaceSupportEmail pgtype.Text        `json:"workspace_support_email"`
-}
-
-func (q *Queries) GetCustomersWithWorkspaceInfo(ctx context.Context, workspaceID uuid.UUID) ([]GetCustomersWithWorkspaceInfoRow, error) {
-	rows, err := q.db.Query(ctx, getCustomersWithWorkspaceInfo, workspaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetCustomersWithWorkspaceInfoRow{}
-	for rows.Next() {
-		var i GetCustomersWithWorkspaceInfoRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.ExternalID,
-			&i.Email,
-			&i.Name,
-			&i.Phone,
-			&i.Description,
-			&i.Metadata,
-			&i.PaymentSyncStatus,
-			&i.PaymentSyncedAt,
-			&i.PaymentSyncVersion,
-			&i.PaymentProvider,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-			&i.WorkspaceName,
-			&i.WorkspaceBusinessName,
-			&i.WorkspaceSupportEmail,
 		); err != nil {
 			return nil, err
 		}
@@ -576,13 +537,13 @@ func (q *Queries) GetCustomersWithWorkspaceInfo(ctx context.Context, workspaceID
 }
 
 const listCustomers = `-- name: ListCustomers :many
-SELECT id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers
-WHERE workspace_id = $1 AND deleted_at IS NULL
+SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers
+WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListCustomers(ctx context.Context, workspaceID uuid.UUID) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, listCustomers, workspaceID)
+func (q *Queries) ListCustomers(ctx context.Context) ([]Customer, error) {
+	rows, err := q.db.Query(ctx, listCustomers)
 	if err != nil {
 		return nil, err
 	}
@@ -592,7 +553,7 @@ func (q *Queries) ListCustomers(ctx context.Context, workspaceID uuid.UUID) ([]C
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
-			&i.WorkspaceID,
+			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
 			&i.Name,
@@ -618,20 +579,19 @@ func (q *Queries) ListCustomers(ctx context.Context, workspaceID uuid.UUID) ([]C
 }
 
 const listCustomersWithPagination = `-- name: ListCustomersWithPagination :many
-SELECT id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers
-WHERE workspace_id = $1 AND deleted_at IS NULL
+SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers
+WHERE deleted_at IS NULL
 ORDER BY created_at DESC
-LIMIT $2 OFFSET $3
+LIMIT $1 OFFSET $2
 `
 
 type ListCustomersWithPaginationParams struct {
-	WorkspaceID uuid.UUID `json:"workspace_id"`
-	Limit       int32     `json:"limit"`
-	Offset      int32     `json:"offset"`
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
 }
 
 func (q *Queries) ListCustomersWithPagination(ctx context.Context, arg ListCustomersWithPaginationParams) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, listCustomersWithPagination, arg.WorkspaceID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listCustomersWithPagination, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -641,7 +601,7 @@ func (q *Queries) ListCustomersWithPagination(ctx context.Context, arg ListCusto
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
-			&i.WorkspaceID,
+			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
 			&i.Name,
@@ -669,19 +629,18 @@ func (q *Queries) ListCustomersWithPagination(ctx context.Context, arg ListCusto
 const updateCustomer = `-- name: UpdateCustomer :one
 UPDATE customers
 SET
-    email = COALESCE($3, email),
-    name = COALESCE($4, name),
-    phone = COALESCE($5, phone),
-    description = COALESCE($6, description),
-    metadata = COALESCE($7, metadata),
+    email = COALESCE($2, email),
+    name = COALESCE($3, name),
+    phone = COALESCE($4, phone),
+    description = COALESCE($5, description),
+    metadata = COALESCE($6, metadata),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type UpdateCustomerParams struct {
 	ID          uuid.UUID   `json:"id"`
-	WorkspaceID uuid.UUID   `json:"workspace_id"`
 	Email       pgtype.Text `json:"email"`
 	Name        pgtype.Text `json:"name"`
 	Phone       pgtype.Text `json:"phone"`
@@ -692,7 +651,6 @@ type UpdateCustomerParams struct {
 func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, updateCustomer,
 		arg.ID,
-		arg.WorkspaceID,
 		arg.Email,
 		arg.Name,
 		arg.Phone,
@@ -702,7 +660,7 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 	var i Customer
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
+		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
 		&i.Name,
@@ -722,33 +680,27 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 
 const updateCustomerPaymentSyncStatus = `-- name: UpdateCustomerPaymentSyncStatus :one
 UPDATE customers 
-SET payment_sync_status = $3, 
-    payment_synced_at = CASE WHEN $3 != 'pending' THEN CURRENT_TIMESTAMP ELSE payment_synced_at END,
-    payment_sync_version = CASE WHEN $3 != 'pending' THEN payment_sync_version + 1 ELSE payment_sync_version END,
-    payment_provider = COALESCE($4, payment_provider),
+SET payment_sync_status = $2, 
+    payment_synced_at = CASE WHEN $2 != 'pending' THEN CURRENT_TIMESTAMP ELSE payment_synced_at END,
+    payment_sync_version = CASE WHEN $2 != 'pending' THEN payment_sync_version + 1 ELSE payment_sync_version END,
+    payment_provider = COALESCE($3, payment_provider),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type UpdateCustomerPaymentSyncStatusParams struct {
 	ID                uuid.UUID   `json:"id"`
-	WorkspaceID       uuid.UUID   `json:"workspace_id"`
 	PaymentSyncStatus pgtype.Text `json:"payment_sync_status"`
 	PaymentProvider   pgtype.Text `json:"payment_provider"`
 }
 
 func (q *Queries) UpdateCustomerPaymentSyncStatus(ctx context.Context, arg UpdateCustomerPaymentSyncStatusParams) (Customer, error) {
-	row := q.db.QueryRow(ctx, updateCustomerPaymentSyncStatus,
-		arg.ID,
-		arg.WorkspaceID,
-		arg.PaymentSyncStatus,
-		arg.PaymentProvider,
-	)
+	row := q.db.QueryRow(ctx, updateCustomerPaymentSyncStatus, arg.ID, arg.PaymentSyncStatus, arg.PaymentProvider)
 	var i Customer
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
+		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
 		&i.Name,
@@ -769,23 +721,22 @@ func (q *Queries) UpdateCustomerPaymentSyncStatus(ctx context.Context, arg Updat
 const updateCustomerWithSync = `-- name: UpdateCustomerWithSync :one
 UPDATE customers
 SET
-    email = COALESCE($3, email),
-    name = COALESCE($4, name),
-    phone = COALESCE($5, phone),
-    description = COALESCE($6, description),
-    metadata = COALESCE($7, metadata),
-    payment_sync_status = COALESCE($8, payment_sync_status),
-    payment_synced_at = COALESCE($9, payment_synced_at),
-    payment_sync_version = COALESCE($10, payment_sync_version),
-    payment_provider = COALESCE($11, payment_provider),
+    email = COALESCE($2, email),
+    name = COALESCE($3, name),
+    phone = COALESCE($4, phone),
+    description = COALESCE($5, description),
+    metadata = COALESCE($6, metadata),
+    payment_sync_status = COALESCE($7, payment_sync_status),
+    payment_synced_at = COALESCE($8, payment_synced_at),
+    payment_sync_version = COALESCE($9, payment_sync_version),
+    payment_provider = COALESCE($10, payment_provider),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type UpdateCustomerWithSyncParams struct {
 	ID                 uuid.UUID          `json:"id"`
-	WorkspaceID        uuid.UUID          `json:"workspace_id"`
 	Email              pgtype.Text        `json:"email"`
 	Name               pgtype.Text        `json:"name"`
 	Phone              pgtype.Text        `json:"phone"`
@@ -800,7 +751,6 @@ type UpdateCustomerWithSyncParams struct {
 func (q *Queries) UpdateCustomerWithSync(ctx context.Context, arg UpdateCustomerWithSyncParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, updateCustomerWithSync,
 		arg.ID,
-		arg.WorkspaceID,
 		arg.Email,
 		arg.Name,
 		arg.Phone,
@@ -814,7 +764,7 @@ func (q *Queries) UpdateCustomerWithSync(ctx context.Context, arg UpdateCustomer
 	var i Customer
 	err := row.Scan(
 		&i.ID,
-		&i.WorkspaceID,
+		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
 		&i.Name,

@@ -23,29 +23,32 @@ func NewUserHandler(common *CommonServices) *UserHandler {
 
 // UserResponse represents the standardized API response for user operations
 type UserResponse struct {
-	ID               string                 `json:"id"`
-	Object           string                 `json:"object"`
-	SupabaseID       string                 `json:"supabase_id"`
-	Email            string                 `json:"email"`
-	FirstName        string                 `json:"first_name,omitempty"`
-	LastName         string                 `json:"last_name,omitempty"`
-	AddressLine1     string                 `json:"address_line_1,omitempty"`
-	AddressLine2     string                 `json:"address_line_2,omitempty"`
-	City             string                 `json:"city,omitempty"`
-	StateRegion      string                 `json:"state_region,omitempty"`
-	PostalCode       string                 `json:"postal_code,omitempty"`
-	Country          string                 `json:"country,omitempty"`
-	DisplayName      string                 `json:"display_name,omitempty"`
-	PictureURL       string                 `json:"picture_url,omitempty"`
-	Phone            string                 `json:"phone,omitempty"`
-	Timezone         string                 `json:"timezone,omitempty"`
-	Locale           string                 `json:"locale,omitempty"`
-	EmailVerified    bool                   `json:"email_verified"`
-	TwoFactorEnabled bool                   `json:"two_factor_enabled"`
-	Status           string                 `json:"status"`
-	Metadata         map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt        int64                  `json:"created_at"`
-	UpdatedAt        int64                  `json:"updated_at"`
+	ID                 string                 `json:"id"`
+	Object             string                 `json:"object"`
+	Web3AuthID         string                 `json:"web3auth_id,omitempty"` // Web3Auth user ID
+	Verifier           string                 `json:"verifier,omitempty"`    // Login method (google, discord, etc.)
+	VerifierID         string                 `json:"verifier_id,omitempty"` // ID from the verifier
+	Email              string                 `json:"email"`
+	FirstName          string                 `json:"first_name,omitempty"`
+	LastName           string                 `json:"last_name,omitempty"`
+	AddressLine1       string                 `json:"address_line_1,omitempty"`
+	AddressLine2       string                 `json:"address_line_2,omitempty"`
+	City               string                 `json:"city,omitempty"`
+	StateRegion        string                 `json:"state_region,omitempty"`
+	PostalCode         string                 `json:"postal_code,omitempty"`
+	Country            string                 `json:"country,omitempty"`
+	DisplayName        string                 `json:"display_name,omitempty"`
+	PictureURL         string                 `json:"picture_url,omitempty"`
+	Phone              string                 `json:"phone,omitempty"`
+	Timezone           string                 `json:"timezone,omitempty"`
+	Locale             string                 `json:"locale,omitempty"`
+	EmailVerified      bool                   `json:"email_verified"`
+	TwoFactorEnabled   bool                   `json:"two_factor_enabled"`
+	FinishedOnboarding bool                   `json:"finished_onboarding"`
+	Status             string                 `json:"status"`
+	Metadata           map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt          int64                  `json:"created_at"`
+	UpdatedAt          int64                  `json:"updated_at"`
 }
 
 // UserAccountResponse represents a user's relationship with an account
@@ -58,7 +61,9 @@ type UserAccountResponse struct {
 
 // CreateUserRequest represents the request body for creating a user
 type CreateUserRequest struct {
-	SupabaseID     string                 `json:"supabase_id" binding:"required"`
+	Web3AuthID     string                 `json:"web3auth_id,omitempty"` // Web3Auth user ID
+	Verifier       string                 `json:"verifier,omitempty"`    // Login method (google, discord, etc.)
+	VerifierID     string                 `json:"verifier_id,omitempty"` // ID from the verifier
 	Email          string                 `json:"email" binding:"required,email"`
 	AccountID      uuid.UUID              `json:"account_id" binding:"required"`
 	Role           string                 `json:"role" binding:"required,oneof=admin support developer"`
@@ -188,7 +193,9 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	}
 
 	user, err := h.common.db.CreateUser(c.Request.Context(), db.CreateUserParams{
-		SupabaseID:     req.SupabaseID,
+		Web3authID:     pgtype.Text{String: req.Web3AuthID, Valid: req.Web3AuthID != ""},
+		Verifier:       pgtype.Text{String: req.Verifier, Valid: req.Verifier != ""},
+		VerifierID:     pgtype.Text{String: req.VerifierID, Valid: req.VerifierID != ""},
 		Email:          req.Email,
 		AccountID:      parsedAccountID,
 		Role:           db.UserRole(req.Role),
@@ -351,57 +358,63 @@ func toUserResponse(u db.User) UserResponse {
 	}
 
 	return UserResponse{
-		ID:               u.ID.String(),
-		Object:           "user",
-		SupabaseID:       u.SupabaseID,
-		Email:            u.Email,
-		FirstName:        u.FirstName.String,
-		LastName:         u.LastName.String,
-		AddressLine1:     u.AddressLine1.String,
-		AddressLine2:     u.AddressLine2.String,
-		City:             u.City.String,
-		StateRegion:      u.StateRegion.String,
-		PostalCode:       u.PostalCode.String,
-		Country:          u.Country.String,
-		DisplayName:      u.DisplayName.String,
-		PictureURL:       u.PictureUrl.String,
-		Phone:            u.Phone.String,
-		Timezone:         u.Timezone.String,
-		Locale:           u.Locale.String,
-		EmailVerified:    u.EmailVerified.Bool,
-		TwoFactorEnabled: u.TwoFactorEnabled.Bool,
-		Status:           status,
-		Metadata:         metadata,
-		CreatedAt:        u.CreatedAt.Time.Unix(),
-		UpdatedAt:        u.UpdatedAt.Time.Unix(),
+		ID:                 u.ID.String(),
+		Object:             "user",
+		Web3AuthID:         u.Web3authID.String,
+		Verifier:           u.Verifier.String,
+		VerifierID:         u.VerifierID.String,
+		Email:              u.Email,
+		FirstName:          u.FirstName.String,
+		LastName:           u.LastName.String,
+		AddressLine1:       u.AddressLine1.String,
+		AddressLine2:       u.AddressLine2.String,
+		City:               u.City.String,
+		StateRegion:        u.StateRegion.String,
+		PostalCode:         u.PostalCode.String,
+		Country:            u.Country.String,
+		DisplayName:        u.DisplayName.String,
+		PictureURL:         u.PictureUrl.String,
+		Phone:              u.Phone.String,
+		Timezone:           u.Timezone.String,
+		Locale:             u.Locale.String,
+		EmailVerified:      u.EmailVerified.Bool,
+		TwoFactorEnabled:   u.TwoFactorEnabled.Bool,
+		FinishedOnboarding: u.FinishedOnboarding.Bool,
+		Status:             status,
+		Metadata:           metadata,
+		CreatedAt:          u.CreatedAt.Time.Unix(),
+		UpdatedAt:          u.UpdatedAt.Time.Unix(),
 	}
 }
 
 // Helper function to convert GetUserAccountRow to API response
 func toUserAccountResponse(u db.GetUserAccountRow) UserAccountResponse {
 	userResponse := UserResponse{
-		ID:               u.ID.String(),
-		Object:           "user",
-		SupabaseID:       u.SupabaseID,
-		Email:            u.Email,
-		FirstName:        u.FirstName.String,
-		LastName:         u.LastName.String,
-		AddressLine1:     u.AddressLine1.String,
-		AddressLine2:     u.AddressLine2.String,
-		City:             u.City.String,
-		StateRegion:      u.StateRegion.String,
-		PostalCode:       u.PostalCode.String,
-		Country:          u.Country.String,
-		DisplayName:      u.DisplayName.String,
-		PictureURL:       u.PictureUrl.String,
-		Phone:            u.Phone.String,
-		Timezone:         u.Timezone.String,
-		Locale:           u.Locale.String,
-		EmailVerified:    u.EmailVerified.Bool,
-		TwoFactorEnabled: u.TwoFactorEnabled.Bool,
-		Status:           string(u.Status.UserStatus),
-		CreatedAt:        u.CreatedAt.Time.Unix(),
-		UpdatedAt:        u.UpdatedAt.Time.Unix(),
+		ID:                 u.ID.String(),
+		Object:             "user",
+		Web3AuthID:         u.Web3authID.String,
+		Verifier:           u.Verifier.String,
+		VerifierID:         u.VerifierID.String,
+		Email:              u.Email,
+		FirstName:          u.FirstName.String,
+		LastName:           u.LastName.String,
+		AddressLine1:       u.AddressLine1.String,
+		AddressLine2:       u.AddressLine2.String,
+		City:               u.City.String,
+		StateRegion:        u.StateRegion.String,
+		PostalCode:         u.PostalCode.String,
+		Country:            u.Country.String,
+		DisplayName:        u.DisplayName.String,
+		PictureURL:         u.PictureUrl.String,
+		Phone:              u.Phone.String,
+		Timezone:           u.Timezone.String,
+		Locale:             u.Locale.String,
+		EmailVerified:      u.EmailVerified.Bool,
+		TwoFactorEnabled:   u.TwoFactorEnabled.Bool,
+		FinishedOnboarding: u.FinishedOnboarding.Bool,
+		Status:             string(u.Status.UserStatus),
+		CreatedAt:          u.CreatedAt.Time.Unix(),
+		UpdatedAt:          u.UpdatedAt.Time.Unix(),
 	}
 
 	var metadata map[string]interface{}

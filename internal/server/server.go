@@ -143,14 +143,35 @@ func InitializeHandlers() {
 		}
 	}
 
-	// --- Supabase JWT Secret ---
-	supabaseJwtSecret, err := secretsClient.GetSecretString(ctx, "SUPABASE_JWT_SECRET_ARN", "SUPABASE_JWT_SECRET")
-	if err != nil || supabaseJwtSecret == "" {
-		logger.Fatal("Failed to get Supabase JWT Secret", zap.Error(err))
+	// --- Web3Auth Configuration ---
+	web3AuthClientID, err := secretsClient.GetSecretString(ctx, "WEB3AUTH_CLIENT_ID_ARN", "WEB3AUTH_CLIENT_ID")
+	if err != nil || web3AuthClientID == "" {
+		logger.Fatal("Failed to get Web3Auth Client ID", zap.Error(err))
 	}
 
+	web3AuthJWKSEndpoint, err := secretsClient.GetSecretString(ctx, "WEB3AUTH_JWKS_ENDPOINT_ARN", "WEB3AUTH_JWKS_ENDPOINT")
+	if err != nil || web3AuthJWKSEndpoint == "" {
+		logger.Fatal("Failed to get Web3Auth JWKS Endpoint", zap.Error(err))
+	}
+
+	web3AuthIssuer, err := secretsClient.GetSecretString(ctx, "WEB3AUTH_ISSUER_ARN", "WEB3AUTH_ISSUER")
+	if err != nil || web3AuthIssuer == "" {
+		logger.Fatal("Failed to get Web3Auth Issuer", zap.Error(err))
+	}
+
+	web3AuthAudience, err := secretsClient.GetSecretString(ctx, "WEB3AUTH_AUDIENCE_ARN", "WEB3AUTH_AUDIENCE")
+	if err != nil || web3AuthAudience == "" {
+		logger.Fatal("Failed to get Web3Auth Audience", zap.Error(err))
+	}
+
+	// Set environment variables for AuthClient
+	os.Setenv("WEB3AUTH_CLIENT_ID", web3AuthClientID)
+	os.Setenv("WEB3AUTH_JWKS_ENDPOINT", web3AuthJWKSEndpoint)
+	os.Setenv("WEB3AUTH_ISSUER", web3AuthIssuer)
+	os.Setenv("WEB3AUTH_AUDIENCE", web3AuthAudience)
+
 	// --- Auth Client ---
-	authClient = auth.NewAuthClient(supabaseJwtSecret)
+	authClient = auth.NewAuthClient()
 
 	// --- Circle API Key ---
 	circleApiKey, err := secretsClient.GetSecretString(ctx, "CIRCLE_API_KEY_ARN", "CIRCLE_API_KEY")
@@ -224,10 +245,20 @@ func InitializeHandlers() {
 
 	// STAGE is already determined and validated earlier in InitializeHandlers
 	if stage == helpers.StageLocal {
-		fullDelegationAddr = delegationHost + ":50051"
+		// Check if delegationHost already contains a port (has colon)
+		if strings.Contains(delegationHost, ":") {
+			fullDelegationAddr = delegationHost
+		} else {
+			fullDelegationAddr = delegationHost + ":50051"
+		}
 		useLocalModeForDelegation = true
 	} else if stage == helpers.StageDev || stage == helpers.StageProd {
-		fullDelegationAddr = delegationHost + ":443"
+		// Check if delegationHost already contains a port (has colon)
+		if strings.Contains(delegationHost, ":") {
+			fullDelegationAddr = delegationHost
+		} else {
+			fullDelegationAddr = delegationHost + ":443"
+		}
 		useLocalModeForDelegation = false
 	} else {
 		// This case should ideally not be reached if STAGE validation is robust
@@ -330,7 +361,6 @@ func InitializeRoutes(router *gin.Engine) {
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 	{
-		// No Public routes for now
 
 		// Protected routes (authentication required)
 		protected := v1.Group("/")
@@ -340,8 +370,11 @@ func InitializeRoutes(router *gin.Engine) {
 			admin := protected.Group("/admin")
 			admin.Use(authClient.RequireRoles("admin"))
 			{
-				// public routes
-				admin.GET("/public/prices/:price_id", productHandler.GetPublicProductByPriceID)
+
+				// Sign-in endpoints should be public since users need to authenticate first
+				admin.POST("/accounts/signin", accountHandler.SignInAccount)
+				admin.POST("/customers/signin", customerHandler.SignInRegisterCustomer)
+				admin.GET("/prices/:price_id", productHandler.GetPublicProductByPriceID)
 
 				// subscribe to a product
 				admin.POST("/prices/:price_id/subscribe", productHandler.SubscribeToProductByPriceID)
@@ -349,7 +382,6 @@ func InitializeRoutes(router *gin.Engine) {
 				// Account management
 				admin.GET("/accounts", accountHandler.ListAccounts)
 				admin.POST("/accounts", accountHandler.CreateAccount)
-				admin.POST("/accounts/signin", accountHandler.SignInAccount)
 				admin.DELETE("/accounts/:account_id", accountHandler.DeleteAccount)
 
 				// User management

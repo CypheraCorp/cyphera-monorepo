@@ -519,6 +519,7 @@ type WalletType string
 const (
 	WalletTypeWallet       WalletType = "wallet"
 	WalletTypeCircleWallet WalletType = "circle_wallet"
+	WalletTypeWeb3auth     WalletType = "web3auth"
 )
 
 func (e *WalletType) Scan(src interface{}) error {
@@ -612,7 +613,7 @@ type CircleWallet struct {
 
 type Customer struct {
 	ID                 uuid.UUID          `json:"id"`
-	WorkspaceID        uuid.UUID          `json:"workspace_id"`
+	Web3authID         pgtype.Text        `json:"web3auth_id"`
 	ExternalID         pgtype.Text        `json:"external_id"`
 	Email              pgtype.Text        `json:"email"`
 	Name               pgtype.Text        `json:"name"`
@@ -869,51 +870,57 @@ type Token struct {
 }
 
 type User struct {
+	ID                 uuid.UUID          `json:"id"`
+	Web3authID         pgtype.Text        `json:"web3auth_id"`
+	Verifier           pgtype.Text        `json:"verifier"`
+	VerifierID         pgtype.Text        `json:"verifier_id"`
+	Email              string             `json:"email"`
+	AccountID          uuid.UUID          `json:"account_id"`
+	Role               UserRole           `json:"role"`
+	IsAccountOwner     pgtype.Bool        `json:"is_account_owner"`
+	FirstName          pgtype.Text        `json:"first_name"`
+	LastName           pgtype.Text        `json:"last_name"`
+	AddressLine1       pgtype.Text        `json:"address_line_1"`
+	AddressLine2       pgtype.Text        `json:"address_line_2"`
+	City               pgtype.Text        `json:"city"`
+	StateRegion        pgtype.Text        `json:"state_region"`
+	PostalCode         pgtype.Text        `json:"postal_code"`
+	Country            pgtype.Text        `json:"country"`
+	DisplayName        pgtype.Text        `json:"display_name"`
+	PictureUrl         pgtype.Text        `json:"picture_url"`
+	Phone              pgtype.Text        `json:"phone"`
+	Timezone           pgtype.Text        `json:"timezone"`
+	Locale             pgtype.Text        `json:"locale"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	EmailVerified      pgtype.Bool        `json:"email_verified"`
+	TwoFactorEnabled   pgtype.Bool        `json:"two_factor_enabled"`
+	FinishedOnboarding pgtype.Bool        `json:"finished_onboarding"`
+	Status             NullUserStatus     `json:"status"`
+	Metadata           []byte             `json:"metadata"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type Wallet struct {
 	ID               uuid.UUID          `json:"id"`
-	SupabaseID       string             `json:"supabase_id"`
-	Email            string             `json:"email"`
-	AccountID        uuid.UUID          `json:"account_id"`
-	Role             UserRole           `json:"role"`
-	IsAccountOwner   pgtype.Bool        `json:"is_account_owner"`
-	FirstName        pgtype.Text        `json:"first_name"`
-	LastName         pgtype.Text        `json:"last_name"`
-	AddressLine1     pgtype.Text        `json:"address_line_1"`
-	AddressLine2     pgtype.Text        `json:"address_line_2"`
-	City             pgtype.Text        `json:"city"`
-	StateRegion      pgtype.Text        `json:"state_region"`
-	PostalCode       pgtype.Text        `json:"postal_code"`
-	Country          pgtype.Text        `json:"country"`
-	DisplayName      pgtype.Text        `json:"display_name"`
-	PictureUrl       pgtype.Text        `json:"picture_url"`
-	Phone            pgtype.Text        `json:"phone"`
-	Timezone         pgtype.Text        `json:"timezone"`
-	Locale           pgtype.Text        `json:"locale"`
-	LastLoginAt      pgtype.Timestamptz `json:"last_login_at"`
-	EmailVerified    pgtype.Bool        `json:"email_verified"`
-	TwoFactorEnabled pgtype.Bool        `json:"two_factor_enabled"`
-	Status           NullUserStatus     `json:"status"`
+	WorkspaceID      uuid.UUID          `json:"workspace_id"`
+	WalletType       string             `json:"wallet_type"`
+	WalletAddress    string             `json:"wallet_address"`
+	NetworkType      NetworkType        `json:"network_type"`
+	NetworkID        pgtype.UUID        `json:"network_id"`
+	Nickname         pgtype.Text        `json:"nickname"`
+	Ens              pgtype.Text        `json:"ens"`
+	IsPrimary        pgtype.Bool        `json:"is_primary"`
+	Verified         pgtype.Bool        `json:"verified"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	Web3authUserID   pgtype.Text        `json:"web3auth_user_id"`
+	SmartAccountType pgtype.Text        `json:"smart_account_type"`
+	DeploymentStatus pgtype.Text        `json:"deployment_status"`
 	Metadata         []byte             `json:"metadata"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
-}
-
-type Wallet struct {
-	ID            uuid.UUID          `json:"id"`
-	WorkspaceID   uuid.UUID          `json:"workspace_id"`
-	WalletType    string             `json:"wallet_type"`
-	WalletAddress string             `json:"wallet_address"`
-	NetworkType   NetworkType        `json:"network_type"`
-	NetworkID     pgtype.UUID        `json:"network_id"`
-	Nickname      pgtype.Text        `json:"nickname"`
-	Ens           pgtype.Text        `json:"ens"`
-	IsPrimary     pgtype.Bool        `json:"is_primary"`
-	Verified      pgtype.Bool        `json:"verified"`
-	LastUsedAt    pgtype.Timestamptz `json:"last_used_at"`
-	Metadata      []byte             `json:"metadata"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt     pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type Workspace struct {
@@ -931,6 +938,15 @@ type Workspace struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type WorkspaceCustomer struct {
+	ID          uuid.UUID          `json:"id"`
+	WorkspaceID uuid.UUID          `json:"workspace_id"`
+	CustomerID  uuid.UUID          `json:"customer_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type WorkspacePaymentConfiguration struct {

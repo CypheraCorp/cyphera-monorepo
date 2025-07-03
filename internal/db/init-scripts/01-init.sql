@@ -10,7 +10,7 @@ CREATE TYPE price_type AS ENUM ('recurring', 'one_off');
 CREATE TYPE interval_type AS ENUM ('1min', '5mins', 'daily', 'week', 'month', 'year');
 CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkadot');
 CREATE TYPE currency AS ENUM ('USD', 'EUR');
-CREATE TYPE wallet_type AS ENUM ('wallet', 'circle_wallet');
+CREATE TYPE wallet_type AS ENUM ('wallet', 'circle_wallet', 'web3auth');
 CREATE TYPE circle_network_type AS ENUM ('ARB', 'ARB-SEPOLIA', 'ETH', 'ETH-SEPOLIA', 'MATIC', 'MATIC-AMOY', 'OP', 'OP-SEPOLIA', 'BASE', 'BASE-SEPOLIA', 'UNI', 'UNI-SEPOLIA');
 CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'overdue', 'suspended', 'failed', 'completed');
 CREATE TYPE subscription_event_type AS ENUM (
@@ -54,7 +54,9 @@ CREATE TABLE IF NOT EXISTS accounts (
 -- Users table (depends on accounts)
 CREATE TABLE IF NOT EXISTS users (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    supabase_id VARCHAR(255) NOT NULL UNIQUE,
+    web3auth_id VARCHAR(255) UNIQUE,
+    verifier VARCHAR(100),
+    verifier_id VARCHAR(255),
     email VARCHAR(255) NOT NULL UNIQUE,
     account_id UUID NOT NULL REFERENCES accounts(id),
     role user_role NOT NULL,
@@ -75,6 +77,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_login_at TIMESTAMP WITH TIME ZONE,
     email_verified BOOLEAN DEFAULT false,
     two_factor_enabled BOOLEAN DEFAULT false,
+    finished_onboarding BOOLEAN DEFAULT false,
     status user_status DEFAULT 'active',
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -124,7 +127,7 @@ CREATE TABLE IF NOT EXISTS circle_users (
 -- Customers table (depends on workspaces) - WITH PAYMENT SYNC COLUMNS
 CREATE TABLE IF NOT EXISTS customers (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    web3auth_id VARCHAR(255) UNIQUE,
     external_id VARCHAR(255),
     email VARCHAR(255),
     name VARCHAR(255),
@@ -138,8 +141,7 @@ CREATE TABLE IF NOT EXISTS customers (
     payment_provider VARCHAR(50), -- 'stripe', 'chargebee', etc.
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE,
-    UNIQUE(workspace_id, external_id)
+    deleted_at TIMESTAMP WITH TIME ZONE
 );
 
 -- API Keys table (depends on workspaces)
@@ -177,7 +179,7 @@ CREATE TABLE networks (
 CREATE TABLE IF NOT EXISTS wallets (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     workspace_id UUID NOT NULL REFERENCES workspaces(id), -- Changed from account_id
-    wallet_type TEXT NOT NULL,                -- 'wallet' or 'circle_wallet'
+    wallet_type TEXT NOT NULL,                -- 'wallet', 'circle_wallet', or 'web3auth'
     wallet_address TEXT NOT NULL,
     network_type network_type NOT NULL,
     network_id UUID REFERENCES networks(id),
@@ -186,11 +188,14 @@ CREATE TABLE IF NOT EXISTS wallets (
     is_primary BOOLEAN DEFAULT false,
     verified BOOLEAN DEFAULT false,
     last_used_at TIMESTAMP WITH TIME ZONE,
+    web3auth_user_id VARCHAR(255),
+    smart_account_type VARCHAR(50) CHECK (smart_account_type IN ('web3auth_eoa', 'web3auth_smart_account')),
+    deployment_status VARCHAR(50) CHECK (deployment_status IN ('pending', 'deployed', 'failed')),
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
-    CONSTRAINT check_wallet_type CHECK (wallet_type IN ('wallet', 'circle_wallet'))
+    CONSTRAINT check_wallet_type CHECK (wallet_type IN ('wallet', 'circle_wallet', 'web3auth'))
 );
 
 -- Circle Wallets Table (depends on wallets, circle_users)
@@ -576,6 +581,8 @@ CREATE TRIGGER validate_token_network_trigger
     FOR EACH ROW
     EXECUTE FUNCTION validate_token_network();
 
+-- SQL queries for Web3Auth functionality would be added to sqlc queries directory
+
 -- Create indexes
 -- (Order doesn't matter as much, but group by table for readability)
 
@@ -584,7 +591,9 @@ CREATE TRIGGER validate_token_network_trigger
 
 -- users
 CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_supabase_id ON users(supabase_id);
+CREATE INDEX idx_users_web3auth_id ON users(web3auth_id);
+CREATE INDEX idx_users_verifier ON users(verifier);
+CREATE INDEX idx_users_verifier_id ON users(verifier_id);
 CREATE INDEX idx_users_account_id ON users(account_id);
 
 -- workspaces
@@ -594,7 +603,22 @@ CREATE INDEX idx_workspaces_account_id ON workspaces(account_id);
 CREATE INDEX idx_circle_users_workspace_id ON circle_users(workspace_id);
 
 -- customers
-CREATE INDEX idx_customers_workspace_id ON customers(workspace_id);
+CREATE INDEX idx_customers_web3auth_id ON customers(web3auth_id);
+
+-- Workspace-Customer Association Table (Many-to-Many)
+CREATE TABLE IF NOT EXISTS workspace_customers (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    customer_id UUID NOT NULL REFERENCES customers(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    UNIQUE(workspace_id, customer_id)
+);
+
+CREATE INDEX idx_workspace_customers_workspace_id ON workspace_customers(workspace_id);
+CREATE INDEX idx_workspace_customers_customer_id ON workspace_customers(customer_id);
+CREATE INDEX idx_workspace_customers_deleted_at ON workspace_customers(deleted_at);
 CREATE INDEX idx_customers_payment_provider ON customers(payment_provider) WHERE deleted_at IS NULL;
 CREATE INDEX idx_customers_payment_sync_status ON customers(payment_sync_status) WHERE deleted_at IS NULL;
 
@@ -612,6 +636,9 @@ CREATE INDEX idx_wallets_network_type ON wallets(network_type);
 CREATE INDEX idx_wallets_is_primary ON wallets(is_primary) WHERE deleted_at IS NULL;
 CREATE INDEX idx_wallets_network_id ON wallets(network_id);
 CREATE INDEX idx_wallets_wallet_type ON wallets(wallet_type);
+CREATE INDEX idx_wallets_web3auth_user_id ON wallets(web3auth_user_id);
+CREATE INDEX idx_wallets_smart_account_type ON wallets(smart_account_type);
+CREATE INDEX idx_wallets_deployment_status ON wallets(deployment_status);
 
 -- circle_wallets
 CREATE INDEX idx_circle_wallets_wallet_id ON circle_wallets(wallet_id);
@@ -729,9 +756,9 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
-INSERT INTO users (supabase_id, email, first_name, last_name, display_name, account_id, role, is_account_owner)
+INSERT INTO users (web3auth_id, verifier, verifier_id, email, first_name, last_name, display_name, account_id, role, is_account_owner)
 VALUES 
-    ('supabase|admin', 'admin@cyphera.com', 'Admin', 'User', 'Admin User',
+    ('web3auth|admin', 'custom', 'admin@cyphera.com', 'admin@cyphera.com', 'Admin', 'User', 'Admin User',
      (SELECT id FROM accounts WHERE name = 'Admin Account'), 'admin', true)
 ON CONFLICT DO NOTHING;
 
@@ -750,7 +777,7 @@ VALUES
     (
         (SELECT id FROM workspaces WHERE name = 'Admin Workspace'),
         'Admin API Key',
-        'admin_valid_key_hash',
+        'admin_valid_key',
         'admin'
     )
 ON CONFLICT DO NOTHING;
@@ -764,7 +791,7 @@ VALUES
     ('Arbitrum Sepolia', 'Sepolia', 'evm', 'ARB-SEPOLIA', 421614, true, false, 'https://sepolia.arbiscan.io'),
     ('Arbitrum One', 'Mainnet', 'evm', 'ARB', 42161, false, false, 'https://arbiscan.io'),
     ('Base Sepolia', 'Sepolia', 'evm', 'BASE-SEPOLIA', 84532, true, true, 'https://sepolia.basescan.org'),
-    ('Base Mainnet', 'Mainnet', 'evm', 'BASE', 8453, false, false, 'https://basescan.org'),
+    ('Base Mainnet', 'Mainnet', 'evm', 'BASE', 8453, false, true, 'https://basescan.org'),
     ('Optimism Sepolia', 'Sepolia', 'evm', 'OP-SEPOLIA', 11155420, true, false, 'https://sepolia.optimism.io'),
     ('Optimism Mainnet', 'Mainnet', 'evm', 'OP', 10, false, false, 'https://optimistic.etherscan.io'),
     ('Unichain Sepolia', 'Sepolia', 'evm', 'UNI-SEPOLIA', 1301, true, false, 'https://sepolia.unichain.io'),

@@ -69,7 +69,7 @@ INSERT INTO wallets (
     metadata
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
-) RETURNING id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at
+) RETURNING id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, created_at, updated_at, deleted_at
 `
 
 type CreateWalletParams struct {
@@ -111,6 +111,9 @@ func (q *Queries) CreateWallet(ctx context.Context, arg CreateWalletParams) (Wal
 		&i.IsPrimary,
 		&i.Verified,
 		&i.LastUsedAt,
+		&i.Web3authUserID,
+		&i.SmartAccountType,
+		&i.DeploymentStatus,
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -121,7 +124,7 @@ func (q *Queries) CreateWallet(ctx context.Context, arg CreateWalletParams) (Wal
 
 const getCircleWalletByCircleWalletID = `-- name: GetCircleWalletByCircleWalletID :one
 SELECT 
-    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.web3auth_user_id, w.smart_account_type, w.deployment_status, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -133,26 +136,29 @@ WHERE cw.circle_wallet_id = $1 AND w.deleted_at IS NULL
 `
 
 type GetCircleWalletByCircleWalletIDRow struct {
-	ID             uuid.UUID          `json:"id"`
-	WorkspaceID    uuid.UUID          `json:"workspace_id"`
-	WalletType     string             `json:"wallet_type"`
-	WalletAddress  string             `json:"wallet_address"`
-	NetworkType    NetworkType        `json:"network_type"`
-	NetworkID      pgtype.UUID        `json:"network_id"`
-	Nickname       pgtype.Text        `json:"nickname"`
-	Ens            pgtype.Text        `json:"ens"`
-	IsPrimary      pgtype.Bool        `json:"is_primary"`
-	Verified       pgtype.Bool        `json:"verified"`
-	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
-	Metadata       []byte             `json:"metadata"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
-	CircleWalletID uuid.UUID          `json:"circle_wallet_id"`
-	CircleUserID   uuid.UUID          `json:"circle_user_id"`
-	CircleID       string             `json:"circle_id"`
-	ChainID        int32              `json:"chain_id"`
-	CircleState    string             `json:"circle_state"`
+	ID               uuid.UUID          `json:"id"`
+	WorkspaceID      uuid.UUID          `json:"workspace_id"`
+	WalletType       string             `json:"wallet_type"`
+	WalletAddress    string             `json:"wallet_address"`
+	NetworkType      NetworkType        `json:"network_type"`
+	NetworkID        pgtype.UUID        `json:"network_id"`
+	Nickname         pgtype.Text        `json:"nickname"`
+	Ens              pgtype.Text        `json:"ens"`
+	IsPrimary        pgtype.Bool        `json:"is_primary"`
+	Verified         pgtype.Bool        `json:"verified"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	Web3authUserID   pgtype.Text        `json:"web3auth_user_id"`
+	SmartAccountType pgtype.Text        `json:"smart_account_type"`
+	DeploymentStatus pgtype.Text        `json:"deployment_status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	CircleWalletID   uuid.UUID          `json:"circle_wallet_id"`
+	CircleUserID     uuid.UUID          `json:"circle_user_id"`
+	CircleID         string             `json:"circle_id"`
+	ChainID          int32              `json:"chain_id"`
+	CircleState      string             `json:"circle_state"`
 }
 
 func (q *Queries) GetCircleWalletByCircleWalletID(ctx context.Context, circleWalletID string) (GetCircleWalletByCircleWalletIDRow, error) {
@@ -170,6 +176,9 @@ func (q *Queries) GetCircleWalletByCircleWalletID(ctx context.Context, circleWal
 		&i.IsPrimary,
 		&i.Verified,
 		&i.LastUsedAt,
+		&i.Web3authUserID,
+		&i.SmartAccountType,
+		&i.DeploymentStatus,
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -184,7 +193,7 @@ func (q *Queries) GetCircleWalletByCircleWalletID(ctx context.Context, circleWal
 }
 
 const getRecentlyUsedWallets = `-- name: GetRecentlyUsedWallets :many
-SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, created_at, updated_at, deleted_at FROM wallets
 WHERE workspace_id = $1
 AND last_used_at IS NOT NULL 
 AND deleted_at IS NULL
@@ -218,6 +227,9 @@ func (q *Queries) GetRecentlyUsedWallets(ctx context.Context, arg GetRecentlyUse
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -235,7 +247,7 @@ func (q *Queries) GetRecentlyUsedWallets(ctx context.Context, arg GetRecentlyUse
 
 const getRecentlyUsedWalletsWithCircleData = `-- name: GetRecentlyUsedWalletsWithCircleData :many
 SELECT 
-    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.web3auth_user_id, w.smart_account_type, w.deployment_status, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -256,26 +268,29 @@ type GetRecentlyUsedWalletsWithCircleDataParams struct {
 }
 
 type GetRecentlyUsedWalletsWithCircleDataRow struct {
-	ID             uuid.UUID          `json:"id"`
-	WorkspaceID    uuid.UUID          `json:"workspace_id"`
-	WalletType     string             `json:"wallet_type"`
-	WalletAddress  string             `json:"wallet_address"`
-	NetworkType    NetworkType        `json:"network_type"`
-	NetworkID      pgtype.UUID        `json:"network_id"`
-	Nickname       pgtype.Text        `json:"nickname"`
-	Ens            pgtype.Text        `json:"ens"`
-	IsPrimary      pgtype.Bool        `json:"is_primary"`
-	Verified       pgtype.Bool        `json:"verified"`
-	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
-	Metadata       []byte             `json:"metadata"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
-	CircleWalletID pgtype.UUID        `json:"circle_wallet_id"`
-	CircleUserID   pgtype.UUID        `json:"circle_user_id"`
-	CircleID       pgtype.Text        `json:"circle_id"`
-	ChainID        pgtype.Int4        `json:"chain_id"`
-	CircleState    pgtype.Text        `json:"circle_state"`
+	ID               uuid.UUID          `json:"id"`
+	WorkspaceID      uuid.UUID          `json:"workspace_id"`
+	WalletType       string             `json:"wallet_type"`
+	WalletAddress    string             `json:"wallet_address"`
+	NetworkType      NetworkType        `json:"network_type"`
+	NetworkID        pgtype.UUID        `json:"network_id"`
+	Nickname         pgtype.Text        `json:"nickname"`
+	Ens              pgtype.Text        `json:"ens"`
+	IsPrimary        pgtype.Bool        `json:"is_primary"`
+	Verified         pgtype.Bool        `json:"verified"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	Web3authUserID   pgtype.Text        `json:"web3auth_user_id"`
+	SmartAccountType pgtype.Text        `json:"smart_account_type"`
+	DeploymentStatus pgtype.Text        `json:"deployment_status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	CircleWalletID   pgtype.UUID        `json:"circle_wallet_id"`
+	CircleUserID     pgtype.UUID        `json:"circle_user_id"`
+	CircleID         pgtype.Text        `json:"circle_id"`
+	ChainID          pgtype.Int4        `json:"chain_id"`
+	CircleState      pgtype.Text        `json:"circle_state"`
 }
 
 func (q *Queries) GetRecentlyUsedWalletsWithCircleData(ctx context.Context, arg GetRecentlyUsedWalletsWithCircleDataParams) ([]GetRecentlyUsedWalletsWithCircleDataRow, error) {
@@ -299,6 +314,9 @@ func (q *Queries) GetRecentlyUsedWalletsWithCircleData(ctx context.Context, arg 
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -320,7 +338,7 @@ func (q *Queries) GetRecentlyUsedWalletsWithCircleData(ctx context.Context, arg 
 }
 
 const getWalletByAddressAndCircleNetworkType = `-- name: GetWalletByAddressAndCircleNetworkType :one
-SELECT w.id, workspace_id, wallet_type, wallet_address, w.network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, w.created_at, w.updated_at, w.deleted_at, n.id, name, type, n.network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, n.created_at, n.updated_at, n.deleted_at FROM wallets as w
+SELECT w.id, workspace_id, wallet_type, wallet_address, w.network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, w.created_at, w.updated_at, w.deleted_at, n.id, name, type, n.network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, n.created_at, n.updated_at, n.deleted_at FROM wallets as w
 LEFT JOIN networks as n ON w.network_id = n.id
 WHERE w.wallet_address = $1 AND n.circle_network_type = $2 AND w.deleted_at IS NULL
 `
@@ -342,6 +360,9 @@ type GetWalletByAddressAndCircleNetworkTypeRow struct {
 	IsPrimary         pgtype.Bool           `json:"is_primary"`
 	Verified          pgtype.Bool           `json:"verified"`
 	LastUsedAt        pgtype.Timestamptz    `json:"last_used_at"`
+	Web3authUserID    pgtype.Text           `json:"web3auth_user_id"`
+	SmartAccountType  pgtype.Text           `json:"smart_account_type"`
+	DeploymentStatus  pgtype.Text           `json:"deployment_status"`
 	Metadata          []byte                `json:"metadata"`
 	CreatedAt         pgtype.Timestamptz    `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz    `json:"updated_at"`
@@ -375,6 +396,9 @@ func (q *Queries) GetWalletByAddressAndCircleNetworkType(ctx context.Context, ar
 		&i.IsPrimary,
 		&i.Verified,
 		&i.LastUsedAt,
+		&i.Web3authUserID,
+		&i.SmartAccountType,
+		&i.DeploymentStatus,
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -396,7 +420,7 @@ func (q *Queries) GetWalletByAddressAndCircleNetworkType(ctx context.Context, ar
 }
 
 const getWalletByID = `-- name: GetWalletByID :one
-SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, created_at, updated_at, deleted_at FROM wallets
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 `
 
@@ -420,6 +444,9 @@ func (q *Queries) GetWalletByID(ctx context.Context, arg GetWalletByIDParams) (W
 		&i.IsPrimary,
 		&i.Verified,
 		&i.LastUsedAt,
+		&i.Web3authUserID,
+		&i.SmartAccountType,
+		&i.DeploymentStatus,
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -465,7 +492,7 @@ func (q *Queries) GetWalletStats(ctx context.Context, workspaceID uuid.UUID) (Ge
 
 const getWalletWithCircleDataByAddress = `-- name: GetWalletWithCircleDataByAddress :one
 SELECT 
-    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.web3auth_user_id, w.smart_account_type, w.deployment_status, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -482,26 +509,29 @@ type GetWalletWithCircleDataByAddressParams struct {
 }
 
 type GetWalletWithCircleDataByAddressRow struct {
-	ID             uuid.UUID          `json:"id"`
-	WorkspaceID    uuid.UUID          `json:"workspace_id"`
-	WalletType     string             `json:"wallet_type"`
-	WalletAddress  string             `json:"wallet_address"`
-	NetworkType    NetworkType        `json:"network_type"`
-	NetworkID      pgtype.UUID        `json:"network_id"`
-	Nickname       pgtype.Text        `json:"nickname"`
-	Ens            pgtype.Text        `json:"ens"`
-	IsPrimary      pgtype.Bool        `json:"is_primary"`
-	Verified       pgtype.Bool        `json:"verified"`
-	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
-	Metadata       []byte             `json:"metadata"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
-	CircleWalletID pgtype.UUID        `json:"circle_wallet_id"`
-	CircleUserID   pgtype.UUID        `json:"circle_user_id"`
-	CircleID       pgtype.Text        `json:"circle_id"`
-	ChainID        pgtype.Int4        `json:"chain_id"`
-	CircleState    pgtype.Text        `json:"circle_state"`
+	ID               uuid.UUID          `json:"id"`
+	WorkspaceID      uuid.UUID          `json:"workspace_id"`
+	WalletType       string             `json:"wallet_type"`
+	WalletAddress    string             `json:"wallet_address"`
+	NetworkType      NetworkType        `json:"network_type"`
+	NetworkID        pgtype.UUID        `json:"network_id"`
+	Nickname         pgtype.Text        `json:"nickname"`
+	Ens              pgtype.Text        `json:"ens"`
+	IsPrimary        pgtype.Bool        `json:"is_primary"`
+	Verified         pgtype.Bool        `json:"verified"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	Web3authUserID   pgtype.Text        `json:"web3auth_user_id"`
+	SmartAccountType pgtype.Text        `json:"smart_account_type"`
+	DeploymentStatus pgtype.Text        `json:"deployment_status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	CircleWalletID   pgtype.UUID        `json:"circle_wallet_id"`
+	CircleUserID     pgtype.UUID        `json:"circle_user_id"`
+	CircleID         pgtype.Text        `json:"circle_id"`
+	ChainID          pgtype.Int4        `json:"chain_id"`
+	CircleState      pgtype.Text        `json:"circle_state"`
 }
 
 func (q *Queries) GetWalletWithCircleDataByAddress(ctx context.Context, arg GetWalletWithCircleDataByAddressParams) (GetWalletWithCircleDataByAddressRow, error) {
@@ -519,6 +549,9 @@ func (q *Queries) GetWalletWithCircleDataByAddress(ctx context.Context, arg GetW
 		&i.IsPrimary,
 		&i.Verified,
 		&i.LastUsedAt,
+		&i.Web3authUserID,
+		&i.SmartAccountType,
+		&i.DeploymentStatus,
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -534,7 +567,7 @@ func (q *Queries) GetWalletWithCircleDataByAddress(ctx context.Context, arg GetW
 
 const getWalletWithCircleDataByID = `-- name: GetWalletWithCircleDataByID :one
 SELECT 
-    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.web3auth_user_id, w.smart_account_type, w.deployment_status, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -551,26 +584,29 @@ type GetWalletWithCircleDataByIDParams struct {
 }
 
 type GetWalletWithCircleDataByIDRow struct {
-	ID             uuid.UUID          `json:"id"`
-	WorkspaceID    uuid.UUID          `json:"workspace_id"`
-	WalletType     string             `json:"wallet_type"`
-	WalletAddress  string             `json:"wallet_address"`
-	NetworkType    NetworkType        `json:"network_type"`
-	NetworkID      pgtype.UUID        `json:"network_id"`
-	Nickname       pgtype.Text        `json:"nickname"`
-	Ens            pgtype.Text        `json:"ens"`
-	IsPrimary      pgtype.Bool        `json:"is_primary"`
-	Verified       pgtype.Bool        `json:"verified"`
-	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
-	Metadata       []byte             `json:"metadata"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
-	CircleWalletID pgtype.UUID        `json:"circle_wallet_id"`
-	CircleUserID   pgtype.UUID        `json:"circle_user_id"`
-	CircleID       pgtype.Text        `json:"circle_id"`
-	ChainID        pgtype.Int4        `json:"chain_id"`
-	CircleState    pgtype.Text        `json:"circle_state"`
+	ID               uuid.UUID          `json:"id"`
+	WorkspaceID      uuid.UUID          `json:"workspace_id"`
+	WalletType       string             `json:"wallet_type"`
+	WalletAddress    string             `json:"wallet_address"`
+	NetworkType      NetworkType        `json:"network_type"`
+	NetworkID        pgtype.UUID        `json:"network_id"`
+	Nickname         pgtype.Text        `json:"nickname"`
+	Ens              pgtype.Text        `json:"ens"`
+	IsPrimary        pgtype.Bool        `json:"is_primary"`
+	Verified         pgtype.Bool        `json:"verified"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	Web3authUserID   pgtype.Text        `json:"web3auth_user_id"`
+	SmartAccountType pgtype.Text        `json:"smart_account_type"`
+	DeploymentStatus pgtype.Text        `json:"deployment_status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	CircleWalletID   pgtype.UUID        `json:"circle_wallet_id"`
+	CircleUserID     pgtype.UUID        `json:"circle_user_id"`
+	CircleID         pgtype.Text        `json:"circle_id"`
+	ChainID          pgtype.Int4        `json:"chain_id"`
+	CircleState      pgtype.Text        `json:"circle_state"`
 }
 
 func (q *Queries) GetWalletWithCircleDataByID(ctx context.Context, arg GetWalletWithCircleDataByIDParams) (GetWalletWithCircleDataByIDRow, error) {
@@ -588,6 +624,9 @@ func (q *Queries) GetWalletWithCircleDataByID(ctx context.Context, arg GetWallet
 		&i.IsPrimary,
 		&i.Verified,
 		&i.LastUsedAt,
+		&i.Web3authUserID,
+		&i.SmartAccountType,
+		&i.DeploymentStatus,
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -602,7 +641,7 @@ func (q *Queries) GetWalletWithCircleDataByID(ctx context.Context, arg GetWallet
 }
 
 const getWalletsByENS = `-- name: GetWalletsByENS :many
-SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, created_at, updated_at, deleted_at FROM wallets
 WHERE workspace_id = $1
 AND ens IS NOT NULL 
 AND deleted_at IS NULL
@@ -630,6 +669,9 @@ func (q *Queries) GetWalletsByENS(ctx context.Context, workspaceID uuid.UUID) ([
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -647,7 +689,7 @@ func (q *Queries) GetWalletsByENS(ctx context.Context, workspaceID uuid.UUID) ([
 
 const listCircleWalletsByCircleUserID = `-- name: ListCircleWalletsByCircleUserID :many
 SELECT 
-    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.web3auth_user_id, w.smart_account_type, w.deployment_status, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -660,26 +702,29 @@ ORDER BY w.created_at DESC
 `
 
 type ListCircleWalletsByCircleUserIDRow struct {
-	ID             uuid.UUID          `json:"id"`
-	WorkspaceID    uuid.UUID          `json:"workspace_id"`
-	WalletType     string             `json:"wallet_type"`
-	WalletAddress  string             `json:"wallet_address"`
-	NetworkType    NetworkType        `json:"network_type"`
-	NetworkID      pgtype.UUID        `json:"network_id"`
-	Nickname       pgtype.Text        `json:"nickname"`
-	Ens            pgtype.Text        `json:"ens"`
-	IsPrimary      pgtype.Bool        `json:"is_primary"`
-	Verified       pgtype.Bool        `json:"verified"`
-	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
-	Metadata       []byte             `json:"metadata"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
-	CircleWalletID uuid.UUID          `json:"circle_wallet_id"`
-	CircleUserID   uuid.UUID          `json:"circle_user_id"`
-	CircleID       string             `json:"circle_id"`
-	ChainID        int32              `json:"chain_id"`
-	CircleState    string             `json:"circle_state"`
+	ID               uuid.UUID          `json:"id"`
+	WorkspaceID      uuid.UUID          `json:"workspace_id"`
+	WalletType       string             `json:"wallet_type"`
+	WalletAddress    string             `json:"wallet_address"`
+	NetworkType      NetworkType        `json:"network_type"`
+	NetworkID        pgtype.UUID        `json:"network_id"`
+	Nickname         pgtype.Text        `json:"nickname"`
+	Ens              pgtype.Text        `json:"ens"`
+	IsPrimary        pgtype.Bool        `json:"is_primary"`
+	Verified         pgtype.Bool        `json:"verified"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	Web3authUserID   pgtype.Text        `json:"web3auth_user_id"`
+	SmartAccountType pgtype.Text        `json:"smart_account_type"`
+	DeploymentStatus pgtype.Text        `json:"deployment_status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	CircleWalletID   uuid.UUID          `json:"circle_wallet_id"`
+	CircleUserID     uuid.UUID          `json:"circle_user_id"`
+	CircleID         string             `json:"circle_id"`
+	ChainID          int32              `json:"chain_id"`
+	CircleState      string             `json:"circle_state"`
 }
 
 func (q *Queries) ListCircleWalletsByCircleUserID(ctx context.Context, circleUserID uuid.UUID) ([]ListCircleWalletsByCircleUserIDRow, error) {
@@ -703,6 +748,9 @@ func (q *Queries) ListCircleWalletsByCircleUserID(ctx context.Context, circleUse
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -725,7 +773,7 @@ func (q *Queries) ListCircleWalletsByCircleUserID(ctx context.Context, circleUse
 
 const listCircleWalletsByWorkspaceID = `-- name: ListCircleWalletsByWorkspaceID :many
 SELECT 
-    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.web3auth_user_id, w.smart_account_type, w.deployment_status, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -738,26 +786,29 @@ ORDER BY w.created_at DESC
 `
 
 type ListCircleWalletsByWorkspaceIDRow struct {
-	ID             uuid.UUID          `json:"id"`
-	WorkspaceID    uuid.UUID          `json:"workspace_id"`
-	WalletType     string             `json:"wallet_type"`
-	WalletAddress  string             `json:"wallet_address"`
-	NetworkType    NetworkType        `json:"network_type"`
-	NetworkID      pgtype.UUID        `json:"network_id"`
-	Nickname       pgtype.Text        `json:"nickname"`
-	Ens            pgtype.Text        `json:"ens"`
-	IsPrimary      pgtype.Bool        `json:"is_primary"`
-	Verified       pgtype.Bool        `json:"verified"`
-	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
-	Metadata       []byte             `json:"metadata"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
-	CircleWalletID uuid.UUID          `json:"circle_wallet_id"`
-	CircleUserID   uuid.UUID          `json:"circle_user_id"`
-	CircleID       string             `json:"circle_id"`
-	ChainID        int32              `json:"chain_id"`
-	CircleState    string             `json:"circle_state"`
+	ID               uuid.UUID          `json:"id"`
+	WorkspaceID      uuid.UUID          `json:"workspace_id"`
+	WalletType       string             `json:"wallet_type"`
+	WalletAddress    string             `json:"wallet_address"`
+	NetworkType      NetworkType        `json:"network_type"`
+	NetworkID        pgtype.UUID        `json:"network_id"`
+	Nickname         pgtype.Text        `json:"nickname"`
+	Ens              pgtype.Text        `json:"ens"`
+	IsPrimary        pgtype.Bool        `json:"is_primary"`
+	Verified         pgtype.Bool        `json:"verified"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	Web3authUserID   pgtype.Text        `json:"web3auth_user_id"`
+	SmartAccountType pgtype.Text        `json:"smart_account_type"`
+	DeploymentStatus pgtype.Text        `json:"deployment_status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	CircleWalletID   uuid.UUID          `json:"circle_wallet_id"`
+	CircleUserID     uuid.UUID          `json:"circle_user_id"`
+	CircleID         string             `json:"circle_id"`
+	ChainID          int32              `json:"chain_id"`
+	CircleState      string             `json:"circle_state"`
 }
 
 func (q *Queries) ListCircleWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListCircleWalletsByWorkspaceIDRow, error) {
@@ -781,6 +832,9 @@ func (q *Queries) ListCircleWalletsByWorkspaceID(ctx context.Context, workspaceI
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -802,7 +856,7 @@ func (q *Queries) ListCircleWalletsByWorkspaceID(ctx context.Context, workspaceI
 }
 
 const listPrimaryWalletsByWorkspaceID = `-- name: ListPrimaryWalletsByWorkspaceID :many
-SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, created_at, updated_at, deleted_at FROM wallets
 WHERE workspace_id = $1 AND is_primary = true AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -828,6 +882,9 @@ func (q *Queries) ListPrimaryWalletsByWorkspaceID(ctx context.Context, workspace
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -845,7 +902,7 @@ func (q *Queries) ListPrimaryWalletsByWorkspaceID(ctx context.Context, workspace
 
 const listPrimaryWalletsWithCircleDataByWorkspaceID = `-- name: ListPrimaryWalletsWithCircleDataByWorkspaceID :many
 SELECT 
-    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.web3auth_user_id, w.smart_account_type, w.deployment_status, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -858,26 +915,29 @@ ORDER BY w.created_at DESC
 `
 
 type ListPrimaryWalletsWithCircleDataByWorkspaceIDRow struct {
-	ID             uuid.UUID          `json:"id"`
-	WorkspaceID    uuid.UUID          `json:"workspace_id"`
-	WalletType     string             `json:"wallet_type"`
-	WalletAddress  string             `json:"wallet_address"`
-	NetworkType    NetworkType        `json:"network_type"`
-	NetworkID      pgtype.UUID        `json:"network_id"`
-	Nickname       pgtype.Text        `json:"nickname"`
-	Ens            pgtype.Text        `json:"ens"`
-	IsPrimary      pgtype.Bool        `json:"is_primary"`
-	Verified       pgtype.Bool        `json:"verified"`
-	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
-	Metadata       []byte             `json:"metadata"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
-	CircleWalletID pgtype.UUID        `json:"circle_wallet_id"`
-	CircleUserID   pgtype.UUID        `json:"circle_user_id"`
-	CircleID       pgtype.Text        `json:"circle_id"`
-	ChainID        pgtype.Int4        `json:"chain_id"`
-	CircleState    pgtype.Text        `json:"circle_state"`
+	ID               uuid.UUID          `json:"id"`
+	WorkspaceID      uuid.UUID          `json:"workspace_id"`
+	WalletType       string             `json:"wallet_type"`
+	WalletAddress    string             `json:"wallet_address"`
+	NetworkType      NetworkType        `json:"network_type"`
+	NetworkID        pgtype.UUID        `json:"network_id"`
+	Nickname         pgtype.Text        `json:"nickname"`
+	Ens              pgtype.Text        `json:"ens"`
+	IsPrimary        pgtype.Bool        `json:"is_primary"`
+	Verified         pgtype.Bool        `json:"verified"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	Web3authUserID   pgtype.Text        `json:"web3auth_user_id"`
+	SmartAccountType pgtype.Text        `json:"smart_account_type"`
+	DeploymentStatus pgtype.Text        `json:"deployment_status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	CircleWalletID   pgtype.UUID        `json:"circle_wallet_id"`
+	CircleUserID     pgtype.UUID        `json:"circle_user_id"`
+	CircleID         pgtype.Text        `json:"circle_id"`
+	ChainID          pgtype.Int4        `json:"chain_id"`
+	CircleState      pgtype.Text        `json:"circle_state"`
 }
 
 func (q *Queries) ListPrimaryWalletsWithCircleDataByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListPrimaryWalletsWithCircleDataByWorkspaceIDRow, error) {
@@ -901,6 +961,9 @@ func (q *Queries) ListPrimaryWalletsWithCircleDataByWorkspaceID(ctx context.Cont
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -922,7 +985,7 @@ func (q *Queries) ListPrimaryWalletsWithCircleDataByWorkspaceID(ctx context.Cont
 }
 
 const listWalletsByNetworkType = `-- name: ListWalletsByNetworkType :many
-SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, created_at, updated_at, deleted_at FROM wallets
 WHERE workspace_id = $1 AND network_type = $2 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -953,6 +1016,9 @@ func (q *Queries) ListWalletsByNetworkType(ctx context.Context, arg ListWalletsB
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -969,7 +1035,7 @@ func (q *Queries) ListWalletsByNetworkType(ctx context.Context, arg ListWalletsB
 }
 
 const listWalletsByWalletType = `-- name: ListWalletsByWalletType :many
-SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, created_at, updated_at, deleted_at FROM wallets
 WHERE workspace_id = $1 AND wallet_type = $2 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -1000,6 +1066,9 @@ func (q *Queries) ListWalletsByWalletType(ctx context.Context, arg ListWalletsBy
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -1016,7 +1085,7 @@ func (q *Queries) ListWalletsByWalletType(ctx context.Context, arg ListWalletsBy
 }
 
 const listWalletsByWorkspaceID = `-- name: ListWalletsByWorkspaceID :many
-SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, created_at, updated_at, deleted_at FROM wallets
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -1042,6 +1111,9 @@ func (q *Queries) ListWalletsByWorkspaceID(ctx context.Context, workspaceID uuid
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -1059,7 +1131,7 @@ func (q *Queries) ListWalletsByWorkspaceID(ctx context.Context, workspaceID uuid
 
 const listWalletsWithCircleDataByNetworkType = `-- name: ListWalletsWithCircleDataByNetworkType :many
 SELECT 
-    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.web3auth_user_id, w.smart_account_type, w.deployment_status, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -1077,26 +1149,29 @@ type ListWalletsWithCircleDataByNetworkTypeParams struct {
 }
 
 type ListWalletsWithCircleDataByNetworkTypeRow struct {
-	ID             uuid.UUID          `json:"id"`
-	WorkspaceID    uuid.UUID          `json:"workspace_id"`
-	WalletType     string             `json:"wallet_type"`
-	WalletAddress  string             `json:"wallet_address"`
-	NetworkType    NetworkType        `json:"network_type"`
-	NetworkID      pgtype.UUID        `json:"network_id"`
-	Nickname       pgtype.Text        `json:"nickname"`
-	Ens            pgtype.Text        `json:"ens"`
-	IsPrimary      pgtype.Bool        `json:"is_primary"`
-	Verified       pgtype.Bool        `json:"verified"`
-	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
-	Metadata       []byte             `json:"metadata"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
-	CircleWalletID pgtype.UUID        `json:"circle_wallet_id"`
-	CircleUserID   pgtype.UUID        `json:"circle_user_id"`
-	CircleID       pgtype.Text        `json:"circle_id"`
-	ChainID        pgtype.Int4        `json:"chain_id"`
-	CircleState    pgtype.Text        `json:"circle_state"`
+	ID               uuid.UUID          `json:"id"`
+	WorkspaceID      uuid.UUID          `json:"workspace_id"`
+	WalletType       string             `json:"wallet_type"`
+	WalletAddress    string             `json:"wallet_address"`
+	NetworkType      NetworkType        `json:"network_type"`
+	NetworkID        pgtype.UUID        `json:"network_id"`
+	Nickname         pgtype.Text        `json:"nickname"`
+	Ens              pgtype.Text        `json:"ens"`
+	IsPrimary        pgtype.Bool        `json:"is_primary"`
+	Verified         pgtype.Bool        `json:"verified"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	Web3authUserID   pgtype.Text        `json:"web3auth_user_id"`
+	SmartAccountType pgtype.Text        `json:"smart_account_type"`
+	DeploymentStatus pgtype.Text        `json:"deployment_status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	CircleWalletID   pgtype.UUID        `json:"circle_wallet_id"`
+	CircleUserID     pgtype.UUID        `json:"circle_user_id"`
+	CircleID         pgtype.Text        `json:"circle_id"`
+	ChainID          pgtype.Int4        `json:"chain_id"`
+	CircleState      pgtype.Text        `json:"circle_state"`
 }
 
 func (q *Queries) ListWalletsWithCircleDataByNetworkType(ctx context.Context, arg ListWalletsWithCircleDataByNetworkTypeParams) ([]ListWalletsWithCircleDataByNetworkTypeRow, error) {
@@ -1120,6 +1195,9 @@ func (q *Queries) ListWalletsWithCircleDataByNetworkType(ctx context.Context, ar
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -1142,7 +1220,7 @@ func (q *Queries) ListWalletsWithCircleDataByNetworkType(ctx context.Context, ar
 
 const listWalletsWithCircleDataByWorkspaceID = `-- name: ListWalletsWithCircleDataByWorkspaceID :many
 SELECT 
-    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.web3auth_user_id, w.smart_account_type, w.deployment_status, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -1155,26 +1233,29 @@ ORDER BY w.created_at DESC
 `
 
 type ListWalletsWithCircleDataByWorkspaceIDRow struct {
-	ID             uuid.UUID          `json:"id"`
-	WorkspaceID    uuid.UUID          `json:"workspace_id"`
-	WalletType     string             `json:"wallet_type"`
-	WalletAddress  string             `json:"wallet_address"`
-	NetworkType    NetworkType        `json:"network_type"`
-	NetworkID      pgtype.UUID        `json:"network_id"`
-	Nickname       pgtype.Text        `json:"nickname"`
-	Ens            pgtype.Text        `json:"ens"`
-	IsPrimary      pgtype.Bool        `json:"is_primary"`
-	Verified       pgtype.Bool        `json:"verified"`
-	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
-	Metadata       []byte             `json:"metadata"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
-	CircleWalletID pgtype.UUID        `json:"circle_wallet_id"`
-	CircleUserID   pgtype.UUID        `json:"circle_user_id"`
-	CircleID       pgtype.Text        `json:"circle_id"`
-	ChainID        pgtype.Int4        `json:"chain_id"`
-	CircleState    pgtype.Text        `json:"circle_state"`
+	ID               uuid.UUID          `json:"id"`
+	WorkspaceID      uuid.UUID          `json:"workspace_id"`
+	WalletType       string             `json:"wallet_type"`
+	WalletAddress    string             `json:"wallet_address"`
+	NetworkType      NetworkType        `json:"network_type"`
+	NetworkID        pgtype.UUID        `json:"network_id"`
+	Nickname         pgtype.Text        `json:"nickname"`
+	Ens              pgtype.Text        `json:"ens"`
+	IsPrimary        pgtype.Bool        `json:"is_primary"`
+	Verified         pgtype.Bool        `json:"verified"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	Web3authUserID   pgtype.Text        `json:"web3auth_user_id"`
+	SmartAccountType pgtype.Text        `json:"smart_account_type"`
+	DeploymentStatus pgtype.Text        `json:"deployment_status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	CircleWalletID   pgtype.UUID        `json:"circle_wallet_id"`
+	CircleUserID     pgtype.UUID        `json:"circle_user_id"`
+	CircleID         pgtype.Text        `json:"circle_id"`
+	ChainID          pgtype.Int4        `json:"chain_id"`
+	CircleState      pgtype.Text        `json:"circle_state"`
 }
 
 func (q *Queries) ListWalletsWithCircleDataByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListWalletsWithCircleDataByWorkspaceIDRow, error) {
@@ -1198,6 +1279,9 @@ func (q *Queries) ListWalletsWithCircleDataByWorkspaceID(ctx context.Context, wo
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -1219,7 +1303,7 @@ func (q *Queries) ListWalletsWithCircleDataByWorkspaceID(ctx context.Context, wo
 }
 
 const searchWallets = `-- name: SearchWallets :many
-SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at FROM wallets
+SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, created_at, updated_at, deleted_at FROM wallets
 WHERE workspace_id = $1
 AND deleted_at IS NULL
 AND (
@@ -1264,6 +1348,9 @@ func (q *Queries) SearchWallets(ctx context.Context, arg SearchWalletsParams) ([
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -1281,7 +1368,7 @@ func (q *Queries) SearchWallets(ctx context.Context, arg SearchWalletsParams) ([
 
 const searchWalletsWithCircleData = `-- name: SearchWalletsWithCircleData :many
 SELECT 
-    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.metadata, w.created_at, w.updated_at, w.deleted_at,
+    w.id, w.workspace_id, w.wallet_type, w.wallet_address, w.network_type, w.network_id, w.nickname, w.ens, w.is_primary, w.verified, w.last_used_at, w.web3auth_user_id, w.smart_account_type, w.deployment_status, w.metadata, w.created_at, w.updated_at, w.deleted_at,
     cw.id as circle_wallet_id,
     cw.circle_user_id,
     cw.circle_wallet_id as circle_id,
@@ -1309,26 +1396,29 @@ type SearchWalletsWithCircleDataParams struct {
 }
 
 type SearchWalletsWithCircleDataRow struct {
-	ID             uuid.UUID          `json:"id"`
-	WorkspaceID    uuid.UUID          `json:"workspace_id"`
-	WalletType     string             `json:"wallet_type"`
-	WalletAddress  string             `json:"wallet_address"`
-	NetworkType    NetworkType        `json:"network_type"`
-	NetworkID      pgtype.UUID        `json:"network_id"`
-	Nickname       pgtype.Text        `json:"nickname"`
-	Ens            pgtype.Text        `json:"ens"`
-	IsPrimary      pgtype.Bool        `json:"is_primary"`
-	Verified       pgtype.Bool        `json:"verified"`
-	LastUsedAt     pgtype.Timestamptz `json:"last_used_at"`
-	Metadata       []byte             `json:"metadata"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
-	CircleWalletID pgtype.UUID        `json:"circle_wallet_id"`
-	CircleUserID   pgtype.UUID        `json:"circle_user_id"`
-	CircleID       pgtype.Text        `json:"circle_id"`
-	ChainID        pgtype.Int4        `json:"chain_id"`
-	CircleState    pgtype.Text        `json:"circle_state"`
+	ID               uuid.UUID          `json:"id"`
+	WorkspaceID      uuid.UUID          `json:"workspace_id"`
+	WalletType       string             `json:"wallet_type"`
+	WalletAddress    string             `json:"wallet_address"`
+	NetworkType      NetworkType        `json:"network_type"`
+	NetworkID        pgtype.UUID        `json:"network_id"`
+	Nickname         pgtype.Text        `json:"nickname"`
+	Ens              pgtype.Text        `json:"ens"`
+	IsPrimary        pgtype.Bool        `json:"is_primary"`
+	Verified         pgtype.Bool        `json:"verified"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	Web3authUserID   pgtype.Text        `json:"web3auth_user_id"`
+	SmartAccountType pgtype.Text        `json:"smart_account_type"`
+	DeploymentStatus pgtype.Text        `json:"deployment_status"`
+	Metadata         []byte             `json:"metadata"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	CircleWalletID   pgtype.UUID        `json:"circle_wallet_id"`
+	CircleUserID     pgtype.UUID        `json:"circle_user_id"`
+	CircleID         pgtype.Text        `json:"circle_id"`
+	ChainID          pgtype.Int4        `json:"chain_id"`
+	CircleState      pgtype.Text        `json:"circle_state"`
 }
 
 func (q *Queries) SearchWalletsWithCircleData(ctx context.Context, arg SearchWalletsWithCircleDataParams) ([]SearchWalletsWithCircleDataRow, error) {
@@ -1357,6 +1447,9 @@ func (q *Queries) SearchWalletsWithCircleData(ctx context.Context, arg SearchWal
 			&i.IsPrimary,
 			&i.Verified,
 			&i.LastUsedAt,
+			&i.Web3authUserID,
+			&i.SmartAccountType,
+			&i.DeploymentStatus,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -1461,7 +1554,7 @@ SET
     metadata = COALESCE($5, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $6 AND deleted_at IS NULL
-RETURNING id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateWalletParams struct {
@@ -1495,6 +1588,9 @@ func (q *Queries) UpdateWallet(ctx context.Context, arg UpdateWalletParams) (Wal
 		&i.IsPrimary,
 		&i.Verified,
 		&i.LastUsedAt,
+		&i.Web3authUserID,
+		&i.SmartAccountType,
+		&i.DeploymentStatus,
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -1522,7 +1618,7 @@ SET
     verified = $1,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateWalletVerificationStatusParams struct {
@@ -1545,6 +1641,9 @@ func (q *Queries) UpdateWalletVerificationStatus(ctx context.Context, arg Update
 		&i.IsPrimary,
 		&i.Verified,
 		&i.LastUsedAt,
+		&i.Web3authUserID,
+		&i.SmartAccountType,
+		&i.DeploymentStatus,
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,

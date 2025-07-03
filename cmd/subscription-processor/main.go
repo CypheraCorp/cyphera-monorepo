@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	awsclient "cyphera-api/internal/client/aws"
@@ -185,10 +186,20 @@ func main() {
 	var fullDelegationAddr string
 	var useLocalModeForDelegation bool
 	if stage == helpers.StageLocal {
-		fullDelegationAddr = delegationHost + ":50051"
+		// Check if delegationHost already contains a port (has colon)
+		if strings.Contains(delegationHost, ":") {
+			fullDelegationAddr = delegationHost
+		} else {
+			fullDelegationAddr = delegationHost + ":50051"
+		}
 		useLocalModeForDelegation = true
 	} else if stage == helpers.StageDev || stage == helpers.StageProd {
-		fullDelegationAddr = delegationHost + ":443"
+		// Check if delegationHost already contains a port (has colon)
+		if strings.Contains(delegationHost, ":") {
+			fullDelegationAddr = delegationHost
+		} else {
+			fullDelegationAddr = delegationHost + ":443"
+		}
 		useLocalModeForDelegation = false
 	} else {
 		logger.Fatal("Invalid STAGE for delegation server connection configuration", zap.String("stage", stage))

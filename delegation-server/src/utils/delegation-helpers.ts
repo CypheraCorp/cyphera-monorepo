@@ -102,18 +102,19 @@ export async function validateDelegation(delegation: Delegation, publicClient: P
     throw new Error('Invalid delegate address format: must be a valid Ethereum address (0x + 40 hex chars)')
   }
 
-  // Check if the delegator Smart Account (customer's account) is deployed
+  // Note: We don't halt if the delegator Smart Account is not deployed
+  // because Web3Auth Smart Accounts are deployed on their first transaction.
+  // The redemption process will handle deployment automatically if needed.  
   try {
     const bytecode = await publicClient.getBytecode({ address: delegation.delegator as Address });
     if (!bytecode || bytecode === '0x') {
-      throw new Error(`Invalid delegation: Delegator smart account at ${delegation.delegator} is not deployed. The customer must deploy their account first.`);
+      logger.debug(`Delegator smart account at ${delegation.delegator} is not yet deployed. It will be deployed during redemption.`);
+    } else {
+      logger.debug(`Delegator smart account at ${delegation.delegator} is already deployed.`);
     }
   } catch (error: any) {
-    // Catch errors from getBytecode (e.g., RPC issues) and re-throw appropriately
-    if (error.message.includes('Delegator smart account') && error.message.includes('is not deployed')) {
-        throw error; // Re-throw our specific error
-    }
-    throw new Error(`Failed to verify delegator deployment status for ${delegation.delegator}: ${error.message}`);
+    // Just log RPC errors, don't throw - deployment status will be handled during redemption
+    logger.debug(`Could not check delegator deployment status for ${delegation.delegator}: ${error.message}`);
   }
   
   return true

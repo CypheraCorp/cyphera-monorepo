@@ -12,18 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countWorkspaceCustomers = `-- name: CountWorkspaceCustomers :one
-SELECT COUNT(*) FROM customers
-WHERE workspace_id = $1 AND deleted_at IS NULL
-`
-
-func (q *Queries) CountWorkspaceCustomers(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countWorkspaceCustomers, workspaceID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createWorkspace = `-- name: CreateWorkspace :one
 INSERT INTO workspaces (
     account_id,
@@ -205,101 +193,6 @@ WHERE id = $1
 func (q *Queries) HardDeleteWorkspace(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, hardDeleteWorkspace, id)
 	return err
-}
-
-const listWorkspaceCustomers = `-- name: ListWorkspaceCustomers :many
-SELECT c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at FROM customers c
-INNER JOIN workspaces w ON c.workspace_id = w.id
-WHERE w.id = $1 AND c.deleted_at IS NULL
-ORDER BY c.created_at DESC
-`
-
-func (q *Queries) ListWorkspaceCustomers(ctx context.Context, id uuid.UUID) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, listWorkspaceCustomers, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Customer{}
-	for rows.Next() {
-		var i Customer
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.ExternalID,
-			&i.Email,
-			&i.Name,
-			&i.Phone,
-			&i.Description,
-			&i.Metadata,
-			&i.PaymentSyncStatus,
-			&i.PaymentSyncedAt,
-			&i.PaymentSyncVersion,
-			&i.PaymentProvider,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listWorkspaceCustomersWithPagination = `-- name: ListWorkspaceCustomersWithPagination :many
-SELECT 
-    c.id, c.workspace_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at
-FROM customers c
-JOIN workspaces w ON c.workspace_id = w.id
-WHERE w.id = $1 AND c.deleted_at IS NULL
-ORDER BY c.created_at DESC
-LIMIT $2 OFFSET $3
-`
-
-type ListWorkspaceCustomersWithPaginationParams struct {
-	ID     uuid.UUID `json:"id"`
-	Limit  int32     `json:"limit"`
-	Offset int32     `json:"offset"`
-}
-
-func (q *Queries) ListWorkspaceCustomersWithPagination(ctx context.Context, arg ListWorkspaceCustomersWithPaginationParams) ([]Customer, error) {
-	rows, err := q.db.Query(ctx, listWorkspaceCustomersWithPagination, arg.ID, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Customer{}
-	for rows.Next() {
-		var i Customer
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.ExternalID,
-			&i.Email,
-			&i.Name,
-			&i.Phone,
-			&i.Description,
-			&i.Metadata,
-			&i.PaymentSyncStatus,
-			&i.PaymentSyncedAt,
-			&i.PaymentSyncVersion,
-			&i.PaymentProvider,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listWorkspaces = `-- name: ListWorkspaces :many

@@ -59,12 +59,6 @@ WHERE id = $1 AND deleted_at IS NULL;
 DELETE FROM workspaces
 WHERE id = $1;
 
--- name: ListWorkspaceCustomers :many
-SELECT c.* FROM customers c
-INNER JOIN workspaces w ON c.workspace_id = w.id
-WHERE w.id = $1 AND c.deleted_at IS NULL
-ORDER BY c.created_at DESC;
-
 -- name: GetAccountByWorkspaceID :one
 SELECT a.* FROM accounts a
 JOIN workspaces w ON w.account_id = a.id
@@ -72,16 +66,3 @@ WHERE w.id = $1
 AND w.deleted_at IS NULL 
 AND a.deleted_at IS NULL
 LIMIT 1;
-
--- name: CountWorkspaceCustomers :one
-SELECT COUNT(*) FROM customers
-WHERE workspace_id = $1 AND deleted_at IS NULL;
-
--- name: ListWorkspaceCustomersWithPagination :many
-SELECT 
-    c.*
-FROM customers c
-JOIN workspaces w ON c.workspace_id = w.id
-WHERE w.id = $1 AND c.deleted_at IS NULL
-ORDER BY c.created_at DESC
-LIMIT $2 OFFSET $3;
