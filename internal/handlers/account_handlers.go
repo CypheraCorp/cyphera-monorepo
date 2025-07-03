@@ -57,6 +57,26 @@ type CreateAccountRequest struct {
 	SupportPhone       string                 `json:"support_phone,omitempty"`
 	FinishedOnboarding bool                   `json:"finished_onboarding,omitempty"`
 	Metadata           map[string]interface{} `json:"metadata,omitempty"`
+	// Web3Auth embedded wallet data to be created during registration
+	WalletData *EmbeddedWalletRequest `json:"wallet_data,omitempty"`
+}
+
+// EmbeddedWalletRequest represents the request body for creating an embedded wallet during account creation
+// This is different from CreateWalletRequest as it doesn't require network_id (we create for all active networks)
+type EmbeddedWalletRequest struct {
+	WalletType    string                 `json:"wallet_type" binding:"required"` // 'web3auth', 'wallet', or 'circle_wallet'
+	WalletAddress string                 `json:"wallet_address" binding:"required"`
+	NetworkType   string                 `json:"network_type" binding:"required"`
+	Nickname      string                 `json:"nickname,omitempty"`
+	ENS           string                 `json:"ens,omitempty"`
+	IsPrimary     bool                   `json:"is_primary"`
+	Verified      bool                   `json:"verified"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	// Circle wallet specific fields
+	CircleUserID   string `json:"circle_user_id,omitempty"`   // Only for circle wallets
+	CircleWalletID string `json:"circle_wallet_id,omitempty"` // Only for circle wallets
+	ChainID        int32  `json:"chain_id,omitempty"`         // Only for circle wallets
+	State          string `json:"state,omitempty"`            // Only for circle wallets
 }
 
 // UpdateAccountRequest represents the request body for updating an account
@@ -82,8 +102,8 @@ type AccountAccessResponse struct {
 
 // OnboardAccountRequest represents the request body for onboarding an account
 type OnboardAccountRequest struct {
-	AddressLine1  string `json:"address_line_1"`
-	AddressLine2  string `json:"address_line_2"`
+	AddressLine1  string `json:"address_line1"` // Frontend sends address_line1 (no underscore)
+	AddressLine2  string `json:"address_line2"` // Frontend sends address_line2 (no underscore)
 	City          string `json:"city"`
 	State         string `json:"state"`
 	PostalCode    string `json:"postal_code"`
@@ -318,20 +338,83 @@ func (h *AccountHandler) validateSignInRequest(req CreateAccountRequest) (string
 		return "", "", nil, errors.Wrap(err, "failed to unmarshal metadata")
 	}
 
-	// Check for Supabase metadata format
-	if supabaseId, ok := metaDataMap["ownerSupabaseId"].(string); ok {
+	// Check for Web3Auth metadata format
+	if web3authId, ok := metaDataMap["ownerWeb3AuthId"].(string); ok {
 		email, ok := metaDataMap["email"].(string)
 		if !ok || email == "" {
 			return "", "", nil, errors.New("email is required")
 		}
-		return supabaseId, email, metadata, nil
+		return web3authId, email, metadata, nil
 	}
 
-	return "", "", nil, errors.New("ownerSupabaseId is required")
+	return "", "", nil, errors.New("ownerWeb3AuthId is required")
 }
 
-// createNewAccountWithUser creates a new account with associated user and workspace
-func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAccountRequest, supabaseId string, email string, metadata []byte) (*AccountDetailsResponse, error) {
+// createWalletsForActiveNetworks creates wallet entries for all active networks
+func (h *AccountHandler) createWalletsForActiveNetworks(ctx *gin.Context, workspaceID uuid.UUID, walletData *EmbeddedWalletRequest) error {
+	// Get all active networks
+	networks, err := h.common.db.ListNetworks(ctx.Request.Context(), db.ListNetworksParams{
+		IsActive: pgtype.Bool{Bool: true, Valid: true},
+	})
+	if err != nil {
+		return errors.Wrap(err, "failed to fetch active networks")
+	}
+
+	if len(networks) == 0 {
+		return errors.New("no active networks found")
+	}
+
+	// Create wallet entry for each active network
+	for i, network := range networks {
+		// Prepare metadata for the wallet
+		var walletMetadata []byte
+		if walletData.Metadata != nil {
+			walletMetadata, err = json.Marshal(walletData.Metadata)
+			if err != nil {
+				return errors.Wrap(err, "failed to marshal wallet metadata")
+			}
+		} else {
+			walletMetadata = []byte("{}")
+		}
+
+		// Set the first wallet as primary, others as non-primary
+		isPrimary := i == 0 && walletData.IsPrimary
+
+		// Create wallet for this network
+		_, err = h.common.db.CreateWallet(ctx.Request.Context(), db.CreateWalletParams{
+			WorkspaceID:   workspaceID,
+			WalletType:    walletData.WalletType,
+			WalletAddress: walletData.WalletAddress,
+			NetworkType:   network.NetworkType,
+			NetworkID:     pgtype.UUID{Bytes: network.ID, Valid: true},
+			Nickname:      pgtype.Text{String: walletData.Nickname, Valid: walletData.Nickname != ""},
+			Ens:           pgtype.Text{String: walletData.ENS, Valid: walletData.ENS != ""},
+			IsPrimary:     pgtype.Bool{Bool: isPrimary, Valid: true},
+			Verified:      pgtype.Bool{Bool: walletData.Verified, Valid: true},
+			Metadata:      walletMetadata,
+		})
+		if err != nil {
+			return errors.Wrapf(err, "failed to create wallet for network %s (chain_id: %d)", network.Name, network.ChainID)
+		}
+	}
+
+	return nil
+}
+
+func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAccountRequest, web3authId string, email string, metadata []byte) (*AccountDetailsResponse, error) {
+	// Extract verifier and verifierId from metadata
+	var metadataMap map[string]interface{}
+	var verifier, verifierId string
+
+	if err := json.Unmarshal(metadata, &metadataMap); err == nil {
+		if v, ok := metadataMap["verifier"].(string); ok {
+			verifier = v
+		}
+		if v, ok := metadataMap["verifierId"].(string); ok {
+			verifierId = v
+		}
+	}
+
 	// Create account
 	account, err := h.common.db.CreateAccount(ctx.Request.Context(), db.CreateAccountParams{
 		Name:               req.Name,
@@ -350,11 +433,28 @@ func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAc
 
 	// Create user
 	user, err := h.common.db.CreateUser(ctx.Request.Context(), db.CreateUserParams{
-		SupabaseID:     supabaseId,
 		Email:          email,
 		AccountID:      account.ID,
 		Role:           db.UserRoleAdmin,
 		IsAccountOwner: pgtype.Bool{Bool: true, Valid: true},
+		FirstName:      pgtype.Text{Valid: false},
+		LastName:       pgtype.Text{Valid: false},
+		AddressLine1:   pgtype.Text{Valid: false},
+		AddressLine2:   pgtype.Text{Valid: false},
+		City:           pgtype.Text{Valid: false},
+		StateRegion:    pgtype.Text{Valid: false},
+		PostalCode:     pgtype.Text{Valid: false},
+		Country:        pgtype.Text{Valid: false},
+		DisplayName:    pgtype.Text{Valid: false},
+		PictureUrl:     pgtype.Text{Valid: false},
+		Phone:          pgtype.Text{Valid: false},
+		Timezone:       pgtype.Text{Valid: false},
+		Locale:         pgtype.Text{Valid: false},
+		EmailVerified:  pgtype.Bool{Bool: true, Valid: true}, // Assume Web3Auth emails are verified
+		Metadata:       []byte("{}"),
+		Web3authID:     pgtype.Text{String: web3authId, Valid: web3authId != ""},
+		Verifier:       pgtype.Text{String: verifier, Valid: verifier != ""},
+		VerifierID:     pgtype.Text{String: verifierId, Valid: verifierId != ""},
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to createNewAccountWithUser")
@@ -367,6 +467,14 @@ func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAc
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create workspace")
+	}
+
+	// Create wallets for all active networks if wallet data is provided
+	if req.WalletData != nil {
+		err = h.createWalletsForActiveNetworks(ctx, workspace.ID, req.WalletData)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create wallets for active networks")
+		}
 	}
 
 	return &AccountDetailsResponse{
@@ -388,14 +496,14 @@ func (h *AccountHandler) SignInAccount(c *gin.Context) {
 		return
 	}
 
-	supabaseId, email, metadata, err := h.validateSignInRequest(req)
+	web3authId, email, metadata, err := h.validateSignInRequest(req)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
 		return
 	}
 
-	// Check if user already exists by Supabase ID
-	user, err := h.common.db.GetUserBySupabaseID(c.Request.Context(), supabaseId)
+	// Check if user already exists by Web3Auth ID
+	user, err := h.common.db.GetUserByWeb3AuthID(c.Request.Context(), pgtype.Text{String: web3authId, Valid: web3authId != ""})
 	if err != nil {
 		if err != pgx.ErrNoRows {
 			sendError(c, http.StatusInternalServerError, "Failed to check existing user", err)
@@ -406,7 +514,7 @@ func (h *AccountHandler) SignInAccount(c *gin.Context) {
 	var response *AccountDetailsResponse
 	if errors.Is(err, pgx.ErrNoRows) {
 		// User doesn't exist, create new account and user
-		response, err = h.createNewAccountWithUser(c, req, supabaseId, email, metadata)
+		response, err = h.createNewAccountWithUser(c, req, web3authId, email, metadata)
 		if err != nil {
 			sendError(c, http.StatusInternalServerError, err.Error(), err)
 			return
@@ -507,24 +615,25 @@ func (h *AccountHandler) OnboardAccount(c *gin.Context) {
 	}
 
 	userParams := db.UpdateUserParams{
-		ID:               user.ID,
-		Email:            user.Email,
-		FirstName:        pgtype.Text{String: req.FirstName, Valid: req.FirstName != ""},
-		LastName:         pgtype.Text{String: req.LastName, Valid: req.LastName != ""},
-		AddressLine1:     pgtype.Text{String: req.AddressLine1, Valid: req.AddressLine1 != ""},
-		AddressLine2:     pgtype.Text{String: req.AddressLine2, Valid: req.AddressLine2 != ""},
-		City:             pgtype.Text{String: req.City, Valid: req.City != ""},
-		StateRegion:      pgtype.Text{String: req.State, Valid: req.State != ""},
-		PostalCode:       pgtype.Text{String: req.PostalCode, Valid: req.PostalCode != ""},
-		Country:          pgtype.Text{String: req.Country, Valid: req.Country != ""},
-		DisplayName:      user.DisplayName,
-		PictureUrl:       user.PictureUrl,
-		Phone:            user.Phone,
-		Timezone:         user.Timezone,
-		Locale:           user.Locale,
-		EmailVerified:    pgtype.Bool{Bool: true, Valid: true},
-		TwoFactorEnabled: user.TwoFactorEnabled,
-		Status:           user.Status,
+		ID:                 user.ID,
+		Email:              user.Email,
+		FirstName:          pgtype.Text{String: req.FirstName, Valid: req.FirstName != ""},
+		LastName:           pgtype.Text{String: req.LastName, Valid: req.LastName != ""},
+		AddressLine1:       pgtype.Text{String: req.AddressLine1, Valid: req.AddressLine1 != ""},
+		AddressLine2:       pgtype.Text{String: req.AddressLine2, Valid: req.AddressLine2 != ""},
+		City:               pgtype.Text{String: req.City, Valid: req.City != ""},
+		StateRegion:        pgtype.Text{String: req.State, Valid: req.State != ""},
+		PostalCode:         pgtype.Text{String: req.PostalCode, Valid: req.PostalCode != ""},
+		Country:            pgtype.Text{String: req.Country, Valid: req.Country != ""},
+		DisplayName:        user.DisplayName,
+		PictureUrl:         user.PictureUrl,
+		Phone:              user.Phone,
+		Timezone:           user.Timezone,
+		Locale:             user.Locale,
+		EmailVerified:      pgtype.Bool{Bool: true, Valid: true},
+		TwoFactorEnabled:   user.TwoFactorEnabled,
+		FinishedOnboarding: pgtype.Bool{Bool: true, Valid: true}, // Automatically set to true when onboarding
+		Status:             user.Status,
 	}
 
 	_, err = h.common.db.UpdateUser(c.Request.Context(), userParams)

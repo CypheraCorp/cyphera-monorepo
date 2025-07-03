@@ -24,19 +24,16 @@ func NewCustomerHandler(common *CommonServices) *CustomerHandler {
 
 // CustomerResponse represents the standardized API response for customer operations
 type CustomerResponse struct {
-	ID            string                 `json:"id"`
-	Object        string                 `json:"object"`
-	WorkspaceID   string                 `json:"workspace_id"`
-	ExternalID    string                 `json:"external_id,omitempty"`
-	Email         string                 `json:"email"`
-	Name          string                 `json:"name,omitempty"`
-	Phone         string                 `json:"phone,omitempty"`
-	Description   string                 `json:"description,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt     int64                  `json:"created_at"`
-	UpdatedAt     int64                  `json:"updated_at"`
-	WorkspaceName string                 `json:"workspace_name,omitempty"`
-	BusinessName  string                 `json:"business_name,omitempty"`
+	ID          string                 `json:"id"`
+	Object      string                 `json:"object"`
+	ExternalID  string                 `json:"external_id,omitempty"`
+	Email       string                 `json:"email"`
+	Name        string                 `json:"name,omitempty"`
+	Phone       string                 `json:"phone,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt   int64                  `json:"created_at"`
+	UpdatedAt   int64                  `json:"updated_at"`
 }
 
 // CreateCustomerRequest represents the request body for creating a customer
@@ -67,6 +64,49 @@ type ListCustomersResponse struct {
 	Total   int64              `json:"total"`
 }
 
+// Customer wallet response for the sign-in/register API
+type CustomerWalletResponse struct {
+	ID            string                 `json:"id"`
+	Object        string                 `json:"object"`
+	CustomerID    string                 `json:"customer_id"`
+	WalletAddress string                 `json:"wallet_address"`
+	NetworkType   string                 `json:"network_type"`
+	Nickname      string                 `json:"nickname,omitempty"`
+	ENS           string                 `json:"ens,omitempty"`
+	IsPrimary     bool                   `json:"is_primary"`
+	Verified      bool                   `json:"verified"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt     int64                  `json:"created_at"`
+	UpdatedAt     int64                  `json:"updated_at"`
+}
+
+// SignInRegisterCustomerRequest represents the request body for customer sign-in/register
+type SignInRegisterCustomerRequest struct {
+	Email    string                 `json:"email" binding:"required,email"`
+	Name     string                 `json:"name,omitempty"`
+	Phone    string                 `json:"phone,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	// Web3Auth wallet data to be created during registration
+	WalletData *CustomerWalletRequest `json:"wallet_data,omitempty"`
+}
+
+// CustomerWalletRequest represents wallet data for customer registration
+type CustomerWalletRequest struct {
+	WalletAddress string                 `json:"wallet_address" binding:"required"`
+	NetworkType   string                 `json:"network_type" binding:"required"`
+	Nickname      string                 `json:"nickname,omitempty"`
+	ENS           string                 `json:"ens,omitempty"`
+	IsPrimary     bool                   `json:"is_primary"`
+	Verified      bool                   `json:"verified"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// CustomerDetailsResponse represents the response for customer sign-in/register
+type CustomerDetailsResponse struct {
+	Customer CustomerResponse       `json:"customer"`
+	Wallet   CustomerWalletResponse `json:"wallet,omitempty"`
+}
+
 // GetCustomer godoc
 // @Summary Get customer by ID
 // @Description Get customer details by customer ID
@@ -80,13 +120,6 @@ type ListCustomersResponse struct {
 // @Security ApiKeyAuth
 // @Router /customers/{customer_id} [get]
 func (h *CustomerHandler) GetCustomer(c *gin.Context) {
-	workspaceID := c.GetHeader("X-Workspace-ID")
-	parsedWorkspaceID, err := uuid.Parse(workspaceID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
-		return
-	}
-
 	customerId := c.Param("customer_id")
 	parsedUUID, err := uuid.Parse(customerId)
 	if err != nil {
@@ -94,10 +127,7 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 		return
 	}
 
-	customer, err := h.common.db.GetCustomer(c.Request.Context(), db.GetCustomerParams{
-		ID:          parsedUUID,
-		WorkspaceID: parsedWorkspaceID,
-	})
+	customer, err := h.common.db.GetCustomer(c.Request.Context(), parsedUUID)
 	if err != nil {
 		handleDBError(c, err, "Customer not found")
 		return
@@ -167,13 +197,13 @@ func (h *CustomerHandler) updateCustomerParams(id uuid.UUID, req UpdateCustomerR
 // @Router /customers [get]
 func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
-	parsedWorkspaceID, err := uuid.Parse(workspaceID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+	if workspaceID != "" {
+		// If workspace ID is provided, list customers for that workspace
+		h.listWorkspaceCustomers(c, workspaceID)
 		return
 	}
 
-	// Get pagination parameters
+	// Otherwise, list all customers (global)
 	limit, page, err := validatePaginationParams(c)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid pagination parameters", err)
@@ -190,19 +220,64 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	offset := (page - 1) * limit
 
 	customers, err := h.common.db.ListCustomersWithPagination(c.Request.Context(), db.ListCustomersWithPaginationParams{
-		WorkspaceID: parsedWorkspaceID,
-		Limit:       int32(limit),
-		Offset:      int32(offset),
+		Limit:  int32(limit),
+		Offset: int32(offset),
 	})
 	if err != nil {
 		handleDBError(c, err, "Failed to retrieve customers")
 		return
 	}
 
-	// Get the total count for pagination metadata
-	totalCount, err := h.common.db.CountCustomersByWorkspaceID(c.Request.Context(), parsedWorkspaceID)
+	totalCount, err := h.common.db.CountCustomers(c.Request.Context())
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to count customers", err)
+		return
+	}
+
+	customerResponses := make([]CustomerResponse, len(customers))
+	for i, customer := range customers {
+		customerResponses[i] = toCustomerResponse(customer)
+	}
+
+	response := sendPaginatedSuccess(c, http.StatusOK, customerResponses, int(page), int(limit), int(totalCount))
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *CustomerHandler) listWorkspaceCustomers(c *gin.Context, workspaceID string) {
+	parsedWorkspaceID, err := uuid.Parse(workspaceID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
+	limit, page, err := validatePaginationParams(c)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid pagination parameters", err)
+		return
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	offset := (page - 1) * limit
+
+	customers, err := h.common.db.ListWorkspaceCustomersWithPagination(c.Request.Context(), db.ListWorkspaceCustomersWithPaginationParams{
+		WorkspaceID: parsedWorkspaceID,
+		Limit:       int32(limit),
+		Offset:      int32(offset),
+	})
+	if err != nil {
+		handleDBError(c, err, "Failed to retrieve workspace customers")
+		return
+	}
+
+	totalCount, err := h.common.db.CountWorkspaceCustomers(c.Request.Context(), parsedWorkspaceID)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to count workspace customers", err)
 		return
 	}
 
@@ -229,13 +304,6 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 		return
 	}
 
-	workspaceID := c.GetHeader("X-Workspace-ID")
-	parsedWorkspaceID, err := uuid.Parse(workspaceID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
-		return
-	}
-
 	metadataBytes, err := json.Marshal(req.Metadata)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
@@ -243,7 +311,6 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	}
 
 	customer, err := h.common.db.CreateCustomer(c.Request.Context(), db.CreateCustomerParams{
-		WorkspaceID: parsedWorkspaceID,
 		ExternalID:  pgtype.Text{String: req.ExternalID, Valid: req.ExternalID != ""},
 		Email:       pgtype.Text{String: req.Email, Valid: req.Email != ""},
 		Name:        pgtype.Text{String: req.Name, Valid: req.Name != ""},
@@ -254,6 +321,22 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to create customer", err)
 		return
+	}
+
+	// If workspace ID is provided, associate the customer with the workspace
+	workspaceID := c.GetHeader("X-Workspace-ID")
+	if workspaceID != "" {
+		parsedWorkspaceID, err := uuid.Parse(workspaceID)
+		if err == nil {
+			_, err = h.common.db.AddCustomerToWorkspace(c.Request.Context(), db.AddCustomerToWorkspaceParams{
+				WorkspaceID: parsedWorkspaceID,
+				CustomerID:  customer.ID,
+			})
+			if err != nil {
+				log.Printf("Failed to associate customer with workspace: %v", err)
+				// Don't fail the request, just log the error
+			}
+		}
 	}
 
 	sendSuccess(c, http.StatusCreated, toCustomerResponse(customer))
@@ -267,13 +350,6 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 // @Produce json
 // @Tags exclude
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
-	workspaceID := c.GetHeader("X-Workspace-ID")
-	parsedWorkspaceID, err := uuid.Parse(workspaceID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
-		return
-	}
-
 	customerId := c.Param("customer_id")
 	parsedUUID, err := uuid.Parse(customerId)
 	if err != nil {
@@ -293,9 +369,6 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 		return
 	}
 
-	// Update the workspace ID
-	params.WorkspaceID = parsedWorkspaceID
-
 	customer, err := h.common.db.UpdateCustomer(c.Request.Context(), params)
 	if err != nil {
 		handleDBError(c, err, "Failed to update customer")
@@ -313,13 +386,6 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 // @Produce json
 // @Tags exclude
 func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
-	workspaceID := c.GetHeader("X-Workspace-ID")
-	parsedWorkspaceID, err := uuid.Parse(workspaceID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
-		return
-	}
-
 	customerId := c.Param("customer_id")
 	parsedUUID, err := uuid.Parse(customerId)
 	if err != nil {
@@ -327,10 +393,7 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 		return
 	}
 
-	err = h.common.db.DeleteCustomer(c.Request.Context(), db.DeleteCustomerParams{
-		ID:          parsedUUID,
-		WorkspaceID: parsedWorkspaceID,
-	})
+	err = h.common.db.DeleteCustomer(c.Request.Context(), parsedUUID)
 	if err != nil {
 		handleDBError(c, err, "Failed to delete customer")
 		return
@@ -350,7 +413,6 @@ func toCustomerResponse(c db.Customer) CustomerResponse {
 	return CustomerResponse{
 		ID:          c.ID.String(),
 		Object:      "customer",
-		WorkspaceID: c.WorkspaceID.String(),
 		ExternalID:  c.ExternalID.String,
 		Email:       c.Email.String,
 		Name:        c.Name.String,
@@ -359,5 +421,189 @@ func toCustomerResponse(c db.Customer) CustomerResponse {
 		Metadata:    metadata,
 		CreatedAt:   c.CreatedAt.Time.Unix(),
 		UpdatedAt:   c.UpdatedAt.Time.Unix(),
+	}
+}
+
+// SignInRegisterCustomer godoc
+// @Summary Sign in or register a customer
+// @Description Signs in to an existing customer account or creates a new customer with Web3Auth ID
+// @Tags customers
+// @Accept json
+// @Produce json
+// @Tags exclude
+func (h *CustomerHandler) SignInRegisterCustomer(c *gin.Context) {
+	var req SignInRegisterCustomerRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	web3authId, email, metadata, err := h.validateCustomerSignInRequest(req)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
+		return
+	}
+
+	// Check if customer already exists by Web3Auth ID
+	customer, err := h.common.db.GetCustomerByWeb3AuthID(c.Request.Context(), pgtype.Text{String: web3authId, Valid: web3authId != ""})
+	if err != nil {
+		if err.Error() != "no rows in result set" {
+			sendError(c, http.StatusInternalServerError, "Failed to check existing customer", err)
+			return
+		}
+	}
+
+	var response *CustomerDetailsResponse
+	if err != nil && err.Error() == "no rows in result set" {
+		// Customer doesn't exist, create new customer and wallet
+		response, err = h.createNewCustomerWithWallet(c, req, web3authId, email, metadata)
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, err.Error(), err)
+			return
+		}
+		sendSuccess(c, http.StatusCreated, response)
+	} else {
+		// Customer exists, get existing customer and wallet details
+		wallets, err := h.common.db.ListCustomerWallets(c.Request.Context(), customer.ID)
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, "Failed to retrieve customer wallets", err)
+			return
+		}
+
+		var walletResponse CustomerWalletResponse
+		if len(wallets) > 0 {
+			// Find primary wallet or use first wallet
+			var primaryWallet *db.CustomerWallet
+			for _, wallet := range wallets {
+				if wallet.IsPrimary.Bool {
+					primaryWallet = &wallet
+					break
+				}
+			}
+			if primaryWallet == nil {
+				primaryWallet = &wallets[0]
+			}
+			walletResponse = toCustomerWalletResponse(*primaryWallet)
+		}
+
+		response = &CustomerDetailsResponse{
+			Customer: toCustomerResponse(customer),
+			Wallet:   walletResponse,
+		}
+		sendSuccess(c, http.StatusOK, response)
+	}
+}
+
+// validateCustomerSignInRequest validates the sign-in request and extracts metadata
+func (h *CustomerHandler) validateCustomerSignInRequest(req SignInRegisterCustomerRequest) (string, string, []byte, error) {
+	// Extract Web3Auth ID from metadata if present
+	web3authId := ""
+	if req.Metadata != nil {
+		if id, exists := req.Metadata["web3auth_id"]; exists {
+			if idStr, ok := id.(string); ok {
+				web3authId = idStr
+			}
+		}
+	}
+
+	metadata, err := json.Marshal(req.Metadata)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("invalid metadata format: %w", err)
+	}
+
+	return web3authId, req.Email, metadata, nil
+}
+
+// createNewCustomerWithWallet creates a new customer and associated wallet
+func (h *CustomerHandler) createNewCustomerWithWallet(ctx *gin.Context, req SignInRegisterCustomerRequest, web3authId string, email string, metadata []byte) (*CustomerDetailsResponse, error) {
+	// Create the customer (now workspace-independent)
+	customer, err := h.common.db.CreateCustomerWithWeb3Auth(ctx.Request.Context(), db.CreateCustomerWithWeb3AuthParams{
+		Web3authID: pgtype.Text{String: web3authId, Valid: web3authId != ""},
+		Email:      pgtype.Text{String: email, Valid: email != ""},
+		Name:       pgtype.Text{String: req.Name, Valid: req.Name != ""},
+		Phone:      pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
+		Metadata:   metadata,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create customer: %w", err)
+	}
+
+	var walletResponse CustomerWalletResponse
+
+	// Create wallet if wallet data is provided
+	if req.WalletData != nil {
+		walletMetadata, err := json.Marshal(req.WalletData.Metadata)
+		if err != nil {
+			return nil, fmt.Errorf("invalid wallet metadata format: %w", err)
+		}
+
+		// Parse network type
+		networkType, err := h.parseNetworkType(req.WalletData.NetworkType)
+		if err != nil {
+			return nil, fmt.Errorf("invalid network type: %w", err)
+		}
+
+		wallet, err := h.common.db.CreateCustomerWallet(ctx.Request.Context(), db.CreateCustomerWalletParams{
+			CustomerID:    customer.ID,
+			WalletAddress: req.WalletData.WalletAddress,
+			NetworkType:   networkType,
+			Nickname:      pgtype.Text{String: req.WalletData.Nickname, Valid: req.WalletData.Nickname != ""},
+			Ens:           pgtype.Text{String: req.WalletData.ENS, Valid: req.WalletData.ENS != ""},
+			IsPrimary:     pgtype.Bool{Bool: req.WalletData.IsPrimary, Valid: true},
+			Verified:      pgtype.Bool{Bool: req.WalletData.Verified, Valid: true},
+			Metadata:      walletMetadata,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create customer wallet: %w", err)
+		}
+
+		walletResponse = toCustomerWalletResponse(wallet)
+	}
+
+	return &CustomerDetailsResponse{
+		Customer: toCustomerResponse(customer),
+		Wallet:   walletResponse,
+	}, nil
+}
+
+// parseNetworkType converts string to NetworkType
+func (h *CustomerHandler) parseNetworkType(networkType string) (db.NetworkType, error) {
+	switch networkType {
+	case "evm":
+		return db.NetworkTypeEvm, nil
+	case "solana":
+		return db.NetworkTypeSolana, nil
+	case "cosmos":
+		return db.NetworkTypeCosmos, nil
+	case "bitcoin":
+		return db.NetworkTypeBitcoin, nil
+	case "polkadot":
+		return db.NetworkTypePolkadot, nil
+	default:
+		return "", fmt.Errorf("unsupported network type: %s", networkType)
+	}
+}
+
+// toCustomerWalletResponse converts database CustomerWallet to API response
+func toCustomerWalletResponse(w db.CustomerWallet) CustomerWalletResponse {
+	var metadata map[string]interface{}
+	if err := json.Unmarshal(w.Metadata, &metadata); err != nil {
+		log.Printf("Error unmarshaling wallet metadata: %v", err)
+		metadata = make(map[string]interface{})
+	}
+
+	return CustomerWalletResponse{
+		ID:            w.ID.String(),
+		Object:        "customer_wallet",
+		CustomerID:    w.CustomerID.String(),
+		WalletAddress: w.WalletAddress,
+		NetworkType:   string(w.NetworkType),
+		Nickname:      w.Nickname.String,
+		ENS:           w.Ens.String,
+		IsPrimary:     w.IsPrimary.Bool,
+		Verified:      w.Verified.Bool,
+		Metadata:      metadata,
+		CreatedAt:     w.CreatedAt.Time.Unix(),
+		UpdatedAt:     w.UpdatedAt.Time.Unix(),
 	}
 }

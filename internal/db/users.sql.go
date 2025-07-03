@@ -14,7 +14,9 @@ import (
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (
-    supabase_id,
+    web3auth_id,
+    verifier,
+    verifier_id,
     email,
     account_id,
     role,
@@ -35,12 +37,14 @@ INSERT INTO users (
     email_verified,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
-) RETURNING id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+) RETURNING id, web3auth_id, verifier, verifier_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, finished_onboarding, status, metadata, created_at, updated_at, deleted_at
 `
 
 type CreateUserParams struct {
-	SupabaseID     string      `json:"supabase_id"`
+	Web3authID     pgtype.Text `json:"web3auth_id"`
+	Verifier       pgtype.Text `json:"verifier"`
+	VerifierID     pgtype.Text `json:"verifier_id"`
 	Email          string      `json:"email"`
 	AccountID      uuid.UUID   `json:"account_id"`
 	Role           UserRole    `json:"role"`
@@ -64,7 +68,9 @@ type CreateUserParams struct {
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, createUser,
-		arg.SupabaseID,
+		arg.Web3authID,
+		arg.Verifier,
+		arg.VerifierID,
 		arg.Email,
 		arg.AccountID,
 		arg.Role,
@@ -88,7 +94,9 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.SupabaseID,
+		&i.Web3authID,
+		&i.Verifier,
+		&i.VerifierID,
 		&i.Email,
 		&i.AccountID,
 		&i.Role,
@@ -109,6 +117,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.LastLoginAt,
 		&i.EmailVerified,
 		&i.TwoFactorEnabled,
+		&i.FinishedOnboarding,
 		&i.Status,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -130,7 +139,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAccountOwner = `-- name: GetAccountOwner :one
-SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, web3auth_id, verifier, verifier_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, finished_onboarding, status, metadata, created_at, updated_at, deleted_at FROM users
 WHERE account_id = $1 AND is_account_owner = true AND deleted_at IS NULL
 `
 
@@ -139,7 +148,9 @@ func (q *Queries) GetAccountOwner(ctx context.Context, accountID uuid.UUID) (Use
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.SupabaseID,
+		&i.Web3authID,
+		&i.Verifier,
+		&i.VerifierID,
 		&i.Email,
 		&i.AccountID,
 		&i.Role,
@@ -160,6 +171,7 @@ func (q *Queries) GetAccountOwner(ctx context.Context, accountID uuid.UUID) (Use
 		&i.LastLoginAt,
 		&i.EmailVerified,
 		&i.TwoFactorEnabled,
+		&i.FinishedOnboarding,
 		&i.Status,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -171,7 +183,7 @@ func (q *Queries) GetAccountOwner(ctx context.Context, accountID uuid.UUID) (Use
 
 const getUserAccount = `-- name: GetUserAccount :one
 SELECT 
-    u.id, u.supabase_id, u.email, u.account_id, u.role, u.is_account_owner, u.first_name, u.last_name, u.address_line_1, u.address_line_2, u.city, u.state_region, u.postal_code, u.country, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
+    u.id, u.web3auth_id, u.verifier, u.verifier_id, u.email, u.account_id, u.role, u.is_account_owner, u.first_name, u.last_name, u.address_line_1, u.address_line_2, u.city, u.state_region, u.postal_code, u.country, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.finished_onboarding, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
     a.name as account_name
 FROM users u
 JOIN accounts a ON u.account_id = a.id
@@ -181,34 +193,37 @@ AND a.deleted_at IS NULL
 `
 
 type GetUserAccountRow struct {
-	ID               uuid.UUID          `json:"id"`
-	SupabaseID       string             `json:"supabase_id"`
-	Email            string             `json:"email"`
-	AccountID        uuid.UUID          `json:"account_id"`
-	Role             UserRole           `json:"role"`
-	IsAccountOwner   pgtype.Bool        `json:"is_account_owner"`
-	FirstName        pgtype.Text        `json:"first_name"`
-	LastName         pgtype.Text        `json:"last_name"`
-	AddressLine1     pgtype.Text        `json:"address_line_1"`
-	AddressLine2     pgtype.Text        `json:"address_line_2"`
-	City             pgtype.Text        `json:"city"`
-	StateRegion      pgtype.Text        `json:"state_region"`
-	PostalCode       pgtype.Text        `json:"postal_code"`
-	Country          pgtype.Text        `json:"country"`
-	DisplayName      pgtype.Text        `json:"display_name"`
-	PictureUrl       pgtype.Text        `json:"picture_url"`
-	Phone            pgtype.Text        `json:"phone"`
-	Timezone         pgtype.Text        `json:"timezone"`
-	Locale           pgtype.Text        `json:"locale"`
-	LastLoginAt      pgtype.Timestamptz `json:"last_login_at"`
-	EmailVerified    pgtype.Bool        `json:"email_verified"`
-	TwoFactorEnabled pgtype.Bool        `json:"two_factor_enabled"`
-	Status           NullUserStatus     `json:"status"`
-	Metadata         []byte             `json:"metadata"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
-	AccountName      string             `json:"account_name"`
+	ID                 uuid.UUID          `json:"id"`
+	Web3authID         pgtype.Text        `json:"web3auth_id"`
+	Verifier           pgtype.Text        `json:"verifier"`
+	VerifierID         pgtype.Text        `json:"verifier_id"`
+	Email              string             `json:"email"`
+	AccountID          uuid.UUID          `json:"account_id"`
+	Role               UserRole           `json:"role"`
+	IsAccountOwner     pgtype.Bool        `json:"is_account_owner"`
+	FirstName          pgtype.Text        `json:"first_name"`
+	LastName           pgtype.Text        `json:"last_name"`
+	AddressLine1       pgtype.Text        `json:"address_line_1"`
+	AddressLine2       pgtype.Text        `json:"address_line_2"`
+	City               pgtype.Text        `json:"city"`
+	StateRegion        pgtype.Text        `json:"state_region"`
+	PostalCode         pgtype.Text        `json:"postal_code"`
+	Country            pgtype.Text        `json:"country"`
+	DisplayName        pgtype.Text        `json:"display_name"`
+	PictureUrl         pgtype.Text        `json:"picture_url"`
+	Phone              pgtype.Text        `json:"phone"`
+	Timezone           pgtype.Text        `json:"timezone"`
+	Locale             pgtype.Text        `json:"locale"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	EmailVerified      pgtype.Bool        `json:"email_verified"`
+	TwoFactorEnabled   pgtype.Bool        `json:"two_factor_enabled"`
+	FinishedOnboarding pgtype.Bool        `json:"finished_onboarding"`
+	Status             NullUserStatus     `json:"status"`
+	Metadata           []byte             `json:"metadata"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	AccountName        string             `json:"account_name"`
 }
 
 func (q *Queries) GetUserAccount(ctx context.Context, id uuid.UUID) (GetUserAccountRow, error) {
@@ -216,7 +231,9 @@ func (q *Queries) GetUserAccount(ctx context.Context, id uuid.UUID) (GetUserAcco
 	var i GetUserAccountRow
 	err := row.Scan(
 		&i.ID,
-		&i.SupabaseID,
+		&i.Web3authID,
+		&i.Verifier,
+		&i.VerifierID,
 		&i.Email,
 		&i.AccountID,
 		&i.Role,
@@ -237,6 +254,7 @@ func (q *Queries) GetUserAccount(ctx context.Context, id uuid.UUID) (GetUserAcco
 		&i.LastLoginAt,
 		&i.EmailVerified,
 		&i.TwoFactorEnabled,
+		&i.FinishedOnboarding,
 		&i.Status,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -248,7 +266,7 @@ func (q *Queries) GetUserAccount(ctx context.Context, id uuid.UUID) (GetUserAcco
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, web3auth_id, verifier, verifier_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, finished_onboarding, status, metadata, created_at, updated_at, deleted_at FROM users
 WHERE email = $1 AND deleted_at IS NULL
 `
 
@@ -257,7 +275,9 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.SupabaseID,
+		&i.Web3authID,
+		&i.Verifier,
+		&i.VerifierID,
 		&i.Email,
 		&i.AccountID,
 		&i.Role,
@@ -278,6 +298,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.LastLoginAt,
 		&i.EmailVerified,
 		&i.TwoFactorEnabled,
+		&i.FinishedOnboarding,
 		&i.Status,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -288,7 +309,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, web3auth_id, verifier, verifier_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, finished_onboarding, status, metadata, created_at, updated_at, deleted_at FROM users
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -297,7 +318,9 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.SupabaseID,
+		&i.Web3authID,
+		&i.Verifier,
+		&i.VerifierID,
 		&i.Email,
 		&i.AccountID,
 		&i.Role,
@@ -318,6 +341,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.LastLoginAt,
 		&i.EmailVerified,
 		&i.TwoFactorEnabled,
+		&i.FinishedOnboarding,
 		&i.Status,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -327,17 +351,19 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
-const getUserBySupabaseID = `-- name: GetUserBySupabaseID :one
-SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
-WHERE supabase_id = $1 AND deleted_at IS NULL
+const getUserByWeb3AuthID = `-- name: GetUserByWeb3AuthID :one
+SELECT id, web3auth_id, verifier, verifier_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, finished_onboarding, status, metadata, created_at, updated_at, deleted_at FROM users
+WHERE web3auth_id = $1 AND deleted_at IS NULL
 `
 
-func (q *Queries) GetUserBySupabaseID(ctx context.Context, supabaseID string) (User, error) {
-	row := q.db.QueryRow(ctx, getUserBySupabaseID, supabaseID)
+func (q *Queries) GetUserByWeb3AuthID(ctx context.Context, web3authID pgtype.Text) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByWeb3AuthID, web3authID)
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.SupabaseID,
+		&i.Web3authID,
+		&i.Verifier,
+		&i.VerifierID,
 		&i.Email,
 		&i.AccountID,
 		&i.Role,
@@ -358,6 +384,7 @@ func (q *Queries) GetUserBySupabaseID(ctx context.Context, supabaseID string) (U
 		&i.LastLoginAt,
 		&i.EmailVerified,
 		&i.TwoFactorEnabled,
+		&i.FinishedOnboarding,
 		&i.Status,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -368,7 +395,7 @@ func (q *Queries) GetUserBySupabaseID(ctx context.Context, supabaseID string) (U
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, web3auth_id, verifier, verifier_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, finished_onboarding, status, metadata, created_at, updated_at, deleted_at FROM users
 ORDER BY created_at
 `
 
@@ -383,7 +410,9 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		var i User
 		if err := rows.Scan(
 			&i.ID,
-			&i.SupabaseID,
+			&i.Web3authID,
+			&i.Verifier,
+			&i.VerifierID,
 			&i.Email,
 			&i.AccountID,
 			&i.Role,
@@ -404,6 +433,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.LastLoginAt,
 			&i.EmailVerified,
 			&i.TwoFactorEnabled,
+			&i.FinishedOnboarding,
 			&i.Status,
 			&i.Metadata,
 			&i.CreatedAt,
@@ -421,7 +451,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 }
 
 const listUsersByAccount = `-- name: ListUsersByAccount :many
-SELECT id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at FROM users
+SELECT id, web3auth_id, verifier, verifier_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, finished_onboarding, status, metadata, created_at, updated_at, deleted_at FROM users
 WHERE account_id = $1 AND deleted_at IS NULL
 ORDER BY is_account_owner DESC, created_at DESC
 `
@@ -437,7 +467,9 @@ func (q *Queries) ListUsersByAccount(ctx context.Context, accountID uuid.UUID) (
 		var i User
 		if err := rows.Scan(
 			&i.ID,
-			&i.SupabaseID,
+			&i.Web3authID,
+			&i.Verifier,
+			&i.VerifierID,
 			&i.Email,
 			&i.AccountID,
 			&i.Role,
@@ -458,6 +490,7 @@ func (q *Queries) ListUsersByAccount(ctx context.Context, accountID uuid.UUID) (
 			&i.LastLoginAt,
 			&i.EmailVerified,
 			&i.TwoFactorEnabled,
+			&i.FinishedOnboarding,
 			&i.Status,
 			&i.Metadata,
 			&i.CreatedAt,
@@ -493,33 +526,35 @@ SET
     locale = COALESCE($15, locale),
     email_verified = COALESCE($16, email_verified),
     two_factor_enabled = COALESCE($17, two_factor_enabled),
-    status = COALESCE($18, status),
-    metadata = COALESCE($19, metadata),
+    finished_onboarding = COALESCE($18, finished_onboarding),
+    status = COALESCE($19, status),
+    metadata = COALESCE($20, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
+RETURNING id, web3auth_id, verifier, verifier_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, finished_onboarding, status, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateUserParams struct {
-	ID               uuid.UUID      `json:"id"`
-	Email            string         `json:"email"`
-	FirstName        pgtype.Text    `json:"first_name"`
-	LastName         pgtype.Text    `json:"last_name"`
-	AddressLine1     pgtype.Text    `json:"address_line_1"`
-	AddressLine2     pgtype.Text    `json:"address_line_2"`
-	City             pgtype.Text    `json:"city"`
-	StateRegion      pgtype.Text    `json:"state_region"`
-	PostalCode       pgtype.Text    `json:"postal_code"`
-	Country          pgtype.Text    `json:"country"`
-	DisplayName      pgtype.Text    `json:"display_name"`
-	PictureUrl       pgtype.Text    `json:"picture_url"`
-	Phone            pgtype.Text    `json:"phone"`
-	Timezone         pgtype.Text    `json:"timezone"`
-	Locale           pgtype.Text    `json:"locale"`
-	EmailVerified    pgtype.Bool    `json:"email_verified"`
-	TwoFactorEnabled pgtype.Bool    `json:"two_factor_enabled"`
-	Status           NullUserStatus `json:"status"`
-	Metadata         []byte         `json:"metadata"`
+	ID                 uuid.UUID      `json:"id"`
+	Email              string         `json:"email"`
+	FirstName          pgtype.Text    `json:"first_name"`
+	LastName           pgtype.Text    `json:"last_name"`
+	AddressLine1       pgtype.Text    `json:"address_line_1"`
+	AddressLine2       pgtype.Text    `json:"address_line_2"`
+	City               pgtype.Text    `json:"city"`
+	StateRegion        pgtype.Text    `json:"state_region"`
+	PostalCode         pgtype.Text    `json:"postal_code"`
+	Country            pgtype.Text    `json:"country"`
+	DisplayName        pgtype.Text    `json:"display_name"`
+	PictureUrl         pgtype.Text    `json:"picture_url"`
+	Phone              pgtype.Text    `json:"phone"`
+	Timezone           pgtype.Text    `json:"timezone"`
+	Locale             pgtype.Text    `json:"locale"`
+	EmailVerified      pgtype.Bool    `json:"email_verified"`
+	TwoFactorEnabled   pgtype.Bool    `json:"two_factor_enabled"`
+	FinishedOnboarding pgtype.Bool    `json:"finished_onboarding"`
+	Status             NullUserStatus `json:"status"`
+	Metadata           []byte         `json:"metadata"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
@@ -541,13 +576,16 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		arg.Locale,
 		arg.EmailVerified,
 		arg.TwoFactorEnabled,
+		arg.FinishedOnboarding,
 		arg.Status,
 		arg.Metadata,
 	)
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.SupabaseID,
+		&i.Web3authID,
+		&i.Verifier,
+		&i.VerifierID,
 		&i.Email,
 		&i.AccountID,
 		&i.Role,
@@ -568,6 +606,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.LastLoginAt,
 		&i.EmailVerified,
 		&i.TwoFactorEnabled,
+		&i.FinishedOnboarding,
 		&i.Status,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -584,7 +623,7 @@ SET
     is_account_owner = $3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, supabase_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, status, metadata, created_at, updated_at, deleted_at
+RETURNING id, web3auth_id, verifier, verifier_id, email, account_id, role, is_account_owner, first_name, last_name, address_line_1, address_line_2, city, state_region, postal_code, country, display_name, picture_url, phone, timezone, locale, last_login_at, email_verified, two_factor_enabled, finished_onboarding, status, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateUserRoleParams struct {
@@ -598,7 +637,9 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.SupabaseID,
+		&i.Web3authID,
+		&i.Verifier,
+		&i.VerifierID,
 		&i.Email,
 		&i.AccountID,
 		&i.Role,
@@ -619,6 +660,7 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.LastLoginAt,
 		&i.EmailVerified,
 		&i.TwoFactorEnabled,
+		&i.FinishedOnboarding,
 		&i.Status,
 		&i.Metadata,
 		&i.CreatedAt,

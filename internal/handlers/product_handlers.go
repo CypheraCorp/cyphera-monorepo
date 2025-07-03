@@ -355,6 +355,40 @@ func (h *ProductHandler) processCustomerAndWallet(
 	}
 
 	customer := customers[0]
+
+	// Ensure customer is associated with the current workspace
+	isAssociated, err := tx.IsCustomerInWorkspace(ctx, db.IsCustomerInWorkspaceParams{
+		WorkspaceID: product.WorkspaceID,
+		CustomerID:  customer.ID,
+	})
+	if err != nil {
+		logger.Error("Failed to check customer workspace association",
+			zap.Error(err),
+			zap.String("customer_id", customer.ID.String()),
+			zap.String("workspace_id", product.WorkspaceID.String()))
+		return db.Customer{}, db.CustomerWallet{}, err
+	}
+
+	// If customer is not associated with this workspace, create the association
+	if !isAssociated {
+		_, err = tx.AddCustomerToWorkspace(ctx, db.AddCustomerToWorkspaceParams{
+			WorkspaceID: product.WorkspaceID,
+			CustomerID:  customer.ID,
+		})
+		if err != nil {
+			logger.Error("Failed to associate customer with workspace",
+				zap.Error(err),
+				zap.String("customer_id", customer.ID.String()),
+				zap.String("workspace_id", product.WorkspaceID.String()))
+			return db.Customer{}, db.CustomerWallet{}, err
+		}
+
+		logger.Info("Associated existing customer with workspace",
+			zap.String("customer_id", customer.ID.String()),
+			zap.String("workspace_id", product.WorkspaceID.String()),
+			zap.String("wallet_address", walletAddress))
+	}
+
 	customerWallet, err := h.findOrCreateCustomerWallet(ctx, tx, customer, walletAddress, networkType, product.ID.String())
 
 	return customer, customerWallet, err
@@ -383,7 +417,6 @@ func (h *ProductHandler) createNewCustomerWithWallet(
 	}
 
 	createCustomerParams := db.CreateCustomerParams{
-		WorkspaceID: product.WorkspaceID,
 		Email: pgtype.Text{
 			String: "",
 			Valid:  false,
@@ -400,6 +433,15 @@ func (h *ProductHandler) createNewCustomerWithWallet(
 	}
 
 	customer, err := tx.CreateCustomer(ctx, createCustomerParams)
+	if err != nil {
+		return db.Customer{}, db.CustomerWallet{}, err
+	}
+
+	// Associate customer with workspace using the new association table
+	_, err = tx.AddCustomerToWorkspace(ctx, db.AddCustomerToWorkspaceParams{
+		WorkspaceID: product.WorkspaceID,
+		CustomerID:  customer.ID,
+	})
 	if err != nil {
 		return db.Customer{}, db.CustomerWallet{}, err
 	}

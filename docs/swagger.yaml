@@ -541,6 +541,54 @@ definitions:
       updated_at:
         type: integer
     type: object
+  handlers.PublicProductResponse:
+    properties:
+      account_id:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      image_url:
+        type: string
+      name:
+        type: string
+      price:
+        $ref: '#/definitions/handlers.PriceResponse'
+      product_tokens:
+        items:
+          $ref: '#/definitions/handlers.PublicProductTokenResponse'
+        type: array
+      url:
+        type: string
+      wallet_address:
+        type: string
+      workspace_id:
+        type: string
+    type: object
+  handlers.PublicProductTokenResponse:
+    properties:
+      network_chain_id:
+        type: string
+      network_id:
+        type: string
+      network_name:
+        type: string
+      product_token_id:
+        type: string
+      token_address:
+        type: string
+      token_decimals:
+        type: integer
+      token_id:
+        type: string
+      token_image_url:
+        type: string
+      token_name:
+        type: string
+      token_symbol:
+        type: string
+    type: object
   handlers.SubscriptionEventPriceInfo:
     properties:
       currency:
@@ -803,14 +851,21 @@ definitions:
         type: string
       status:
         type: string
-      supabase_id:
-        type: string
       timezone:
         type: string
       two_factor_enabled:
         type: boolean
       updated_at:
         type: integer
+      verifier:
+        description: Login method (google, discord, etc.)
+        type: string
+      verifier_id:
+        description: ID from the verifier
+        type: string
+      web3auth_id:
+        description: Web3Auth user ID
+        type: string
     type: object
   handlers.WalletListResponse:
     properties:
@@ -1724,6 +1779,42 @@ paths:
       summary: Get a subscription event by ID
       tags:
       - subscription-events
+  /subscription-events/transaction/{tx_hash}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a subscription event by its transaction hash
+      parameters:
+      - description: Transaction Hash
+        in: path
+        name: tx_hash
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.SubscriptionEventResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a subscription event by transaction hash
+      tags:
+      - subscription-events
+      - exclude
   /subscriptions:
     get:
       consumes:

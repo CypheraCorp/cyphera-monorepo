@@ -313,17 +313,8 @@ func (app *Application) processCustomerDeletedEvent(ctx context.Context, workspa
 		zap.String("workspace_id", workspaceID),
 		zap.String("customer_id", customer.ExternalID))
 
-	// Parse workspace ID
-	wsID, err := uuid.Parse(workspaceID)
-	if err != nil {
-		return fmt.Errorf("invalid workspace ID: %w", err)
-	}
-
 	// Find the customer by external ID and soft delete
-	existingCustomer, err := app.dbQueries.GetCustomerByExternalID(ctx, db.GetCustomerByExternalIDParams{
-		WorkspaceID: wsID,
-		ExternalID:  pgtype.Text{String: customer.ExternalID, Valid: true},
-	})
+	existingCustomer, err := app.dbQueries.GetCustomerByExternalID(ctx, pgtype.Text{String: customer.ExternalID, Valid: true})
 	if err != nil {
 		logger.Warn("Customer not found for deletion",
 			zap.String("workspace_id", workspaceID),
@@ -332,10 +323,7 @@ func (app *Application) processCustomerDeletedEvent(ctx context.Context, workspa
 	}
 
 	// Soft delete the customer
-	err = app.dbQueries.DeleteCustomer(ctx, db.DeleteCustomerParams{
-		ID:          existingCustomer.ID,
-		WorkspaceID: wsID,
-	})
+	err = app.dbQueries.DeleteCustomer(ctx, existingCustomer.ID)
 	if err != nil {
 		return fmt.Errorf("failed to delete customer: %w", err)
 	}

@@ -142,7 +142,7 @@ func (q *Queries) GetAccountByID(ctx context.Context, id uuid.UUID) (Account, er
 
 const getAccountUsers = `-- name: GetAccountUsers :many
 SELECT 
-    u.id, u.supabase_id, u.email, u.account_id, u.role, u.is_account_owner, u.first_name, u.last_name, u.address_line_1, u.address_line_2, u.city, u.state_region, u.postal_code, u.country, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
+    u.id, u.web3auth_id, u.verifier, u.verifier_id, u.email, u.account_id, u.role, u.is_account_owner, u.first_name, u.last_name, u.address_line_1, u.address_line_2, u.city, u.state_region, u.postal_code, u.country, u.display_name, u.picture_url, u.phone, u.timezone, u.locale, u.last_login_at, u.email_verified, u.two_factor_enabled, u.finished_onboarding, u.status, u.metadata, u.created_at, u.updated_at, u.deleted_at,
     u.role,
     u.is_account_owner,
     u.created_at as joined_at
@@ -153,36 +153,39 @@ ORDER BY u.is_account_owner DESC, u.created_at DESC
 `
 
 type GetAccountUsersRow struct {
-	ID               uuid.UUID          `json:"id"`
-	SupabaseID       string             `json:"supabase_id"`
-	Email            string             `json:"email"`
-	AccountID        uuid.UUID          `json:"account_id"`
-	Role             UserRole           `json:"role"`
-	IsAccountOwner   pgtype.Bool        `json:"is_account_owner"`
-	FirstName        pgtype.Text        `json:"first_name"`
-	LastName         pgtype.Text        `json:"last_name"`
-	AddressLine1     pgtype.Text        `json:"address_line_1"`
-	AddressLine2     pgtype.Text        `json:"address_line_2"`
-	City             pgtype.Text        `json:"city"`
-	StateRegion      pgtype.Text        `json:"state_region"`
-	PostalCode       pgtype.Text        `json:"postal_code"`
-	Country          pgtype.Text        `json:"country"`
-	DisplayName      pgtype.Text        `json:"display_name"`
-	PictureUrl       pgtype.Text        `json:"picture_url"`
-	Phone            pgtype.Text        `json:"phone"`
-	Timezone         pgtype.Text        `json:"timezone"`
-	Locale           pgtype.Text        `json:"locale"`
-	LastLoginAt      pgtype.Timestamptz `json:"last_login_at"`
-	EmailVerified    pgtype.Bool        `json:"email_verified"`
-	TwoFactorEnabled pgtype.Bool        `json:"two_factor_enabled"`
-	Status           NullUserStatus     `json:"status"`
-	Metadata         []byte             `json:"metadata"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
-	Role_2           UserRole           `json:"role_2"`
-	IsAccountOwner_2 pgtype.Bool        `json:"is_account_owner_2"`
-	JoinedAt         pgtype.Timestamptz `json:"joined_at"`
+	ID                 uuid.UUID          `json:"id"`
+	Web3authID         pgtype.Text        `json:"web3auth_id"`
+	Verifier           pgtype.Text        `json:"verifier"`
+	VerifierID         pgtype.Text        `json:"verifier_id"`
+	Email              string             `json:"email"`
+	AccountID          uuid.UUID          `json:"account_id"`
+	Role               UserRole           `json:"role"`
+	IsAccountOwner     pgtype.Bool        `json:"is_account_owner"`
+	FirstName          pgtype.Text        `json:"first_name"`
+	LastName           pgtype.Text        `json:"last_name"`
+	AddressLine1       pgtype.Text        `json:"address_line_1"`
+	AddressLine2       pgtype.Text        `json:"address_line_2"`
+	City               pgtype.Text        `json:"city"`
+	StateRegion        pgtype.Text        `json:"state_region"`
+	PostalCode         pgtype.Text        `json:"postal_code"`
+	Country            pgtype.Text        `json:"country"`
+	DisplayName        pgtype.Text        `json:"display_name"`
+	PictureUrl         pgtype.Text        `json:"picture_url"`
+	Phone              pgtype.Text        `json:"phone"`
+	Timezone           pgtype.Text        `json:"timezone"`
+	Locale             pgtype.Text        `json:"locale"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	EmailVerified      pgtype.Bool        `json:"email_verified"`
+	TwoFactorEnabled   pgtype.Bool        `json:"two_factor_enabled"`
+	FinishedOnboarding pgtype.Bool        `json:"finished_onboarding"`
+	Status             NullUserStatus     `json:"status"`
+	Metadata           []byte             `json:"metadata"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	Role_2             UserRole           `json:"role_2"`
+	IsAccountOwner_2   pgtype.Bool        `json:"is_account_owner_2"`
+	JoinedAt           pgtype.Timestamptz `json:"joined_at"`
 }
 
 func (q *Queries) GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]GetAccountUsersRow, error) {
@@ -196,7 +199,9 @@ func (q *Queries) GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]G
 		var i GetAccountUsersRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.SupabaseID,
+			&i.Web3authID,
+			&i.Verifier,
+			&i.VerifierID,
 			&i.Email,
 			&i.AccountID,
 			&i.Role,
@@ -217,6 +222,7 @@ func (q *Queries) GetAccountUsers(ctx context.Context, accountID uuid.UUID) ([]G
 			&i.LastLoginAt,
 			&i.EmailVerified,
 			&i.TwoFactorEnabled,
+			&i.FinishedOnboarding,
 			&i.Status,
 			&i.Metadata,
 			&i.CreatedAt,

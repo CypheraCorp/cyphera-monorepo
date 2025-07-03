@@ -345,18 +345,14 @@ func (s *StripeService) UpsertCustomer(ctx context.Context, session *db.PaymentS
 		return fmt.Errorf("failed to marshal customer metadata: %w", err)
 	}
 
-	// Try to find existing customer by external ID
-	existingCustomer, err := s.db.GetCustomerByExternalID(ctx, db.GetCustomerByExternalIDParams{
-		WorkspaceID: session.WorkspaceID,
-		ExternalID:  pgtype.Text{String: customer.ExternalID, Valid: true},
-	})
+	// Try to find existing customer by external ID (now workspace-independent)
+	existingCustomer, err := s.db.GetCustomerByExternalID(ctx, pgtype.Text{String: customer.ExternalID, Valid: true})
 
 	if err != nil {
 		// Customer doesn't exist, create new one
 		s.logger.Debug("Creating new customer", zap.String("external_id", customer.ExternalID))
 
-		_, err = s.db.CreateCustomerWithSync(ctx, db.CreateCustomerWithSyncParams{
-			WorkspaceID:       session.WorkspaceID,
+		newCustomer, err := s.db.CreateCustomerWithSync(ctx, db.CreateCustomerWithSyncParams{
 			ExternalID:        pgtype.Text{String: customer.ExternalID, Valid: true},
 			Email:             pgtype.Text{String: customer.Email, Valid: customer.Email != ""},
 			Name:              pgtype.Text{String: customer.Name, Valid: customer.Name != ""},
@@ -369,6 +365,15 @@ func (s *StripeService) UpsertCustomer(ctx context.Context, session *db.PaymentS
 			return fmt.Errorf("failed to create customer: %w", err)
 		}
 
+		// Associate customer with workspace using the new association table
+		_, err = s.db.AddCustomerToWorkspace(ctx, db.AddCustomerToWorkspaceParams{
+			WorkspaceID: session.WorkspaceID,
+			CustomerID:  newCustomer.ID,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to associate customer with workspace: %w", err)
+		}
+
 		s.logger.Debug("Successfully created customer", zap.String("external_id", customer.ExternalID))
 	} else {
 		// Customer exists, update it
@@ -377,15 +382,26 @@ func (s *StripeService) UpsertCustomer(ctx context.Context, session *db.PaymentS
 			zap.String("existing_id", existingCustomer.ID.String()))
 
 		_, err = s.db.UpdateCustomer(ctx, db.UpdateCustomerParams{
-			ID:          existingCustomer.ID,
-			WorkspaceID: session.WorkspaceID,
-			Email:       pgtype.Text{String: customer.Email, Valid: customer.Email != ""},
-			Name:        pgtype.Text{String: customer.Name, Valid: customer.Name != ""},
-			Phone:       pgtype.Text{String: customer.Phone, Valid: customer.Phone != ""},
-			Metadata:    metadata,
+			ID:       existingCustomer.ID,
+			Email:    pgtype.Text{String: customer.Email, Valid: customer.Email != ""},
+			Name:     pgtype.Text{String: customer.Name, Valid: customer.Name != ""},
+			Phone:    pgtype.Text{String: customer.Phone, Valid: customer.Phone != ""},
+			Metadata: metadata,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to update customer: %w", err)
+		}
+
+		// Ensure customer is associated with this workspace
+		_, err = s.db.AddCustomerToWorkspace(ctx, db.AddCustomerToWorkspaceParams{
+			WorkspaceID: session.WorkspaceID,
+			CustomerID:  existingCustomer.ID,
+		})
+		if err != nil {
+			// Ignore error if association already exists
+			s.logger.Debug("Customer already associated with workspace or association failed",
+				zap.String("customer_id", existingCustomer.ID.String()),
+				zap.String("workspace_id", session.WorkspaceID.String()))
 		}
 
 		// Update sync status
@@ -631,10 +647,7 @@ func (s *StripeService) UpsertSubscription(ctx context.Context, session *db.Paym
 	}
 
 	// Find the corresponding customer
-	existingCustomer, err := s.db.GetCustomerByExternalID(ctx, db.GetCustomerByExternalIDParams{
-		WorkspaceID: session.WorkspaceID,
-		ExternalID:  pgtype.Text{String: subscription.CustomerID, Valid: true},
-	})
+	existingCustomer, err := s.db.GetCustomerByExternalID(ctx, pgtype.Text{String: subscription.CustomerID, Valid: true})
 	if err != nil {
 		return fmt.Errorf("failed to find customer for subscription: %w", err)
 	}
@@ -816,10 +829,7 @@ func (s *StripeService) UpsertInvoice(ctx context.Context, session *db.PaymentSy
 	// Try to find corresponding customer by external ID
 	var customerID *uuid.UUID
 	if invoice.CustomerID != "" {
-		existingCustomer, err := s.db.GetCustomerByExternalID(ctx, db.GetCustomerByExternalIDParams{
-			WorkspaceID: session.WorkspaceID,
-			ExternalID:  pgtype.Text{String: invoice.CustomerID, Valid: true},
-		})
+		existingCustomer, err := s.db.GetCustomerByExternalID(ctx, pgtype.Text{String: invoice.CustomerID, Valid: true})
 		if err == nil {
 			customerID = &existingCustomer.ID
 		}

@@ -1202,6 +1202,62 @@ const docTemplate = `{
                 }
             }
         },
+        "/subscription-events/transaction/{tx_hash}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieves a subscription event by its transaction hash",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subscription-events",
+                    "exclude"
+                ],
+                "summary": "Get a subscription event by transaction hash",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Transaction Hash",
+                        "name": "tx_hash",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SubscriptionEventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/subscription-events/{event_id}": {
             "get": {
                 "security": [
@@ -3508,6 +3564,79 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.PublicProductResponse": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "image_url": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price": {
+                    "$ref": "#/definitions/handlers.PriceResponse"
+                },
+                "product_tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.PublicProductTokenResponse"
+                    }
+                },
+                "url": {
+                    "type": "string"
+                },
+                "wallet_address": {
+                    "type": "string"
+                },
+                "workspace_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.PublicProductTokenResponse": {
+            "type": "object",
+            "properties": {
+                "network_chain_id": {
+                    "type": "string"
+                },
+                "network_id": {
+                    "type": "string"
+                },
+                "network_name": {
+                    "type": "string"
+                },
+                "product_token_id": {
+                    "type": "string"
+                },
+                "token_address": {
+                    "type": "string"
+                },
+                "token_decimals": {
+                    "type": "integer"
+                },
+                "token_id": {
+                    "type": "string"
+                },
+                "token_image_url": {
+                    "type": "string"
+                },
+                "token_name": {
+                    "type": "string"
+                },
+                "token_symbol": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.SubscriptionEventPriceInfo": {
             "type": "object",
             "properties": {
@@ -3900,9 +4029,6 @@ const docTemplate = `{
                 "status": {
                     "type": "string"
                 },
-                "supabase_id": {
-                    "type": "string"
-                },
                 "timezone": {
                     "type": "string"
                 },
@@ -3911,6 +4037,18 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "integer"
+                },
+                "verifier": {
+                    "description": "Login method (google, discord, etc.)",
+                    "type": "string"
+                },
+                "verifier_id": {
+                    "description": "ID from the verifier",
+                    "type": "string"
+                },
+                "web3auth_id": {
+                    "description": "Web3Auth user ID",
+                    "type": "string"
                 }
             }
         },

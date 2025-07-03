@@ -1,6 +1,8 @@
 -- name: CreateUser :one
 INSERT INTO users (
-    supabase_id,
+    web3auth_id,
+    verifier,
+    verifier_id,
     email,
     account_id,
     role,
@@ -21,16 +23,16 @@ INSERT INTO users (
     email_verified,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
 ) RETURNING *;
 
 -- name: GetUserByID :one
 SELECT * FROM users
 WHERE id = $1 AND deleted_at IS NULL;
 
--- name: GetUserBySupabaseID :one
+-- name: GetUserByWeb3AuthID :one
 SELECT * FROM users
-WHERE supabase_id = $1 AND deleted_at IS NULL;
+WHERE web3auth_id = $1 AND deleted_at IS NULL;
 
 -- name: GetUserByEmail :one
 SELECT * FROM users
@@ -55,8 +57,9 @@ SET
     locale = COALESCE($15, locale),
     email_verified = COALESCE($16, email_verified),
     two_factor_enabled = COALESCE($17, two_factor_enabled),
-    status = COALESCE($18, status),
-    metadata = COALESCE($19, metadata),
+    finished_onboarding = COALESCE($18, finished_onboarding),
+    status = COALESCE($19, status),
+    metadata = COALESCE($20, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;

@@ -266,11 +266,21 @@ WHERE session_id = $1;
 
 -- name: GetCustomersByPaymentProvider :many
 SELECT * FROM customers 
-WHERE workspace_id = $1 AND payment_provider = $2 AND deleted_at IS NULL;
+WHERE payment_provider = $1 AND deleted_at IS NULL;
 
 -- name: GetCustomersByPaymentSyncStatus :many
 SELECT * FROM customers 
-WHERE workspace_id = $1 AND payment_sync_status = $2 AND deleted_at IS NULL;
+WHERE payment_sync_status = $1 AND deleted_at IS NULL;
+
+-- name: GetWorkspaceCustomersByPaymentProvider :many
+SELECT c.* FROM customers c
+INNER JOIN workspace_customers wc ON c.id = wc.customer_id
+WHERE wc.workspace_id = $1 AND c.payment_provider = $2 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL;
+
+-- name: GetWorkspaceCustomersByPaymentSyncStatus :many
+SELECT c.* FROM customers c
+INNER JOIN workspace_customers wc ON c.id = wc.customer_id
+WHERE wc.workspace_id = $1 AND c.payment_sync_status = $2 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL;
 
 -- name: GetProductsByPaymentProvider :many
 SELECT * FROM products 
@@ -335,7 +345,8 @@ SELECT
     c.payment_synced_at,
     c.payment_provider
 FROM customers c
-WHERE c.workspace_id = $1 AND c.payment_provider = $2 AND c.payment_sync_status = $3 AND c.deleted_at IS NULL
+INNER JOIN workspace_customers wc ON c.id = wc.customer_id
+WHERE wc.workspace_id = $1 AND c.payment_provider = $2 AND c.payment_sync_status = $3 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL
 
 UNION ALL
 
@@ -405,13 +416,12 @@ ORDER BY w.created_at DESC;
 
 -- name: BulkUpdateCustomerSyncStatus :exec
 UPDATE customers 
-SET payment_sync_status = $2, 
+SET payment_sync_status = $1, 
     payment_synced_at = CURRENT_TIMESTAMP, 
     payment_sync_version = payment_sync_version + 1, 
-    payment_provider = $3, 
+    payment_provider = $2, 
     updated_at = CURRENT_TIMESTAMP
-WHERE workspace_id = $1 
-  AND external_id = ANY($4::text[]) 
+WHERE external_id = ANY($3::text[]) 
   AND deleted_at IS NULL;
 
 -- name: BulkUpdateProductSyncStatus :exec
@@ -451,23 +461,18 @@ WHERE workspace_id = $1
 
 -- Cross-Entity Lookup Queries for External IDs
 
--- name: GetEntityByExternalID :one
+-- name: GetEntityByExternalIDWithWorkspace :one
 SELECT 
     CASE 
-        WHEN c.id IS NOT NULL THEN 'customer'
         WHEN p.id IS NOT NULL THEN 'product'
         WHEN pr.id IS NOT NULL THEN 'price'
         WHEN s.id IS NOT NULL THEN 'subscription'
         ELSE 'unknown'
     END as entity_type,
-    COALESCE(c.id, p.id, pr.id, s.id) as entity_id,
-    COALESCE(c.external_id, p.external_id, pr.external_id, s.external_id) as external_id,
-    COALESCE(c.payment_provider, p.payment_provider, pr.payment_provider, s.payment_provider) as payment_provider
+    COALESCE(p.id, pr.id, s.id) as entity_id,
+    COALESCE(p.external_id, pr.external_id, s.external_id) as external_id,
+    COALESCE(p.payment_provider, pr.payment_provider, s.payment_provider) as payment_provider
 FROM (SELECT $1 as workspace_id, $2 as external_id, $3 as payment_provider) params
-LEFT JOIN customers c ON c.workspace_id = params.workspace_id 
-    AND c.external_id = params.external_id 
-    AND c.payment_provider = params.payment_provider 
-    AND c.deleted_at IS NULL
 LEFT JOIN products p ON p.workspace_id = params.workspace_id 
     AND p.external_id = params.external_id 
     AND p.payment_provider = params.payment_provider 
@@ -480,7 +485,19 @@ LEFT JOIN subscriptions s ON s.workspace_id = params.workspace_id
     AND s.external_id = params.external_id 
     AND s.payment_provider = params.payment_provider 
     AND s.deleted_at IS NULL
-WHERE COALESCE(c.id, p.id, pr.id, s.id) IS NOT NULL
+WHERE COALESCE(p.id, pr.id, s.id) IS NOT NULL
+LIMIT 1;
+
+-- name: GetCustomerByExternalIDAndProvider :one
+SELECT 
+    'customer' as entity_type,
+    c.id as entity_id,
+    c.external_id,
+    c.payment_provider
+FROM customers c
+WHERE c.external_id = $1 
+    AND c.payment_provider = $2 
+    AND c.deleted_at IS NULL
 LIMIT 1;
 
 -- Additional Workspace-specific Queries
@@ -500,7 +517,8 @@ SELECT
     MAX(pss.completed_at) as last_successful_sync
 FROM workspaces w
 LEFT JOIN payment_sync_sessions pss ON w.id = pss.workspace_id AND pss.deleted_at IS NULL
-LEFT JOIN customers c ON w.id = c.workspace_id AND c.deleted_at IS NULL
+LEFT JOIN workspace_customers wc ON w.id = wc.workspace_id AND wc.deleted_at IS NULL
+LEFT JOIN customers c ON wc.customer_id = c.id AND c.deleted_at IS NULL
 LEFT JOIN products p ON w.id = p.workspace_id AND p.deleted_at IS NULL
 LEFT JOIN prices pr ON p.id = pr.product_id AND pr.deleted_at IS NULL
 LEFT JOIN subscriptions s ON w.id = s.workspace_id AND s.deleted_at IS NULL
