@@ -3,12 +3,16 @@
 # Go parameters
 BINARY_NAME=cyphera-api
 MAIN_PACKAGE=./cmd/api/main
+LOCAL_PACKAGE=./cmd/api/local
 GO=go
 
 all: lint test build
 
 build:
 	$(GO) build -o bin/$(BINARY_NAME) $(MAIN_PACKAGE)
+
+build-local:
+	$(GO) build -o bin/$(BINARY_NAME)-local $(LOCAL_PACKAGE)
 
 install: delegation-server-setup
 	go mod tidy
@@ -73,6 +77,9 @@ lint:
 	gofmt -l .
 
 run:
+	$(GO) run $(LOCAL_PACKAGE)
+
+run-lambda:
 	$(GO) run $(MAIN_PACKAGE)
 
 swag:

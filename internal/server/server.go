@@ -371,7 +371,6 @@ func InitializeRoutes(router *gin.Engine) {
 			admin.Use(authClient.RequireRoles("admin"))
 			{
 
-				// Sign-in endpoints should be public since users need to authenticate first
 				admin.POST("/accounts/signin", accountHandler.SignInAccount)
 				admin.POST("/customers/signin", customerHandler.SignInRegisterCustomer)
 				admin.GET("/prices/:price_id", productHandler.GetPublicProductByPriceID)
