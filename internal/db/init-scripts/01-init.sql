@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS customers (
     phone VARCHAR(255),
     description TEXT,
     metadata JSONB,
+    finished_onboarding BOOLEAN DEFAULT false,
     -- Payment sync tracking columns
     payment_sync_status VARCHAR(20) DEFAULT 'pending',
     payment_synced_at TIMESTAMP WITH TIME ZONE,

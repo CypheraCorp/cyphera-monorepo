@@ -24,36 +24,39 @@ func NewCustomerHandler(common *CommonServices) *CustomerHandler {
 
 // CustomerResponse represents the standardized API response for customer operations
 type CustomerResponse struct {
-	ID          string                 `json:"id"`
-	Object      string                 `json:"object"`
-	ExternalID  string                 `json:"external_id,omitempty"`
-	Email       string                 `json:"email"`
-	Name        string                 `json:"name,omitempty"`
-	Phone       string                 `json:"phone,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt   int64                  `json:"created_at"`
-	UpdatedAt   int64                  `json:"updated_at"`
+	ID                 string                 `json:"id"`
+	Object             string                 `json:"object"`
+	ExternalID         string                 `json:"external_id,omitempty"`
+	Email              string                 `json:"email"`
+	Name               string                 `json:"name,omitempty"`
+	Phone              string                 `json:"phone,omitempty"`
+	Description        string                 `json:"description,omitempty"`
+	FinishedOnboarding bool                   `json:"finished_onboarding"`
+	Metadata           map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt          int64                  `json:"created_at"`
+	UpdatedAt          int64                  `json:"updated_at"`
 }
 
 // CreateCustomerRequest represents the request body for creating a customer
 type CreateCustomerRequest struct {
-	ExternalID  string                 `json:"external_id,omitempty"`
-	Email       string                 `json:"email" binding:"required,email"`
-	Name        string                 `json:"name,omitempty"`
-	Phone       string                 `json:"phone,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	ExternalID         string                 `json:"external_id,omitempty"`
+	Email              string                 `json:"email" binding:"required,email"`
+	Name               string                 `json:"name,omitempty"`
+	Phone              string                 `json:"phone,omitempty"`
+	Description        string                 `json:"description,omitempty"`
+	FinishedOnboarding *bool                  `json:"finished_onboarding,omitempty"`
+	Metadata           map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // UpdateCustomerRequest represents the request body for updating a customer
 type UpdateCustomerRequest struct {
-	ExternalID  *string                `json:"external_id,omitempty"`
-	Email       *string                `json:"email,omitempty" binding:"omitempty,email"`
-	Name        *string                `json:"name,omitempty"`
-	Phone       *string                `json:"phone,omitempty"`
-	Description *string                `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	ExternalID         *string                `json:"external_id,omitempty"`
+	Email              *string                `json:"email,omitempty" binding:"omitempty,email"`
+	Name               *string                `json:"name,omitempty"`
+	Phone              *string                `json:"phone,omitempty"`
+	Description        *string                `json:"description,omitempty"`
+	FinishedOnboarding *bool                  `json:"finished_onboarding,omitempty"`
+	Metadata           map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ListCustomersResponse represents the paginated response for customer list operations
@@ -149,6 +152,9 @@ func (h *CustomerHandler) updateBasicCustomerFields(params *db.UpdateCustomerPar
 	}
 	if req.Description != nil {
 		params.Description = pgtype.Text{String: *req.Description, Valid: true}
+	}
+	if req.FinishedOnboarding != nil {
+		params.FinishedOnboarding = pgtype.Bool{Bool: *req.FinishedOnboarding, Valid: true}
 	}
 }
 
@@ -310,13 +316,21 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 		return
 	}
 
+	finishedOnboarding := false
+	if req.FinishedOnboarding != nil {
+		finishedOnboarding = *req.FinishedOnboarding
+	}
+
 	customer, err := h.common.db.CreateCustomer(c.Request.Context(), db.CreateCustomerParams{
-		ExternalID:  pgtype.Text{String: req.ExternalID, Valid: req.ExternalID != ""},
-		Email:       pgtype.Text{String: req.Email, Valid: req.Email != ""},
-		Name:        pgtype.Text{String: req.Name, Valid: req.Name != ""},
-		Description: pgtype.Text{String: req.Description, Valid: req.Description != ""},
-		Phone:       pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
-		Metadata:    metadataBytes,
+		ExternalID:         pgtype.Text{String: req.ExternalID, Valid: req.ExternalID != ""},
+		Email:              pgtype.Text{String: req.Email, Valid: req.Email != ""},
+		Name:               pgtype.Text{String: req.Name, Valid: req.Name != ""},
+		Description:        pgtype.Text{String: req.Description, Valid: req.Description != ""},
+		Phone:              pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
+		Metadata:           metadataBytes,
+		FinishedOnboarding: finishedOnboarding,
+		PaymentSyncStatus:  "pending",
+		PaymentProvider:    pgtype.Text{},
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to create customer", err)
@@ -402,6 +416,52 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// UpdateCustomerOnboardingStatusRequest represents the request body for updating customer onboarding status
+type UpdateCustomerOnboardingStatusRequest struct {
+	FinishedOnboarding bool `json:"finished_onboarding" binding:"required"`
+}
+
+// UpdateCustomerOnboardingStatus godoc
+// @Summary Update customer onboarding status
+// @Description Updates the finished_onboarding status for a customer
+// @Tags customers
+// @Accept json
+// @Produce json
+// @Param customer_id path string true "Customer ID"
+// @Param finished_onboarding body bool true "Finished onboarding status"
+// @Success 200 {object} CustomerResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /customers/{customer_id}/onboarding [put]
+func (h *CustomerHandler) UpdateCustomerOnboardingStatus(c *gin.Context) {
+	customerId := c.Param("customer_id")
+	parsedUUID, err := uuid.Parse(customerId)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid customer ID format", err)
+		return
+	}
+
+	var req struct {
+		FinishedOnboarding bool `json:"finished_onboarding" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	customer, err := h.common.db.UpdateCustomerOnboardingStatus(c.Request.Context(), db.UpdateCustomerOnboardingStatusParams{
+		ID:                 parsedUUID,
+		FinishedOnboarding: pgtype.Bool{Bool: req.FinishedOnboarding, Valid: true},
+	})
+	if err != nil {
+		handleDBError(c, err, "Failed to update customer onboarding status")
+		return
+	}
+
+	sendSuccess(c, http.StatusOK, toCustomerResponse(customer))
+}
+
 // Helper function to convert database model to API response
 func toCustomerResponse(c db.Customer) CustomerResponse {
 	var metadata map[string]interface{}
@@ -411,16 +471,17 @@ func toCustomerResponse(c db.Customer) CustomerResponse {
 	}
 
 	return CustomerResponse{
-		ID:          c.ID.String(),
-		Object:      "customer",
-		ExternalID:  c.ExternalID.String,
-		Email:       c.Email.String,
-		Name:        c.Name.String,
-		Phone:       c.Phone.String,
-		Description: c.Description.String,
-		Metadata:    metadata,
-		CreatedAt:   c.CreatedAt.Time.Unix(),
-		UpdatedAt:   c.UpdatedAt.Time.Unix(),
+		ID:                 c.ID.String(),
+		Object:             "customer",
+		ExternalID:         c.ExternalID.String,
+		Email:              c.Email.String,
+		Name:               c.Name.String,
+		Phone:              c.Phone.String,
+		Description:        c.Description.String,
+		FinishedOnboarding: c.FinishedOnboarding.Bool,
+		Metadata:           metadata,
+		CreatedAt:          c.CreatedAt.Time.Unix(),
+		UpdatedAt:          c.UpdatedAt.Time.Unix(),
 	}
 }
 
@@ -518,11 +579,13 @@ func (h *CustomerHandler) validateCustomerSignInRequest(req SignInRegisterCustom
 func (h *CustomerHandler) createNewCustomerWithWallet(ctx *gin.Context, req SignInRegisterCustomerRequest, web3authId string, email string, metadata []byte) (*CustomerDetailsResponse, error) {
 	// Create the customer (now workspace-independent)
 	customer, err := h.common.db.CreateCustomerWithWeb3Auth(ctx.Request.Context(), db.CreateCustomerWithWeb3AuthParams{
-		Web3authID: pgtype.Text{String: web3authId, Valid: web3authId != ""},
-		Email:      pgtype.Text{String: email, Valid: email != ""},
-		Name:       pgtype.Text{String: req.Name, Valid: req.Name != ""},
-		Phone:      pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
-		Metadata:   metadata,
+		Web3authID:         pgtype.Text{String: web3authId, Valid: web3authId != ""},
+		Email:              pgtype.Text{String: email, Valid: email != ""},
+		Name:               pgtype.Text{String: req.Name, Valid: req.Name != ""},
+		Phone:              pgtype.Text{String: req.Phone, Valid: req.Phone != ""},
+		Description:        pgtype.Text{},
+		Metadata:           metadata,
+		FinishedOnboarding: false, // finished_onboarding defaults to false
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create customer: %w", err)

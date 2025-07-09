@@ -23,12 +23,19 @@ INSERT INTO customers (
     phone,
     description,
     metadata,
+    finished_onboarding,
     payment_sync_status,
     payment_provider
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, 
-    COALESCE($7, 'pending'), 
-    $8
+    @external_id,
+    @email,
+    @name,
+    @phone,
+    @description,
+    @metadata,
+    COALESCE(@finished_onboarding, false),
+    COALESCE(@payment_sync_status, 'pending'),
+    @payment_provider
 )
 RETURNING *;
 
@@ -40,12 +47,23 @@ INSERT INTO customers (
     phone,
     description,
     metadata,
+    finished_onboarding,
     payment_sync_status,
     payment_synced_at,
     payment_sync_version,
     payment_provider
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    @external_id,
+    @email,
+    @name,
+    @phone,
+    @description,
+    @metadata,
+    COALESCE(@finished_onboarding, false),
+    @payment_sync_status,
+    @payment_synced_at,
+    @payment_sync_version,
+    @payment_provider
 )
 RETURNING *;
 
@@ -56,38 +74,47 @@ INSERT INTO customers (
     name,
     phone,
     description,
-    metadata
+    metadata,
+    finished_onboarding
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    @web3auth_id,
+    @email,
+    @name,
+    @phone,
+    @description,
+    @metadata,
+    COALESCE(@finished_onboarding, false)
 )
 RETURNING *;
 
 -- name: UpdateCustomer :one
 UPDATE customers
 SET
-    email = COALESCE($2, email),
-    name = COALESCE($3, name),
-    phone = COALESCE($4, phone),
-    description = COALESCE($5, description),
-    metadata = COALESCE($6, metadata),
+    email = COALESCE(@email, email),
+    name = COALESCE(@name, name),
+    phone = COALESCE(@phone, phone),
+    description = COALESCE(@description, description),
+    metadata = COALESCE(@metadata, metadata),
+    finished_onboarding = COALESCE(@finished_onboarding, finished_onboarding),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = @id AND deleted_at IS NULL
 RETURNING *;
 
 -- name: UpdateCustomerWithSync :one
 UPDATE customers
 SET
-    email = COALESCE($2, email),
-    name = COALESCE($3, name),
-    phone = COALESCE($4, phone),
-    description = COALESCE($5, description),
-    metadata = COALESCE($6, metadata),
-    payment_sync_status = COALESCE($7, payment_sync_status),
-    payment_synced_at = COALESCE($8, payment_synced_at),
-    payment_sync_version = COALESCE($9, payment_sync_version),
-    payment_provider = COALESCE($10, payment_provider),
+    email = COALESCE(@email, email),
+    name = COALESCE(@name, name),
+    phone = COALESCE(@phone, phone),
+    description = COALESCE(@description, description),
+    metadata = COALESCE(@metadata, metadata),
+    finished_onboarding = COALESCE(@finished_onboarding, finished_onboarding),
+    payment_sync_status = COALESCE(@payment_sync_status, payment_sync_status),
+    payment_synced_at = COALESCE(@payment_synced_at, payment_synced_at),
+    payment_sync_version = COALESCE(@payment_sync_version, payment_sync_version),
+    payment_provider = COALESCE(@payment_provider, payment_provider),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = @id AND deleted_at IS NULL
 RETURNING *;
 
 -- name: DeleteCustomer :exec
@@ -143,3 +170,11 @@ RETURNING *;
 SELECT * FROM customers 
 WHERE payment_sync_status = 'conflict' AND deleted_at IS NULL
 ORDER BY payment_synced_at DESC;
+
+-- name: UpdateCustomerOnboardingStatus :one
+UPDATE customers
+SET
+    finished_onboarding = @finished_onboarding,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = @id AND deleted_at IS NULL
+RETURNING *;

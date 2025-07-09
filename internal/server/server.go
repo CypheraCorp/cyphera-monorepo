@@ -467,6 +467,9 @@ func InitializeRoutes(router *gin.Engine) {
 				customers.PUT("/:customer_id", customerHandler.UpdateCustomer)
 				customers.DELETE("/:customer_id", customerHandler.DeleteCustomer)
 
+				// Customer onboarding status
+				customers.PATCH("/:customer_id/onboarding", customerHandler.UpdateCustomerOnboardingStatus)
+
 				// Customer subscriptions
 				customers.GET("/:customer_id/subscriptions", subscriptionHandler.ListSubscriptionsByCustomer)
 			}

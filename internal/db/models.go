@@ -620,6 +620,7 @@ type Customer struct {
 	Phone              pgtype.Text        `json:"phone"`
 	Description        pgtype.Text        `json:"description"`
 	Metadata           []byte             `json:"metadata"`
+	FinishedOnboarding pgtype.Bool        `json:"finished_onboarding"`
 	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
 	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
 	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`

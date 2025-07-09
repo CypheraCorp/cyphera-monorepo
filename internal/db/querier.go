@@ -420,6 +420,7 @@ type Querier interface {
 	UpdateCircleUserByWorkspaceID(ctx context.Context, arg UpdateCircleUserByWorkspaceIDParams) (CircleUser, error)
 	UpdateCircleWalletState(ctx context.Context, arg UpdateCircleWalletStateParams) (CircleWallet, error)
 	UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error)
+	UpdateCustomerOnboardingStatus(ctx context.Context, arg UpdateCustomerOnboardingStatusParams) (Customer, error)
 	UpdateCustomerPaymentSyncStatus(ctx context.Context, arg UpdateCustomerPaymentSyncStatusParams) (Customer, error)
 	UpdateCustomerSyncStatus(ctx context.Context, arg UpdateCustomerSyncStatusParams) (Customer, error)
 	UpdateCustomerWallet(ctx context.Context, arg UpdateCustomerWalletParams) (CustomerWallet, error)

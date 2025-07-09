@@ -150,7 +150,7 @@ func (q *Queries) ListCustomerWorkspaces(ctx context.Context, customerID uuid.UU
 
 const listWorkspaceCustomers = `-- name: ListWorkspaceCustomers :many
 SELECT 
-    c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at
+    c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at
 FROM customers c
 INNER JOIN workspace_customers wc ON c.id = wc.customer_id
 WHERE wc.workspace_id = $1 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL
@@ -175,6 +175,7 @@ func (q *Queries) ListWorkspaceCustomers(ctx context.Context, workspaceID uuid.U
 			&i.Phone,
 			&i.Description,
 			&i.Metadata,
+			&i.FinishedOnboarding,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
 			&i.PaymentSyncVersion,
@@ -195,7 +196,7 @@ func (q *Queries) ListWorkspaceCustomers(ctx context.Context, workspaceID uuid.U
 
 const listWorkspaceCustomersWithInfo = `-- name: ListWorkspaceCustomersWithInfo :many
 SELECT 
-    c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at,
+    c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at,
     w.name as workspace_name,
     w.business_name as workspace_business_name,
     w.support_email as workspace_support_email,
@@ -216,6 +217,7 @@ type ListWorkspaceCustomersWithInfoRow struct {
 	Phone                 pgtype.Text        `json:"phone"`
 	Description           pgtype.Text        `json:"description"`
 	Metadata              []byte             `json:"metadata"`
+	FinishedOnboarding    pgtype.Bool        `json:"finished_onboarding"`
 	PaymentSyncStatus     pgtype.Text        `json:"payment_sync_status"`
 	PaymentSyncedAt       pgtype.Timestamptz `json:"payment_synced_at"`
 	PaymentSyncVersion    pgtype.Int4        `json:"payment_sync_version"`
@@ -247,6 +249,7 @@ func (q *Queries) ListWorkspaceCustomersWithInfo(ctx context.Context, workspaceI
 			&i.Phone,
 			&i.Description,
 			&i.Metadata,
+			&i.FinishedOnboarding,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
 			&i.PaymentSyncVersion,
@@ -271,7 +274,7 @@ func (q *Queries) ListWorkspaceCustomersWithInfo(ctx context.Context, workspaceI
 
 const listWorkspaceCustomersWithPagination = `-- name: ListWorkspaceCustomersWithPagination :many
 SELECT 
-    c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at
+    c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at
 FROM customers c
 INNER JOIN workspace_customers wc ON c.id = wc.customer_id
 WHERE wc.workspace_id = $1 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL
@@ -303,6 +306,7 @@ func (q *Queries) ListWorkspaceCustomersWithPagination(ctx context.Context, arg 
 			&i.Phone,
 			&i.Description,
 			&i.Metadata,
+			&i.FinishedOnboarding,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
 			&i.PaymentSyncVersion,

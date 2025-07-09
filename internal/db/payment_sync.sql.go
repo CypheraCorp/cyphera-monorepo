@@ -523,7 +523,7 @@ func (q *Queries) GetCustomerByExternalIDAndProvider(ctx context.Context, arg Ge
 
 const getCustomersByPaymentProvider = `-- name: GetCustomersByPaymentProvider :many
 
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers 
+SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers 
 WHERE payment_provider = $1 AND deleted_at IS NULL
 `
 
@@ -546,6 +546,7 @@ func (q *Queries) GetCustomersByPaymentProvider(ctx context.Context, paymentProv
 			&i.Phone,
 			&i.Description,
 			&i.Metadata,
+			&i.FinishedOnboarding,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
 			&i.PaymentSyncVersion,
@@ -565,7 +566,7 @@ func (q *Queries) GetCustomersByPaymentProvider(ctx context.Context, paymentProv
 }
 
 const getCustomersByPaymentSyncStatus = `-- name: GetCustomersByPaymentSyncStatus :many
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers 
+SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM customers 
 WHERE payment_sync_status = $1 AND deleted_at IS NULL
 `
 
@@ -587,6 +588,7 @@ func (q *Queries) GetCustomersByPaymentSyncStatus(ctx context.Context, paymentSy
 			&i.Phone,
 			&i.Description,
 			&i.Metadata,
+			&i.FinishedOnboarding,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
 			&i.PaymentSyncVersion,
@@ -1498,7 +1500,7 @@ func (q *Queries) GetWebhookEventsSummaryByProvider(ctx context.Context, arg Get
 }
 
 const getWorkspaceCustomersByPaymentProvider = `-- name: GetWorkspaceCustomersByPaymentProvider :many
-SELECT c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at FROM customers c
+SELECT c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at FROM customers c
 INNER JOIN workspace_customers wc ON c.id = wc.customer_id
 WHERE wc.workspace_id = $1 AND c.payment_provider = $2 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL
 `
@@ -1526,6 +1528,7 @@ func (q *Queries) GetWorkspaceCustomersByPaymentProvider(ctx context.Context, ar
 			&i.Phone,
 			&i.Description,
 			&i.Metadata,
+			&i.FinishedOnboarding,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
 			&i.PaymentSyncVersion,
@@ -1545,7 +1548,7 @@ func (q *Queries) GetWorkspaceCustomersByPaymentProvider(ctx context.Context, ar
 }
 
 const getWorkspaceCustomersByPaymentSyncStatus = `-- name: GetWorkspaceCustomersByPaymentSyncStatus :many
-SELECT c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at FROM customers c
+SELECT c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at FROM customers c
 INNER JOIN workspace_customers wc ON c.id = wc.customer_id
 WHERE wc.workspace_id = $1 AND c.payment_sync_status = $2 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL
 `
@@ -1573,6 +1576,7 @@ func (q *Queries) GetWorkspaceCustomersByPaymentSyncStatus(ctx context.Context, 
 			&i.Phone,
 			&i.Description,
 			&i.Metadata,
+			&i.FinishedOnboarding,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
 			&i.PaymentSyncVersion,
@@ -2218,7 +2222,7 @@ UPDATE customers
 SET payment_sync_status = $2, payment_synced_at = CURRENT_TIMESTAMP, 
     payment_sync_version = payment_sync_version + 1, payment_provider = $3, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 
-RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type UpdateCustomerSyncStatusParams struct {
@@ -2239,6 +2243,7 @@ func (q *Queries) UpdateCustomerSyncStatus(ctx context.Context, arg UpdateCustom
 		&i.Phone,
 		&i.Description,
 		&i.Metadata,
+		&i.FinishedOnboarding,
 		&i.PaymentSyncStatus,
 		&i.PaymentSyncedAt,
 		&i.PaymentSyncVersion,
