@@ -1461,3 +1461,115 @@ func (h *ProductHandler) determineErrorType(err error) db.SubscriptionEventType 
 		return db.SubscriptionEventTypeFailed
 	}
 }
+
+// toComprehensiveSubscriptionResponse converts a db.Subscription to a comprehensive SubscriptionResponse
+// that includes all subscription fields plus the initial transaction hash from subscription events
+func (h *ProductHandler) toComprehensiveSubscriptionResponse(ctx context.Context, subscription db.Subscription) (*SubscriptionResponse, error) {
+	// Get the subscription details with related data
+	subscriptionDetails, err := h.common.db.GetSubscriptionWithDetails(ctx, db.GetSubscriptionWithDetailsParams{
+		ID:          subscription.ID,
+		WorkspaceID: subscription.WorkspaceID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription details: %w", err)
+	}
+
+	// Get the initial transaction hash from the first redemption event
+	initialTxHash := ""
+	events, err := h.common.db.ListSubscriptionEventsBySubscription(ctx, subscription.ID)
+	if err == nil {
+		for _, event := range events {
+			if event.EventType == db.SubscriptionEventTypeRedeemed && event.TransactionHash.Valid {
+				initialTxHash = event.TransactionHash.String
+				break
+			}
+		}
+	}
+
+	// Parse metadata
+	var metadata map[string]interface{}
+	if len(subscription.Metadata) > 0 {
+		if err := json.Unmarshal(subscription.Metadata, &metadata); err != nil {
+			log.Printf("Error unmarshaling subscription metadata: %v", err)
+			metadata = make(map[string]interface{})
+		}
+	}
+
+	// Convert to response
+	response := &SubscriptionResponse{
+		ID:                     subscription.ID,
+		WorkspaceID:            subscription.WorkspaceID,
+		CustomerID:             subscription.CustomerID,
+		Status:                 string(subscription.Status),
+		CurrentPeriodStart:     subscription.CurrentPeriodStart.Time,
+		CurrentPeriodEnd:       subscription.CurrentPeriodEnd.Time,
+		TotalRedemptions:       subscription.TotalRedemptions,
+		TotalAmountInCents:     subscription.TotalAmountInCents,
+		TokenAmount:            subscription.TokenAmount,
+		DelegationID:           subscription.DelegationID,
+		InitialTransactionHash: initialTxHash,
+		Metadata:               metadata,
+		CreatedAt:              subscription.CreatedAt.Time,
+		UpdatedAt:              subscription.UpdatedAt.Time,
+		CustomerName:           subscriptionDetails.CustomerName.String,
+		CustomerEmail:          subscriptionDetails.CustomerEmail.String,
+		Price: PriceResponse{
+			ID:                  subscriptionDetails.PriceID.String(),
+			Object:              "price",
+			ProductID:           subscriptionDetails.ProductID.String(),
+			Active:              true, // Assuming active for subscriptions
+			Type:                string(subscriptionDetails.PriceType),
+			Currency:            string(subscriptionDetails.PriceCurrency),
+			UnitAmountInPennies: subscriptionDetails.PriceUnitAmountInPennies,
+			IntervalType:        string(subscriptionDetails.PriceIntervalType),
+			TermLength:          subscriptionDetails.PriceTermLength,
+			CreatedAt:           time.Now().Unix(), // Default timestamp
+			UpdatedAt:           time.Now().Unix(), // Default timestamp
+		},
+		Product: ProductResponse{
+			ID:     subscriptionDetails.ProductID.String(),
+			Name:   subscriptionDetails.ProductName,
+			Active: true, // Assuming active for subscriptions
+			Object: "product",
+		},
+		ProductToken: ProductTokenResponse{
+			ID:          subscriptionDetails.ProductTokenID.String(),
+			TokenSymbol: subscriptionDetails.TokenSymbol,
+			NetworkID:   subscriptionDetails.ProductTokenID.String(),
+			CreatedAt:   time.Now().Unix(), // Default timestamp
+			UpdatedAt:   time.Now().Unix(), // Default timestamp
+		},
+	}
+
+	// Handle nullable fields
+	if subscription.NextRedemptionDate.Valid {
+		response.NextRedemptionDate = &subscription.NextRedemptionDate.Time
+	}
+
+	if subscription.CustomerWalletID.Valid {
+		walletID := uuid.UUID(subscription.CustomerWalletID.Bytes)
+		response.CustomerWalletID = &walletID
+	}
+
+	if subscription.ExternalID.Valid {
+		response.ExternalID = subscription.ExternalID.String
+	}
+
+	if subscription.PaymentSyncStatus.Valid {
+		response.PaymentSyncStatus = subscription.PaymentSyncStatus.String
+	}
+
+	if subscription.PaymentSyncedAt.Valid {
+		response.PaymentSyncedAt = &subscription.PaymentSyncedAt.Time
+	}
+
+	if subscription.PaymentSyncVersion.Valid {
+		response.PaymentSyncVersion = subscription.PaymentSyncVersion.Int32
+	}
+
+	if subscription.PaymentProvider.Valid {
+		response.PaymentProvider = subscription.PaymentProvider.String
+	}
+
+	return response, nil
+}

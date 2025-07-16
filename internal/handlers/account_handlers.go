@@ -380,6 +380,12 @@ func (h *AccountHandler) createWalletsForActiveNetworks(ctx *gin.Context, worksp
 		// Set the first wallet as primary, others as non-primary
 		isPrimary := i == 0 && walletData.IsPrimary
 
+		// Determine the nickname to use - default to "Cyphera Wallet" if none provided
+		nickname := walletData.Nickname
+		if nickname == "" {
+			nickname = "Cyphera Wallet"
+		}
+
 		// Create wallet for this network
 		_, err = h.common.db.CreateWallet(ctx.Request.Context(), db.CreateWalletParams{
 			WorkspaceID:   workspaceID,
@@ -387,7 +393,7 @@ func (h *AccountHandler) createWalletsForActiveNetworks(ctx *gin.Context, worksp
 			WalletAddress: walletData.WalletAddress,
 			NetworkType:   network.NetworkType,
 			NetworkID:     pgtype.UUID{Bytes: network.ID, Valid: true},
-			Nickname:      pgtype.Text{String: walletData.Nickname, Valid: walletData.Nickname != ""},
+			Nickname:      pgtype.Text{String: nickname, Valid: true},
 			Ens:           pgtype.Text{String: walletData.ENS, Valid: walletData.ENS != ""},
 			IsPrimary:     pgtype.Bool{Bool: isPrimary, Valid: true},
 			Verified:      pgtype.Bool{Bool: walletData.Verified, Valid: true},
@@ -483,13 +489,13 @@ func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAc
 	}, nil
 }
 
-// SignInAccount godoc
+// SignInRegisterAccount godoc
 // @Summary Sign in to an account
 // @Description Signs in to an account with the specified email and password
 // @Tags accounts
 // @Accept json
 // @Tags exclude
-func (h *AccountHandler) SignInAccount(c *gin.Context) {
+func (h *AccountHandler) SignInRegisterAccount(c *gin.Context) {
 	var req CreateAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid request body", err)

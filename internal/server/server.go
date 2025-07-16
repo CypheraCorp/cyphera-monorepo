@@ -370,8 +370,7 @@ func InitializeRoutes(router *gin.Engine) {
 			admin := protected.Group("/admin")
 			admin.Use(authClient.RequireRoles("admin"))
 			{
-
-				admin.POST("/accounts/signin", accountHandler.SignInAccount)
+				admin.POST("/accounts/signin", accountHandler.SignInRegisterAccount)
 				admin.POST("/customers/signin", customerHandler.SignInRegisterCustomer)
 				admin.GET("/prices/:price_id", productHandler.GetPublicProductByPriceID)
 

@@ -49,23 +49,32 @@ type SubscribeRequest struct {
 
 // SubscriptionResponse represents a subscription along with its associated price and product details.
 type SubscriptionResponse struct {
-	ID                 uuid.UUID            `json:"id"`
-	WorkspaceID        uuid.UUID            `json:"workspace_id"`
-	CustomerID         uuid.UUID            `json:"customer_id,omitempty"`
-	CustomerName       string               `json:"customer_name,omitempty"`
-	CustomerEmail      string               `json:"customer_email,omitempty"`
-	Status             string               `json:"status"`
-	CurrentPeriodStart time.Time            `json:"current_period_start"`
-	CurrentPeriodEnd   time.Time            `json:"current_period_end"`
-	TrialStart         time.Time            `json:"trial_start,omitempty"`
-	TrialEnd           time.Time            `json:"trial_end,omitempty"`
-	TokenAmount        int32                `json:"token_amount"`
-	CanceledAt         time.Time            `json:"canceled_at,omitempty"`
-	CreatedAt          time.Time            `json:"created_at"`
-	UpdatedAt          time.Time            `json:"updated_at"`
-	Price              PriceResponse        `json:"price"`
-	Product            ProductResponse      `json:"product"`
-	ProductToken       ProductTokenResponse `json:"product_token"`
+	ID                     uuid.UUID              `json:"id"`
+	WorkspaceID            uuid.UUID              `json:"workspace_id"`
+	CustomerID             uuid.UUID              `json:"customer_id,omitempty"`
+	CustomerName           string                 `json:"customer_name,omitempty"`
+	CustomerEmail          string                 `json:"customer_email,omitempty"`
+	Status                 string                 `json:"status"`
+	CurrentPeriodStart     time.Time              `json:"current_period_start"`
+	CurrentPeriodEnd       time.Time              `json:"current_period_end"`
+	NextRedemptionDate     *time.Time             `json:"next_redemption_date,omitempty"`
+	TotalRedemptions       int32                  `json:"total_redemptions"`
+	TotalAmountInCents     int32                  `json:"total_amount_in_cents"`
+	TokenAmount            int32                  `json:"token_amount"`
+	DelegationID           uuid.UUID              `json:"delegation_id"`
+	CustomerWalletID       *uuid.UUID             `json:"customer_wallet_id,omitempty"`
+	ExternalID             string                 `json:"external_id,omitempty"`
+	PaymentSyncStatus      string                 `json:"payment_sync_status,omitempty"`
+	PaymentSyncedAt        *time.Time             `json:"payment_synced_at,omitempty"`
+	PaymentSyncVersion     int32                  `json:"payment_sync_version,omitempty"`
+	PaymentProvider        string                 `json:"payment_provider,omitempty"`
+	InitialTransactionHash string                 `json:"initial_transaction_hash,omitempty"`
+	Metadata               map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt              time.Time              `json:"created_at"`
+	UpdatedAt              time.Time              `json:"updated_at"`
+	Price                  PriceResponse          `json:"price"`
+	Product                ProductResponse        `json:"product"`
+	ProductToken           ProductTokenResponse   `json:"product_token"`
 }
 
 type CreateSubscriptionParams struct {
@@ -1574,7 +1583,17 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		sendError(c, http.StatusInternalServerError, "Initial redemption failed, subscription marked as failed and soft-deleted", err)
 		return
 	}
-	sendSuccess(c, http.StatusCreated, updatedSubscription)
+	// Create comprehensive response with all subscription fields and initial transaction hash
+	comprehensiveResponse, err := h.toComprehensiveSubscriptionResponse(ctx, updatedSubscription)
+	if err != nil {
+		logger.Error("Failed to create comprehensive subscription response",
+			zap.Error(err),
+			zap.String("subscription_id", updatedSubscription.ID.String()))
+		sendError(c, http.StatusInternalServerError, "Failed to create subscription response", err)
+		return
+	}
+
+	sendSuccess(c, http.StatusCreated, comprehensiveResponse)
 }
 
 // logAndValidateEventCreation helps debug event creation issues by logging details and optionally validating the event was created
