@@ -90,9 +90,9 @@ swag:
 
 gitbook-sync: swag
 	@echo "🚀 Publishing OpenAPI spec to GitBook..."
-	@if [ -z "$(GITBOOK_API_KEY)" ]; then \
-		echo "❌ Error: GITBOOK_API_KEY environment variable is required"; \
-		echo "💡 Set it with: export GITBOOK_API_KEY=your_api_key"; \
+	@if [ -z "$(GITBOOK_TOKEN)" ]; then \
+		echo "❌ Error: GITBOOK_TOKEN environment variable is required"; \
+		echo "💡 Set it with: export GITBOOK_TOKEN=your_api_token"; \
 		exit 1; \
 	fi
 	gitbook openapi publish --spec cyphera-api --organization 1AowlQrHqnVzYns51v22 docs/gitbook/api/openapi.yaml
