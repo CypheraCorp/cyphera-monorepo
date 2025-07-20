@@ -84,7 +84,7 @@ run-lambda:
 
 swag:
 	swag init --dir ./internal/handlers --generalInfo ../../cmd/api/main/main.go --output ./docs/gitbook/api --tags='!exclude'
-	npx swagger2openapi docs/gitbook/api/swagger.json --yaml > docs/gitbook/api/openapi.yaml
+	npx swagger2openapi docs/gitbook/api/swagger.json --yaml --targetVersion=3.1.0 > docs/gitbook/api/openapi.yaml
 	rm -f docs/gitbook/api/swagger.json docs/gitbook/api/swagger.yaml docs/gitbook/api/docs.go docs/gitbook/api/openapi.json
 	@echo "✅ Generated OpenAPI 3.0 spec: docs/gitbook/api/openapi.yaml"
 
