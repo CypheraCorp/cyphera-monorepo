@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	_ "cyphera-api/docs" // This will be generated
 	"cyphera-api/internal/client/auth"
 	awsclient "cyphera-api/internal/client/aws"
 	"cyphera-api/internal/client/circle"
