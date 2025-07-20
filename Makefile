@@ -83,7 +83,7 @@ run-lambda:
 	$(GO) run $(MAIN_PACKAGE)
 
 swag:
-	swag init --dir ./internal/handlers --generalInfo ../../cmd/api/main/main.go --output ./docs --tags='!exclude'
+	swag init --dir ./internal/handlers --generalInfo ../../cmd/api/main/main.go --output ./docs/gitbook/api --tags='!exclude'
 
 deploy:
 	# Add deployment steps here

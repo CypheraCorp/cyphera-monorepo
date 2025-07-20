@@ -23,8 +23,9 @@ func NewAccountHandler(common *CommonServices) *AccountHandler {
 }
 
 type AccountDetailsResponse struct {
-	AccountResponse AccountResponse `json:"account"`
-	User            UserResponse    `json:"user,omitempty"`
+	AccountResponse AccountResponse  `json:"account"`
+	User            UserResponse     `json:"user,omitempty"`
+	Wallets         []WalletResponse `json:"wallets,omitempty"`
 }
 
 // AccountResponse represents the standardized API response for account operations

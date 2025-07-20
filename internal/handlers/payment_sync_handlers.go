@@ -34,23 +34,33 @@ func NewPaymentSyncHandlers(dbQueries *db.Queries, logger *zap.Logger, syncClien
 
 // Configuration Management Request/Response Types
 
+// PaymentProviderConfig represents the configuration for a payment provider
+// @Description Configuration details for a payment provider
+type PaymentProviderConfig struct {
+	APIKey         string `json:"api_key" binding:"required"`
+	WebhookSecret  string `json:"webhook_secret" binding:"required"`
+	PublishableKey string `json:"publishable_key,omitempty"`
+	Environment    string `json:"environment" binding:"required"` // "test" or "live"
+	BaseURL        string `json:"base_url,omitempty"`
+}
+
 type CreateConfigurationRequest struct {
-	ProviderName       string                   `json:"provider_name" binding:"required"`
-	IsActive           bool                     `json:"is_active"`
-	IsTestMode         bool                     `json:"is_test_mode"`
-	Configuration      ps.PaymentProviderConfig `json:"configuration" binding:"required"`
-	WebhookEndpointURL string                   `json:"webhook_endpoint_url,omitempty"`
-	ConnectedAccountID string                   `json:"connected_account_id,omitempty"`
-	Metadata           map[string]interface{}   `json:"metadata,omitempty"`
+	ProviderName       string                 `json:"provider_name" binding:"required"`
+	IsActive           bool                   `json:"is_active"`
+	IsTestMode         bool                   `json:"is_test_mode"`
+	Configuration      PaymentProviderConfig  `json:"configuration" binding:"required"`
+	WebhookEndpointURL string                 `json:"webhook_endpoint_url,omitempty"`
+	ConnectedAccountID string                 `json:"connected_account_id,omitempty"`
+	Metadata           map[string]interface{} `json:"metadata,omitempty"`
 }
 
 type UpdateConfigurationRequest struct {
-	IsActive           *bool                     `json:"is_active,omitempty"`
-	IsTestMode         *bool                     `json:"is_test_mode,omitempty"`
-	Configuration      *ps.PaymentProviderConfig `json:"configuration,omitempty"`
-	WebhookEndpointURL *string                   `json:"webhook_endpoint_url,omitempty"`
-	ConnectedAccountID *string                   `json:"connected_account_id,omitempty"`
-	Metadata           map[string]interface{}    `json:"metadata,omitempty"`
+	IsActive           *bool                  `json:"is_active,omitempty"`
+	IsTestMode         *bool                  `json:"is_test_mode,omitempty"`
+	Configuration      *PaymentProviderConfig `json:"configuration,omitempty"`
+	WebhookEndpointURL *string                `json:"webhook_endpoint_url,omitempty"`
+	ConnectedAccountID *string                `json:"connected_account_id,omitempty"`
+	Metadata           map[string]interface{} `json:"metadata,omitempty"`
 }
 
 type ConfigurationResponse struct {
@@ -67,6 +77,17 @@ type ConfigurationResponse struct {
 	CreatedAt          int64                  `json:"created_at"`
 	UpdatedAt          int64                  `json:"updated_at"`
 	// Note: Configuration is not returned for security reasons
+}
+
+// Helper function to convert handler PaymentProviderConfig to ps.PaymentProviderConfig
+func (h *PaymentSyncHandlers) convertToClientConfig(config PaymentProviderConfig) ps.PaymentProviderConfig {
+	return ps.PaymentProviderConfig{
+		APIKey:         config.APIKey,
+		WebhookSecret:  config.WebhookSecret,
+		PublishableKey: config.PublishableKey,
+		Environment:    config.Environment,
+		BaseURL:        config.BaseURL,
+	}
 }
 
 // Sync Operation Request/Response Types
@@ -164,7 +185,7 @@ func (h *PaymentSyncHandlers) CreateConfiguration(c *gin.Context) {
 		ProviderName:       req.ProviderName,
 		IsActive:           req.IsActive,
 		IsTestMode:         req.IsTestMode,
-		Configuration:      req.Configuration,
+		Configuration:      h.convertToClientConfig(req.Configuration),
 		WebhookEndpointURL: req.WebhookEndpointURL,
 		ConnectedAccountID: req.ConnectedAccountID,
 		Metadata:           req.Metadata,
@@ -360,7 +381,7 @@ func (h *PaymentSyncHandlers) UpdateConfiguration(c *gin.Context) {
 		existing.IsTestMode = *req.IsTestMode
 	}
 	if req.Configuration != nil {
-		existing.Configuration = *req.Configuration
+		existing.Configuration = h.convertToClientConfig(*req.Configuration)
 	}
 	if req.WebhookEndpointURL != nil {
 		existing.WebhookEndpointURL = *req.WebhookEndpointURL

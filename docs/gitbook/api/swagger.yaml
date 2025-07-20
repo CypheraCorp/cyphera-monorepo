@@ -28,6 +28,10 @@ definitions:
         $ref: '#/definitions/handlers.AccountResponse'
       user:
         $ref: '#/definitions/handlers.UserResponse'
+      wallets:
+        items:
+          $ref: '#/definitions/handlers.WalletResponse'
+        type: array
     type: object
   handlers.AccountResponse:
     properties:
@@ -103,6 +107,25 @@ definitions:
         type: string
     type: object
   handlers.CreateConfigurationRequest:
+    properties:
+      configuration:
+        $ref: '#/definitions/handlers.PaymentProviderConfig'
+      connected_account_id:
+        type: string
+      is_active:
+        type: boolean
+      is_test_mode:
+        type: boolean
+      metadata:
+        additionalProperties: true
+        type: object
+      provider_name:
+        type: string
+      webhook_endpoint_url:
+        type: string
+    required:
+    - configuration
+    - provider_name
     type: object
   handlers.CreatePriceRequest:
     properties:
@@ -191,9 +214,8 @@ definitions:
       metadata:
         additionalProperties: true
         type: object
-      network_id:
-        type: string
       network_type:
+        description: '''evm'' or ''solana'''
         type: string
       nickname:
         type: string
@@ -208,15 +230,12 @@ definitions:
         description: '''wallet'' or ''circle_wallet'''
         type: string
     required:
-    - network_id
     - network_type
     - wallet_address
     - wallet_type
     type: object
   handlers.CustomerResponse:
     properties:
-      business_name:
-        type: string
       created_at:
         type: integer
       description:
@@ -225,6 +244,8 @@ definitions:
         type: string
       external_id:
         type: string
+      finished_onboarding:
+        type: boolean
       id:
         type: string
       metadata:
@@ -238,10 +259,6 @@ definitions:
         type: string
       updated_at:
         type: integer
-      workspace_id:
-        type: string
-      workspace_name:
-        type: string
     type: object
   handlers.DLQProcessingStats:
     properties:
@@ -442,6 +459,25 @@ definitions:
       total_pages:
         type: integer
     type: object
+  handlers.PaymentProviderConfig:
+    description: Configuration details for a payment provider
+    properties:
+      api_key:
+        type: string
+      base_url:
+        type: string
+      environment:
+        description: '"test" or "live"'
+        type: string
+      publishable_key:
+        type: string
+      webhook_secret:
+        type: string
+    required:
+    - api_key
+    - environment
+    - webhook_secret
+    type: object
   handlers.PriceResponse:
     properties:
       active:
@@ -541,54 +577,6 @@ definitions:
       updated_at:
         type: integer
     type: object
-  handlers.PublicProductResponse:
-    properties:
-      account_id:
-        type: string
-      description:
-        type: string
-      id:
-        type: string
-      image_url:
-        type: string
-      name:
-        type: string
-      price:
-        $ref: '#/definitions/handlers.PriceResponse'
-      product_tokens:
-        items:
-          $ref: '#/definitions/handlers.PublicProductTokenResponse'
-        type: array
-      url:
-        type: string
-      wallet_address:
-        type: string
-      workspace_id:
-        type: string
-    type: object
-  handlers.PublicProductTokenResponse:
-    properties:
-      network_chain_id:
-        type: string
-      network_id:
-        type: string
-      network_name:
-        type: string
-      product_token_id:
-        type: string
-      token_address:
-        type: string
-      token_decimals:
-        type: integer
-      token_id:
-        type: string
-      token_image_url:
-        type: string
-      token_name:
-        type: string
-      token_symbol:
-        type: string
-    type: object
   handlers.SubscriptionEventPriceInfo:
     properties:
       currency:
@@ -653,8 +641,6 @@ definitions:
     type: object
   handlers.SubscriptionResponse:
     properties:
-      canceled_at:
-        type: string
       created_at:
         type: string
       current_period_end:
@@ -667,7 +653,28 @@ definitions:
         type: string
       customer_name:
         type: string
+      customer_wallet_id:
+        type: string
+      delegation_id:
+        type: string
+      external_id:
+        type: string
       id:
+        type: string
+      initial_transaction_hash:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      next_redemption_date:
+        type: string
+      payment_provider:
+        type: string
+      payment_sync_status:
+        type: string
+      payment_sync_version:
+        type: integer
+      payment_synced_at:
         type: string
       price:
         $ref: '#/definitions/handlers.PriceResponse'
@@ -679,10 +686,10 @@ definitions:
         type: string
       token_amount:
         type: integer
-      trial_end:
-        type: string
-      trial_start:
-        type: string
+      total_amount_in_cents:
+        type: integer
+      total_redemptions:
+        type: integer
       updated_at:
         type: string
       workspace_id:
@@ -788,6 +795,20 @@ definitions:
         type: integer
     type: object
   handlers.UpdateConfigurationRequest:
+    properties:
+      configuration:
+        $ref: '#/definitions/handlers.PaymentProviderConfig'
+      connected_account_id:
+        type: string
+      is_active:
+        type: boolean
+      is_test_mode:
+        type: boolean
+      metadata:
+        additionalProperties: true
+        type: object
+      webhook_endpoint_url:
+        type: string
     type: object
   handlers.UpdateProductRequest:
     properties:
@@ -827,6 +848,8 @@ definitions:
       email:
         type: string
       email_verified:
+        type: boolean
+      finished_onboarding:
         type: boolean
       first_name:
         type: string
@@ -1370,6 +1393,43 @@ paths:
       summary: Get customer by ID
       tags:
       - customers
+  /customers/{customer_id}/onboarding:
+    put:
+      consumes:
+      - application/json
+      description: Updates the finished_onboarding status for a customer
+      parameters:
+      - description: Customer ID
+        in: path
+        name: customer_id
+        required: true
+        type: string
+      - description: Finished onboarding status
+        in: body
+        name: finished_onboarding
+        required: true
+        schema:
+          type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.CustomerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update customer onboarding status
+      tags:
+      - customers
   /customers/{customer_id}/subscriptions:
     get:
       consumes:
@@ -1779,42 +1839,6 @@ paths:
       summary: Get a subscription event by ID
       tags:
       - subscription-events
-  /subscription-events/transaction/{tx_hash}:
-    get:
-      consumes:
-      - application/json
-      description: Retrieves a subscription event by its transaction hash
-      parameters:
-      - description: Transaction Hash
-        in: path
-        name: tx_hash
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.SubscriptionEventResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get a subscription event by transaction hash
-      tags:
-      - subscription-events
-      - exclude
   /subscriptions:
     get:
       consumes:
@@ -2585,7 +2609,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a new wallet for the authenticated workspace
+      description: Creates a new wallet for each active network in the authenticated
+        workspace
       parameters:
       - description: Wallet creation request
         in: body
@@ -2599,7 +2624,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/handlers.WalletResponse'
+            $ref: '#/definitions/handlers.WalletListResponse'
         "400":
           description: Bad Request
           schema:

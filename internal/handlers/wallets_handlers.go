@@ -60,8 +60,7 @@ type WalletListResponse struct {
 type CreateWalletRequest struct {
 	WalletType    string                 `json:"wallet_type" binding:"required"` // 'wallet' or 'circle_wallet'
 	WalletAddress string                 `json:"wallet_address" binding:"required"`
-	NetworkType   string                 `json:"network_type" binding:"required"`
-	NetworkID     string                 `json:"network_id" binding:"required"`
+	NetworkType   string                 `json:"network_type" binding:"required"` // 'evm' or 'solana'
 	Nickname      string                 `json:"nickname,omitempty"`
 	ENS           string                 `json:"ens,omitempty"`
 	IsPrimary     bool                   `json:"is_primary"`
@@ -256,12 +255,12 @@ func toListCircleWalletsResponse(w db.ListCircleWalletsByWorkspaceIDRow) WalletR
 
 // CreateWallet godoc
 // @Summary Create a new wallet
-// @Description Creates a new wallet for the authenticated workspace
+// @Description Creates a new wallet for each active network in the authenticated workspace
 // @Tags wallets
 // @Accept json
 // @Produce json
 // @Param body body CreateWalletRequest true "Wallet creation request"
-// @Success 201 {object} WalletResponse
+// @Success 201 {object} WalletListResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
@@ -294,37 +293,52 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 		return
 	}
 
-	// Parse network ID if provided
-	var networkIDUUID pgtype.UUID
-	if req.NetworkID != "" {
-		parsedNetworkID, err := uuid.Parse(req.NetworkID)
-		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
-			return
-		}
-		networkIDUUID.Bytes = parsedNetworkID
-		networkIDUUID.Valid = true
-	}
-
-	// Create wallet
-	wallet, err := h.common.db.CreateWallet(c.Request.Context(), db.CreateWalletParams{
-		WorkspaceID:   workspaceID,
-		WalletType:    req.WalletType,
-		WalletAddress: req.WalletAddress,
-		NetworkType:   db.NetworkType(req.NetworkType),
-		NetworkID:     networkIDUUID,
-		Nickname:      pgtype.Text{String: req.Nickname, Valid: req.Nickname != ""},
-		Ens:           pgtype.Text{String: req.ENS, Valid: req.ENS != ""},
-		IsPrimary:     pgtype.Bool{Bool: req.IsPrimary, Valid: true},
-		Verified:      pgtype.Bool{Bool: req.Verified, Valid: true},
-		Metadata:      metadata,
+	// Get all active networks
+	networks, err := h.common.db.ListNetworks(c.Request.Context(), db.ListNetworksParams{
+		IsActive: pgtype.Bool{Bool: true, Valid: true},
 	})
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to create wallet", err)
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve active networks", err)
 		return
 	}
 
-	sendSuccess(c, http.StatusCreated, toWalletResponse(wallet))
+	if len(networks) == 0 {
+		sendError(c, http.StatusBadRequest, "No active networks found", nil)
+		return
+	}
+
+	// Create wallets for each active network
+	var createdWallets []WalletResponse
+	for _, network := range networks {
+
+		// Create wallet for this network
+		wallet, err := h.common.db.CreateWallet(c.Request.Context(), db.CreateWalletParams{
+			WorkspaceID:   workspaceID,
+			WalletType:    req.WalletType,
+			WalletAddress: req.WalletAddress,
+			NetworkType:   network.NetworkType,
+			NetworkID:     pgtype.UUID{Bytes: network.ID, Valid: true},
+			Nickname:      pgtype.Text{String: req.Nickname, Valid: req.Nickname != ""},
+			Ens:           pgtype.Text{String: req.ENS, Valid: req.ENS != ""},
+			IsPrimary:     pgtype.Bool{Bool: req.IsPrimary, Valid: true},
+			Verified:      pgtype.Bool{Bool: req.Verified, Valid: true},
+			Metadata:      metadata,
+		})
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, "Failed to create wallet for network: "+network.Name, err)
+			return
+		}
+
+		createdWallets = append(createdWallets, toWalletResponse(wallet))
+	}
+
+	// Return list of created wallets
+	listResponse := WalletListResponse{
+		Object: "list",
+		Data:   createdWallets,
+	}
+
+	sendSuccess(c, http.StatusCreated, listResponse)
 }
 
 // GetWallet godoc
