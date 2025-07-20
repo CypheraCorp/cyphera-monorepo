@@ -15,7 +15,7 @@ on:
       - 'docs/gitbook/api/openapi.yaml'
 
 env:
-  GITBOOK_API_KEY: ${{ secrets.GITBOOK_API_KEY }}
+  GITBOOK_TOKEN: ${{ secrets.GITBOOK_API_KEY }}
 
 jobs:
   sync-openapi:
@@ -45,8 +45,8 @@ jobs:
           
       - name: Validate GitBook API Key
         run: |
-          if [ -z "$GITBOOK_API_KEY" ]; then
-            echo "❌ GITBOOK_API_KEY secret is not set"
+          if [ -z "$GITBOOK_TOKEN" ]; then
+            echo "❌ GITBOOK_TOKEN secret is not set"
             exit 1
           fi
           echo "✅ GitBook API Key is configured"
