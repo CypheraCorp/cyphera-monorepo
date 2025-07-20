@@ -84,6 +84,19 @@ run-lambda:
 
 swag:
 	swag init --dir ./internal/handlers --generalInfo ../../cmd/api/main/main.go --output ./docs/gitbook/api --tags='!exclude'
+	npx swagger2openapi docs/gitbook/api/swagger.json --yaml > docs/gitbook/api/openapi.yaml
+	rm -f docs/gitbook/api/swagger.json docs/gitbook/api/swagger.yaml docs/gitbook/api/docs.go docs/gitbook/api/openapi.json
+	@echo "✅ Generated OpenAPI 3.0 spec: docs/gitbook/api/openapi.yaml"
+
+gitbook-sync: swag
+	@echo "🚀 Publishing OpenAPI spec to GitBook..."
+	@if [ -z "$(GITBOOK_API_KEY)" ]; then \
+		echo "❌ Error: GITBOOK_API_KEY environment variable is required"; \
+		echo "💡 Set it with: export GITBOOK_API_KEY=your_api_key"; \
+		exit 1; \
+	fi
+	gitbook openapi publish --spec cyphera-api --organization 1AowlQrHqnVzYns51v22 docs/gitbook/api/openapi.yaml
+	@echo "✅ Successfully published to GitBook!"
 
 deploy:
 	# Add deployment steps here

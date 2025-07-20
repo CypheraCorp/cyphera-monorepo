@@ -135,6 +135,7 @@ func (h *AccountHandler) ListAccounts(c *gin.Context) {
 // @Tags accounts
 // @Accept json
 // @Produce json
+// @Param account_id path string true "Account ID"
 // @Success 200 {object} AccountDetailsResponse
 // @Failure 401 {object} ErrorResponse
 // @Security ApiKeyAuth

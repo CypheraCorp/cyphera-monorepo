@@ -1,0 +1,74 @@
+name: GitBook OpenAPI Sync
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'docs/gitbook/api/openapi.yaml'
+  pull_request:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'docs/gitbook/api/openapi.yaml'
+
+env:
+  GITBOOK_API_KEY: ${{ secrets.GITBOOK_API_KEY }}
+
+jobs:
+  sync-openapi:
+    name: Sync OpenAPI to GitBook
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install GitBook CLI
+        run: npm install -g @gitbook/cli
+        
+      - name: Verify OpenAPI file exists
+        run: |
+          if [ ! -f "docs/gitbook/api/openapi.yaml" ]; then
+            echo "❌ OpenAPI file not found at docs/gitbook/api/openapi.yaml"
+            exit 1
+          fi
+          echo "✅ OpenAPI file found"
+          
+      - name: Validate GitBook API Key
+        run: |
+          if [ -z "$GITBOOK_API_KEY" ]; then
+            echo "❌ GITBOOK_API_KEY secret is not set"
+            exit 1
+          fi
+          echo "✅ GitBook API Key is configured"
+          
+      - name: Publish OpenAPI spec to GitBook
+        run: |
+          echo "🚀 Publishing OpenAPI spec to GitBook..."
+          gitbook openapi publish \
+            --spec cyphera-api \
+            --organization 1AowlQrHqnVzYns51v22 \
+            docs/gitbook/api/openapi.yaml
+            
+      - name: Success notification
+        if: success()
+        run: |
+          echo "✅ Successfully published OpenAPI spec to GitBook!"
+          echo "📚 Spec name: cyphera-api"
+          echo "🏢 Organization: 1AowlQrHqnVzYns51v22"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          
+      - name: Failure notification
+        if: failure()
+        run: |
+          echo "❌ Failed to publish OpenAPI spec to GitBook"
+          echo "Please check the logs above for error details" 

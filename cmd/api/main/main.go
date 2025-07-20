@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	_ "cyphera-api/docs" // This will be generated
 	"cyphera-api/internal/logger"
 	"cyphera-api/internal/server"
 
@@ -32,6 +31,11 @@ import (
 
 // @host      localhost:8000
 // @BasePath  /api/v1
+
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
+// @description API Key authentication. Use 'Bearer <token>' format.
 
 // @securityDefinitions.apikey Bearer
 // @in header

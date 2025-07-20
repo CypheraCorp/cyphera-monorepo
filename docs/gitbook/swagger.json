@@ -36,6 +36,15 @@
                     "accounts"
                 ],
                 "summary": "Get account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "account_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1689,9 +1698,7 @@
                         }
                     }
                 }
-            }
-        },
-        "/sync/config/{config_id}": {
+            },
             "put": {
                 "security": [
                     {
@@ -1802,7 +1809,7 @@
                 }
             }
         },
-        "/sync/config/{config_id}/test": {
+        "/sync/config/id/{config_id}/test": {
             "post": {
                 "security": [
                     {
@@ -4252,6 +4259,12 @@
         }
     },
     "securityDefinitions": {
+        "ApiKeyAuth": {
+            "description": "API Key authentication. Use 'Bearer \u003ctoken\u003e' format.",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        },
         "Bearer": {
             "description": "Type \"Bearer\" followed by a space and JWT token.",
             "type": "apiKey",

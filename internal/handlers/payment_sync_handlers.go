@@ -342,7 +342,7 @@ func (h *PaymentSyncHandlers) ListConfigurations(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /sync/config/{config_id} [put]
+// @Router /sync/config/id/{config_id} [put]
 func (h *PaymentSyncHandlers) UpdateConfiguration(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
@@ -415,7 +415,7 @@ func (h *PaymentSyncHandlers) UpdateConfiguration(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /sync/config/{config_id} [delete]
+// @Router /sync/config/id/{config_id} [delete]
 func (h *PaymentSyncHandlers) DeleteConfiguration(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
@@ -452,7 +452,7 @@ func (h *PaymentSyncHandlers) DeleteConfiguration(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
-// @Router /sync/config/{config_id}/test [post]
+// @Router /sync/config/id/{config_id}/test [post]
 func (h *PaymentSyncHandlers) TestConnection(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
