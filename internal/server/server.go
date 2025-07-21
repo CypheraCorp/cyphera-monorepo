@@ -211,8 +211,8 @@ func InitializeHandlers() {
 	// Configure the connection pool
 	poolConfig.MaxConns = 20
 	poolConfig.MinConns = 5
-	poolConfig.MaxConnLifetime = time.Hour
-	poolConfig.MaxConnIdleTime = time.Minute * 30
+	poolConfig.MaxConnLifetime = time.Minute * 30 // Shorter lifetime to prevent cached plan issues
+	poolConfig.MaxConnIdleTime = time.Minute * 15 // Shorter idle time
 
 	// Create the connection pool using the config
 	dbpool, err := pgxpool.NewWithConfig(ctx, poolConfig)
