@@ -714,18 +714,31 @@ type Invoice struct {
 }
 
 type Network struct {
-	ID                uuid.UUID          `json:"id"`
-	Name              string             `json:"name"`
-	Type              string             `json:"type"`
-	NetworkType       NetworkType        `json:"network_type"`
-	CircleNetworkType CircleNetworkType  `json:"circle_network_type"`
-	BlockExplorerUrl  pgtype.Text        `json:"block_explorer_url"`
-	ChainID           int32              `json:"chain_id"`
-	IsTestnet         bool               `json:"is_testnet"`
-	Active            bool               `json:"active"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
+	ID                    uuid.UUID          `json:"id"`
+	Name                  string             `json:"name"`
+	Type                  string             `json:"type"`
+	NetworkType           NetworkType        `json:"network_type"`
+	CircleNetworkType     CircleNetworkType  `json:"circle_network_type"`
+	BlockExplorerUrl      pgtype.Text        `json:"block_explorer_url"`
+	ChainID               int32              `json:"chain_id"`
+	IsTestnet             bool               `json:"is_testnet"`
+	Active                bool               `json:"active"`
+	LogoUrl               pgtype.Text        `json:"logo_url"`
+	DisplayName           pgtype.Text        `json:"display_name"`
+	ChainNamespace        pgtype.Text        `json:"chain_namespace"`
+	BaseFeeMultiplier     pgtype.Numeric     `json:"base_fee_multiplier"`
+	PriorityFeeMultiplier pgtype.Numeric     `json:"priority_fee_multiplier"`
+	DeploymentGasLimit    pgtype.Text        `json:"deployment_gas_limit"`
+	TokenTransferGasLimit pgtype.Text        `json:"token_transfer_gas_limit"`
+	SupportsEip1559       pgtype.Bool        `json:"supports_eip1559"`
+	GasOracleUrl          pgtype.Text        `json:"gas_oracle_url"`
+	GasRefreshIntervalMs  pgtype.Int4        `json:"gas_refresh_interval_ms"`
+	GasPriorityLevels     []byte             `json:"gas_priority_levels"`
+	AverageBlockTimeMs    pgtype.Int4        `json:"average_block_time_ms"`
+	PeakHoursMultiplier   pgtype.Numeric     `json:"peak_hours_multiplier"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt             pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type PaymentSyncEvent struct {

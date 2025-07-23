@@ -338,7 +338,7 @@ func (q *Queries) GetRecentlyUsedWalletsWithCircleData(ctx context.Context, arg 
 }
 
 const getWalletByAddressAndCircleNetworkType = `-- name: GetWalletByAddressAndCircleNetworkType :one
-SELECT w.id, workspace_id, wallet_type, wallet_address, w.network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, w.created_at, w.updated_at, w.deleted_at, n.id, name, type, n.network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, n.created_at, n.updated_at, n.deleted_at FROM wallets as w
+SELECT w.id, workspace_id, wallet_type, wallet_address, w.network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, w.created_at, w.updated_at, w.deleted_at, n.id, name, type, n.network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, n.created_at, n.updated_at, n.deleted_at FROM wallets as w
 LEFT JOIN networks as n ON w.network_id = n.id
 WHERE w.wallet_address = $1 AND n.circle_network_type = $2 AND w.deleted_at IS NULL
 `
@@ -349,36 +349,49 @@ type GetWalletByAddressAndCircleNetworkTypeParams struct {
 }
 
 type GetWalletByAddressAndCircleNetworkTypeRow struct {
-	ID                uuid.UUID             `json:"id"`
-	WorkspaceID       uuid.UUID             `json:"workspace_id"`
-	WalletType        string                `json:"wallet_type"`
-	WalletAddress     string                `json:"wallet_address"`
-	NetworkType       NetworkType           `json:"network_type"`
-	NetworkID         pgtype.UUID           `json:"network_id"`
-	Nickname          pgtype.Text           `json:"nickname"`
-	Ens               pgtype.Text           `json:"ens"`
-	IsPrimary         pgtype.Bool           `json:"is_primary"`
-	Verified          pgtype.Bool           `json:"verified"`
-	LastUsedAt        pgtype.Timestamptz    `json:"last_used_at"`
-	Web3authUserID    pgtype.Text           `json:"web3auth_user_id"`
-	SmartAccountType  pgtype.Text           `json:"smart_account_type"`
-	DeploymentStatus  pgtype.Text           `json:"deployment_status"`
-	Metadata          []byte                `json:"metadata"`
-	CreatedAt         pgtype.Timestamptz    `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz    `json:"updated_at"`
-	DeletedAt         pgtype.Timestamptz    `json:"deleted_at"`
-	ID_2              pgtype.UUID           `json:"id_2"`
-	Name              pgtype.Text           `json:"name"`
-	Type              pgtype.Text           `json:"type"`
-	NetworkType_2     NullNetworkType       `json:"network_type_2"`
-	CircleNetworkType NullCircleNetworkType `json:"circle_network_type"`
-	BlockExplorerUrl  pgtype.Text           `json:"block_explorer_url"`
-	ChainID           pgtype.Int4           `json:"chain_id"`
-	IsTestnet         pgtype.Bool           `json:"is_testnet"`
-	Active            pgtype.Bool           `json:"active"`
-	CreatedAt_2       pgtype.Timestamptz    `json:"created_at_2"`
-	UpdatedAt_2       pgtype.Timestamptz    `json:"updated_at_2"`
-	DeletedAt_2       pgtype.Timestamptz    `json:"deleted_at_2"`
+	ID                    uuid.UUID             `json:"id"`
+	WorkspaceID           uuid.UUID             `json:"workspace_id"`
+	WalletType            string                `json:"wallet_type"`
+	WalletAddress         string                `json:"wallet_address"`
+	NetworkType           NetworkType           `json:"network_type"`
+	NetworkID             pgtype.UUID           `json:"network_id"`
+	Nickname              pgtype.Text           `json:"nickname"`
+	Ens                   pgtype.Text           `json:"ens"`
+	IsPrimary             pgtype.Bool           `json:"is_primary"`
+	Verified              pgtype.Bool           `json:"verified"`
+	LastUsedAt            pgtype.Timestamptz    `json:"last_used_at"`
+	Web3authUserID        pgtype.Text           `json:"web3auth_user_id"`
+	SmartAccountType      pgtype.Text           `json:"smart_account_type"`
+	DeploymentStatus      pgtype.Text           `json:"deployment_status"`
+	Metadata              []byte                `json:"metadata"`
+	CreatedAt             pgtype.Timestamptz    `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz    `json:"updated_at"`
+	DeletedAt             pgtype.Timestamptz    `json:"deleted_at"`
+	ID_2                  pgtype.UUID           `json:"id_2"`
+	Name                  pgtype.Text           `json:"name"`
+	Type                  pgtype.Text           `json:"type"`
+	NetworkType_2         NullNetworkType       `json:"network_type_2"`
+	CircleNetworkType     NullCircleNetworkType `json:"circle_network_type"`
+	BlockExplorerUrl      pgtype.Text           `json:"block_explorer_url"`
+	ChainID               pgtype.Int4           `json:"chain_id"`
+	IsTestnet             pgtype.Bool           `json:"is_testnet"`
+	Active                pgtype.Bool           `json:"active"`
+	LogoUrl               pgtype.Text           `json:"logo_url"`
+	DisplayName           pgtype.Text           `json:"display_name"`
+	ChainNamespace        pgtype.Text           `json:"chain_namespace"`
+	BaseFeeMultiplier     pgtype.Numeric        `json:"base_fee_multiplier"`
+	PriorityFeeMultiplier pgtype.Numeric        `json:"priority_fee_multiplier"`
+	DeploymentGasLimit    pgtype.Text           `json:"deployment_gas_limit"`
+	TokenTransferGasLimit pgtype.Text           `json:"token_transfer_gas_limit"`
+	SupportsEip1559       pgtype.Bool           `json:"supports_eip1559"`
+	GasOracleUrl          pgtype.Text           `json:"gas_oracle_url"`
+	GasRefreshIntervalMs  pgtype.Int4           `json:"gas_refresh_interval_ms"`
+	GasPriorityLevels     []byte                `json:"gas_priority_levels"`
+	AverageBlockTimeMs    pgtype.Int4           `json:"average_block_time_ms"`
+	PeakHoursMultiplier   pgtype.Numeric        `json:"peak_hours_multiplier"`
+	CreatedAt_2           pgtype.Timestamptz    `json:"created_at_2"`
+	UpdatedAt_2           pgtype.Timestamptz    `json:"updated_at_2"`
+	DeletedAt_2           pgtype.Timestamptz    `json:"deleted_at_2"`
 }
 
 func (q *Queries) GetWalletByAddressAndCircleNetworkType(ctx context.Context, arg GetWalletByAddressAndCircleNetworkTypeParams) (GetWalletByAddressAndCircleNetworkTypeRow, error) {
@@ -412,6 +425,19 @@ func (q *Queries) GetWalletByAddressAndCircleNetworkType(ctx context.Context, ar
 		&i.ChainID,
 		&i.IsTestnet,
 		&i.Active,
+		&i.LogoUrl,
+		&i.DisplayName,
+		&i.ChainNamespace,
+		&i.BaseFeeMultiplier,
+		&i.PriorityFeeMultiplier,
+		&i.DeploymentGasLimit,
+		&i.TokenTransferGasLimit,
+		&i.SupportsEip1559,
+		&i.GasOracleUrl,
+		&i.GasRefreshIntervalMs,
+		&i.GasPriorityLevels,
+		&i.AverageBlockTimeMs,
+		&i.PeakHoursMultiplier,
 		&i.CreatedAt_2,
 		&i.UpdatedAt_2,
 		&i.DeletedAt_2,

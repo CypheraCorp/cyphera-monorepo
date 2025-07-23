@@ -343,7 +343,7 @@ func (q *Queries) GetActiveProductTokensByProduct(ctx context.Context, productID
 
 const getProductNetworks = `-- name: GetProductNetworks :many
 SELECT DISTINCT
-    n.id, n.name, n.type, n.network_type, n.circle_network_type, n.block_explorer_url, n.chain_id, n.is_testnet, n.active, n.created_at, n.updated_at, n.deleted_at,
+    n.id, n.name, n.type, n.network_type, n.circle_network_type, n.block_explorer_url, n.chain_id, n.is_testnet, n.active, n.logo_url, n.display_name, n.chain_namespace, n.base_fee_multiplier, n.priority_fee_multiplier, n.deployment_gas_limit, n.token_transfer_gas_limit, n.supports_eip1559, n.gas_oracle_url, n.gas_refresh_interval_ms, n.gas_priority_levels, n.average_block_time_ms, n.peak_hours_multiplier, n.created_at, n.updated_at, n.deleted_at,
     (
         SELECT COUNT(*) 
         FROM products_tokens pt2 
@@ -364,19 +364,32 @@ ORDER BY n.chain_id ASC
 `
 
 type GetProductNetworksRow struct {
-	ID                uuid.UUID          `json:"id"`
-	Name              string             `json:"name"`
-	Type              string             `json:"type"`
-	NetworkType       NetworkType        `json:"network_type"`
-	CircleNetworkType CircleNetworkType  `json:"circle_network_type"`
-	BlockExplorerUrl  pgtype.Text        `json:"block_explorer_url"`
-	ChainID           int32              `json:"chain_id"`
-	IsTestnet         bool               `json:"is_testnet"`
-	Active            bool               `json:"active"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
-	ActiveTokensCount int64              `json:"active_tokens_count"`
+	ID                    uuid.UUID          `json:"id"`
+	Name                  string             `json:"name"`
+	Type                  string             `json:"type"`
+	NetworkType           NetworkType        `json:"network_type"`
+	CircleNetworkType     CircleNetworkType  `json:"circle_network_type"`
+	BlockExplorerUrl      pgtype.Text        `json:"block_explorer_url"`
+	ChainID               int32              `json:"chain_id"`
+	IsTestnet             bool               `json:"is_testnet"`
+	Active                bool               `json:"active"`
+	LogoUrl               pgtype.Text        `json:"logo_url"`
+	DisplayName           pgtype.Text        `json:"display_name"`
+	ChainNamespace        pgtype.Text        `json:"chain_namespace"`
+	BaseFeeMultiplier     pgtype.Numeric     `json:"base_fee_multiplier"`
+	PriorityFeeMultiplier pgtype.Numeric     `json:"priority_fee_multiplier"`
+	DeploymentGasLimit    pgtype.Text        `json:"deployment_gas_limit"`
+	TokenTransferGasLimit pgtype.Text        `json:"token_transfer_gas_limit"`
+	SupportsEip1559       pgtype.Bool        `json:"supports_eip1559"`
+	GasOracleUrl          pgtype.Text        `json:"gas_oracle_url"`
+	GasRefreshIntervalMs  pgtype.Int4        `json:"gas_refresh_interval_ms"`
+	GasPriorityLevels     []byte             `json:"gas_priority_levels"`
+	AverageBlockTimeMs    pgtype.Int4        `json:"average_block_time_ms"`
+	PeakHoursMultiplier   pgtype.Numeric     `json:"peak_hours_multiplier"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt             pgtype.Timestamptz `json:"deleted_at"`
+	ActiveTokensCount     int64              `json:"active_tokens_count"`
 }
 
 func (q *Queries) GetProductNetworks(ctx context.Context, productID uuid.UUID) ([]GetProductNetworksRow, error) {
@@ -398,6 +411,19 @@ func (q *Queries) GetProductNetworks(ctx context.Context, productID uuid.UUID) (
 			&i.ChainID,
 			&i.IsTestnet,
 			&i.Active,
+			&i.LogoUrl,
+			&i.DisplayName,
+			&i.ChainNamespace,
+			&i.BaseFeeMultiplier,
+			&i.PriorityFeeMultiplier,
+			&i.DeploymentGasLimit,
+			&i.TokenTransferGasLimit,
+			&i.SupportsEip1559,
+			&i.GasOracleUrl,
+			&i.GasRefreshIntervalMs,
+			&i.GasPriorityLevels,
+			&i.AverageBlockTimeMs,
+			&i.PeakHoursMultiplier,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,

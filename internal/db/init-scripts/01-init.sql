@@ -171,6 +171,22 @@ CREATE TABLE networks (
     chain_id INTEGER NOT NULL UNIQUE,
     is_testnet BOOLEAN NOT NULL DEFAULT false,
     active BOOLEAN NOT NULL DEFAULT true,
+    -- Display information
+    logo_url TEXT,
+    display_name TEXT,
+    chain_namespace TEXT DEFAULT 'eip155',
+    -- Gas configuration
+    base_fee_multiplier DECIMAL(4,2) DEFAULT 1.2,
+    priority_fee_multiplier DECIMAL(4,2) DEFAULT 1.1,
+    deployment_gas_limit TEXT DEFAULT '500000',
+    token_transfer_gas_limit TEXT DEFAULT '100000',
+    supports_eip1559 BOOLEAN DEFAULT true,
+    gas_oracle_url TEXT,
+    gas_refresh_interval_ms INTEGER DEFAULT 30000,
+    gas_priority_levels JSONB DEFAULT '{"slow":{"max_fee_per_gas":"1000000000","max_priority_fee_per_gas":"100000000"},"standard":{"max_fee_per_gas":"2000000000","max_priority_fee_per_gas":"200000000"},"fast":{"max_fee_per_gas":"5000000000","max_priority_fee_per_gas":"500000000"}}'::jsonb,
+    -- Network performance
+    average_block_time_ms INTEGER DEFAULT 2000,
+    peak_hours_multiplier DECIMAL(4,2) DEFAULT 1.5,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE
@@ -783,20 +799,20 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
-INSERT INTO networks (name, type, network_type, circle_network_type, chain_id, is_testnet, active, block_explorer_url)
+INSERT INTO networks (name, type, network_type, circle_network_type, chain_id, is_testnet, active, block_explorer_url, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, average_block_time_ms, gas_priority_levels)
 VALUES 
-    ('Ethereum Sepolia', 'Sepolia', 'evm', 'ETH-SEPOLIA', 11155111, true, true, 'https://sepolia.etherscan.io'),
-    ('Ethereum Mainnet', 'Mainnet', 'evm', 'ETH', 1, false, false, 'https://etherscan.io'),
-    ('Polygon Amoy', 'Amoy', 'evm', 'MATIC-AMOY', 80002, true, false, 'https://www.oklink.com/amoy'), 
-    ('Polygon Mainnet', 'Mainnet', 'evm', 'MATIC', 137, false, false, 'https://polygonscan.com'),
-    ('Arbitrum Sepolia', 'Sepolia', 'evm', 'ARB-SEPOLIA', 421614, true, false, 'https://sepolia.arbiscan.io'),
-    ('Arbitrum One', 'Mainnet', 'evm', 'ARB', 42161, false, false, 'https://arbiscan.io'),
-    ('Base Sepolia', 'Sepolia', 'evm', 'BASE-SEPOLIA', 84532, true, true, 'https://sepolia.basescan.org'),
-    ('Base Mainnet', 'Mainnet', 'evm', 'BASE', 8453, false, true, 'https://basescan.org'),
-    ('Optimism Sepolia', 'Sepolia', 'evm', 'OP-SEPOLIA', 11155420, true, false, 'https://sepolia.optimism.io'),
-    ('Optimism Mainnet', 'Mainnet', 'evm', 'OP', 10, false, false, 'https://optimistic.etherscan.io'),
-    ('Unichain Sepolia', 'Sepolia', 'evm', 'UNI-SEPOLIA', 1301, true, false, 'https://sepolia.unichain.io'),
-    ('Unichain Mainnet', 'Mainnet', 'evm', 'UNI', 130, false, false, 'https://unichain.io')
+    ('Ethereum Sepolia', 'Sepolia', 'evm', 'ETH-SEPOLIA', 11155111, true, true, 'https://sepolia.etherscan.io', 'https://cryptologos.cc/logos/ethereum-eth-logo.png', 'Ethereum Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 12000, '{"slow":{"max_fee_per_gas":"1000000000","max_priority_fee_per_gas":"100000000"},"standard":{"max_fee_per_gas":"2000000000","max_priority_fee_per_gas":"200000000"},"fast":{"max_fee_per_gas":"5000000000","max_priority_fee_per_gas":"500000000"}}'),
+    ('Ethereum Mainnet', 'Mainnet', 'evm', 'ETH', 1, false, false, 'https://etherscan.io', 'https://cryptologos.cc/logos/ethereum-eth-logo.png', 'Ethereum', 'eip155', 1.2, 1.1, '500000', '100000', true, 12000, '{"slow":{"max_fee_per_gas":"20000000000","max_priority_fee_per_gas":"1000000000"},"standard":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"2000000000"},"fast":{"max_fee_per_gas":"50000000000","max_priority_fee_per_gas":"3000000000"}}'),
+    ('Polygon Amoy', 'Amoy', 'evm', 'MATIC-AMOY', 80002, true, false, 'https://www.oklink.com/amoy', 'https://cryptologos.cc/logos/polygon-matic-logo.png', 'Polygon Amoy', 'eip155', 1.3, 1.2, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"30000000000"},"standard":{"max_fee_per_gas":"35000000000","max_priority_fee_per_gas":"35000000000"},"fast":{"max_fee_per_gas":"40000000000","max_priority_fee_per_gas":"40000000000"}}'), 
+    ('Polygon Mainnet', 'Mainnet', 'evm', 'MATIC', 137, false, false, 'https://polygonscan.com', 'https://cryptologos.cc/logos/polygon-matic-logo.png', 'Polygon', 'eip155', 1.3, 1.2, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"30000000000"},"standard":{"max_fee_per_gas":"35000000000","max_priority_fee_per_gas":"35000000000"},"fast":{"max_fee_per_gas":"40000000000","max_priority_fee_per_gas":"40000000000"}}'),
+    ('Arbitrum Sepolia', 'Sepolia', 'evm', 'ARB-SEPOLIA', 421614, true, false, 'https://sepolia.arbiscan.io', 'https://cryptologos.cc/logos/arbitrum-arb-logo.png', 'Arbitrum Sepolia', 'eip155', 1.1, 1.1, '1000000', '150000', true, 250, '{"slow":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"0"},"standard":{"max_fee_per_gas":"150000000","max_priority_fee_per_gas":"0"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"0"}}'),
+    ('Arbitrum One', 'Mainnet', 'evm', 'ARB', 42161, false, false, 'https://arbiscan.io', 'https://cryptologos.cc/logos/arbitrum-arb-logo.png', 'Arbitrum', 'eip155', 1.1, 1.1, '1000000', '150000', true, 250, '{"slow":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"0"},"standard":{"max_fee_per_gas":"150000000","max_priority_fee_per_gas":"0"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"0"}}'),
+    ('Base Sepolia', 'Sepolia', 'evm', 'BASE-SEPOLIA', 84532, true, true, 'https://sepolia.basescan.org', 'https://basescan.org/images/svg/logos/chain-light.svg', 'Base Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
+    ('Base Mainnet', 'Mainnet', 'evm', 'BASE', 8453, false, true, 'https://basescan.org', 'https://basescan.org/images/svg/logos/chain-light.svg', 'Base', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
+    ('Optimism Sepolia', 'Sepolia', 'evm', 'OP-SEPOLIA', 11155420, true, false, 'https://sepolia.optimism.io', 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png', 'Optimism Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
+    ('Optimism Mainnet', 'Mainnet', 'evm', 'OP', 10, false, false, 'https://optimistic.etherscan.io', 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png', 'Optimism', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
+    ('Unichain Sepolia', 'Sepolia', 'evm', 'UNI-SEPOLIA', 1301, true, false, 'https://sepolia.unichain.io', 'https://cryptologos.cc/logos/uniswap-uni-logo.png', 'Unichain Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
+    ('Unichain Mainnet', 'Mainnet', 'evm', 'UNI', 130, false, false, 'https://unichain.io', 'https://cryptologos.cc/logos/uniswap-uni-logo.png', 'Unichain', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token, active, decimals)

@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"cyphera-api/internal/db"
+	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -31,8 +33,27 @@ type NetworkResponse struct {
 	BlockExplorerURL  string `json:"block_explorer_url,omitempty"`
 	IsTestnet         bool   `json:"is_testnet"`
 	Active            bool   `json:"active"`
+	LogoURL           string `json:"logo_url,omitempty"`
+	DisplayName       string `json:"display_name,omitempty"`
+	ChainNamespace    string `json:"chain_namespace,omitempty"`
 	CreatedAt         int64  `json:"created_at"`
 	UpdatedAt         int64  `json:"updated_at"`
+	// Gas configuration
+	GasConfig         *GasConfigResponse `json:"gas_config,omitempty"`
+}
+
+// GasConfigResponse represents gas configuration for a network
+type GasConfigResponse struct {
+	BaseFeeMultiplier       float64                 `json:"base_fee_multiplier"`
+	PriorityFeeMultiplier   float64                 `json:"priority_fee_multiplier"`
+	DeploymentGasLimit      string                  `json:"deployment_gas_limit"`
+	TokenTransferGasLimit   string                  `json:"token_transfer_gas_limit"`
+	SupportsEIP1559         bool                    `json:"supports_eip1559"`
+	GasOracleURL            string                  `json:"gas_oracle_url,omitempty"`
+	GasRefreshIntervalMs    int32                   `json:"gas_refresh_interval_ms"`
+	GasPriorityLevels       map[string]interface{}  `json:"gas_priority_levels"`
+	AverageBlockTimeMs      int32                   `json:"average_block_time_ms"`
+	PeakHoursMultiplier     float64                 `json:"peak_hours_multiplier"`
 }
 
 // CreateNetworkRequest represents the request body for creating a network
@@ -45,6 +66,25 @@ type CreateNetworkRequest struct {
 	ChainID           int32  `json:"chain_id" binding:"required"`
 	IsTestnet         bool   `json:"is_testnet"`
 	Active            bool   `json:"active"`
+	LogoURL           string `json:"logo_url,omitempty"`
+	DisplayName       string `json:"display_name,omitempty"`
+	ChainNamespace    string `json:"chain_namespace,omitempty"`
+	// Gas configuration
+	GasConfig         *CreateGasConfigRequest `json:"gas_config,omitempty"`
+}
+
+// CreateGasConfigRequest represents gas configuration for creating a network
+type CreateGasConfigRequest struct {
+	BaseFeeMultiplier       float64                 `json:"base_fee_multiplier,omitempty"`
+	PriorityFeeMultiplier   float64                 `json:"priority_fee_multiplier,omitempty"`
+	DeploymentGasLimit      string                  `json:"deployment_gas_limit,omitempty"`
+	TokenTransferGasLimit   string                  `json:"token_transfer_gas_limit,omitempty"`
+	SupportsEIP1559         bool                    `json:"supports_eip1559"`
+	GasOracleURL            string                  `json:"gas_oracle_url,omitempty"`
+	GasRefreshIntervalMs    int32                   `json:"gas_refresh_interval_ms,omitempty"`
+	GasPriorityLevels       map[string]interface{}  `json:"gas_priority_levels,omitempty"`
+	AverageBlockTimeMs      int32                   `json:"average_block_time_ms,omitempty"`
+	PeakHoursMultiplier     float64                 `json:"peak_hours_multiplier,omitempty"`
 }
 
 // UpdateNetworkRequest represents the request body for updating a network
@@ -57,6 +97,25 @@ type UpdateNetworkRequest struct {
 	ChainID           int32  `json:"chain_id,omitempty"`
 	IsTestnet         *bool  `json:"is_testnet,omitempty"`
 	Active            *bool  `json:"active,omitempty"`
+	LogoURL           string `json:"logo_url,omitempty"`
+	DisplayName       string `json:"display_name,omitempty"`
+	ChainNamespace    string `json:"chain_namespace,omitempty"`
+	// Gas configuration
+	GasConfig         *UpdateGasConfigRequest `json:"gas_config,omitempty"`
+}
+
+// UpdateGasConfigRequest represents gas configuration for updating a network
+type UpdateGasConfigRequest struct {
+	BaseFeeMultiplier       *float64                `json:"base_fee_multiplier,omitempty"`
+	PriorityFeeMultiplier   *float64                `json:"priority_fee_multiplier,omitempty"`
+	DeploymentGasLimit      *string                 `json:"deployment_gas_limit,omitempty"`
+	TokenTransferGasLimit   *string                 `json:"token_transfer_gas_limit,omitempty"`
+	SupportsEIP1559         *bool                   `json:"supports_eip1559,omitempty"`
+	GasOracleURL            *string                 `json:"gas_oracle_url,omitempty"`
+	GasRefreshIntervalMs    *int32                  `json:"gas_refresh_interval_ms,omitempty"`
+	GasPriorityLevels       map[string]interface{}  `json:"gas_priority_levels,omitempty"`
+	AverageBlockTimeMs      *int32                  `json:"average_block_time_ms,omitempty"`
+	PeakHoursMultiplier     *float64                `json:"peak_hours_multiplier,omitempty"`
 }
 
 // ListNetworksResponse represents the paginated response for network list operations
@@ -149,7 +208,7 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 		return
 	}
 
-	network, err := h.common.db.CreateNetwork(c.Request.Context(), db.CreateNetworkParams{
+	params := db.CreateNetworkParams{
 		Name:              req.Name,
 		Type:              req.Type,
 		NetworkType:       db.NetworkType(req.NetworkType),
@@ -158,7 +217,32 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 		ChainID:           req.ChainID,
 		IsTestnet:         req.IsTestnet,
 		Active:            req.Active,
-	})
+		LogoUrl:           nullableString(req.LogoURL),
+		DisplayName:       nullableString(req.DisplayName),
+		ChainNamespace:    nullableString(req.ChainNamespace),
+	}
+	
+	// Set gas config if provided
+	if req.GasConfig != nil {
+		params.BaseFeeMultiplier = nullableNumeric(req.GasConfig.BaseFeeMultiplier)
+		params.PriorityFeeMultiplier = nullableNumeric(req.GasConfig.PriorityFeeMultiplier)
+		params.DeploymentGasLimit = nullableString(req.GasConfig.DeploymentGasLimit)
+		params.TokenTransferGasLimit = nullableString(req.GasConfig.TokenTransferGasLimit)
+		params.SupportsEip1559 = pgtype.Bool{Bool: req.GasConfig.SupportsEIP1559, Valid: true}
+		params.GasOracleUrl = nullableString(req.GasConfig.GasOracleURL)
+		params.GasRefreshIntervalMs = pgtype.Int4{Int32: req.GasConfig.GasRefreshIntervalMs, Valid: true}
+		params.AverageBlockTimeMs = pgtype.Int4{Int32: req.GasConfig.AverageBlockTimeMs, Valid: true}
+		params.PeakHoursMultiplier = nullableNumeric(req.GasConfig.PeakHoursMultiplier)
+		
+		if req.GasConfig.GasPriorityLevels != nil {
+			levelsJSON, err := json.Marshal(req.GasConfig.GasPriorityLevels)
+			if err == nil {
+				params.GasPriorityLevels = levelsJSON
+			}
+		}
+	}
+	
+	network, err := h.common.db.CreateNetwork(c.Request.Context(), params)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to create network", err)
 		return
@@ -188,7 +272,7 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 		return
 	}
 
-	network, err := h.common.db.UpdateNetwork(c.Request.Context(), db.UpdateNetworkParams{
+	params := db.UpdateNetworkParams{
 		ID:                parsedUUID,
 		Name:              req.Name,
 		Type:              req.Type,
@@ -196,9 +280,57 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 		CircleNetworkType: db.CircleNetworkType(req.CircleNetworkType),
 		BlockExplorerUrl:  nullableString(req.BlockExplorerURL),
 		ChainID:           req.ChainID,
-		IsTestnet:         *req.IsTestnet,
-		Active:            *req.Active,
-	})
+		LogoUrl:           nullableString(req.LogoURL),
+		DisplayName:       nullableString(req.DisplayName),
+		ChainNamespace:    nullableString(req.ChainNamespace),
+	}
+	
+	if req.IsTestnet != nil {
+		params.IsTestnet = *req.IsTestnet
+	}
+	if req.Active != nil {
+		params.Active = *req.Active
+	}
+	
+	// Set gas config if provided
+	if req.GasConfig != nil {
+		if req.GasConfig.BaseFeeMultiplier != nil {
+			params.BaseFeeMultiplier = nullableNumeric(*req.GasConfig.BaseFeeMultiplier)
+		}
+		if req.GasConfig.PriorityFeeMultiplier != nil {
+			params.PriorityFeeMultiplier = nullableNumeric(*req.GasConfig.PriorityFeeMultiplier)
+		}
+		if req.GasConfig.DeploymentGasLimit != nil {
+			params.DeploymentGasLimit = nullableString(*req.GasConfig.DeploymentGasLimit)
+		}
+		if req.GasConfig.TokenTransferGasLimit != nil {
+			params.TokenTransferGasLimit = nullableString(*req.GasConfig.TokenTransferGasLimit)
+		}
+		if req.GasConfig.SupportsEIP1559 != nil {
+			params.SupportsEip1559 = pgtype.Bool{Bool: *req.GasConfig.SupportsEIP1559, Valid: true}
+		}
+		if req.GasConfig.GasOracleURL != nil {
+			params.GasOracleUrl = nullableString(*req.GasConfig.GasOracleURL)
+		}
+		if req.GasConfig.GasRefreshIntervalMs != nil {
+			params.GasRefreshIntervalMs = pgtype.Int4{Int32: *req.GasConfig.GasRefreshIntervalMs, Valid: true}
+		}
+		if req.GasConfig.AverageBlockTimeMs != nil {
+			params.AverageBlockTimeMs = pgtype.Int4{Int32: *req.GasConfig.AverageBlockTimeMs, Valid: true}
+		}
+		if req.GasConfig.PeakHoursMultiplier != nil {
+			params.PeakHoursMultiplier = nullableNumeric(*req.GasConfig.PeakHoursMultiplier)
+		}
+		
+		if req.GasConfig.GasPriorityLevels != nil {
+			levelsJSON, err := json.Marshal(req.GasConfig.GasPriorityLevels)
+			if err == nil {
+				params.GasPriorityLevels = levelsJSON
+			}
+		}
+	}
+	
+	network, err := h.common.db.UpdateNetwork(c.Request.Context(), params)
 	if err != nil {
 		handleDBError(c, err, "Failed to update network")
 		return
@@ -294,6 +426,59 @@ func toNetworkResponse(n db.Network) NetworkResponse {
 	if n.BlockExplorerUrl.Valid {
 		blockExplorerURL = n.BlockExplorerUrl.String
 	}
+	
+	var logoURL string
+	if n.LogoUrl.Valid {
+		logoURL = n.LogoUrl.String
+	}
+	
+	var displayName string
+	if n.DisplayName.Valid {
+		displayName = n.DisplayName.String
+	}
+	
+	var chainNamespace string
+	if n.ChainNamespace.Valid {
+		chainNamespace = n.ChainNamespace.String
+	}
+
+	// Build gas config
+	gasConfig := &GasConfigResponse{
+		DeploymentGasLimit:      n.DeploymentGasLimit.String,
+		TokenTransferGasLimit:   n.TokenTransferGasLimit.String,
+		SupportsEIP1559:         n.SupportsEip1559.Bool,
+		GasRefreshIntervalMs:    n.GasRefreshIntervalMs.Int32,
+		AverageBlockTimeMs:      n.AverageBlockTimeMs.Int32,
+	}
+	
+	// Convert numeric values
+	if n.BaseFeeMultiplier.Valid {
+		if f8, err := n.BaseFeeMultiplier.Float64Value(); err == nil {
+			gasConfig.BaseFeeMultiplier = f8.Float64
+		}
+	}
+	if n.PriorityFeeMultiplier.Valid {
+		if f8, err := n.PriorityFeeMultiplier.Float64Value(); err == nil {
+			gasConfig.PriorityFeeMultiplier = f8.Float64
+		}
+	}
+	if n.PeakHoursMultiplier.Valid {
+		if f8, err := n.PeakHoursMultiplier.Float64Value(); err == nil {
+			gasConfig.PeakHoursMultiplier = f8.Float64
+		}
+	}
+	
+	if n.GasOracleUrl.Valid {
+		gasConfig.GasOracleURL = n.GasOracleUrl.String
+	}
+	
+	// Parse gas priority levels JSON
+	if n.GasPriorityLevels != nil {
+		var levels map[string]interface{}
+		if err := json.Unmarshal(n.GasPriorityLevels, &levels); err == nil {
+			gasConfig.GasPriorityLevels = levels
+		}
+	}
 
 	return NetworkResponse{
 		ID:                n.ID.String(),
@@ -306,8 +491,12 @@ func toNetworkResponse(n db.Network) NetworkResponse {
 		ChainID:           n.ChainID,
 		IsTestnet:         n.IsTestnet,
 		Active:            n.Active,
+		LogoURL:           logoURL,
+		DisplayName:       displayName,
+		ChainNamespace:    chainNamespace,
 		CreatedAt:         n.CreatedAt.Time.Unix(),
 		UpdatedAt:         n.UpdatedAt.Time.Unix(),
+		GasConfig:         gasConfig,
 	}
 }
 
@@ -317,4 +506,13 @@ func nullableString(s string) pgtype.Text {
 		return pgtype.Text{Valid: false}
 	}
 	return pgtype.Text{String: s, Valid: true}
+}
+
+// Helper function to convert float64 to pgtype.Numeric
+func nullableNumeric(f float64) pgtype.Numeric {
+	n := pgtype.Numeric{}
+	// Convert float to string and scan it
+	strVal := fmt.Sprintf("%f", f)
+	n.Scan(strVal)
+	return n
 }
