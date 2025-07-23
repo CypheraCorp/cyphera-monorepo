@@ -7,6 +7,7 @@ import EnvProvider from '@/components/env/provider';
 import { CircleSDKProvider } from '@/contexts/circle-sdk-provider';
 import { NavigationProgress } from '@/components/ui/nprogress';
 import { ServiceWorkerProvider } from '@/components/providers/service-worker-provider';
+import { CSRFProvider } from '@/components/providers/csrf-provider';
 import { Suspense } from 'react';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -25,12 +26,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <NavigationProgress />
           </Suspense>
           <EnvProvider>
-            <Web3Provider>
-              <CircleSDKProvider>
-                {children}
-                <Toaster />
-              </CircleSDKProvider>
-            </Web3Provider>
+            <CSRFProvider>
+              <Web3Provider>
+                <CircleSDKProvider>
+                  {children}
+                  <Toaster />
+                </CircleSDKProvider>
+              </Web3Provider>
+            </CSRFProvider>
           </EnvProvider>
         </ServiceWorkerProvider>
       </body>

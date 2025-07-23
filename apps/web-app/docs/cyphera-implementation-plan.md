@@ -241,6 +241,15 @@ Based on the significant progress made, here are the recommended next steps:
    - Address 8 TODO comments
    - Remove debug endpoints
 
+6. **Shared Library Refactoring** (2-3 days)
+   - Extract common code between delegation-server and web-app
+   - Create shared TypeScript library for:
+     - Type definitions
+     - API client code
+     - Utility functions
+     - Constants and configurations
+   - This will reduce code duplication and improve maintainability
+
 ## Progress Summary
 
 ### Major Achievements ✨

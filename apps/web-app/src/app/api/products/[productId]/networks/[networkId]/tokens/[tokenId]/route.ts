@@ -5,11 +5,7 @@ import type { UpdateProductTokenRequest } from '@/types/product';
 import logger from '@/lib/core/logger/logger';
 
 interface RouteParams {
-  params: Promise<{
-    productId: string;
-    networkId: string;
-    tokenId: string;
-  }>;
+  params: Promise<Record<string, string>>;
 }
 
 /**

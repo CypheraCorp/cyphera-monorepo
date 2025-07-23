@@ -1,94 +1,77 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SubscribeAPI } from '@/services/cyphera-api/subscribe';
 import logger from '@/lib/core/logger/logger';
+import { withValidation } from '@/lib/validation/validate';
+import { subscribeRequestSchema } from '@/lib/validation/schemas/subscription';
+import { priceIdParamSchema } from '@/lib/validation/schemas/product';
+import { z } from 'zod';
 
 interface RouteParams {
-  params: Promise<{
-    priceId: string;
-  }>;
+  params: Promise<Record<string, string>>;
 }
 
 /**
  * POST /api/public/prices/:priceId/subscribe
  * Public Cyphera API endpoint to handle price subscriptions.
  * Uses the API Key for authentication.
+ * Note: Public endpoints don't need CSRF protection
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
-  try {
-    const subscribeAPI = new SubscribeAPI();
-    const { priceId } = await params; // Await params in Next.js 15
-    if (!priceId) {
-      return NextResponse.json({ success: false, message: 'Missing price ID' }, { status: 400 });
-    }
-
-    let body;
+export const POST = withValidation(
+  { 
+    bodySchema: subscribeRequestSchema.extend({
+      price_id: z.string().uuid('Invalid price ID format')
+    }),
+    paramsSchema: priceIdParamSchema 
+  },
+  async (request, { body, params }) => {
     try {
-      body = await request.json();
-    } catch (error) {
-      logger.error('Invalid JSON in request body', { error });
-      return NextResponse.json(
-        { success: false, message: 'Invalid request body' },
-        { status: 400 }
-      );
-    }
-
-    const { subscriber_address, product_token_id, delegation, token_amount } = body;
-
-    // Keep validation
-    if (!subscriber_address) {
-      return NextResponse.json(
-        { success: false, message: 'Missing subscriber_address' },
-        { status: 400 }
-      );
-    }
-    if (!product_token_id) {
-      return NextResponse.json(
-        { success: false, message: 'Missing product_token_id' },
-        { status: 400 }
-      );
-    }
-    if (!delegation) {
-      return NextResponse.json({ success: false, message: 'Missing delegation' }, { status: 400 });
-    }
-    if (!token_amount || typeof token_amount !== 'string') {
-      return NextResponse.json(
-        { success: false, message: 'Invalid token amount' },
-        { status: 400 }
-      );
-    }
-
-    // Custom serializer for BigInt
-    const replaceBigInt = (key: string, value: unknown): string | unknown => {
-      if (typeof value === 'bigint') {
-        return value.toString();
+      const subscribeAPI = new SubscribeAPI();
+      
+      // Ensure we have the priceId from params
+      if (!params?.priceId) {
+        return NextResponse.json({ error: 'Price ID is required' }, { status: 400 });
       }
-      return value;
-    };
-    const processedDelegation = JSON.parse(JSON.stringify(delegation, replaceBigInt));
 
-    // Call the service method (which uses public headers internally)
-    const subscriptionResult = await subscribeAPI.submitSubscription(
-      priceId,
-      product_token_id,
-      token_amount,
-      processedDelegation,
-      subscriber_address
-    );
+      // Merge price_id from params into body for validation
+      const requestData = {
+        ...body,
+        price_id: params.priceId
+      };
 
-    // Check if the service call was successful
-    if (!subscriptionResult.success) {
-      return NextResponse.json(
-        { success: false, message: subscriptionResult.message },
-        { status: 400 }
+      // Custom serializer for BigInt in delegation
+      const replaceBigInt = (key: string, value: unknown): string | unknown => {
+        if (typeof value === 'bigint') {
+          return value.toString();
+        }
+        return value;
+      };
+      const processedDelegation = JSON.parse(JSON.stringify(requestData.delegation, replaceBigInt));
+
+      // Since validation passed, all fields are guaranteed to be present
+      // Call the service method (which uses public headers internally)
+      const subscriptionResult = await subscribeAPI.submitSubscription(
+        requestData.price_id!,
+        requestData.product_token_id!,
+        requestData.token_amount!,
+        processedDelegation,
+        requestData.subscriber_address!
       );
-    }
 
-    // Return the actual subscription data (not wrapped in service response)
-    return NextResponse.json(subscriptionResult.data, { status: 200 });
-  } catch (error) {
-    // Catch errors from getAPIContext or unexpected issues
-    logger.error('Error in subscribe endpoint', { error });
-    const message = error instanceof Error ? error.message : 'Failed to process subscription';
-    return NextResponse.json({ success: false, message }, { status: 500 });
+      // Check if the service call was successful
+      if (!subscriptionResult.success) {
+        return NextResponse.json(
+          { success: false, message: subscriptionResult.message },
+          { status: 400 }
+        );
+      }
+
+      // Return the actual subscription data (not wrapped in service response)
+      return NextResponse.json(subscriptionResult.data, { status: 200 });
+    } catch (error) {
+      // Catch errors from getAPIContext or unexpected issues
+      logger.error('Error in subscribe endpoint', { error });
+      const message = error instanceof Error ? error.message : 'Failed to process subscription';
+      return NextResponse.json({ success: false, message }, { status: 500 });
+    }
   }
-}
+);

@@ -3,6 +3,9 @@ import { getAPIContextFromSession } from '@/lib/api/server/server-api';
 import { requireAuth } from '@/lib/auth/guards/require-auth';
 import type { CreateProductRequest } from '@/types/product';
 import { logger } from '@/lib/core/logger/logger';
+import { withCSRFProtection } from '@/lib/security/csrf-middleware';
+import { withValidation } from '@/lib/validation/validate';
+import { createProductSchema } from '@/lib/validation/schemas/product';
 
 /**
  * GET /api/products
@@ -47,31 +50,40 @@ export async function GET(request: NextRequest) {
  * POST /api/products
  * Creates a new product
  */
-export async function POST(request: NextRequest) {
-  try {
-    await requireAuth();
-    const body = (await request.json()) as CreateProductRequest;
+export const POST = withCSRFProtection(
+  withValidation(
+    { bodySchema: createProductSchema },
+    async (request, { body }) => {
+      try {
+        await requireAuth();
 
-    const { api, userContext } = await getAPIContextFromSession(request);
-    // Pass context to API call
-    const product = await api.products.createProduct(userContext, body);
+        const { api, userContext } = await getAPIContextFromSession(request);
+        
+        if (!body) {
+          return NextResponse.json({ error: 'Request body is required' }, { status: 400 });
+        }
+        
+        // Pass validated body to API call
+        const product = await api.products.createProduct(userContext, body);
 
-    return NextResponse.json(product);
-  } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+        return NextResponse.json(product);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Unauthorized') {
+          return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+        }
+        logger.error('Error creating product', {
+          error: error instanceof Error ? error.message : error,
+        });
+        const message = error instanceof Error ? error.message : 'Failed to create product';
+        // Check if it might be a validation error (e.g., 400, 422) vs server error (500)
+        // This requires the API to return appropriate status codes
+        interface APIError extends Error {
+          status?: number;
+        }
+        const apiError = error as APIError;
+        const status = apiError?.status === 400 || apiError?.status === 422 ? 400 : 500;
+        return NextResponse.json({ error: message }, { status });
+      }
     }
-    logger.error('Error creating product', {
-      error: error instanceof Error ? error.message : error,
-    });
-    const message = error instanceof Error ? error.message : 'Failed to create product';
-    // Check if it might be a validation error (e.g., 400, 422) vs server error (500)
-    // This requires the API to return appropriate status codes
-    interface APIError extends Error {
-      status?: number;
-    }
-    const apiError = error as APIError;
-    const status = apiError?.status === 400 || apiError?.status === 422 ? 400 : 500;
-    return NextResponse.json({ error: message }, { status });
-  }
-}
+  )
+);

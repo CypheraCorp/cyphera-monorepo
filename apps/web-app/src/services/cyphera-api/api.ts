@@ -40,7 +40,7 @@ export class CypheraAPI {
    * Returns the headers needed for authenticated API requests.
    * Accepts user context as a parameter.
    */
-  protected getHeaders(context: UserRequestContext): Record<string, string> {
+  protected getHeaders(context: UserRequestContext, csrfToken?: string): Record<string, string> {
     if (!context?.access_token) {
       // Add a check here, as the token is crucial for authenticated requests
       throw new Error(
@@ -52,6 +52,11 @@ export class CypheraAPI {
       Accept: 'application/json',
       Authorization: `Bearer ${context.access_token}`, // Use token from context
     };
+
+    // Add CSRF token if provided
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken;
+    }
 
     if (context.account_id) {
       headers['X-Account-ID'] = context.account_id;
@@ -69,7 +74,7 @@ export class CypheraAPI {
   /**
    * Returns the headers for public API requests (using API key).
    */
-  protected getPublicHeaders(): Record<string, string> {
+  protected getPublicHeaders(csrfToken?: string): Record<string, string> {
     if (!this.apiKey) {
       throw new Error('Cannot make public API call: CYPHERA_API_KEY is not configured.');
     }
@@ -78,6 +83,11 @@ export class CypheraAPI {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     };
+
+    // Add CSRF token if provided
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken;
+    }
 
     return headers;
   }

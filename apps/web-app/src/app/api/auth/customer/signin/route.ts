@@ -5,6 +5,7 @@ import type { CustomerResponse } from '@/types/customer';
 import type { WalletResponse } from '@/types/wallet';
 import { logger } from '@/lib/core/logger/logger';
 import { UnifiedSessionService } from '@/lib/auth/session/unified-session';
+import { withCSRFProtection } from '@/lib/security/csrf-middleware';
 
 /**
  * POST /api/auth/customer/signin

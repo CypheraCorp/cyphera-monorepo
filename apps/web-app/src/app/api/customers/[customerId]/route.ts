@@ -1,16 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/core/logger/logger';
+import { withCSRFProtection } from '@/lib/security/csrf-middleware';
+import { withValidation } from '@/lib/validation/validate';
+import { updateCustomerSchema, customerIdParamSchema } from '@/lib/validation/schemas/customer';
+
+interface RouteParams {
+  params: Promise<Record<string, string>>;
+}
 
 /**
  * PUT /api/customers/[customerId]
  * Update customer details including onboarding status
  */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ customerId: string }> }
-) {
-  try {
-    const { customerId } = await params;
+export const PUT = withCSRFProtection(
+  async (request: NextRequest, context: RouteParams) => {
+    try {
+      const { customerId } = await context.params;
+      
+      // Validate params
+      const paramsValidation = customerIdParamSchema.safeParse({ customerId });
+      if (!paramsValidation.success) {
+        return NextResponse.json(
+          { error: 'Invalid customer ID format' },
+          { status: 400 }
+        );
+      }
 
     // Get session from cookie
     const sessionCookie = request.cookies.get('cyphera-customer-session')?.value;
@@ -48,8 +62,19 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized to update this customer' }, { status: 403 });
     }
 
-    // Parse request body
-    const updateData = await request.json();
+    // Parse and validate request body
+    const body = await request.json();
+    const bodyValidation = updateCustomerSchema.safeParse(body);
+    if (!bodyValidation.success) {
+      return NextResponse.json(
+        { 
+          error: 'Validation failed',
+          details: bodyValidation.error.errors 
+        },
+        { status: 400 }
+      );
+    }
+    const updateData = bodyValidation.data;
 
     logger.info('Updating customer', {
       customerId,
@@ -117,4 +142,5 @@ export async function PUT(
     const message = error instanceof Error ? error.message : 'Failed to update customer';
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+  }
+);
