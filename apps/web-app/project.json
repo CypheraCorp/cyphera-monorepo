@@ -1,0 +1,84 @@
+{
+  "name": "web-app",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/web-app/src",
+  "tags": ["type:typescript", "scope:frontend"],
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run dev",
+        "cwd": "apps/web-app"
+      },
+      "configurations": {
+        "production": {
+          "command": "npm run start"
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/apps/web-app"],
+      "options": {
+        "command": "npm run build",
+        "cwd": "apps/web-app"
+      },
+      "configurations": {
+        "production": {
+          "command": "NODE_ENV=production npm run build"
+        }
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run test",
+        "cwd": "apps/web-app"
+      },
+      "configurations": {
+        "watch": {
+          "command": "npm run test:watch"
+        },
+        "coverage": {
+          "command": "npm run test:coverage"
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run lint",
+        "cwd": "apps/web-app"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm run type-check",
+        "cwd": "apps/web-app"
+      }
+    },
+    "install": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npm install",
+        "cwd": "apps/web-app"
+      }
+    },
+    "clean": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "rm -rf .next .turbo node_modules dist",
+        "cwd": "apps/web-app"
+      }
+    },
+    "generate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'No generation needed for web-app'",
+        "cwd": "apps/web-app"
+      }
+    }
+  }
+}

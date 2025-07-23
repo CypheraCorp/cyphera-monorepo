@@ -1,0 +1,226 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useWeb3AuthUser, useWeb3Auth } from '@web3auth/modal/react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { CreditCard, Calendar, DollarSign, ExternalLink, Wallet } from 'lucide-react';
+import Link from 'next/link';
+
+// Safe Web3Auth user hook
+function useSafeCustomerAuth() {
+  const { userInfo } = useWeb3AuthUser();
+  const { isConnected } = useWeb3Auth();
+  return { userInfo, isConnected };
+}
+
+// Mock subscription data - in real app this would come from API
+const mockSubscriptions = [
+  {
+    id: '1',
+    product_name: 'Premium API Access',
+    description: 'High-rate API access with advanced features',
+    price: '$29.99',
+    billing_cycle: 'monthly',
+    status: 'active',
+    next_billing: '2024-02-15',
+    created_at: '2024-01-15',
+  },
+  {
+    id: '2',
+    product_name: 'Data Analytics Pro',
+    description: 'Advanced analytics and reporting tools',
+    price: '$99.99',
+    billing_cycle: 'monthly',
+    status: 'active',
+    next_billing: '2024-02-20',
+    created_at: '2024-01-20',
+  },
+];
+
+export default function CustomerSubscriptionsPage() {
+  const [isClient, setIsClient] = useState(false);
+  const { userInfo, isConnected } = useSafeCustomerAuth();
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return (
+      <div className="container mx-auto p-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+      </div>
+    );
+  }
+
+  if (!isConnected || !userInfo) {
+    return (
+      <div className="container mx-auto p-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Authentication Required</CardTitle>
+            <CardDescription>Please sign in to view your subscriptions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link href="/customers/signin">Sign In</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto p-8 space-y-8">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-8">
+        <CreditCard className="h-8 w-8 text-purple-600" />
+        <div>
+          <h1 className="text-4xl font-bold">My Subscriptions</h1>
+          <p className="text-lg text-muted-foreground">
+            Manage your active subscriptions and billing
+          </p>
+        </div>
+      </div>
+
+      {/* Subscriptions Overview */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Subscriptions</CardTitle>
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{mockSubscriptions.length}</div>
+            <p className="text-xs text-muted-foreground">Currently active</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Monthly Spend</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">$129.98</div>
+            <p className="text-xs text-muted-foreground">Total monthly cost</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Next Billing</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">Feb 15</div>
+            <p className="text-xs text-muted-foreground">Premium API Access</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Subscriptions List */}
+      <div className="space-y-4">
+        <h2 className="text-2xl font-semibold">Active Subscriptions</h2>
+
+        {mockSubscriptions.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <CreditCard className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-xl font-semibold mb-2">No Active Subscriptions</h3>
+              <p className="text-muted-foreground text-center mb-4">
+                You don&apos;t have any active subscriptions yet. Browse our products to get
+                started.
+              </p>
+              <Button asChild>
+                <Link href="/public/prices">Browse Products</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {mockSubscriptions.map((subscription) => (
+              <Card key={subscription.id}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        {subscription.product_name}
+                        <Badge variant={subscription.status === 'active' ? 'default' : 'secondary'}>
+                          {subscription.status}
+                        </Badge>
+                      </CardTitle>
+                      <CardDescription>{subscription.description}</CardDescription>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold">{subscription.price}</div>
+                      <div className="text-sm text-muted-foreground">
+                        per {subscription.billing_cycle}
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Started</label>
+                      <p className="text-sm">
+                        {new Date(subscription.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">
+                        Next Billing
+                      </label>
+                      <p className="text-sm">
+                        {new Date(subscription.next_billing).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-end">
+                      <Button variant="outline" size="sm" className="ml-auto">
+                        Manage
+                        <ExternalLink className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Billing Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Billing Information</CardTitle>
+          <CardDescription>Your payment method and billing details</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Payment Method</label>
+              <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md">
+                  <Wallet className="h-4 w-4" />
+                  <span className="text-sm">Web3Auth Wallet</span>
+                </div>
+                <Badge variant="secondary">USDC</Badge>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Connected Account</label>
+              <p className="text-sm font-mono mt-1">
+                {userInfo?.email ? `Connected to ${userInfo.email}` : 'Wallet connected'}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
