@@ -61,8 +61,8 @@ export default function CustomerSignInPage() {
   const { web3Auth, isConnected } = useWeb3Auth();
   const { address } = useAccount();
 
-  // Auth store for refreshing state after signin
-  const refreshAuth = useAuthStore((state) => state.refreshAuth);
+  // Auth store actions
+  const { setTokens } = useAuthStore();
 
   // Client-side check to prevent SSR issues
   useEffect(() => {
@@ -215,9 +215,8 @@ export default function CustomerSignInPage() {
         // Clear logout flag on successful signin
         clearLogoutFlag();
 
-        // Refresh auth context to reflect new authentication state
-        addDebugInfo('Refreshing auth context...');
-        await refreshAuth();
+        // Auth state will automatically update via React Query
+        addDebugInfo('Authentication state updated');
 
         setCurrentStep('complete');
 
@@ -236,7 +235,7 @@ export default function CustomerSignInPage() {
         setCurrentStep('idle');
       }
     },
-    [userInfo, web3Auth, address, router, addDebugInfo, refreshAuth]
+    [userInfo, web3Auth, address, router, addDebugInfo]
   );
 
   const handleSignIn = async () => {

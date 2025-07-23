@@ -46,8 +46,8 @@ export default function MerchantSignInPage() {
   const { web3Auth, isConnected } = useWeb3Auth();
   const { address } = useAccount();
 
-  // Auth store for refreshing state after signin
-  const refreshAuth = useAuthStore((state) => state.refreshAuth);
+  // Auth store actions
+  const { setTokens } = useAuthStore();
 
   // Debug logging
   const addDebugInfo = useCallback((info: string) => {
@@ -170,9 +170,8 @@ export default function MerchantSignInPage() {
         await response.json();
         addDebugInfo('Backend signin successful!');
 
-        // Refresh auth context to reflect new authentication state
-        addDebugInfo('Refreshing auth context...');
-        await refreshAuth();
+        // Auth state will automatically update via React Query
+        addDebugInfo('Authentication state updated');
 
         setCurrentStep('complete');
 
@@ -191,7 +190,7 @@ export default function MerchantSignInPage() {
         setCurrentStep('idle');
       }
     },
-    [userInfo, web3Auth, address, router, addDebugInfo, refreshAuth]
+    [userInfo, web3Auth, address, router, addDebugInfo]
   );
 
   const handleSignIn = async () => {

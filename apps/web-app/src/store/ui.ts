@@ -4,7 +4,7 @@ import { devtools, persist } from 'zustand/middleware';
 type Theme = 'light' | 'dark' | 'system';
 type UserType = 'merchant' | 'customer' | null;
 
-interface UIState {
+export interface UIState {
   // Theme preferences
   theme: Theme;
 
@@ -39,7 +39,7 @@ interface UIState {
   currentOnboardingStep: number;
 }
 
-interface UIActions {
+export interface UIActions {
   // Theme actions
   setTheme: (theme: Theme) => void;
 

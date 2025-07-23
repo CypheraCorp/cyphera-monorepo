@@ -1,20 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { CustomerSidebar } from '@/components/public/customer-sidebar';
 import { CustomerHeader } from '@/components/public/customer-header';
-import { AuthProvider } from '@/contexts/auth-context';
 import { QueryProvider } from '@/lib/query/query-client';
 import { logger } from '@/lib/core/logger/logger-utils';
-import { AuthSyncProvider } from '@/components/providers/auth-sync-provider';
+import { useAuth } from '@/hooks/auth/use-auth-user';
 
 // Customer authentication wrapper component
 function CustomerAuthWrapper({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { isAuthenticated, loading, hasHydrated } = useAuth();
 
   // Get page title based on pathname
   const getPageTitle = () => {
@@ -38,41 +36,25 @@ function CustomerAuthWrapper({ children }: { children: React.ReactNode }) {
   const isPublicRoute = pathname === '/customers/signin';
 
   useEffect(() => {
+    // Wait for hydration
+    if (!hasHydrated || loading) return;
+
     if (isPublicRoute) {
-      setIsAuthenticated(true);
-      setIsLoading(false);
+      // If user is authenticated and visits signin page, redirect to dashboard
+      if (isAuthenticated && pathname === '/customers/signin') {
+        router.push('/customers/dashboard');
+      }
       return;
     }
 
-    async function checkAuth() {
-      try {
-        const response = await fetch('/api/auth/customer/me', {
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const hasValidSession = !!data.customer;
-          setIsAuthenticated(hasValidSession);
-        } else {
-          logger.info('No valid customer session, redirecting to signin');
-          setIsAuthenticated(false);
-          router.push('/customers/signin');
-        }
-      } catch (error) {
-        logger.error('Auth check failed', error);
-        setIsAuthenticated(false);
-        router.push('/customers/signin');
-      } finally {
-        setIsLoading(false);
-      }
+    if (!isAuthenticated) {
+      logger.info('No valid customer session, redirecting to signin');
+      router.push('/customers/signin');
     }
-
-    checkAuth();
-  }, [pathname, router, isPublicRoute]);
+  }, [hasHydrated, loading, isAuthenticated, pathname, router, isPublicRoute]);
 
   // Show loading state
-  if (isLoading) {
+  if (!hasHydrated || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-900">
         <div className="text-center">
@@ -122,11 +104,7 @@ function CustomerAuthWrapper({ children }: { children: React.ReactNode }) {
 export default function CustomersLayout({ children }: { children: React.ReactNode }) {
   return (
     <QueryProvider>
-      <AuthProvider>
-        <AuthSyncProvider>
-          <CustomerAuthWrapper>{children}</CustomerAuthWrapper>
-        </AuthSyncProvider>
-      </AuthProvider>
+      <CustomerAuthWrapper>{children}</CustomerAuthWrapper>
     </QueryProvider>
   );
 }

@@ -8,10 +8,7 @@ import { Web3AuthProvider, type Web3AuthContextConfig } from '@web3auth/modal/re
 import { WagmiProvider } from '@web3auth/modal/react/wagmi'; // Use Web3Auth's Wagmi provider
 import { WEB3AUTH_NETWORK } from '@web3auth/modal';
 
-import type { NetworkWithTokensResponse } from '@/types/network';
-import { NetworkProvider } from '@/contexts/network-context';
-import { NetworkSyncProvider } from '@/components/providers/network-sync-provider';
-import { fetchNetworks, getAllNetworkConfigs, getPimlicoUrls } from '@/lib/web3/dynamic-networks';
+import { getAllNetworkConfigs, getPimlicoUrls } from '@/lib/web3/dynamic-networks';
 import { logger } from '@/lib/core/logger/logger-utils';
 
 // Create a TanStack Query client
@@ -30,7 +27,6 @@ interface Web3ProviderProps {
 }
 
 export function Web3Provider({ children }: Web3ProviderProps) {
-  const [networks, setNetworks] = useState<NetworkWithTokensResponse[]>([]);
   const [web3AuthConfig, setWeb3AuthConfig] = useState<Web3AuthContextConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -38,11 +34,7 @@ export function Web3Provider({ children }: Web3ProviderProps) {
   useEffect(() => {
     async function initializeNetworks() {
       try {
-        logger.log('🔄 Fetching dynamic network configuration...');
-
-        // Fetch networks from backend
-        const networkData = await fetchNetworks();
-        setNetworks(networkData);
+        logger.log('🔄 Loading dynamic network configuration...');
 
         // Get all network configs
         const networkConfigs = await getAllNetworkConfigs();
@@ -135,11 +127,7 @@ export function Web3Provider({ children }: Web3ProviderProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <Web3AuthProvider config={web3AuthConfig}>
-        <WagmiProvider>
-          <NetworkProvider networks={networks}>
-            <NetworkSyncProvider networks={networks}>{children}</NetworkSyncProvider>
-          </NetworkProvider>
-        </WagmiProvider>
+        <WagmiProvider>{children}</WagmiProvider>
       </Web3AuthProvider>
     </QueryClientProvider>
   );

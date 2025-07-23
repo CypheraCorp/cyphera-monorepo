@@ -14,20 +14,37 @@ interface Workspace {
   id: string;
 }
 
-interface AuthState {
+export interface AuthState {
+  // Auth state (persisted)
   isAuthenticated: boolean;
+  accessToken: string | null;
+  refreshToken: string | null;
+  
+  // User data (fetched fresh, not persisted)
   user: User | null;
   account: Account | null;
   workspace: Workspace | null;
+  
+  // UI state
   loading: boolean;
   error: string | null;
+  hasHydrated: boolean;
 }
 
-interface AuthActions {
-  refreshAuth: () => Promise<void>;
-  setAuth: (auth: Partial<AuthState>) => void;
+export interface AuthActions {
+  // Auth actions
+  setTokens: (accessToken: string, refreshToken?: string) => void;
+  setUserData: (user: User, account: Account, workspace: Workspace) => void;
+  clearAuth: () => void;
+  
+  // UI actions
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+  setHasHydrated: (hydrated: boolean) => void;
+  
+  // Combined actions
+  login: (accessToken: string, refreshToken: string, user: User, account: Account, workspace: Workspace) => void;
   logout: () => void;
-  clearError: () => void;
 }
 
 export const useAuthStore = create<AuthState & AuthActions>()(
@@ -36,63 +53,86 @@ export const useAuthStore = create<AuthState & AuthActions>()(
       (set) => ({
         // State
         isAuthenticated: false,
+        accessToken: null,
+        refreshToken: null,
         user: null,
         account: null,
         workspace: null,
-        loading: true,
+        loading: false,
         error: null,
+        hasHydrated: false,
 
         // Actions
-        refreshAuth: async () => {
-          set({ loading: true, error: null });
-          try {
-            const response = await fetch('/api/auth/me');
-            if (!response.ok) {
-              throw new Error('Auth check failed');
-            }
-            const data = await response.json();
-            set({
-              isAuthenticated: true,
-              user: data.user,
-              account: data.account,
-              workspace: data.workspace,
-              loading: false,
-            });
-          } catch (err) {
-            set({
-              isAuthenticated: false,
-              user: null,
-              account: null,
-              workspace: null,
-              error: err instanceof Error ? err.message : 'Unknown error',
-              loading: false,
-            });
-          }
-        },
-
-        setAuth: (auth) => set(auth),
-
-        logout: () => {
+        setTokens: (accessToken, refreshToken) => 
+          set({ 
+            accessToken, 
+            refreshToken: refreshToken || null,
+            isAuthenticated: true 
+          }),
+          
+        setUserData: (user, account, workspace) => 
+          set({ user, account, workspace }),
+          
+        clearAuth: () => 
           set({
             isAuthenticated: false,
+            accessToken: null,
+            refreshToken: null,
+            user: null,
+            account: null,
+            workspace: null,
+            error: null,
+          }),
+
+        setLoading: (loading) => set({ loading }),
+        setError: (error) => set({ error }),
+        setHasHydrated: (hasHydrated) => set({ hasHydrated }),
+
+        login: (accessToken, refreshToken, user, account, workspace) => 
+          set({
+            isAuthenticated: true,
+            accessToken,
+            refreshToken,
+            user,
+            account,
+            workspace,
+            error: null,
+          }),
+
+        logout: () => {
+          // Clear auth state
+          set({
+            isAuthenticated: false,
+            accessToken: null,
+            refreshToken: null,
             user: null,
             account: null,
             workspace: null,
             error: null,
           });
+          
+          // Clear any cached data
+          if (typeof window !== 'undefined') {
+            // This will trigger React Query to refetch
+            window.dispatchEvent(new Event('auth-logout'));
+          }
         },
-
-        clearError: () => set({ error: null }),
       }),
       {
         name: 'auth-storage',
+        // Only persist tokens and auth state, not user data
         partialize: (state) => ({
           isAuthenticated: state.isAuthenticated,
-          user: state.user,
-          account: state.account,
-          workspace: state.workspace,
+          accessToken: state.accessToken,
+          refreshToken: state.refreshToken,
         }),
+        onRehydrateStorage: () => (state) => {
+          state?.setHasHydrated(true);
+        },
       }
-    )
+    ),
+    {
+      name: 'auth-store',
+    }
   )
 );

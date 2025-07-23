@@ -3,16 +3,13 @@
 import { useEffect, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { MainSidebar } from '@/components/layout/main-sidebar';
-import { AuthProvider } from '@/contexts/auth-context';
-import { useAuthStore } from '@/store/auth';
-import { AuthSyncProvider } from '@/components/providers/auth-sync-provider';
+import { useAuth } from '@/hooks/auth/use-auth-user';
 import { QueryProvider } from '@/lib/query/query-client';
 
 // Merchant authentication wrapper component
 function MerchantAuthWrapper({ children }: { children: ReactNode }) {
-  // Using Zustand store instead of context
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const loading = useAuthStore((state) => state.loading);
+  // Using new auth hook with fresh data
+  const { isAuthenticated, loading, hasHydrated } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -39,7 +36,8 @@ function MerchantAuthWrapper({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    if (loading) return;
+    // Wait for hydration to complete
+    if (!hasHydrated || loading) return;
 
     if (PUBLIC_ROUTES.includes(pathname)) {
       // If user is authenticated and visits signin page, redirect to dashboard
@@ -54,9 +52,9 @@ function MerchantAuthWrapper({ children }: { children: ReactNode }) {
     } else if (pathname === '/merchants') {
       router.push('/merchants/dashboard');
     }
-  }, [loading, isAuthenticated, pathname, router]);
+  }, [hasHydrated, loading, isAuthenticated, pathname, router]);
 
-  if (loading) {
+  if (!hasHydrated || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-900">
         <div className="text-center">
@@ -102,11 +100,7 @@ const PUBLIC_ROUTES = ['/merchants/signin', '/merchants/verify-email', '/merchan
 export default function MerchantsLayout({ children }: { children: ReactNode }) {
   return (
     <QueryProvider>
-      <AuthProvider>
-        <AuthSyncProvider>
-          <MerchantAuthWrapper>{children}</MerchantAuthWrapper>
-        </AuthSyncProvider>
-      </AuthProvider>
+      <MerchantAuthWrapper>{children}</MerchantAuthWrapper>
     </QueryProvider>
   );
 }

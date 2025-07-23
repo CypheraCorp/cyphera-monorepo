@@ -1,4 +1,3 @@
 // Contexts Export
-export { AuthProvider, useAuth } from './auth-context';
+// Only third-party SDK contexts remain
 export { CircleSDKProvider, useCircleSDKContext } from './circle-sdk-provider';
-export { NetworkProvider, useNetworkContext } from './network-context';
