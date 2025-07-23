@@ -9,7 +9,7 @@
     "dev:api": "cd apps/api && air -c .air.toml",
     "dev:delegation": "cd apps/delegation-server && npm run dev",
     "dev:web": "cd apps/web-app && npm run dev",
-    "dev:subscription": "cd apps/subscription-processor && go run cmd/main.go",
+    "dev:subscription": "./scripts/run-subscription-processor.sh",
     "dev:webhook-receiver": "cd apps/webhook-receiver && go run cmd/main.go",
     "dev:webhook-processor": "cd apps/webhook-processor && go run cmd/main.go",
     "dev:dlq": "cd apps/dlq-processor && go run cmd/main.go",
@@ -75,6 +75,7 @@
     
     "// Process Management": "",
     "start:prod": "NODE_ENV=production npm run build:all",
+    "start:web": "cd apps/web-app && npm start",
     "stop:all": "pkill -f 'next dev' || true && pkill -f 'go run' || true && pkill -f 'air' || true && pkill -f 'ts-node' || true",
     "restart:all": "npm run stop:all && npm run dev:all",
     
