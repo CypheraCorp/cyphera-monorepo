@@ -1,0 +1,46 @@
+{
+  "name": "webhook-receiver",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/webhook-receiver",
+  "targets": {
+    "install": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "go mod tidy",
+        "cwd": "apps/webhook-receiver"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/apps/webhook-receiver"],
+      "options": {
+        "command": "go build -o ../../dist/apps/webhook-receiver/webhook-receiver ./cmd/main.go",
+        "cwd": "apps/webhook-receiver"
+      }
+    },
+    "build-lambda": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/apps/webhook-receiver/bootstrap"],
+      "options": {
+        "command": "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-s -w' -tags lambda.norpc -o bootstrap ./cmd/main.go",
+        "cwd": "apps/webhook-receiver"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "go test -v ./...",
+        "cwd": "apps/webhook-receiver"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "go vet ./... && golangci-lint run ./...",
+        "cwd": "apps/webhook-receiver"
+      }
+    }
+  },
+  "implicitDependencies": ["go-shared"]
+}

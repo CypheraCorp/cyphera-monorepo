@@ -49,7 +49,7 @@ trap cleanup EXIT
 
 # Step 1: Build the backend
 echo -e "${BLUE}🔨 Step 1: Building backend...${NC}"
-if go build -o ./bin/api-local ./cmd/api/local; then
+if go build -o ./bin/api-local ./apps/api/cmd/local; then
     log_test "Backend Build" "PASS" "Compiled successfully"
 else
     log_test "Backend Build" "FAIL" "Compilation failed"

@@ -4,12 +4,12 @@ on:
   push:
     branches: [ dev, main ]
     paths: # Only trigger on changes within delegation-server or this workflow file
-      - 'delegation-server/**'
+      - 'apps/delegation-server/**'
       - '.github/workflows/delegation-server.yml'
   pull_request:
     branches: [ dev, main ]
     paths:
-      - 'delegation-server/**'
+      - 'apps/delegation-server/**'
       - '.github/workflows/delegation-server.yml'
 
 env:
@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: delegation-server/package-lock.json # Adjust if using yarn or pnpm
+          cache-dependency-path: apps/delegation-server/package-lock.json # Adjust if using yarn or pnpm
       - name: Install dependencies
         run: make delegation-server-setup # Runs npm install/ci via setup script
       - name: Run linter
@@ -50,7 +50,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: delegation-server/package-lock.json
+          cache-dependency-path: apps/delegation-server/package-lock.json
       - name: Install dependencies
         run: make delegation-server-setup
       - name: Run tests
@@ -67,7 +67,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: delegation-server/package-lock.json
+          cache-dependency-path: apps/delegation-server/package-lock.json
       - name: Install dependencies
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -79,8 +79,8 @@ jobs:
         with:
           name: delegation-server-${{ env.STAGE }}
           path: |
-            delegation-server/package.json
-            delegation-server/package-lock.json # Include lock file
+            apps/delegation-server/package.json
+            apps/delegation-server/package-lock.json # Include lock file
             # dist is no longer needed here as build happens in Dockerfile
 
   deploy:
@@ -118,7 +118,7 @@ jobs:
         run: |
           echo "Building and pushing image $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG and :latest"
           # Build the docker image locally
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f delegation-server/Dockerfile delegation-server/
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f infrastructure/docker/delegation-server/Dockerfile apps/delegation-server/
           # Also tag as latest
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           # Push the image with Git SHA tag to ECR

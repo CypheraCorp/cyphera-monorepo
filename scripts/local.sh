@@ -10,7 +10,7 @@ else
 fi
 
 # Build the binary
-go build -o bin/cyphera-api cmd/api/local/main.go
+go build -o bin/cyphera-api apps/api/cmd/local/main.go
 
 # Run the binary with environment variables
 echo "Starting local server..."

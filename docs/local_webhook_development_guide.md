@@ -205,7 +205,7 @@ services:
   # Extend the existing API service
   cyphera-api:
     extends:
-      file: docker-compose.yml
+      file: ../infrastructure/docker/docker-compose.yml
       service: cyphera-api
     environment:
       - WEBHOOK_RECEIVER_URL=http://webhook-receiver:3001
@@ -217,7 +217,7 @@ services:
   # PostgreSQL (from base docker-compose.yml)
   postgres:
     extends:
-      file: docker-compose.yml
+      file: ../infrastructure/docker/docker-compose.yml
       service: postgres
 
   # LocalStack for AWS service simulation
@@ -241,7 +241,7 @@ services:
   webhook-receiver:
     build:
       context: .
-      dockerfile: Dockerfile.webhook-receiver
+      dockerfile: infrastructure/docker/webhook/Dockerfile.webhook-receiver
     container_name: cyphera-webhook-receiver
     ports:
       - "3001:3001"
@@ -266,7 +266,7 @@ services:
   webhook-processor:
     build:
       context: .
-      dockerfile: Dockerfile.webhook-processor
+      dockerfile: infrastructure/docker/webhook/Dockerfile.webhook-processor
     container_name: cyphera-webhook-processor
     environment:
       - STAGE=local
@@ -296,7 +296,7 @@ volumes:
 
 ### 2. Webhook-Specific Dockerfiles
 
-#### Dockerfile.webhook-receiver
+#### infrastructure/docker/webhook/Dockerfile.webhook-receiver
 
 ```dockerfile
 FROM golang:1.22-alpine AS builder
@@ -316,7 +316,7 @@ EXPOSE 3001
 CMD ["./webhook-receiver"]
 ```
 
-#### Dockerfile.webhook-processor
+#### infrastructure/docker/webhook/Dockerfile.webhook-processor
 
 ```dockerfile
 FROM golang:1.22-alpine AS builder

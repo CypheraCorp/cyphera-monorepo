@@ -35,7 +35,7 @@ make swag                   # Generate/update Swagger documentation
 # Database
 docker-compose up postgres   # Start PostgreSQL database
 
-# Delegation server (from delegation-server/)
+# Delegation server (from apps/delegation-server/)
 npm run build               # Build TypeScript
 npm run dev                # Run with auto-reload
 npm run test               # Run tests
@@ -46,32 +46,32 @@ npm run proto:build        # Generate gRPC code
 
 ### System Components
 
-1. **Main API (Go)** - Core business logic in `/cmd/api/main`
+1. **Main API (Go)** - Core business logic in `/apps/api/cmd/main`
    - AWS Lambda deployment with Gin framework
    - Handles authentication, CRUD operations, and orchestrates services
-   - Entry point: `/cmd/api/main/main.go`
+   - Entry point: `/apps/api/cmd/main/main.go`
 
-2. **Delegation Server (Node.js)** - Blockchain operations in `/delegation-server`
+2. **Delegation Server (Node.js)** - Blockchain operations in `/apps/delegation-server`
    - gRPC server for MetaMask delegation operations
    - Manages smart account creation and transaction signing
    - Communicates with main API via gRPC
 
-3. **Subscription Processor (Go)** - Background job in `/cmd/subscription-processor`
+3. **Subscription Processor (Go)** - Background job in `/apps/subscription-processor/cmd`
    - Processes recurring subscription payments
    - Uses stored delegation credentials
    - Runs periodically to check and process due subscriptions
 
 4. **Database Layer** - PostgreSQL with SQLC
    - Type-safe SQL through SQLC code generation
-   - Schema in `/internal/db/schema.sql`
-   - Queries in `/internal/db/queries/`
+   - Schema in `/libs/go/db/schema.sql`
+   - Queries in `/libs/go/db/queries/`
 
 ### Key Architectural Patterns
 
 1. **Clean Architecture**
-   - Database queries isolated in SQLC-generated code (`/internal/db`)
-   - Business logic in handlers (`/internal/handlers`)
-   - External services abstracted in client packages (`/internal/client`)
+   - Database queries isolated in SQLC-generated code (`/libs/go/db`)
+   - Business logic in handlers (`/apps/api/handlers`)
+   - External services abstracted in client packages (`/libs/go/client`)
 
 2. **Multi-Service Communication**
    - Main API ↔ Delegation Server: gRPC
@@ -81,7 +81,7 @@ npm run proto:build        # Generate gRPC code
 3. **Authentication Flow**
    - JWT tokens for user authentication (Web3Auth integration)
    - API keys for service-to-service communication
-   - Middleware in `internal/auth/middleware.go`
+   - Middleware in `libs/go/auth/middleware.go`
    - Workspace-based multi-tenancy
 
 4. **Blockchain Integration**
@@ -117,7 +117,7 @@ npm run proto:build        # Generate gRPC code
 
 1. **Initial Setup**
    - Copy `.env.template` to `.env` and configure
-   - Copy `delegation-server/.env.example` to `delegation-server/.env`
+   - Copy `apps/delegation-server/.env.example` to `apps/delegation-server/.env`
    - Run `make install` to set up dependencies
    - Start PostgreSQL with `docker-compose up postgres`
 

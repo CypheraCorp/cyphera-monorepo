@@ -171,7 +171,7 @@ The diagram above illustrates the delegation redemption process flow.
    - Used by both the direct handler and the HTTP handlers
 
 3. **Node.js gRPC Server**
-   - Runs as a separate service (in the `delegation-server` directory)
+   - Runs as a separate service (in the `apps/delegation-server` directory)
    - Handles the actual delegation redemption process
    - Communicates with blockchain providers and bundlers
    - Uses MetaMask's delegation libraries for account creation and transaction submission
@@ -190,7 +190,7 @@ The diagram above illustrates the delegation redemption process flow.
 - All blockchain operations are conducted through the Node.js server for consistency
 - Transaction receipts and errors are properly propagated back to the client
 
-For more detailed information, see the [Delegation System documentation](DELEGATION_SYSTEM.md).
+For more detailed information, see the [Delegation System documentation](delegation-system.md).
 
 ## Deployment Architecture
 
@@ -203,7 +203,7 @@ The Cyphera API is designed to be deployed in cloud environments, with the follo
 
 ## Additional Documentation
 
-- [Delegation System](DELEGATION_SYSTEM.md) - Details on the delegation system architecture
+- [Delegation System](delegation-system.md) - Details on the delegation system architecture
 - [API Reference (Swagger)](swagger.yaml) - Swagger API documentation
 
 ## Conclusion

@@ -70,7 +70,7 @@ ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 echo "Project root: $ROOT_DIR"
 
 # Directory for Node.js delegation server
-DELEGATION_SERVER_DIR="$ROOT_DIR/delegation-server"
+DELEGATION_SERVER_DIR="$ROOT_DIR/apps/delegation-server"
 echo "Delegation server directory: $DELEGATION_SERVER_DIR"
 
 # Function to check if a port is listening (portable across OS)
@@ -152,13 +152,13 @@ fi
 
 # Run unit tests first
 echo "Running unit tests..."
-cd "$ROOT_DIR/cmd/delegation-integration-test"
+cd "$ROOT_DIR/apps/delegation-server/test/integration"
 go test -v
 
 # Build the Go integration test client
 echo "Building integration test client..."
 cd "$ROOT_DIR"
-go build -o cmd/delegation-integration-test/integration-test cmd/delegation-integration-test/main.go
+go build -o apps/delegation-server/test/integration/integration-test apps/delegation-server/test/integration/main.go
 
 if [ "$MOCK" = "true" ]; then
   # Check if Node.js and npm are installed
@@ -258,7 +258,7 @@ cd "$ROOT_DIR"
 
 if [ "$MODE" = "server" ]; then
   echo "Running in HTTP server mode..."
-  ./cmd/delegation-integration-test/integration-test -server -port "$SERVER_PORT" &
+  ./apps/delegation-server/test/integration/integration-test -server -port "$SERVER_PORT" &
   HTTP_SERVER_PID=$!
   
   # Wait for server to start
@@ -283,7 +283,7 @@ else
   echo "Running in CLI mode..."
   # Also set the DELEGATION_GRPC_ADDR for the client to use the correct port (forcing IPv4)
   export DELEGATION_GRPC_ADDR="127.0.0.1:${GRPC_PORT}"
-  ./cmd/delegation-integration-test/integration-test -verbose
+  ./apps/delegation-server/test/integration/integration-test -verbose
   
   # Print test result
   if [ $? -eq 0 ]; then

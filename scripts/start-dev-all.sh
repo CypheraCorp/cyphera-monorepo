@@ -101,11 +101,11 @@ fi
 
 # Start the delegation server in the background with environment variables
 echo "Starting delegation server..."
-cd delegation-server
+cd apps/delegation-server
 
 # Check if delegation server .env file exists
 if [ ! -f .env ]; then
-  echo "Warning: delegation-server/.env file not found. The delegation server may not function correctly."
+  echo "Warning: apps/delegation-server/.env file not found. The delegation server may not function correctly."
 else 
   echo "Delegation server .env file found."
 fi
@@ -118,7 +118,7 @@ chmod +x scripts/run.sh
 # Clean up the temporary script (but not immediately, to ensure it's available for the background process)
 sleep 1
 
-cd ..
+cd ../..
 
 # Wait a moment for the delegation server to start
 sleep 2
@@ -134,7 +134,7 @@ fi
 
 # Start the subscription processor in the background
 echo "Starting subscription processor with 1-minute interval..."
-go run ./cmd/subscription-processor/main.go --interval=10s &
+go run ./apps/subscription-processor/cmd/main.go --interval=10s &
 
 # Check if air is installed
 if ! command -v air &> /dev/null; then
@@ -142,7 +142,7 @@ if ! command -v air &> /dev/null; then
   go install github.com/air-verse/air@latest
   if [ $? -ne 0 ]; then
     echo "Failed to install air. Falling back to standard Go run."
-    go run ./cmd/api/local/main.go &
+    go run ./apps/api/cmd/local/main.go &
   else
     air &
   fi

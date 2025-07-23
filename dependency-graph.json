@@ -1,0 +1,552 @@
+{
+  "graph": {
+    "nodes": {
+      "subscription-processor": {
+        "name": "subscription-processor",
+        "type": "app",
+        "data": {
+          "root": "apps/subscription-processor",
+          "name": "subscription-processor",
+          "$schema": "../../node_modules/nx/schemas/project-schema.json",
+          "projectType": "application",
+          "sourceRoot": "apps/subscription-processor",
+          "implicitDependencies": [
+            "go-shared"
+          ],
+          "targets": {
+            "build": {
+              "executor": "nx:run-commands",
+              "outputs": [
+                "{workspaceRoot}/dist/apps/subscription-processor"
+              ],
+              "options": {
+                "command": "go build -o ../../dist/apps/subscription-processor/subscription-processor ./cmd/main.go",
+                "cwd": "apps/subscription-processor"
+              },
+              "configurations": {},
+              "parallelism": true,
+              "dependsOn": [
+                "^build"
+              ],
+              "inputs": [
+                "production",
+                "^production"
+              ]
+            },
+            "build-lambda": {
+              "executor": "nx:run-commands",
+              "outputs": [
+                "{workspaceRoot}/apps/subscription-processor/bootstrap"
+              ],
+              "options": {
+                "command": "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-s -w' -tags lambda.norpc -o bootstrap ./cmd",
+                "cwd": "apps/subscription-processor"
+              },
+              "configurations": {},
+              "parallelism": true
+            },
+            "test": {
+              "executor": "nx:run-commands",
+              "options": {
+                "command": "go test -v ./...",
+                "cwd": "apps/subscription-processor"
+              },
+              "configurations": {},
+              "parallelism": true,
+              "inputs": [
+                "default",
+                "^production",
+                "{workspaceRoot}/jest.preset.js"
+              ]
+            },
+            "lint": {
+              "executor": "nx:run-commands",
+              "options": {
+                "command": "go vet ./... && golangci-lint run ./...",
+                "cwd": "apps/subscription-processor"
+              },
+              "configurations": {},
+              "parallelism": true
+            }
+          },
+          "tags": []
+        }
+      },
+      "webhook-processor": {
+        "name": "webhook-processor",
+        "type": "app",
+        "data": {
+          "root": "apps/webhook-processor",
+          "name": "webhook-processor",
+          "$schema": "../../node_modules/nx/schemas/project-schema.json",
+          "projectType": "application",
+          "sourceRoot": "apps/webhook-processor",
+          "implicitDependencies": [
+            "go-shared"
+          ],
+          "targets": {
+            "build": {
+              "executor": "nx:run-commands",
+              "outputs": [
+                "{workspaceRoot}/dist/apps/webhook-processor"
+              ],
+              "options": {
+                "command": "go build -o ../../dist/apps/webhook-processor/webhook-processor ./cmd/main.go",
+                "cwd": "apps/webhook-processor"
+              },
+              "configurations": {},
+              "parallelism": true,
+              "dependsOn": [
+                "^build"
+              ],
+              "inputs": [
+                "production",
+                "^production"
+              ]
+            },
+            "build-lambda": {
+              "executor": "nx:run-commands",
+              "outputs": [
+                "{workspaceRoot}/apps/webhook-processor/bootstrap"
+              ],
+              "options": {
+                "command": "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-s -w' -tags lambda.norpc -o bootstrap ./cmd/main.go",
+                "cwd": "apps/webhook-processor"
+              },
+              "configurations": {},
+              "parallelism": true
+            },
+            "test": {
+              "executor": "nx:run-commands",
+              "options": {
+                "command": "go test -v ./...",
+                "cwd": "apps/webhook-processor"
+              },
+              "configurations": {},
+              "parallelism": true,
+              "inputs": [
+                "default",
+                "^production",
+                "{workspaceRoot}/jest.preset.js"
+              ]
+            },
+            "lint": {
+              "executor": "nx:run-commands",
+              "options": {
+                "command": "go vet ./... && golangci-lint run ./...",
+                "cwd": "apps/webhook-processor"
+              },
+              "configurations": {},
+              "parallelism": true
+            }
+          },
+          "tags": []
+        }
+      },
+      "webhook-receiver": {
+        "name": "webhook-receiver",
+        "type": "app",
+        "data": {
+          "root": "apps/webhook-receiver",
+          "name": "webhook-receiver",
+          "$schema": "../../node_modules/nx/schemas/project-schema.json",
+          "projectType": "application",
+          "sourceRoot": "apps/webhook-receiver",
+          "implicitDependencies": [
+            "go-shared"
+          ],
+          "targets": {
+            "build": {
+              "executor": "nx:run-commands",
+              "outputs": [
+                "{workspaceRoot}/dist/apps/webhook-receiver"
+              ],
+              "options": {
+                "command": "go build -o ../../dist/apps/webhook-receiver/webhook-receiver ./cmd/main.go",
+                "cwd": "apps/webhook-receiver"
+              },
+              "configurations": {},
+              "parallelism": true,
+              "dependsOn": [
+                "^build"
+              ],
+              "inputs": [
+                "production",
+                "^production"
+              ]
+            },
+            "build-lambda": {
+              "executor": "nx:run-commands",
+              "outputs": [
+                "{workspaceRoot}/apps/webhook-receiver/bootstrap"
+              ],
+              "options": {
+                "command": "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-s -w' -tags lambda.norpc -o bootstrap ./cmd/main.go",
+                "cwd": "apps/webhook-receiver"
+              },
+              "configurations": {},
+              "parallelism": true
+            },
+            "test": {
+              "executor": "nx:run-commands",
+              "options": {
+                "command": "go test -v ./...",
+                "cwd": "apps/webhook-receiver"
+              },
+              "configurations": {},
+              "parallelism": true,
+              "inputs": [
+                "default",
+                "^production",
+                "{workspaceRoot}/jest.preset.js"
+              ]
+            },
+            "lint": {
+              "executor": "nx:run-commands",
+              "options": {
+                "command": "go vet ./... && golangci-lint run ./...",
+                "cwd": "apps/webhook-receiver"
+              },
+              "configurations": {},
+              "parallelism": true
+            }
+          },
+          "tags": []
+        }
+      },
+      "dlq-processor": {
+        "name": "dlq-processor",
+        "type": "app",
+        "data": {
+          "root": "apps/dlq-processor",
+          "name": "dlq-processor",
+          "$schema": "../../node_modules/nx/schemas/project-schema.json",
+          "projectType": "application",
+          "sourceRoot": "apps/dlq-processor",
+          "implicitDependencies": [
+            "go-shared"
+          ],
+          "targets": {
+            "build": {
+              "executor": "nx:run-commands",
+              "outputs": [
+                "{workspaceRoot}/dist/apps/dlq-processor"
+              ],
+              "options": {
+                "command": "go build -o ../../dist/apps/dlq-processor/dlq-processor ./cmd/main.go",
+                "cwd": "apps/dlq-processor"
+              },
+              "configurations": {},
+              "parallelism": true,
+              "dependsOn": [
+                "^build"
+              ],
+              "inputs": [
+                "production",
+                "^production"
+              ]
+            },
+            "build-lambda": {
+              "executor": "nx:run-commands",
+              "outputs": [
+                "{workspaceRoot}/apps/dlq-processor/bootstrap"
+              ],
+              "options": {
+                "command": "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-s -w' -tags lambda.norpc -o bootstrap ./cmd/main.go",
+                "cwd": "apps/dlq-processor"
+              },
+              "configurations": {},
+              "parallelism": true
+            },
+            "test": {
+              "executor": "nx:run-commands",
+              "options": {
+                "command": "go test -v ./...",
+                "cwd": "apps/dlq-processor"
+              },
+              "configurations": {},
+              "parallelism": true,
+              "inputs": [
+                "default",
+                "^production",
+                "{workspaceRoot}/jest.preset.js"
+              ]
+            },
+            "lint": {
+              "executor": "nx:run-commands",
+              "options": {
+                "command": "go vet ./... && golangci-lint run ./...",
+                "cwd": "apps/dlq-processor"
+              },
+              "configurations": {},
+              "parallelism": true
+            }
+          },
+          "tags": []
+        }
+      },
+      "web-app": {
+        "name": "web-app",
+        "type": "app",
+        "data": {
+          "root": "apps/web-app",
+          "name": "web-app",
+          "$schema": "../../node_modules/nx/schemas/project-schema.json",
+          "projectType": "application",
+          "sourceRoot": "apps/web-app",
+          "tags": [],
+          "targets": {
+            "build": {
+              "executor": "@nx/next:build",
+              "outputs": [
+                "{options.outputPath}"
+              ],
+              "defaultConfiguration": "production",
+              "options": {
+                "outputPath": "dist/apps/web-app"
+              },
+              "configurations": {
+                "development": {
+                  "outputPath": "apps/web-app"
+                },
+                "production": {}
+              },
+              "parallelism": true,
+              "dependsOn": [
+                "^build"
+              ],
+              "inputs": [
+                "production",
+                "^production"
+              ]
+            },
+            "serve": {
+              "executor": "@nx/next:server",
+              "defaultConfiguration": "development",
+              "options": {
+                "buildTarget": "web-app:build",
+                "dev": true
+              },
+              "configurations": {
+                "development": {
+                  "buildTarget": "web-app:build:development",
+                  "dev": true
+                },
+                "production": {
+                  "buildTarget": "web-app:build:production",
+                  "dev": false
+                }
+              },
+              "parallelism": true,
+              "continuous": true
+            },
+            "export": {
+              "executor": "@nx/next:export",
+              "options": {
+                "buildTarget": "web-app:build:production"
+              },
+              "configurations": {},
+              "parallelism": true
+            },
+            "test": {
+              "executor": "@nx/jest:jest",
+              "outputs": [
+                "{workspaceRoot}/coverage/{projectRoot}"
+              ],
+              "options": {
+                "jestConfig": "apps/web-app/jest.config.ts",
+                "passWithNoTests": true
+              },
+              "configurations": {},
+              "parallelism": true,
+              "inputs": [
+                "default",
+                "^production",
+                "{workspaceRoot}/jest.preset.js"
+              ]
+            },
+            "lint": {
+              "executor": "@nx/eslint:lint",
+              "outputs": [
+                "{options.outputFile}"
+              ],
+              "configurations": {},
+              "options": {},
+              "parallelism": true
+            }
+          },
+          "implicitDependencies": []
+        }
+      },
+      "api": {
+        "name": "api",
+        "type": "app",
+        "data": {
+          "root": "apps/api",
+          "name": "api",
+          "$schema": "../../node_modules/nx/schemas/project-schema.json",
+          "projectType": "application",
+          "sourceRoot": "apps/api",
+          "implicitDependencies": [
+            "go-shared"
+          ],
+          "targets": {
+            "build": {
+              "executor": "nx:run-commands",
+              "outputs": [
+                "{workspaceRoot}/dist/apps/api"
+              ],
+              "options": {
+                "command": "go build -o ../../dist/apps/api/cyphera-api ./cmd/main/main.go",
+                "cwd": "apps/api"
+              },
+              "configurations": {},
+              "parallelism": true,
+              "dependsOn": [
+                "^build"
+              ],
+              "inputs": [
+                "production",
+                "^production"
+              ]
+            },
+            "build-lambda": {
+              "executor": "nx:run-commands",
+              "outputs": [
+                "{workspaceRoot}/apps/api/bootstrap"
+              ],
+              "options": {
+                "command": "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-s -w' -tags lambda.norpc -o bootstrap ./cmd/main/main.go",
+                "cwd": "apps/api"
+              },
+              "configurations": {},
+              "parallelism": true
+            },
+            "serve": {
+              "executor": "nx:run-commands",
+              "options": {
+                "command": "go run ./cmd/local/main.go",
+                "cwd": "apps/api"
+              },
+              "configurations": {},
+              "parallelism": true
+            },
+            "test": {
+              "executor": "nx:run-commands",
+              "options": {
+                "command": "go test -v ./...",
+                "cwd": "apps/api"
+              },
+              "configurations": {},
+              "parallelism": true,
+              "inputs": [
+                "default",
+                "^production",
+                "{workspaceRoot}/jest.preset.js"
+              ]
+            },
+            "lint": {
+              "executor": "nx:run-commands",
+              "options": {
+                "command": "go vet ./... && golangci-lint run ./...",
+                "cwd": "apps/api"
+              },
+              "configurations": {},
+              "parallelism": true
+            }
+          },
+          "tags": []
+        }
+      },
+      "go-shared": {
+        "name": "go-shared",
+        "type": "lib",
+        "data": {
+          "root": "libs/go",
+          "name": "go-shared",
+          "$schema": "../../node_modules/nx/schemas/project-schema.json",
+          "projectType": "library",
+          "sourceRoot": "libs/go",
+          "targets": {
+            "test": {
+              "executor": "nx:run-commands",
+              "options": {
+                "command": "go test -v ./...",
+                "cwd": "libs/go"
+              },
+              "configurations": {},
+              "parallelism": true,
+              "inputs": [
+                "default",
+                "^production",
+                "{workspaceRoot}/jest.preset.js"
+              ]
+            },
+            "lint": {
+              "executor": "nx:run-commands",
+              "options": {
+                "command": "go vet ./... && golangci-lint run ./...",
+                "cwd": "libs/go"
+              },
+              "configurations": {},
+              "parallelism": true
+            },
+            "generate": {
+              "executor": "nx:run-commands",
+              "outputs": [
+                "{projectRoot}/db/*.sql.go"
+              ],
+              "options": {
+                "command": "sqlc generate",
+                "cwd": "libs/go/db"
+              },
+              "configurations": {},
+              "parallelism": true
+            }
+          },
+          "implicitDependencies": [],
+          "tags": []
+        }
+      }
+    },
+    "dependencies": {
+      "subscription-processor": [
+        {
+          "source": "subscription-processor",
+          "target": "go-shared",
+          "type": "implicit"
+        }
+      ],
+      "webhook-processor": [
+        {
+          "source": "webhook-processor",
+          "target": "go-shared",
+          "type": "implicit"
+        }
+      ],
+      "webhook-receiver": [
+        {
+          "source": "webhook-receiver",
+          "target": "go-shared",
+          "type": "implicit"
+        }
+      ],
+      "dlq-processor": [
+        {
+          "source": "dlq-processor",
+          "target": "go-shared",
+          "type": "implicit"
+        }
+      ],
+      "web-app": [],
+      "api": [
+        {
+          "source": "api",
+          "target": "go-shared",
+          "type": "implicit"
+        }
+      ],
+      "go-shared": []
+    }
+  }
+}

@@ -1,0 +1,51 @@
+
+> delegation-server@1.0.0 start:mock
+> MOCK_MODE=true ts-node src/index.ts
+
+[2025-05-23T04:19:17.154Z] INFO: ===== SERVICE.TS INITIALIZATION =====
+[2025-05-23T04:19:17.154Z] INFO: MOCK_MODE from environment: "true"
+[2025-05-23T04:19:17.154Z] INFO: MOCK_MODE from config: true
+[2025-05-23T04:19:17.154Z] INFO: SERVICE.TS: Running in MOCK MODE - using mock blockchain service
+[2025-05-23T04:19:17.163Z] INFO: ===== ENVIRONMENT VARIABLES =====
+[2025-05-23T04:19:17.163Z] INFO: MOCK_MODE: true
+[2025-05-23T04:19:17.163Z] INFO: GRPC_HOST: not set
+[2025-05-23T04:19:17.163Z] INFO: GRPC_PORT: not set
+[2025-05-23T04:19:17.163Z] INFO: RPC_URL: not set
+[2025-05-23T04:19:17.163Z] INFO: INFURA_API_KEY_ARN: not set
+[2025-05-23T04:19:17.163Z] INFO: INFURA_API_KEY: not set
+[2025-05-23T04:19:17.163Z] INFO: PIMLICO_API_KEY_ARN: not set
+[2025-05-23T04:19:17.163Z] INFO: PIMLICO_API_KEY: not set
+[2025-05-23T04:19:17.163Z] INFO: PRIVATE_KEY_ARN: not set
+[2025-05-23T04:19:17.163Z] INFO: PRIVATE_KEY: not set
+[2025-05-23T04:19:17.164Z] INFO: LOG_LEVEL: not set
+[2025-05-23T04:19:17.164Z] INFO: ==================================
+[2025-05-23T04:19:17.164Z] INFO: Config loaded:
+[2025-05-23T04:19:17.164Z] INFO: mockMode: true
+[2025-05-23T04:19:17.164Z] INFO: serverAddress: 0.0.0.0:50051
+[2025-05-23T04:19:17.449Z] INFO: SERVICE.TS: Successfully loaded MOCK blockchain service
+[2025-05-23T04:19:17.456Z] INFO: Delegation server running on 0.0.0.0:50051
+(node:80730) DeprecationWarning: Calling start() is no longer necessary. It can be safely omitted.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[2025-05-23T04:19:19.131Z] INFO: Received RedeemDelegation request
+call.request {
+  signature: <Buffer 7b 22 64 65 6c 65 67 61 74 6f 72 22 3a 22 30 78 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 ... 283 more bytes>,
+  merchant_address: '0x1234567890123456789012345678901234567890',
+  token_contract_address: '0x1234567890123456789012345678901234567890',
+  token_amount: '1000000',
+  token_decimals: 6,
+  chain_id: 1,
+  network_name: 'Ethereum Mainnet'
+}
+[2025-05-23T04:19:19.133Z] INFO: Request parameters: {
+  signatureLength: 333,
+  merchantAddress: '0x1234567890123456789012345678901234567890',
+  tokenContractAddress: '0x1234567890123456789012345678901234567890',
+  tokenAmount: '1000000',
+  tokenDecimals: 6,
+  chainId: 1,
+  networkName: 'Ethereum Mainnet'
+}
+[2025-05-23T04:19:19.134Z] INFO: [MOCK] Delegation structure validated successfully
+[2025-05-23T04:19:19.134Z] INFO: [MOCK] Redeeming delegation...
+[2025-05-23T04:19:20.136Z] INFO: [MOCK] Transaction confirmed: 0x846059431b3b0a24b691364986477b2f3e858fc43ce7214e077ff53a5627391f
+[2025-05-23T04:19:20.137Z] INFO: Redemption successful, transaction hash: 0x846059431b3b0a24b691364986477b2f3e858fc43ce7214e077ff53a5627391f

@@ -1,0 +1,106 @@
+{
+  "name": "api",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/api",
+  "tags": ["type:go", "scope:backend"],
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "air -c .air.toml",
+        "cwd": "apps/api",
+        "envFile": [".env", "apps/api/.env.local"]
+      },
+      "configurations": {
+        "production": {
+          "command": "go run ./cmd/main/main.go",
+          "env": {
+            "GIN_MODE": "release"
+          }
+        }
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/apps/api"],
+      "options": {
+        "command": "go build -o ../../dist/apps/api/cyphera-api ./cmd/main/main.go",
+        "cwd": "apps/api"
+      },
+      "configurations": {
+        "production": {
+          "command": "go build -ldflags='-s -w' -o ../../dist/apps/api/cyphera-api ./cmd/main/main.go"
+        },
+        "lambda": {
+          "command": "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-s -w' -tags lambda.norpc -o bootstrap ./cmd/main/main.go"
+        }
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "go test -v ./...",
+        "cwd": "apps/api",
+        "envFile": [".env", "apps/api/.env.local"]
+      },
+      "configurations": {
+        "coverage": {
+          "command": "go test -v -coverprofile=coverage.out ./... && go tool cover -html=coverage.out -o coverage.html"
+        }
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "go test -v -tags=integration ./...",
+        "cwd": "apps/api",
+        "envFile": [".env", "apps/api/.env.local"]
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "go vet ./...",
+          "golangci-lint run ./..."
+        ],
+        "cwd": "apps/api",
+        "parallel": false
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "gofmt -w .",
+        "cwd": "apps/api"
+      }
+    },
+    "install": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "go mod tidy",
+        "cwd": "apps/api"
+      }
+    },
+    "clean": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "rm -rf tmp",
+          "rm -rf ../../dist/apps/api",
+          "go clean -cache -testcache"
+        ],
+        "cwd": "apps/api"
+      }
+    },
+    "generate": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["go-shared:generate"],
+      "options": {
+        "command": "go generate ./...",
+        "cwd": "apps/api"
+      }
+    }
+  }
+}

@@ -1,0 +1,51 @@
+services:
+  cyphera-api:
+    build: .
+    container_name: cyphera-api
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://apiuser:apipassword@postgres:5432/cyphera
+      - PORT=8000
+      - GIN_MODE=debug
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - CORS_ALLOWED_METHODS=${CORS_ALLOWED_METHODS}
+      - CORS_ALLOWED_HEADERS=${CORS_ALLOWED_HEADERS}
+      - CORS_EXPOSED_HEADERS=${CORS_EXPOSED_HEADERS}
+      - CORS_ALLOW_CREDENTIALS=${CORS_ALLOW_CREDENTIALS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./:/usr/src/app
+      - /usr/src/app/node_modules
+    networks:
+      - cyphera-network
+
+  postgres:
+    container_name: cyphera-db
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=apiuser
+      - POSTGRES_PASSWORD=apipassword
+      - POSTGRES_DB=cyphera
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./internal/db/init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U apiuser -d cyphera"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cyphera-network
+
+volumes:
+  postgres_data:
+
+networks:
+  cyphera-network:
+    driver: bridge 

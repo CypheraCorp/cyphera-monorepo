@@ -10,7 +10,7 @@ DB_NAME="cyphera"
 # DB_PASSWORD="apipassword"
 
 # Path to init SQL script
-INIT_SCRIPT="internal/db/init-scripts/01-init.sql"
+INIT_SCRIPT="libs/go/db/init-scripts/01-init.sql"
 
 echo "Connecting to database, dropping all tables and custom types..."
 

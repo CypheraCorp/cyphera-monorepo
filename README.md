@@ -1,429 +1,208 @@
-# Cyphera API
+# Cyphera Platform
 
-Cyphera API is a comprehensive backend system that enables blockchain-based subscription and payment processing. It consists of multiple integrated components that work together to provide a complete solution for managing cryptocurrency-based transactions, delegations, and subscriptions.
+[![Build Status](https://github.com/your-org/cyphera-api/workflows/CI/badge.svg)](https://github.com/your-org/cyphera-api/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/your-org/cyphera-api)](https://goreportcard.com/report/github.com/your-org/cyphera-api)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Documentation
+Cyphera is a comprehensive Web3 payment infrastructure platform that enables merchants to accept cryptocurrency subscriptions with automatic billing through MetaMask delegation. Built as a modern monorepo with Go, Node.js, and Next.js services.
 
-Detailed documentation on the architecture, workflows, and components of the Cyphera API can be found in the [docs/README.md](docs/README.md) file. The documentation includes:
+## ⚡ Quick Start
 
-- System architecture diagrams
-- Component flow explanations
-- Database schema overview
-- Request processing workflows
-- Subscription and payment processes
-- Delegation system details
-- API reference information
-
-## System Overview
-
-The Cyphera API ecosystem consists of four main components:
-
-1. **Main API** (`/cmd/api/main`)
-   - Core API service written in Go
-   - Operates as an AWS Lambda function in production
-   - Can run as a standalone HTTP server locally
-   - Handles authentication, database operations, and business logic
-
-2. **Delegation Server** (`/delegation-server`)
-   - Node.js gRPC server for MetaMask delegation operations
-   - Handles blockchain interactions for delegation redemption
-   - Can operate in mock mode for local testing
-   - Communicates with the main API via gRPC
-
-3. **Subscription Processor** (`/cmd/subscription-processor`)
-   - Background service that processes recurring subscription payments
-   - Identifies subscriptions due for renewal
-   - Uses stored delegation credentials for payment processing
-   - Updates subscription records and logs events
-
-4. **PostgreSQL Database**
-   - Stores all application data including user accounts, workspaces, products, and subscriptions
-   - Manages delegation data and transaction records
-   - Runs locally via Docker for development
-   - Used by all three other components
-
-5. **Circle API Integration**
-   - Provides seamless integration with Circle's programmable wallets
-   - Automatically synchronizes Circle data with our database
-   - Maintains a caching layer for improved performance
-   - Supports multiple blockchain networks via Circle's infrastructure
-
-```
-                ┌───────────────────┐         ┌────────────────────┐
-                │                   │         │                    │
- ┌─────────┐    │    Go API         │ gRPC    │   Node.js Server   │
- │         │    │  ┌─────────────┐  │ call    │  ┌──────────────┐  │
- │  User   ├────┼──┤ HTTP Routes ├──┼─────────┼──┤ gRPC Service │  │
- │         │    │  └─────┬───────┘  │         │  └──────┬───────┘  │
- └─────────┘    │        │          │         │         │          │
-                │        ▼          │         │         ▼          │
-                │  ┌─────────────┐  │         │  ┌──────────────┐  │
-                │  │ Delegation  │  │         │  │  Blockchain  │  │
-                │  │   Client    │  │         │  │  Operations  │  │         ┌─────────────┐
-                │  └─────────────┘  │         │  └──────┬───────┘  │         │             │
-                │                   │         │         │          │         │ Blockchain  │
-                └───────────────────┘         │         ▼          │         │             │
-                                              │  ┌──────────────┐  │         │  ┌───────┐  │
-                ┌───────────────────┐         │  │Smart Account │  │user op  │  │       │  │
-                │                   │         │  │  Creation    ├──┼─────────┼─►│ ERC20 │  │
-                │  Subscription     │         │  └──────────────┘  │         │  │       │  │
-                │   Processor       │         │                    │         │  └───────┘  │
-                │                   │         └────────────────────┘         │             │
-                └───────────────────┘                                        └─────────────┘
-                          │
-                          │
-                          ▼
-                ┌───────────────────┐
-                │                   │
-                │    PostgreSQL     │
-                │    Database      │
-                │                   │
-                └───────────────────┘
-```
-
-## Installation and Setup
-
-### Prerequisites
-
-- Go 1.21 or later
-- Node.js 18 or later
-- Docker and Docker Compose
-- PostgreSQL 14 or later (Docker setup provided)
-
-### Environment Setup
-
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd cyphera-api
-   ```
-
-2. **Configure Local Development Environment (`.env`):**
-   Copy the template file:
-   ```bash
-   cp .env.template .env
-   ```
-   *   Edit the `.env` file.
-   *   Set `DATABASE_URL` to point to your local PostgreSQL instance (e.g., the one started by `docker-compose`). The default `postgres://apiuser:apipassword@localhost:5432/cyphera?sslmode=disable` often works if using the provided `docker-compose.yml`.
-   *   Update `SUPABASE_URL`, `SUPABASE_JWT_SECRET`, `CYPHERA_SMART_WALLET_ADDRESS`, `CIRCLE_API_KEY`, and other necessary variables for your local setup.
-   *   **Important:** The `DATABASE_URL` in this file is **ONLY** used for local development runs (like `make dev` or `make dev-all`). Deployed environments (dev/prod in AWS Lambda) fetch credentials securely from AWS Secrets Manager.
-
-3. **Configure Delegation Server Local Environment:**
-   ```bash
-   cp delegation-server/.env.example delegation-server/.env
-   ```
-   *   Edit `delegation-server/.env` and set necessary variables, including `NPM_TOKEN` if required for private dependencies.
-
-4. **Configure Deployment Secrets (GitHub Actions):**
-   For deployments via GitHub Actions, configure the following secrets in your GitHub repository settings (`Settings > Secrets and variables > Actions`):
-   *   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: For deploying to AWS.
-   *   `SUPABASE_URL`, `SUPABASE_JWT_SECRET`: For Supabase integration.
-   *   `CYPHERA_SMART_WALLET_ADDRESS`: Smart contract address.
-   *   `CIRCLE_API_KEY`: Circle API credentials.
-   *   `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_METHODS`, etc.: CORS settings for deployed environments.
-   *   `NPM_TOKEN` (if needed by delegation server build/setup).
-   *   **Note:** Database credentials (`DATABASE_URL` with password) are **NOT** stored here. They are managed by AWS Secrets Manager via Terraform.
-
-5. **Install dependencies:**
-   ```bash
-   make install
-   ```
-   This command will install Go dependencies and set up the delegation server.
-
-## Running the Application
-
-### Running All Components At Once
-
-To run all components (API, delegation server, and subscription processor) together:
+Get started in under 10 minutes:
 
 ```bash
-make dev-all
+# Clone and install
+git clone https://github.com/your-org/cyphera-api.git
+cd cyphera-api
+npm run install:all
+
+# Setup environment
+cp .env.example .env
+# Edit .env with your configuration
+
+# Start all services
+npm run dev:all
 ```
 
-This command:
-- Starts the PostgreSQL database if not already running
-- Launches the delegation server
-- Starts the main API server
-- Runs the subscription processor
+**🌐 Access Points:**
+- **Web App:** http://localhost:3000
+- **API Server:** http://localhost:8080  
+- **Health Check:** http://localhost:8080/health
 
-### Starting Just The Database
+**📖 For detailed setup instructions:** [Quick Start Guide →](docs/quick-start.md)
 
-If you just want to run the PostgreSQL database by itself then run the following:
+## 🏗️ Architecture
 
+Cyphera consists of multiple integrated microservices:
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Web Frontend  │    │     Main API    │    │  Delegation     │
+│   (Next.js)     │ ── │   (Go/Gin)      │ ── │  Server         │
+│   Port: 3000    │    │   Port: 8080    │    │  (Node.js/gRPC) │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │     PostgreSQL          │
+                    │     Database            │
+                    └─────────────────────────┘
+```
+
+### Core Services
+
+| Service | Technology | Purpose | Port |
+|---------|------------|---------|------|
+| **[Web App](apps/web-app/README.md)** | Next.js 15 | Frontend interface | 3000 |
+| **[Main API](apps/api/README.md)** | Go + Gin | Core business logic | 8080 |
+| **[Delegation Server](apps/delegation-server/README.md)** | Node.js + gRPC | Blockchain operations | 50051 |
+| **[Subscription Processor](apps/subscription-processor/README.md)** | Go | Background billing | - |
+
+**📖 For detailed architecture information:** [Architecture Guide →](docs/architecture.md)
+
+## 🚀 Development Commands
+
+### Essential Commands
 ```bash
-docker-compose up postgres
+# Development servers
+npm run dev:all              # Run all services
+npm run dev:web              # Web app only  
+npm run dev:api              # API server only
+npm run dev:delegation       # Delegation server only
+
+# Installation & Setup
+npm run install:all          # Install all dependencies
+npm run generate:all         # Generate code (SQLC, gRPC)
+npm run setup               # Full setup (install + generate)
+
+# Testing & Quality
+npm run test:all            # Run all tests
+npm run lint                # Lint code
+npm run format              # Format code
+npm run typecheck           # TypeScript checking
+
+# Building
+npm run build:all           # Build all services
+npm run build:web           # Build web app
+npm run clean               # Clean build artifacts
 ```
 
-This will start a PostgreSQL instance with the necessary schema loaded.
-
-### Starting The Delegation Server
-
-If you want to just run the delegation server individually, then run the following:
-
+### Database Operations
 ```bash
-make delegation-server
+docker-compose up postgres  # Start PostgreSQL
+npm run db:migrate          # Apply migrations  
+npm run db:reset           # Reset database
+make gen                   # Regenerate SQLC code
 ```
 
-### Starting the Cyphera API
+## 📚 Documentation
+
+### Getting Started
+- **[Quick Start](docs/quick-start.md)** - 10-minute setup guide
+- **[Architecture Overview](docs/architecture.md)** - System design and components
+- **[API Reference](docs/api-reference.md)** - Complete API documentation
+
+### Service Documentation  
+- **[Web Application](apps/web-app/README.md)** - Frontend development guide
+- **[Main API Server](apps/api/README.md)** - Backend API development  
+- **[Delegation Server](apps/delegation-server/README.md)** - Blockchain operations
+- **[Subscription Processor](apps/subscription-processor/README.md)** - Background jobs
+
+### Operations
+- **[Deployment Guide](docs/deployment.md)** - Production deployment
+- **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
+- **[Contributing Guide](docs/contributing.md)** - Development workflow
+
+## 🛠️ Technology Stack
+
+### Backend Services
+- **Languages:** Go 1.21+, Node.js 18+
+- **Frameworks:** Gin (REST), gRPC, Express
+- **Database:** PostgreSQL with SQLC
+- **Deployment:** AWS Lambda, ECS, Docker
+
+### Frontend
+- **Framework:** Next.js 15 with App Router
+- **Styling:** Tailwind CSS + shadcn/ui
+- **State:** Zustand
+- **Authentication:** Web3Auth + JWT
+
+### Blockchain
+- **Integration:** MetaMask Delegation Toolkit
+- **Networks:** Ethereum, Polygon, Arbitrum
+- **Libraries:** Viem, Wagmi
+- **Wallets:** Circle Programmable Wallets
+
+### Infrastructure
+- **Cloud:** AWS (Lambda, ECS, RDS, Secrets Manager)
+- **CI/CD:** GitHub Actions
+- **Monitoring:** CloudWatch, Structured Logging
+- **Development:** Docker Compose, Hot Reload
+
+## 🔐 Security Features
+
+- **Web3Auth Integration** - Social logins with Web3 wallet creation
+- **JWT Authentication** - Stateless token-based auth
+- **Role-Based Access** - Granular merchant/customer permissions  
+- **Delegation Management** - Secure blockchain operation handling
+- **API Key Authentication** - Service-to-service security
+- **Encryption** - At rest and in transit data protection
+
+## 🌐 Supported Networks
+
+| Network | Mainnet | Testnet | Status |
+|---------|---------|---------|--------|
+| Ethereum | ✅ | Sepolia | Production |
+| Polygon | ✅ | Mumbai | Production |  
+| Arbitrum | ✅ | Sepolia | Production |
+| Base | 🚧 | Sepolia | Coming Soon |
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](docs/contributing.md) for details.
+
+### Development Workflow
+1. **Fork & Clone:** Get the code locally
+2. **Setup:** Run `npm run setup` for full installation
+3. **Develop:** Make changes with hot reload
+4. **Test:** Run `npm run test:all` before committing
+5. **Submit:** Create a pull request
+
+### Code Standards
+- **Go:** Follow standard Go conventions, use `gofmt`
+- **TypeScript:** ESLint + Prettier configuration
+- **Commits:** Conventional commit messages
+- **Documentation:** Update docs for new features
+
+## 📊 Project Status
+
+- **Version:** 2.0.0 (Monorepo)
+- **Status:** Active Development
+- **License:** MIT
+- **Node.js:** ≥18.0.0 required
+- **Go:** ≥1.21 required
+
+### Recent Updates
+- ✅ Migrated to Nx monorepo structure
+- ✅ Implemented Web3Auth integration  
+- ✅ Added MetaMask delegation support
+- ✅ Enhanced Circle API integration
+- 🚧 Mobile app development (planned)
+
+## 🆘 Support
+
+- **[Troubleshooting Guide](docs/troubleshooting.md)** - Common issues
+- **[GitHub Issues](https://github.com/your-org/cyphera-api/issues)** - Bug reports
+- **[Discussions](https://github.com/your-org/cyphera-api/discussions)** - Questions
+- **Documentation** - Comprehensive guides in `/docs`
+
+## 📄 License
 
-If you want to just run the cyphera api individually you first need to make sure that the delegation-server is running, then run the following:
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-```bash
-make dev
-```
-update the parameters int he make file to change the time interval
+---
 
-### Verifying the Cyphera API Setup
+**Built with ❤️ by the Cyphera Team**
 
-Once all components are running, you can verify the API is working by making a request to the health endpoint:
-
-```bash
-curl http://localhost:8000/health
-```
-
-If the api is set up correctly, you'll receive a successful response.
-
-### Starting the Subscription Processor
-
-If you want to just run the subscription processor individually, then run the following:
-
-```bash
-make subscription-processor
-```
-update the parameters int he make file to change the time interval
-
-
-## Developing with Cyphera API
-
-### Development Lifecycle
-
-1. **Making code changes:**
-   - The project uses hot reloading during development with Air for Go code
-   - API changes will automatically restart the server
-   - Delegation server uses nodemon to watch for changes
-
-2. **Testing changes:**
-   - Unit tests: `make test`
-   - Integration tests: `make test-integration`
-   - Full test suite: `make test-all`
-
-3. **Committing changes:**
-   - The project uses Git hooks for linting and formatting
-   - Run `make lint` to check for issues before committing
-
-### API Documentation with Swagger
-
-The API is documented using Swagger/OpenAPI. To generate or update the Swagger documentation:
-
-```bash
-make swagger
-```
-
-Once the API is running, you can access the Swagger UI at:
-```
-http://localhost:8000/swagger/index.html
-```
-
-Swagger annotations are added to handlers in the `internal/handlers` directory using comments starting with `// @`.
-
-### Authentication and Authorization
-
-The API uses two authentication methods:
-
-1. **JWT Token Authentication**
-   - Used for user-based authentication
-   - Tokens are validated in the `auth.EnsureValidAPIKeyOrToken` middleware
-   - User roles and permissions are enforced in handlers
-
-2. **API Key Authentication**
-   - Used for service-to-service and programmatic access
-   - Keys can have different access levels (read, write, admin)
-   - Each API key is associated with a specific workspace
-
-The authentication middleware is defined in `internal/auth/middleware.go` and is applied to routes that require authentication.
-
-### Database Operations with SQLC
-
-The project uses [sqlc](https://sqlc.dev/) to generate type-safe Go code from SQL queries.
-
-#### Database Schema
-
-The database schema is defined in `internal/db/init-scripts/01-init.sql`, which includes tables for:
-- Users and accounts
-- Workspaces
-- Products and tokens
-- Subscriptions and subscription events
-- Customer and wallet information
-- API keys and delegation data
-
-#### Working with SQLC
-
-1. **Writing queries:**
-   - Create or modify SQL query files in `internal/db/queries/`
-   - Follow the existing pattern for query naming and structure
-
-2. **Generating Go code:**
-   ```bash
-   make gen
-   ```
-   This command runs sqlc to generate Go files based on your SQL queries.
-
-3. **Using generated code:**
-   - Import the db package: `import "cyphera-api/internal/db"`
-   - Create a database connection
-   - Use the generated methods to interact with the database
-
-Example of using the generated code in a handler:
-
-```go
-// Get a user by ID
-user, err := queries.GetUser(ctx, userID)
-if err != nil {
-    // Handle error
-}
-
-// Create a new user
-newUser, err := queries.CreateUser(ctx, db.CreateUserParams{
-    Name:  "John Doe",
-    Email: "john@example.com",
-    Role:  db.RoleUser,
-})
-```
-
-### Server Handlers
-
-The API routes and handlers are defined in the `internal/handlers` directory, organized by resource type. Each handler file contains functions that handle specific API endpoints.
-
-Handlers follow a consistent pattern:
-1. Extract parameters from the request
-2. Validate input data
-3. Perform database operations or call other services
-4. Return an appropriate response
-
-Example handler structure:
-
-```go
-// @Summary Get product by ID
-// @Description Retrieves a product by its ID
-// @Tags products
-// @Accept json
-// @Produce json
-// @Param product_id path string true "Product ID"
-// @Success 200 {object} ProductResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Router /products/{product_id} [get]
-func GetProduct(c *gin.Context) {
-    // Extract product ID from request
-    productID := c.Param("product_id")
-    
-    // Convert to UUID
-    id, err := uuid.Parse(productID)
-    if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid product ID format"})
-        return
-    }
-    
-    // Query the database
-    product, err := queries.GetProduct(c.Request.Context(), id)
-    if err != nil {
-        // Handle error (not found, server error, etc.)
-        handleDatabaseError(c, err, "product")
-        return
-    }
-    
-    // Return the product
-    c.JSON(http.StatusOK, formatProductResponse(product))
-}
-```
-
-## Component Details
-
-### Main API
-
-The main API is a Go application built with the Gin web framework. It provides HTTP endpoints for all operations and internally communicates with the delegation server and database.
-
-Key features:
-- RESTful API design with proper status codes and error handling
-- JWT and API key authentication
-- Rate limiting and request validation
-- Swagger documentation
-- Structured logging
-
-### Delegation Server
-
-The delegation server is a Node.js application that handles blockchain-related operations for delegations:
-
-- Implements a gRPC service defined in protocol buffers
-- Handles delegation redemption and validation
-- Interacts with blockchain networks through Web3 providers
-- Supports both production and mock modes for testing
-
-### Subscription Processor
-
-The subscription processor is a Go application that runs either on a schedule or continuously to process subscription renewals:
-
-- Identifies subscriptions that need processing
-- Processes payments using stored delegation credentials
-- Records subscription events and handles failures
-- Provides detailed logs for troubleshooting
-
-### Circle API Integration
-
-The Circle API integration provides programmable wallet functionality through Circle's infrastructure:
-
-- **Automatic Caching**: All Circle users, wallets, and balances are automatically stored in the database, creating a caching layer
-- **Network Support**: Compatible with multiple blockchain networks supported by Circle (Ethereum, Polygon, Arbitrum, Base, Solana)
-- **Synchronization**: Database records are kept in sync with Circle's data whenever API calls are made
-- **Performance**: Reduces redundant API calls to Circle by storing wallet and user data locally
-- **Transparent Proxy**: Acts as a transparent proxy to Circle's API while adding persistence and caching
-
-Key features:
-- User management with automatic database synchronization
-- Wallet creation and management across multiple blockchains
-- Balance retrieval with local caching
-- PIN management for secure operations
-- Challenge handling for secure wallet operations
-
-### Database Structure
-
-The PostgreSQL database is structured with the following main tables:
-
-- `accounts` - Organization accounts and settings
-- `users` - User information and authentication
-- `workspaces` - Organizational units within accounts
-- `products` - Subscription products offered by workspaces
-- `subscriptions` - Active and historical subscriptions
-- `tokens` - Supported cryptocurrency tokens
-- `networks` - Blockchain networks and connection details
-- `wallets` - Cryptocurrency wallet information
-- `delegation_data` - Stored delegation credentials
-- `api_keys` - API keys for programmatic access
-- `circle_users` - Circle user information and tokens
-- `circle_wallets` - Circle wallet details linked to local wallets
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Database Connection Errors**
-   - Ensure PostgreSQL is running: `docker ps | grep postgres`
-   - Check your `DATABASE_URL` in the `.env` file
-   - Verify the database schema has been initialized
-
-2. **Delegation Server Connection Issues**
-   - Verify the delegation server is running: `make delegation-server`
-   - Check `DELEGATION_GRPC_ADDR` in your `.env` file
-   - Look for gRPC connection errors in the logs
-
-3. **NPM Token Issues**
-   - If delegation server setup fails with npm errors, check the NPM_TOKEN in delegation-server/.env
-   - Ensure you have the correct permissions to access private packages
-
-4. **API Return Errors**
-   - Check the server logs for detailed error information
-   - Verify authentication credentials are correct
-   - Ensure the requested resource exists
-
-For more detailed component-specific troubleshooting, refer to the documentation in the `docs/` directory.
+*For the latest updates and detailed documentation, visit our [documentation site](docs/) or check the individual service README files.*

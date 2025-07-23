@@ -200,7 +200,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o webhook-receiver ./cmd/webhook-receiver
+RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o webhook-receiver ./apps/webhook-receiver/cmd
 
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates tzdata curl
@@ -227,7 +227,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o webhook-processor ./cmd/webhook-processor
+RUN GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o webhook-processor ./apps/webhook-processor/cmd
 
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates tzdata

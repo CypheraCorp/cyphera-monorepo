@@ -4,12 +4,11 @@ on:
   push:
     branches: [ dev, main ]
     paths: # Trigger more specifically
-      - 'cmd/subscription-processor/**'
-      - 'internal/client/delegation_server/**'
-      - 'internal/proto/**'
-      - 'internal/**' # Trigger on shared internal changes
+      - 'apps/subscription-processor/**'
+      - 'libs/go/**'
       - 'go.mod'
       - 'go.sum'
+      - 'go.work'
       - 'Makefile'
       - 'deployment/template-subprocessor.yaml'
       - '.github/workflows/subscription-processor.yml'
@@ -17,12 +16,11 @@ on:
   pull_request:
     branches: [ dev, main ]
     paths: # Trigger more specifically
-      - 'cmd/subscription-processor/**'
-      - 'internal/client/delegation_server/**'
-      - 'internal/proto/**'
-      - 'internal/**' # Trigger on shared internal changes
+      - 'apps/subscription-processor/**'
+      - 'libs/go/**'
       - 'go.mod'
       - 'go.sum'
+      - 'go.work'
       - 'Makefile'
       - 'deployment/template-subprocessor.yaml'
       - '.github/workflows/subscription-processor.yml'

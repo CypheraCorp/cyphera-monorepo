@@ -1,0 +1,46 @@
+{
+  "name": "dlq-processor",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/dlq-processor",
+  "targets": {
+    "install": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "go mod tidy",
+        "cwd": "apps/dlq-processor"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/apps/dlq-processor"],
+      "options": {
+        "command": "go build -o ../../dist/apps/dlq-processor/dlq-processor ./cmd/main.go",
+        "cwd": "apps/dlq-processor"
+      }
+    },
+    "build-lambda": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/apps/dlq-processor/bootstrap"],
+      "options": {
+        "command": "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-s -w' -tags lambda.norpc -o bootstrap ./cmd/main.go",
+        "cwd": "apps/dlq-processor"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "go test -v ./...",
+        "cwd": "apps/dlq-processor"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "go vet ./... && golangci-lint run ./...",
+        "cwd": "apps/dlq-processor"
+      }
+    }
+  },
+  "implicitDependencies": ["go-shared"]
+}

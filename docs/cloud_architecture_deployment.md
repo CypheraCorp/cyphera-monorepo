@@ -12,7 +12,7 @@ This document outlines the infrastructure setup for the Cyphera API and Delegati
 *   **AWS SSM Parameter Store:** Used for storing non-sensitive configuration and pointers (ARNs, endpoints) shared between Terraform and applications.
 *   **AWS Secrets Manager:** Used for securely storing and managing sensitive secrets (API keys, private keys, DB passwords).
 
-## I. Terraform Infrastructure (`terraform/` directory)
+## I. Terraform Infrastructure (`infrastructure/terraform/` directory)
 
 Terraform defines the foundational cloud infrastructure required by the applications.
 
@@ -26,7 +26,7 @@ Terraform defines the foundational cloud infrastructure required by the applicat
     *   **ECS Cluster** (`main.tf`): A cluster (`cyphera-delegation-cluster-${stage}`) to host the Delegation Server tasks.
     *   **ECS Task Definition** (`delegation_server_ecs.tf`): Defines the Delegation Server container (image, CPU/Memory, ports, environment variables, secrets). CPU/Memory are conditionally sized based on stage (`dev`/`prod`).
         *   **Workaround Note:** Due to a persistent issue in the Terraform AWS provider (tested up to v5.40) where changes to SSM Parameter Store values referenced via `valueFrom` in `container_definitions` incorrectly trigger a resource replacement plan, a `lifecycle { ignore_changes = [container_definitions] }` block is applied to this resource. This prevents Terraform from repeatedly trying to replace the task definition unnecessarily.
-        *   **Consequence:** While changes to the *values* stored in the referenced SSM parameters or Secrets Manager secrets will be picked up by new tasks automatically, any *structural* changes made to the `container_definitions` block within `terraform/delegation_server_ecs.tf` (e.g., updating the image tag, adding/removing ports, adding/removing environment variables or secrets) **will NOT be applied by `terraform apply`**. These structural changes must be manually applied by creating a new task definition revision in the AWS ECS console and updating the ECS service to use it.
+        *   **Consequence:** While changes to the *values* stored in the referenced SSM parameters or Secrets Manager secrets will be picked up by new tasks automatically, any *structural* changes made to the `container_definitions` block within `infrastructure/terraform/delegation_server_ecs.tf` (e.g., updating the image tag, adding/removing ports, adding/removing environment variables or secrets) **will NOT be applied by `terraform apply`**. These structural changes must be manually applied by creating a new task definition revision in the AWS ECS console and updating the ECS service to use it.
         *   **Future:** Periodically check Terraform AWS provider release notes for fixes related to planning `container_definitions` with `valueFrom`. If fixed, this `lifecycle` block can potentially be removed.
     *   **ECS Service** (`delegation_server_ecs.tf`): Manages running instances (tasks) of the Delegation Server Task Definition on Fargate, ensuring the desired count (conditional based on stage) is running and registers them with the ALB Target Group.
 *   **Data Store:**
@@ -53,7 +53,7 @@ Terraform uses a state file stored securely in an S3 backend (`s3://cyphera-terr
 
 1.  **Initialization:** Before running any commands in a new checkout or after configuration changes, initialize Terraform. This downloads provider plugins and configures the backend.
     ```bash
-    cd terraform
+    cd infrastructure/terraform
     TF_LOG=debug GODEBUG=asyncpreemptoff=1 terraform init
     # Or, if backend config changed:
     # TF_LOG=debug GODEBUG=asyncpreemptoff=1 terraform init -reconfigure
@@ -61,19 +61,19 @@ Terraform uses a state file stored securely in an S3 backend (`s3://cyphera-terr
     *Note: `TF_LOG=debug GODEBUG=asyncpreemptoff=1` provides verbose logging for troubleshooting.*
 2.  **Planning:** Preview the changes Terraform will make to your infrastructure without actually applying them. Always review the plan carefully. Use `-var="stage=dev"` or `-var="stage=prod"` to target the specific environment.
     ```bash
-    cd terraform
+    cd infrastructure/terraform
     TF_LOG=debug GODEBUG=asyncpreemptoff=1 terraform plan -var="stage=[dev|prod]"
     ```
 3.  **Applying:** Create or update the infrastructure according to the plan. Requires confirmation unless `-auto-approve` is used (use with caution).
     ```bash
-    cd terraform
+    cd infrastructure/terraform
     TF_LOG=debug GODEBUG=asyncpreemptoff=1 terraform apply -var="stage=[dev|prod]"
     ```
 4.  **Importing (Manual Step for Existing Resources):** To bring existing AWS resources under Terraform management:
     *   Define the `resource` block in your `.tf` files.
     *   Run the `import` command, providing the Terraform resource address and the AWS resource ID/ARN.
         ```bash
-        cd terraform
+        cd infrastructure/terraform
         # Example for SSM Parameter:
         TF_LOG=debug GODEBUG=asyncpreemptoff=1 terraform import aws_ssm_parameter.wildcard_cert_arn /cyphera/wildcard-api-cert-arn
         # Example for ACM Certificate:
@@ -120,7 +120,7 @@ Two main workflows automate the deployment process:
         *   Uses the corresponding AWS Environment (`dev`/`prod`) for secrets.
         *   Configures AWS credentials.
         *   Logs into the ECR repository created by Terraform (`cyphera-delegation-server-${stage}`).
-        *   Builds the Docker image using `delegation-server/Dockerfile` (which now uses Node 20).
+        *   Builds the Docker image using `infrastructure/docker/delegation-server/Dockerfile` (which now uses Node 20).
         *   Tags the image with the Git SHA.
         *   Pushes the image to ECR.
         *   Runs `aws ecs update-service --force-new-deployment` targeting the ECS service created by Terraform (`cyphera-delegation-server-${stage}`). This tells ECS to pull the latest image (identified by the Git SHA tag implicitly) and deploy new tasks.

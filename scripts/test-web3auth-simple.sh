@@ -50,12 +50,12 @@ echo ""
 echo -e "${BLUE}🔨 Compilation Check${NC}"
 echo "===================="
 
-if go build -o ./bin/test-web3auth ./cmd/api/local 2>/dev/null; then
+if go build -o ./bin/test-web3auth ./apps/api/cmd/local 2>/dev/null; then
     echo -e "${GREEN}✅ Golang backend compiles successfully${NC}"
     rm -f ./bin/test-web3auth
 else
     echo -e "${RED}❌ Golang backend compilation failed${NC}"
-    echo "Run 'go build ./cmd/api/local' to see detailed errors"
+    echo "Run 'go build ./apps/api/cmd/local' to see detailed errors"
     exit 1
 fi
 

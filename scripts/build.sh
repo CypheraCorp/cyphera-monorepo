@@ -13,7 +13,7 @@ go build \
   -tags lambda.norpc \
   -ldflags="-s -w" \
   -o bootstrap \
-  cmd/api/main/main.go
+  apps/api/cmd/main/main.go
 
 # Print binary information
 echo "Binary details:"

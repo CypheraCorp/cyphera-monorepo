@@ -1,0 +1,68 @@
+{
+  "name": "subscription-processor",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/subscription-processor",
+  "tags": ["type:go", "scope:backend"],
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash -c 'source ../../scripts/load-env.sh subscription-processor && while true; do echo \"Running subscription processor at $(date)...\"; go run ./cmd/main.go; echo \"Subscription processor finished. Sleeping for 10s...\"; sleep 10s; done'",
+        "cwd": "apps/subscription-processor"
+      }
+    },
+    "install": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "go mod tidy",
+        "cwd": "apps/subscription-processor"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/apps/subscription-processor"],
+      "options": {
+        "command": "go build -o ../../dist/apps/subscription-processor/subscription-processor ./cmd/main.go",
+        "cwd": "apps/subscription-processor"
+      },
+      "configurations": {
+        "production": {
+          "command": "go build -ldflags='-s -w' -o ../../dist/apps/subscription-processor/subscription-processor ./cmd/main.go"
+        },
+        "lambda": {
+          "command": "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-s -w' -tags lambda.norpc -o bootstrap ./cmd/main.go"
+        }
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "go test -v ./...",
+        "cwd": "apps/subscription-processor"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "go vet ./...",
+          "golangci-lint run ./..."
+        ],
+        "cwd": "apps/subscription-processor",
+        "parallel": false
+      }
+    },
+    "clean": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "rm -rf ../../dist/apps/subscription-processor",
+          "go clean -cache -testcache"
+        ],
+        "cwd": "apps/subscription-processor"
+      }
+    }
+  },
+  "implicitDependencies": ["go-shared"]
+}

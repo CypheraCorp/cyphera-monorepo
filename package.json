@@ -1,8 +1,109 @@
 {
+  "name": "@cyphera/monorepo",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Cyphera monorepo - Web3 payment infrastructure",
+  "scripts": {
+    "// Development Commands": "",
+    "dev": "cd apps/web-app && npm run dev",
+    "dev:api": "cd apps/api && air -c .air.toml",
+    "dev:delegation": "cd apps/delegation-server && npm run dev",
+    "dev:web": "cd apps/web-app && npm run dev",
+    "dev:subscription": "cd apps/subscription-processor && go run cmd/main.go",
+    "dev:webhook-receiver": "cd apps/webhook-receiver && go run cmd/main.go",
+    "dev:webhook-processor": "cd apps/webhook-processor && go run cmd/main.go",
+    "dev:dlq": "cd apps/dlq-processor && go run cmd/main.go",
+    "dev:all": "concurrently \"npm run dev:api\" \"npm run dev:delegation\" \"npm run dev:web\" --names \"api,delegation,web\" --prefix-colors \"blue,green,yellow\"",
+    "dev:services": "concurrently \"npm run dev:api\" \"npm run dev:delegation\" \"npm run dev:subscription\" --names \"api,delegation,sub\" --prefix-colors \"blue,green,magenta\"",
+    "dev:backend": "concurrently \"npm run dev:api\" \"npm run dev:delegation\" --names \"api,delegation\" --prefix-colors \"blue,green\"",
+    
+    "// Build Commands": "",
+    "build": "cd apps/web-app && npm run build",
+    "build:api": "cd apps/api && go build -o ../../dist/apps/api/cyphera-api ./cmd/main/main.go",
+    "build:delegation": "cd apps/delegation-server && npm run build",
+    "build:web": "cd apps/web-app && npm run build",
+    "build:subscription": "cd apps/subscription-processor && go build -o ../../dist/apps/subscription-processor/subscription-processor ./cmd/main.go",
+    "build:webhook-receiver": "cd apps/webhook-receiver && go build -o ../../dist/apps/webhook-receiver/webhook-receiver ./cmd/main.go",
+    "build:webhook-processor": "cd apps/webhook-processor && go build -o ../../dist/apps/webhook-processor/webhook-processor ./cmd/main.go",
+    "build:dlq": "cd apps/dlq-processor && go build -o ../../dist/apps/dlq-processor/dlq-processor ./cmd/main.go",
+    "build:all": "npm run build:api && npm run build:delegation && npm run build:web && npm run build:subscription && npm run build:webhook-receiver && npm run build:webhook-processor && npm run build:dlq",
+    "build:prod": "NODE_ENV=production npm run build:all",
+    "build:affected": "npm run build:all",
+    "build:lambdas": "make sam-build",
+    
+    "// Test Commands": "",
+    "test": "cd apps/web-app && npm run test",
+    "test:api": "cd apps/api && go test -v ./...",
+    "test:delegation": "cd apps/delegation-server && npm run test",
+    "test:web": "cd apps/web-app && npm run test",
+    "test:subscription": "cd apps/subscription-processor && go test -v ./...",
+    "test:all": "npm run test:api && npm run test:delegation && npm run test:web && npm run test:subscription",
+    "test:unit": "npm run test:all",
+    "test:int": "make test-integration",
+    "test:affected": "npm run test:all",
+    "test:coverage": "npm run test:all",
+    
+    "// Code Quality": "",
+    "lint": "cd apps/web-app && npm run lint && cd ../delegation-server && npm run lint",
+    "lint:fix": "cd apps/web-app && npm run lint --fix && cd ../delegation-server && npm run lint --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "typecheck": "cd apps/web-app && npm run type-check",
+    "type-check": "cd apps/web-app && npm run type-check",
+    
+    "// Installation & Setup": "",
+    "install:all": "npm install && cd apps/web-app && npm install --legacy-peer-deps && cd ../delegation-server && npm install && cd ../.. && go work sync",
+    "install:go": "go work sync",
+    "install:ts": "cd apps/web-app && npm install --legacy-peer-deps && cd ../delegation-server && npm install",
+    "setup": "npm run install:all && npm run generate:all",
+    
+    "// Code Generation": "",
+    "generate:all": "make proto-gen && make swagger-gen",
+    "generate:proto": "make proto-gen",
+    "generate:db": "make db-migrate",
+    "generate:swagger": "make swagger-gen",
+    
+    "// Utility Commands": "",
+    "clean": "rm -rf dist logs/**/*.log apps/*/tmp apps/*/.next apps/*/dist apps/*/build && rm -f *.log && go clean -cache -testcache",
+    "clean:cache": "rm -rf .next apps/*/.next node_modules/.cache apps/*/tsconfig.tsbuildinfo",
+    "clean:deps": "rm -rf node_modules apps/*/node_modules libs/*/node_modules",
+    "clean:logs": "rm -rf logs/**/*.log *.log apps/*/logs/**/*.log",
+    "clean:build": "rm -rf dist apps/*/dist apps/*/build apps/*/tmp",
+    "clean:all": "npm run clean && npm run clean:cache && npm run clean:deps",
+    "reset": "npm run clean:all && rm -rf node_modules apps/*/node_modules libs/*/node_modules",
+    "reset:hard": "npm run reset && rm -rf package-lock.json apps/*/package-lock.json",
+    
+    "// Process Management": "",
+    "start:prod": "NODE_ENV=production npm run build:all",
+    "stop:all": "pkill -f 'next dev' || true && pkill -f 'go run' || true && pkill -f 'air' || true && pkill -f 'ts-node' || true",
+    "restart:all": "npm run stop:all && npm run dev:all",
+    
+    "// CI/CD Commands": "",
+    "ci:build": "npm run build:all",
+    "ci:test": "npm run test:all",
+    "ci:lint": "npm run lint",
+    
+    "// Docker Commands": "",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    
+    "// Database Commands": "",
+    "db:migrate": "make db-migrate",
+    "db:reset": "make db-reset",
+    "db:seed": "make db-seed",
+    
+    "// Deployment": "",
+    "deploy:staging": "make deploy-staging",
+    "deploy:prod": "make deploy-prod"
+  },
   "devDependencies": {
-    "@metamask/delegation-toolkit": "^0.10.2",
-    "install": "^0.13.0",
-    "npm": "^10.9.2",
-    "serverless-domain-manager": "^8.0.0"
+    "concurrently": "^8.0.0",
+    "prettier": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   }
 }

@@ -33,7 +33,7 @@ fi
 
 # Test 4: Check if Web3Auth fields exist in generated code
 echo "4. Checking Web3Auth fields in generated code..."
-if grep -q "Web3authID" internal/db/users.sql.go; then
+if grep -q "Web3authID" libs/go/db/users.sql.go; then
     echo "✅ Web3Auth fields found in generated code"
 else
     echo "❌ Web3Auth fields missing from generated code"
@@ -42,7 +42,7 @@ fi
 
 # Test 5: Check if Web3Auth query exists
 echo "5. Checking GetUserByWeb3AuthID query..."
-if grep -q "GetUserByWeb3AuthID" internal/db/users.sql.go; then
+if grep -q "GetUserByWeb3AuthID" libs/go/db/users.sql.go; then
     echo "✅ GetUserByWeb3AuthID query found"
 else
     echo "❌ GetUserByWeb3AuthID query missing"

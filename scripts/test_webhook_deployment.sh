@@ -126,9 +126,9 @@ echo "🔍 Testing Lambda function directories..."
 
 # Check if the Lambda function directories exist
 LAMBDA_DIRS=(
-    "cmd/webhook-receiver"
-    "cmd/webhook-processor"
-    "cmd/dlq-processor"
+    "apps/webhook-receiver/cmd"
+    "apps/webhook-processor/cmd"
+    "apps/dlq-processor/cmd"
 )
 
 for dir in "${LAMBDA_DIRS[@]}"; do
