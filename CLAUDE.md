@@ -384,10 +384,150 @@ npx playwright test --screenshot=on
 
 ## 8. Custom Tools & MCP Integration
 
+The Cyphera project is configured with several MCP (Model Context Protocol) tools that enhance development workflows. These tools are automatically available when using Claude Code and provide powerful capabilities for development, testing, and project management.
+
 ### Available MCP Tools
-- **Playwright MCP**: Use for visual iteration and UI testing
-- **GitHub MCP**: Integrated GitHub operations
-- **Task Tool**: Complex codebase searches and analysis
+
+#### 1. **Playwright MCP** (`playwright`)
+- **Purpose**: Browser automation, visual testing, and UI debugging
+- **Use Cases in Cyphera**:
+  - Test subscription flows end-to-end
+  - Debug wallet integration UI issues
+  - Automate user registration and authentication flows
+  - Test responsive design across different viewport sizes
+- **Common Commands**:
+  ```javascript
+  // Navigate to app and test subscription creation
+  await page.goto('http://localhost:3000/dashboard');
+  await page.click('[data-testid="create-subscription"]');
+  ```
+
+#### 2. **GitHub MCP** (`github`)
+- **Purpose**: Direct GitHub API integration for repository operations
+- **Use Cases in Cyphera**:
+  - Create issues for bugs found during development
+  - Review and merge pull requests programmatically
+  - Manage project milestones and releases
+  - Automate code review workflows
+- **Authentication**: Uses your GitHub PAT (configured in .mcp.json)
+- **Common Operations**:
+  - Create PRs for feature branches
+  - Add issue comments with debugging information
+  - Check CI/CD status before merging
+
+#### 3. **Browser Tools MCP** (`browser-tools-mcp`)
+- **Purpose**: Advanced browser manipulation and web interaction capabilities
+- **Use Cases in Cyphera**:
+  - Test Circle API wallet integrations in live environments
+  - Debug MetaMask delegation flows interactively
+  - Monitor blockchain transaction status in real-time
+  - Test payment processing workflows
+- **Key Features**:
+  - Screenshot capture for bug reports
+  - Console log monitoring for debugging
+  - Network request inspection
+
+#### 4. **Memory MCP** (`memory`)
+- **Purpose**: Persistent memory and context management across sessions
+- **Use Cases in Cyphera**:
+  - Remember API endpoint configurations
+  - Store frequently used database queries
+  - Maintain context about ongoing feature development
+  - Cache blockchain network configurations
+- **Benefits**: Reduces repetitive explanations and maintains development context
+
+#### 5. **Fetch MCP** (`fetch`)
+- **Purpose**: HTTP request handling and API testing
+- **Use Cases in Cyphera**:
+  - Test Circle API endpoints directly
+  - Verify webhook payload formats
+  - Debug third-party integrations (Stripe, Web3Auth)
+  - Fetch external documentation or API specs
+- **Example Usage**:
+  ```bash
+  # Test Circle API wallet creation
+  fetch_url "https://api.circle.com/v1/wallets" \
+    --method POST \
+    --header "Authorization: Bearer $CIRCLE_API_KEY"
+  ```
+
+#### 6. **TaskMaster AI MCP** (`taskmaster-ai`)
+- **Purpose**: Advanced project management and task tracking
+- **Use Cases in Cyphera**:
+  - Break down complex features into manageable tasks
+  - Track development progress across multiple services
+  - Generate implementation plans for new features
+  - Coordinate tasks between backend, frontend, and blockchain components
+- **Key Features**:
+  - AI-powered task generation
+  - Dependency tracking between tasks
+  - Progress monitoring and reporting
+- **Example Workflow**:
+  ```bash
+  # Initialize TaskMaster for Cyphera project
+  taskmaster init --project-root /path/to/cyphera-api
+  
+  # Add a complex feature
+  taskmaster add-task "Implement recurring subscription payments with MetaMask delegation"
+  
+  # Expand into subtasks
+  taskmaster expand-task 1
+  ```
+
+#### 7. **Context7 MCP** (`context7-mcp`)
+- **Purpose**: Up-to-date library documentation and code examples
+- **Use Cases in Cyphera**:
+  - Get latest Circle API documentation
+  - Find MetaMask Delegation Toolkit examples
+  - Access current Next.js 15 best practices
+  - Retrieve Go Gin framework patterns
+- **Example Usage**:
+  ```bash
+  # Get latest Circle API docs
+  resolve-library-id "circle programmable wallet"
+  get-library-docs "/circle/programmable-wallet"
+  
+  # Find MetaMask delegation examples
+  resolve-library-id "metamask delegation toolkit"
+  get-library-docs "/metamask/delegation-toolkit"
+  ```
+
+### Tool Integration Patterns
+
+#### Development Workflow Integration
+1. **Feature Planning**: Use TaskMaster AI to break down complex blockchain features
+2. **Implementation**: Use Context7 for up-to-date API documentation
+3. **Testing**: Use Playwright for E2E testing of wallet flows
+4. **Debugging**: Use Browser Tools for live blockchain transaction monitoring
+5. **Code Review**: Use GitHub MCP for automated PR management
+
+#### Cyphera-Specific Use Cases
+
+##### Subscription Flow Testing
+```bash
+# Use Playwright to test complete subscription flow
+playwright.navigate("http://localhost:3000/create-subscription")
+playwright.fill("[data-testid='product-name']", "Premium Plan")
+playwright.click("[data-testid='connect-wallet']")
+# Verify MetaMask delegation popup appears
+playwright.waitForSelector("[data-testid='delegation-consent']")
+```
+
+##### Blockchain Integration Debugging
+```bash
+# Use Fetch MCP to verify Circle API responses
+fetch https://api.circle.com/v1/wallets/123/transactions
+# Use Memory MCP to store wallet addresses for testing
+memory.store("test_wallet_address", "0x123...")
+```
+
+##### Task Management for Multi-Service Features
+```bash
+# Break down a blockchain feature across services
+taskmaster add-task "Add support for USDC payments"
+taskmaster expand-task --services "api,delegation-server,web-app"
+taskmaster set-dependencies "api-changes" -> "frontend-integration"
+```
 
 ### Custom Scripts
 ```bash
@@ -404,11 +544,35 @@ make check-all  # Runs lint, test, and build
 make deploy-staging
 ```
 
+### Best Practices for MCP Tool Usage
+
+1. **Security Considerations**:
+   - Never expose API keys or secrets through MCP tools
+   - Use test environments for wallet integrations
+   - Verify blockchain network configurations before mainnet operations
+
+2. **Development Efficiency**:
+   - Use Memory MCP to avoid re-explaining complex blockchain concepts
+   - Leverage TaskMaster for coordinating work across multiple repositories
+   - Combine Playwright + Browser Tools for comprehensive UI testing
+
+3. **Debugging Workflows**:
+   - Use Context7 to verify you're using the latest API versions
+   - Combine Fetch + Memory to store and reuse API responses
+   - Use GitHub MCP to automatically create issues for discovered bugs
+
+4. **Testing Strategies**:
+   - Use Playwright for critical user flows (registration, payment, subscription management)
+   - Use Browser Tools to monitor real blockchain transactions
+   - Use Fetch MCP to test webhook endpoints with various payloads
+
 ### Leveraging Tools Effectively
 1. **Codebase Q&A**: Start here when exploring new areas of the codebase
 2. **Parallel Operations**: Run multiple Claude sessions for complex tasks
 3. **Visual Debugging**: Use Playwright MCP for UI/UX iterations
 4. **Automated Reviews**: Use GitHub Actions for code review assistance
+5. **Context Preservation**: Use Memory MCP to maintain development context across sessions
+6. **Real-time Testing**: Use Browser Tools for live blockchain interaction testing
 
 ## 9. AI-Ready Codebase Principles
 
