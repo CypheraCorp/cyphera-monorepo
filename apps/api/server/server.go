@@ -322,9 +322,21 @@ func InitializeRoutes(router *gin.Engine) {
 	// Configure and apply CORS middleware
 	router.Use(configureCORS())
 
+	// Add correlation ID middleware for request tracing
+	router.Use(middleware.CorrelationIDMiddleware())
+
 	// Apply rate limiting middleware globally
 	// This provides a default rate limit for all endpoints
 	router.Use(middleware.DefaultRateLimiter.Middleware())
+	
+	// Add enhanced logging in development mode
+	isDevelopment := os.Getenv("GIN_MODE") != "release"
+	router.Use(middleware.EnhancedLoggingMiddleware(isDevelopment))
+	
+	// Add basic request logging for production
+	if !isDevelopment {
+		router.Use(middleware.RequestLoggingMiddleware())
+	}
 
 	// Add Swagger endpoint
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -357,10 +369,7 @@ func InitializeRoutes(router *gin.Engine) {
 		c.JSON(http.StatusOK, gin.H{"message": "Server is shutting down..."})
 	})
 
-	// if we are not in production, log the request body
-	if os.Getenv("GIN_MODE") != "release" {
-		router.Use(auth.LogRequest())
-	}
+	// Request logging is now handled by the enhanced logging middleware added earlier
 
 	// API v1 routes
 	v1 := router.Group("/api/v1")
@@ -640,7 +649,7 @@ func configureCORS() gin.HandlerFunc {
 	// Get allowed headers from environment variable
 	headersEnv := os.Getenv("CORS_ALLOWED_HEADERS")
 	if headersEnv == "" {
-		corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-API-Key", "X-Workspace-ID", "X-Account-ID"}
+		corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-API-Key", "X-Workspace-ID", "X-Account-ID", "X-Correlation-ID"}
 	} else {
 		headers := strings.Split(headersEnv, ",")
 		for i, header := range headers {
@@ -664,6 +673,7 @@ func configureCORS() gin.HandlerFunc {
 			"X-RateLimit-Remaining", 
 			"X-RateLimit-Reset",
 			"Retry-After",
+			"X-Correlation-ID",
 		}
 	}
 

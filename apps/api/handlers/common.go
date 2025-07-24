@@ -200,12 +200,29 @@ func IsPrivateKeyValid(key string) bool {
 // sendError is a helper function that combines logging and error response
 // It logs the error with the given message and sends a JSON error response
 func sendError(c *gin.Context, statusCode int, message string, err error) {
+	// Get correlation ID from context
+	correlationID := ""
+	if id, exists := c.Get("correlationID"); exists {
+		correlationID, _ = id.(string)
+	}
+	
 	logger.Error(message,
 		zap.Error(err),
 		zap.String("path", c.Request.URL.Path),
 		zap.String("method", c.Request.Method),
+		zap.String("correlation_id", correlationID),
 	)
-	c.JSON(statusCode, ErrorResponse{Error: message})
+	
+	// Include correlation ID in error response for debugging
+	response := struct {
+		Error         string `json:"error"`
+		CorrelationID string `json:"correlation_id,omitempty"`
+	}{
+		Error:         message,
+		CorrelationID: correlationID,
+	}
+	
+	c.JSON(statusCode, response)
 }
 
 // handleDBError is a helper function that handles database errors and returns appropriate HTTP status codes
