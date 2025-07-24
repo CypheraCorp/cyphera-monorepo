@@ -360,6 +360,17 @@ export function CreateCircleWalletDialog({
 
       if (!walletResponse.ok) {
         const errorData = await walletResponse.json().catch(() => ({})); // Add catch for non-JSON errors
+        const correlationId = errorData.correlation_id || walletResponse.headers.get('X-Correlation-ID');
+        
+        // Log error with correlation ID for debugging
+        if (correlationId) {
+          console.error('Wallet creation failed', {
+            correlationId,
+            status: walletResponse.status,
+            error: errorData.error,
+          });
+        }
+        
         throw new Error(
           errorData.error ||
             `Failed to create wallet via backend (Status: ${walletResponse.status})`

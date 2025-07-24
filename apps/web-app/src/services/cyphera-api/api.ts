@@ -1,6 +1,7 @@
 // No longer need CypheraSupabaseUser here as setRequestData is removed
 import { clientLogger } from '@/lib/core/logger/logger-client';
 import { handleRateLimitedRequest } from '@/lib/api/rate-limit-handler';
+import { createHeadersWithCorrelationId, logErrorWithCorrelation } from '@/lib/utils/correlation';
 
 // Define a type for the user context data needed for authenticated requests
 export interface UserRequestContext {
@@ -48,7 +49,7 @@ export class CypheraAPI {
         'UserRequestContext must include an access_token for authenticated requests.'
       );
     }
-    const headers: Record<string, string> = {
+    let headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
       Authorization: `Bearer ${context.access_token}`, // Use token from context
@@ -69,6 +70,9 @@ export class CypheraAPI {
       headers['X-User-ID'] = context.user_id;
     }
 
+    // Add correlation ID support
+    headers = createHeadersWithCorrelationId(headers);
+
     return headers;
   }
 
@@ -79,7 +83,7 @@ export class CypheraAPI {
     if (!this.apiKey) {
       throw new Error('Cannot make public API call: CYPHERA_API_KEY is not configured.');
     }
-    const headers: Record<string, string> = {
+    let headers: Record<string, string> = {
       'X-API-Key': this.apiKey,
       'Content-Type': 'application/json',
       Accept: 'application/json',
@@ -89,6 +93,9 @@ export class CypheraAPI {
     if (csrfToken) {
       headers['X-CSRF-Token'] = csrfToken;
     }
+
+    // Add correlation ID support
+    headers = createHeadersWithCorrelationId(headers);
 
     return headers;
   }
@@ -128,31 +135,55 @@ export class CypheraAPI {
     } catch {
       // If parsing fails, check if it was an error response with non-JSON body
       if (!response.ok) {
-        clientLogger.error(`API Error Response (non-JSON ${response.status})`, {
+        const error = {
+          error: `API Error: ${response.status} - ${text.substring(0, 100)}`,
+          correlation_id: response.headers.get('X-Correlation-ID'),
+        };
+        logErrorWithCorrelation('API Error Response (non-JSON)', error, {
+          status: response.status,
           text: text.substring(0, 100),
         });
-        throw new Error(`API Error: ${response.status} - ${text.substring(0, 100)}`);
+        throw error;
       }
       // If it was a success response but not JSON
-      clientLogger.error('Failed to parse successful API response (non-JSON)', {
+      const error = {
+        error: `Invalid API response format: ${text.substring(0, 100)}`,
+        correlation_id: response.headers.get('X-Correlation-ID'),
+      };
+      logErrorWithCorrelation('Failed to parse successful API response', error, {
         text: text.substring(0, 100),
       });
-      throw new Error(`Invalid API response format: ${text.substring(0, 100)}`);
+      throw error;
     }
 
     // If parsing succeeded, check response status
     if (!response.ok) {
-      clientLogger.error(`API Error Response (JSON ${response.status})`, { data });
       interface ErrorResponse {
         error?: string | { message?: string };
         message?: string;
+        correlation_id?: string;
       }
       const errorData = data as ErrorResponse;
+      
+      // Preserve correlation_id from response if it exists
+      const correlationId = errorData.correlation_id || response.headers.get('X-Correlation-ID');
+      
       const message =
         (typeof errorData?.error === 'object' ? errorData.error.message : errorData?.error) ||
         errorData?.message ||
         `API Error: ${response.status}`;
-      throw new Error(message);
+      
+      const error = {
+        error: message,
+        correlation_id: correlationId,
+      };
+      
+      logErrorWithCorrelation('API Error Response', error, {
+        status: response.status,
+        data,
+      });
+      
+      throw error;
     }
 
     // Return parsed data for successful responses
