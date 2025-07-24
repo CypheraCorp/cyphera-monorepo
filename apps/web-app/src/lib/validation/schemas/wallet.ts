@@ -86,6 +86,7 @@ export const walletQuerySchema = z.object({
   network_type: networkTypeSchema.optional(),
   is_primary: z.coerce.boolean().optional(),
   verified: z.coerce.boolean().optional(),
+  include_circle_data: z.coerce.boolean().optional(),
 });
 
 // Type exports

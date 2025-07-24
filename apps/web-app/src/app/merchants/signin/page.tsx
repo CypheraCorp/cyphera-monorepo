@@ -70,7 +70,7 @@ export default function MerchantSignInPage() {
   }
 
   const handleAutoSignIn = useCallback(
-    async (providedUserInfo?: UserInfo) => {
+    async (providedUserInfo?: UserInfo, providedIdToken?: string) => {
       try {
         setCurrentStep('authenticate');
 
@@ -167,8 +167,29 @@ export default function MerchantSignInPage() {
           throw new Error(`Authentication failed. Please try again.`);
         }
 
-        await response.json();
+        const signinResponse = await response.json();
         addDebugInfo('Backend signin successful!');
+        
+        // Debug logging for authentication
+        console.log('=== AUTH DEBUG ===');
+        console.log('1. Full signin response:', signinResponse);
+        console.log('2. Raw userInfo from request:', accountRequest.metadata?.raw_userInfo);
+        console.log('3. Looking for idToken in raw_userInfo:', (accountRequest.metadata?.raw_userInfo as any)?.idToken);
+        console.log('4. Provided idToken parameter:', providedIdToken ? `${providedIdToken.substring(0, 20)}...` : 'NONE');
+        
+        // Update auth store with the response data
+        if (signinResponse.user && signinResponse.account) {
+          // The access token should come from the Web3Auth idToken
+          // Priority: providedIdToken > raw_userInfo.idToken > fallback
+          const idToken = providedIdToken || (accountRequest.metadata?.raw_userInfo as any)?.idToken || '';
+          
+          console.log('5. Final ID Token to use:', idToken ? `${idToken.substring(0, 20)}...` : 'NONE');
+          console.log('6. Setting tokens in auth store with:', idToken || 'web3auth_session_token');
+          
+          setTokens(idToken || 'web3auth_session_token');
+          addDebugInfo('Auth store updated with tokens');
+        }
+        console.log('=== END AUTH DEBUG ===');
 
         // Auth state will automatically update via React Query
         addDebugInfo('Authentication state updated');
@@ -190,7 +211,7 @@ export default function MerchantSignInPage() {
         setCurrentStep('idle');
       }
     },
-    [userInfo, web3Auth, address, router, addDebugInfo]
+    [userInfo, web3Auth, address, router, addDebugInfo, setTokens]
   );
 
   const handleSignIn = async () => {
@@ -203,7 +224,22 @@ export default function MerchantSignInPage() {
       // Check if already connected
       if (isConnected && userInfo) {
         addDebugInfo('Already connected, proceeding with signin...');
-        await handleAutoSignIn();
+        // Try to get ID token for already connected user
+        let existingIdToken = null;
+        try {
+          const existingUserInfo = await web3Auth?.getUserInfo();
+          interface Web3AuthUserInfo {
+            idToken?: string;
+            [key: string]: unknown;
+          }
+          const userInfoTyped = existingUserInfo as Web3AuthUserInfo;
+          existingIdToken = userInfoTyped?.idToken || null;
+          addDebugInfo(`Got existing ID token from getUserInfo: ${existingIdToken ? 'Yes' : 'No'}`);
+        } catch (tokenErr) {
+          addDebugInfo(`Failed to get existing ID token: ${tokenErr}`);
+        }
+        
+        await handleAutoSignIn(userInfo, existingIdToken);
         return;
       }
 
@@ -222,9 +258,39 @@ export default function MerchantSignInPage() {
 
         // Try to get user info directly from web3Auth if hook isn't working
         let directUserInfo = null;
+        let idToken = null;
         try {
           if (web3Auth?.connected) {
             directUserInfo = await web3Auth.getUserInfo();
+            
+            // Try to get the ID token from Web3Auth
+            try {
+              // Method 1: Check if getUserInfo contains idToken (as per old implementation)
+              interface Web3AuthUserInfo {
+                idToken?: string;
+                [key: string]: unknown;
+              }
+              const userInfoTyped = directUserInfo as Web3AuthUserInfo;
+              idToken = userInfoTyped?.idToken || null;
+              addDebugInfo(`Got ID token from getUserInfo: ${idToken ? 'Yes' : 'No'}`);
+              
+              // Log all available keys in userInfo for debugging
+              if (directUserInfo) {
+                addDebugInfo(`Available userInfo keys: ${Object.keys(directUserInfo).join(', ')}`);
+              }
+              
+              // Method 2: Also check the userInfo from hook if no idToken found
+              if (!idToken && userInfo) {
+                const hookUserInfoTyped = userInfo as Web3AuthUserInfo;
+                idToken = hookUserInfoTyped?.idToken || null;
+                addDebugInfo(`Got ID token from hook userInfo: ${idToken ? 'Yes' : 'No'}`);
+                if (userInfo) {
+                  addDebugInfo(`Hook userInfo keys: ${Object.keys(userInfo).join(', ')}`);
+                }
+              }
+            } catch (tokenErr) {
+              addDebugInfo(`Failed to get ID token: ${tokenErr}`);
+            }
           }
         } catch (err) {
           addDebugInfo(`Failed to get direct user info: ${err}`);
@@ -245,7 +311,7 @@ export default function MerchantSignInPage() {
             addDebugInfo('Using direct user info from web3Auth.getUserInfo()');
           }
 
-          await handleAutoSignIn(availableUserInfo);
+          await handleAutoSignIn(availableUserInfo, idToken);
           return;
         }
 
@@ -261,9 +327,23 @@ export default function MerchantSignInPage() {
 
       // Try one more time with current state, including direct user info
       let finalUserInfo = null;
+      let finalIdToken = null;
       try {
         if (web3Auth?.connected) {
           finalUserInfo = await web3Auth.getUserInfo();
+          
+          // Try to get ID token one more time
+          try {
+            interface Web3AuthUserInfo {
+              idToken?: string;
+              [key: string]: unknown;
+            }
+            const userInfoTyped = finalUserInfo as Web3AuthUserInfo;
+            finalIdToken = userInfoTyped?.idToken || null;
+            addDebugInfo(`Got final ID token from getUserInfo: ${finalIdToken ? 'Yes' : 'No'}`);
+          } catch (tokenErr) {
+            addDebugInfo(`Failed to get final ID token: ${tokenErr}`);
+          }
         }
       } catch (err) {
         addDebugInfo(`Failed to get final user info: ${err}`);
@@ -273,7 +353,7 @@ export default function MerchantSignInPage() {
 
       if ((isConnected || web3Auth?.connected) && availableFinalUserInfo) {
         addDebugInfo('Found connection on timeout check, proceeding...');
-        await handleAutoSignIn(availableFinalUserInfo);
+        await handleAutoSignIn(availableFinalUserInfo, finalIdToken);
         return;
       }
 

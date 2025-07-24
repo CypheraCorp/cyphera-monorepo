@@ -798,7 +798,7 @@ VALUES
     (
         (SELECT id FROM workspaces WHERE name = 'Admin Workspace'),
         'Admin API Key',
-        '$2a$10$WC3hxra/5dT.KzppxM0fVO1aALLOjq5cW78BRd.S6SgPV59AERLIa',
+        '$2a$10$ahaDS1kD0cLEu3APM2yt6eBHZG0uernuDDVn8OCj5S.rzFDMm8bia',
         'cyk_admin***',
         'admin'
     )

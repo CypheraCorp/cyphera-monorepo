@@ -412,10 +412,33 @@ func (h *WalletHandler) GetWallet(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /wallets [get]
 func (h *WalletHandler) ListWallets(c *gin.Context) {
-	// Get workspace ID from header (Assuming X-Workspace-ID is used now)
+	// Get workspace ID from header - try both cases
 	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	if workspaceIDStr == "" {
+		workspaceIDStr = c.GetHeader("X-Workspace-Id")
+	}
+	
+	// Add debug logging with all header variations
+	logger.Log.Info("ListWallets called",
+		zap.String("workspace_id_header", workspaceIDStr),
+		zap.String("X-Workspace-ID", c.GetHeader("X-Workspace-ID")),
+		zap.String("X-Workspace-Id", c.GetHeader("X-Workspace-Id")),
+		zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
+		zap.String("auth_header_preview", func() string {
+			auth := c.GetHeader("Authorization")
+			if len(auth) > 20 {
+				return auth[:20] + "..."
+			}
+			return auth
+		}()),
+	)
+	
 	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
+		logger.Log.Error("Failed to parse workspace ID",
+			zap.String("workspace_id_str", workspaceIDStr),
+			zap.Error(err),
+		)
 		sendError(c, http.StatusBadRequest, "Invalid or missing X-Workspace-ID header", err)
 		return
 	}

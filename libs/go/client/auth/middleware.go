@@ -103,12 +103,14 @@ type RequestLog struct {
 func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Debug: Log all headers to see what's being sent
-		logger.Log.Debug("Request headers",
+		logger.Log.Info("Request headers in auth middleware",
 			zap.String("authorization", c.GetHeader("Authorization")),
 			zap.String("x-api-key", c.GetHeader("X-API-Key")),
 			zap.String("x-workspace-id", c.GetHeader("X-Workspace-ID")),
+			zap.String("x-workspace-id-lowercase", c.GetHeader("X-Workspace-Id")),
 			zap.String("x-account-id", c.GetHeader("X-Account-ID")),
 			zap.String("user-agent", c.GetHeader("User-Agent")),
+			zap.String("path", c.Request.URL.Path),
 		)
 
 		// First check for API key in header
@@ -153,6 +155,14 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerF
 			c.Abort()
 			return
 		}
+		
+		// Special handling for Web3Auth users without JWT tokens
+		if authHeader == "Bearer no_jwt_token_available" {
+			logger.Log.Debug("Web3Auth user without JWT token - authentication not supported yet")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Web3Auth JWT token required for authentication"})
+			c.Abort()
+			return
+		}
 
 		user, account, err := ac.validateJWTToken(c, queries, authHeader)
 		if err != nil {
@@ -164,12 +174,57 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerF
 			return
 		}
 
-		// require workspace ID in the header
+		// require workspace ID in the header - check both cases
 		workspaceID := c.GetHeader("X-Workspace-ID")
 		if workspaceID == "" {
-			logger.Log.Debug("No workspace ID provided")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "No workspace ID provided"})
+			workspaceID = c.GetHeader("X-Workspace-Id")
+		}
+		if workspaceID == "" {
+			logger.Log.Error("No workspace ID provided",
+				zap.String("X-Workspace-ID", c.GetHeader("X-Workspace-ID")),
+				zap.String("X-Workspace-Id", c.GetHeader("X-Workspace-Id")),
+				zap.Any("headers", c.Request.Header),
+			)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No workspace ID provided"})
 			c.Abort()
+			return
+		}
+		
+		// Validate that the workspace belongs to the user's account
+		workspaceUUID, err := uuid.Parse(workspaceID)
+		if err != nil {
+			logger.Log.Error("Invalid workspace ID format",
+				zap.String("workspace_id", workspaceID),
+				zap.Error(err),
+			)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid workspace ID format"})
+			c.Abort()
+			return
+		}
+		
+		// Get workspace to verify it belongs to the account
+		workspace, err := queries.GetWorkspace(c.Request.Context(), workspaceUUID)
+		if err != nil {
+			logger.Log.Error("Failed to get workspace",
+				zap.String("workspace_id", workspaceID),
+				zap.String("account_id", account.ID.String()),
+				zap.Error(err),
+			)
+			c.JSON(http.StatusForbidden, gin.H{"error": "Workspace not found or access denied"})
+			c.Abort()
+			return
+		}
+		
+		// Verify workspace belongs to the user's account
+		if workspace.AccountID != account.ID {
+			logger.Log.Error("Workspace does not belong to user's account",
+				zap.String("workspace_id", workspaceID),
+				zap.String("workspace_account_id", workspace.AccountID.String()),
+				zap.String("user_account_id", account.ID.String()),
+			)
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to workspace"})
+			c.Abort()
+			return
 		}
 
 		// Set context with user and account information
@@ -291,6 +346,7 @@ func (ac *AuthClient) validateJWTToken(c *gin.Context, queries *db.Queries, auth
 	// Extract Web3Auth ID from token - prefer userId over subject
 	// Parse the token as MapClaims to get all fields
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	
 	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
 	mapToken, _, mapErr := parser.ParseUnverified(tokenString, jwt.MapClaims{})
 
@@ -411,12 +467,13 @@ func (ac *AuthClient) validateWeb3AuthToken(tokenString string) (*Web3AuthClaims
 		tokenPreview = "empty_token"
 	}
 
-	logger.Log.Debug("Validating Web3Auth token",
+	logger.Log.Info("Validating Web3Auth token",
 		zap.String("token_preview", tokenPreview),
 		zap.Int("token_length", len(tokenString)),
 		zap.String("jwks_url", ac.Web3AuthJWKSURL),
 		zap.String("issuer", ac.Web3AuthIssuer),
 		zap.String("audience", ac.Web3AuthAudience),
+		zap.Bool("jwks_initialized", ac.jwks != nil),
 	)
 
 	// Validate that JWKS is initialized

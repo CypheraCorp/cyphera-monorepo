@@ -26,13 +26,18 @@ export async function POST(request: NextRequest) {
     const rawUserInfo = accountData.metadata?.raw_userInfo as Record<string, unknown>;
     let accessToken = rawUserInfo?.idToken as string;
 
-    // Handle the case where frontend sends placeholder token
-    if (!accessToken || accessToken === 'web3auth_no_token') {
-      // Generate a temporary session token for Web3Auth users without JWT
-      accessToken = `web3auth_session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      logger.warn('No valid JWT token from Web3Auth, using temporary session token', {
+    // Handle the case where frontend sends placeholder token or no token
+    if (!accessToken || accessToken === 'web3auth_no_token' || accessToken === '') {
+      // Log what we received for debugging
+      logger.info('No JWT token from Web3Auth', {
         accountId: accountData.metadata?.ownerWeb3AuthId,
+        hasRawUserInfo: !!rawUserInfo,
+        rawUserInfoKeys: rawUserInfo ? Object.keys(rawUserInfo) : [],
       });
+      
+      // For now, we'll use a placeholder that the backend can recognize
+      // The backend should validate using Web3Auth metadata instead of JWT
+      accessToken = 'no_jwt_token_available';
     }
 
     // Log wallet data if present
