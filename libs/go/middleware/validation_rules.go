@@ -7,54 +7,149 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // Common validation configurations for different endpoints
 
 // Product validation rules
 var CreateProductValidation = ValidationConfig{
-	MaxBodySize: 1024 * 1024, // 1MB
+	MaxBodySize:        1024 * 1024, // 1MB
+	AllowUnknownFields: false,       // Strict validation - reject unknown fields
 	Rules: []ValidationRule{
 		{
 			Field:     "name",
 			Type:      "string",
 			Required:  true,
 			MinLength: 1,
-			MaxLength: 255,
+			MaxLength: 100,
 			Sanitize:  true,
 		},
 		{
 			Field:     "description",
 			Type:      "string",
 			Required:  false,
-			MaxLength: 1000,
+			MaxLength: 500,
 			Sanitize:  true,
 		},
 		{
-			Field:         "type",
-			Type:          "string",
-			Required:      true,
-			AllowedValues: []string{"subscription", "one_time"},
+			Field:    "wallet_id",
+			Type:     "uuid",
+			Required: true,
 		},
 		{
-			Field:    "currency",
+			Field:    "active",
+			Type:     "boolean",
+			Required: true, // Changed to required to match frontend schema
+		},
+		{
+			Field:    "image_url",
 			Type:     "string",
-			Required: true,
-			Pattern:  `^[A-Z]{3}$`, // ISO 4217 currency code
+			Required: false,
+			Custom: func(value interface{}) error {
+				// Allow empty string or valid URL
+				str, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("must be a string")
+				}
+				if str == "" {
+					return nil // Empty string is allowed
+				}
+				// Validate URL format
+				if !URLRegex.MatchString(str) {
+					return fmt.Errorf("must be a valid URL")
+				}
+				return nil
+			},
 		},
 		{
-			Field:    "amount",
-			Type:     "number",
-			Required: true,
-			Min:      float64Ptr(0),
-			Max:      float64Ptr(1000000), // Max 1 million
+			Field:    "url",
+			Type:     "string",
+			Required: false,
+			Custom: func(value interface{}) error {
+				// Allow empty string or valid URL
+				str, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("must be a string")
+				}
+				if str == "" {
+					return nil // Empty string is allowed
+				}
+				// Validate URL format
+				if !URLRegex.MatchString(str) {
+					return fmt.Errorf("must be a valid URL")
+				}
+				return nil
+			},
 		},
 		{
-			Field:         "billing_period",
-			Type:          "string",
-			Required:      false,
-			AllowedValues: []string{"daily", "weekly", "monthly", "yearly"},
+			Field:    "metadata",
+			Type:     "object",
+			Required: false,
+		},
+		{
+			Field:    "prices",
+			Type:     "array",
+			Required: true,
+			Custom: func(value interface{}) error {
+				// Ensure at least one price
+				arr, ok := value.([]interface{})
+				if !ok {
+					return fmt.Errorf("prices must be an array")
+				}
+				if len(arr) == 0 {
+					return fmt.Errorf("at least one price is required")
+				}
+
+				// Validate each price object
+				for i, priceInterface := range arr {
+					price, ok := priceInterface.(map[string]interface{})
+					if !ok {
+						return fmt.Errorf("price at index %d must be an object", i)
+					}
+
+					// Check required fields
+					if _, exists := price["active"]; !exists {
+						return fmt.Errorf("price at index %d: active field is required", i)
+					}
+					if _, exists := price["type"]; !exists {
+						return fmt.Errorf("price at index %d: type field is required", i)
+					}
+					if _, exists := price["currency"]; !exists {
+						return fmt.Errorf("price at index %d: currency field is required", i)
+					}
+					if _, exists := price["unit_amount_in_pennies"]; !exists {
+						return fmt.Errorf("price at index %d: unit_amount_in_pennies field is required", i)
+					}
+
+					// Validate type
+					priceType, ok := price["type"].(string)
+					if !ok {
+						return fmt.Errorf("price at index %d: type must be a string", i)
+					}
+					if priceType != "one_off" && priceType != "recurring" {
+						return fmt.Errorf("price at index %d: type must be 'one_off' or 'recurring'", i)
+					}
+
+					// If recurring, validate interval fields
+					if priceType == "recurring" {
+						if _, exists := price["interval_type"]; !exists {
+							return fmt.Errorf("price at index %d: interval_type is required for recurring prices", i)
+						}
+						if _, exists := price["interval_count"]; !exists {
+							return fmt.Errorf("price at index %d: interval_count is required for recurring prices", i)
+						}
+					}
+				}
+				return nil
+			},
+		},
+		{
+			Field:    "product_tokens",
+			Type:     "array",
+			Required: false,
 		},
 	},
 }
@@ -232,6 +327,56 @@ var CreateSubscriptionValidation = ValidationConfig{
 	},
 }
 
+// Subscription validation rules for delegation-based subscription
+var CreateDelegationSubscriptionValidation = ValidationConfig{
+	MaxBodySize: 256 * 1024, // 256KB
+	Rules: []ValidationRule{
+		{
+			Field:    "price_id",
+			Type:     "uuid",
+			Required: true,
+		},
+		{
+			Field:    "subscriber_address",
+			Type:     "string",
+			Required: true,
+			Pattern:  `^0x[a-fA-F0-9]{40}$`, // Ethereum address format
+		},
+		{
+			Field:    "product_token_id",
+			Type:     "uuid",
+			Required: true,
+		},
+		{
+			Field:    "token_amount",
+			Type:     "string",
+			Required: true,
+			Pattern:  `^\d+$`, // Must be a positive integer string
+		},
+		{
+			Field:    "delegation",
+			Type:     "object",
+			Required: true,
+			Custom: func(value interface{}) error {
+				delegation, ok := value.(map[string]interface{})
+				if !ok {
+					return fmt.Errorf("delegation must be an object")
+				}
+
+				// Check required delegation fields
+				requiredFields := []string{"delegate", "delegator", "authority", "signature"}
+				for _, field := range requiredFields {
+					if _, exists := delegation[field]; !exists {
+						return fmt.Errorf("delegation.%s is required", field)
+					}
+				}
+
+				return nil
+			},
+		},
+	},
+}
+
 // User validation rules
 var UpdateUserValidation = ValidationConfig{
 	MaxBodySize:        512 * 1024, // 512KB
@@ -327,6 +472,18 @@ var ListQueryValidation = ValidationConfig{
 			Required:      false,
 			AllowedValues: []string{"active", "inactive", "pending", "cancelled"},
 		},
+		{
+			Field:         "include_circle_data",
+			Type:          "string",
+			Required:      false,
+			AllowedValues: []string{"true", "false"},
+		},
+		{
+			Field:         "wallet_type",
+			Type:          "string",
+			Required:      false,
+			AllowedValues: []string{"wallet", "circle_wallet"},
+		},
 	},
 }
 
@@ -387,6 +544,13 @@ func ValidateBlockchainAddress(blockchain string) func(interface{}) error {
 // ValidateQueryParams creates validation for URL query parameters
 func ValidateQueryParams(config ValidationConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Add debug logging
+		logger.Log.Info("=== QUERY PARAM VALIDATION START ===",
+			zap.String("path", c.Request.URL.Path),
+			zap.String("query", c.Request.URL.RawQuery),
+			zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
+		)
+
 		// Parse query parameters into a map
 		params := make(map[string]interface{})
 		for key, values := range c.Request.URL.Query() {
@@ -394,21 +558,36 @@ func ValidateQueryParams(config ValidationConfig) gin.HandlerFunc {
 				// Try to parse as number if it looks like one
 				if num, err := strconv.ParseFloat(values[0], 64); err == nil {
 					params[key] = num
+					logger.Log.Info("Query param parsed as number", zap.String("key", key), zap.Float64("value", num))
 				} else if values[0] == "true" || values[0] == "false" {
-					params[key] = values[0] == "true"
+					// KEEP AS STRING for validation rules that expect string type
+					params[key] = values[0]
+					logger.Log.Info("Query param kept as string", zap.String("key", key), zap.String("value", values[0]))
 				} else {
 					params[key] = values[0]
+					logger.Log.Info("Query param as string", zap.String("key", key), zap.String("value", values[0]))
 				}
 			}
 		}
 
+		logger.Log.Info("Parsed query params", zap.Any("params", params))
+
 		// Validate fields
 		errors := validateFields(params, config.Rules, config.AllowUnknownFields)
 		if len(errors) > 0 {
+			logger.Log.Error("Query validation failed",
+				zap.Any("errors", errors),
+				zap.Any("params", params),
+				zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
+			)
 			c.JSON(http.StatusBadRequest, ValidationErrors{Errors: errors})
 			c.Abort()
 			return
 		}
+
+		logger.Log.Info("=== QUERY PARAM VALIDATION PASSED ===",
+			zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
+		)
 
 		// Store validated params in context
 		c.Set("validatedQuery", params)

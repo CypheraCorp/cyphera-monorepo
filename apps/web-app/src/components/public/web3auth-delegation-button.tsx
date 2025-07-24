@@ -428,8 +428,13 @@ export function Web3AuthDelegationButton({
         product_token_id: productTokenId,
         subscriber_address: smartAccountAddress, // Required by backend
         token_amount: tokenAmount?.toString() || '0', // Required by backend
-        delegation: signedDelegation, // Should be object, not string
+        delegation: signedDelegation, // Send the object, not the formatted string
       };
+
+      // Log the payload we're sending
+      console.log('📤 Sending subscription payload:', JSON.stringify(subscriptionPayload, null, 2));
+      console.log('Formatted delegation for display:', formattedDelegation);
+      console.log('Raw delegation object being sent:', signedDelegation);
 
       const response = await fetch('/api/public/prices/' + priceId + '/subscribe', {
         method: 'POST',
@@ -439,13 +444,27 @@ export function Web3AuthDelegationButton({
         body: JSON.stringify(subscriptionPayload),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create subscription');
-      }
+      // Log the raw response for debugging
+      console.log('📥 Response status:', response.status);
+      const responseText = await response.text();
+      console.log('📥 Response body:', responseText);
 
-      // Update the subscription success handling section
-      const subscriptionResult: SubscriptionResponse = await response.json();
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch {
+          errorData = { message: responseText };
+        }
+        
+        // Log the full error details
+        console.error('❌ Subscription error details:', errorData);
+        
+        throw new Error(errorData.message || errorData.error || 'Failed to create subscription');
+      }
+      
+      // Parse successful response
+      const subscriptionResult: SubscriptionResponse = JSON.parse(responseText);
       logger.log('✅ Subscription created successfully:', subscriptionResult);
 
       // Extract transaction and subscription information

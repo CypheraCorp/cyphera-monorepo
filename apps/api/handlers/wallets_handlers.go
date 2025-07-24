@@ -412,6 +412,12 @@ func (h *WalletHandler) GetWallet(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /wallets [get]
 func (h *WalletHandler) ListWallets(c *gin.Context) {
+	// FIRST: Log that we entered the handler
+	logger.Log.Info("=== ENTERED ListWallets handler ===",
+		zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
+		zap.String("path", c.Request.URL.Path),
+	)
+	
 	// Get workspace ID from header - try both cases
 	workspaceIDStr := c.GetHeader("X-Workspace-ID")
 	if workspaceIDStr == "" {

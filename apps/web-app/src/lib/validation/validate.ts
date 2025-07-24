@@ -35,15 +35,33 @@ export async function validateBody<T>(
   request: NextRequest,
   schema: ZodSchema<T>
 ): Promise<{ data: T | null; error: NextResponse | null }> {
+  let bodyData: any;
+  
   try {
-    const body = await request.json();
-    const data = schema.parse(body);
+    bodyData = await request.json();
+    
+    // Log the incoming body for debugging
+    logger.info('Validating request body', {
+      path: request.nextUrl.pathname,
+      body: JSON.stringify(bodyData, null, 2),
+    });
+    
+    const data = schema.parse(bodyData);
     return { data, error: null };
   } catch (error) {
     if (error instanceof ZodError) {
+      // Enhanced logging with full error details
       logger.warn('Request validation failed', {
         path: request.nextUrl.pathname,
         errors: error.errors,
+        issues: error.issues.map(issue => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+          code: issue.code,
+          expected: (issue as any).expected,
+          received: (issue as any).received,
+        })),
+        body: JSON.stringify(bodyData), // Log the parsed body
       });
       return {
         data: null,

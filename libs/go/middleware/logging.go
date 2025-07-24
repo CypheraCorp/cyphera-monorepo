@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/logger"
@@ -91,8 +92,12 @@ func EnhancedLoggingMiddleware(isDevelopment bool) gin.HandlerFunc {
 		// Parse response body for logging (only for JSON content)
 		var responseJSON interface{}
 		responseBody := blw.body.Bytes()
-		if c.Writer.Header().Get("Content-Type") == "application/json" && len(responseBody) > 0 {
-			json.Unmarshal(responseBody, &responseJSON)
+		contentType := c.Writer.Header().Get("Content-Type")
+		if strings.HasPrefix(contentType, "application/json") && len(responseBody) > 0 {
+			if err := json.Unmarshal(responseBody, &responseJSON); err != nil {
+				log.Debug("Failed to parse response JSON", zap.Error(err))
+				responseJSON = string(responseBody)
+			}
 		}
 		
 		// Response headers

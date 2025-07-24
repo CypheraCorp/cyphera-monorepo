@@ -24,10 +24,9 @@ export const delegationSchema = z.object({
 export const subscribeRequestSchema = z.object({
   subscriber_address: z.string()
     .regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address format'),
-  price_id: z.string().uuid('Invalid price ID format'),
   product_token_id: z.string().uuid('Invalid product token ID format'),
   token_amount: z.string()
-    .regex(/^\d+(\.\d+)?$/, 'Invalid token amount format'),
+    .regex(/^\d+$/, 'Invalid token amount format'), // Only integers, no decimals
   delegation: delegationSchema,
 });
 

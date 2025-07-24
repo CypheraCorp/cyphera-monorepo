@@ -239,7 +239,7 @@ export default function MerchantSignInPage() {
           addDebugInfo(`Failed to get existing ID token: ${tokenErr}`);
         }
         
-        await handleAutoSignIn(userInfo, existingIdToken);
+        await handleAutoSignIn(userInfo, existingIdToken || undefined);
         return;
       }
 
@@ -311,7 +311,7 @@ export default function MerchantSignInPage() {
             addDebugInfo('Using direct user info from web3Auth.getUserInfo()');
           }
 
-          await handleAutoSignIn(availableUserInfo, idToken);
+          await handleAutoSignIn(availableUserInfo, idToken || undefined);
           return;
         }
 
@@ -353,7 +353,7 @@ export default function MerchantSignInPage() {
 
       if ((isConnected || web3Auth?.connected) && availableFinalUserInfo) {
         addDebugInfo('Found connection on timeout check, proceeding...');
-        await handleAutoSignIn(availableFinalUserInfo, finalIdToken);
+        await handleAutoSignIn(availableFinalUserInfo, finalIdToken || undefined);
         return;
       }
 

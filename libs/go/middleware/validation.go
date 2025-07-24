@@ -59,8 +59,26 @@ type ValidationErrors struct {
 // ValidateInput creates a validation middleware with the given configuration
 func ValidateInput(config ValidationConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Get correlation ID for logging
+		correlationID, _ := c.Get("correlation_id")
+		correlationIDStr, _ := correlationID.(string)
+
+		// Log validation start
+		logger.Log.Info("Starting validation middleware",
+			zap.String("correlation_id", correlationIDStr),
+			zap.String("endpoint", c.Request.URL.Path),
+			zap.String("method", c.Request.Method),
+			zap.Int("rules_count", len(config.Rules)),
+			zap.Bool("allow_unknown_fields", config.AllowUnknownFields),
+		)
+
 		// Check request size
 		if config.MaxBodySize > 0 && c.Request.ContentLength > config.MaxBodySize {
+			logger.Log.Warn("Request body too large",
+				zap.String("correlation_id", correlationIDStr),
+				zap.Int64("content_length", c.Request.ContentLength),
+				zap.Int64("max_size", config.MaxBodySize),
+			)
 			c.JSON(http.StatusRequestEntityTooLarge, gin.H{
 				"error": fmt.Sprintf("Request body too large. Maximum size: %d bytes", config.MaxBodySize),
 			})
@@ -71,6 +89,10 @@ func ValidateInput(config ValidationConfig) gin.HandlerFunc {
 		// Parse request body
 		var body map[string]interface{}
 		if err := c.ShouldBindJSON(&body); err != nil {
+			logger.Log.Error("Failed to parse JSON body",
+				zap.String("correlation_id", correlationIDStr),
+				zap.Error(err),
+			)
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "Invalid JSON in request body",
 			})
@@ -78,13 +100,34 @@ func ValidateInput(config ValidationConfig) gin.HandlerFunc {
 			return
 		}
 
+		// Log parsed body (excluding sensitive fields)
+		logBody := make(map[string]interface{})
+		for k, v := range body {
+			if k != "password" && k != "api_key" && k != "secret" {
+				logBody[k] = v
+			}
+		}
+		logger.Log.Debug("Parsed request body",
+			zap.String("correlation_id", correlationIDStr),
+			zap.Any("body", logBody),
+		)
+
 		// Validate fields
 		errors := validateFields(body, config.Rules, config.AllowUnknownFields)
 		if len(errors) > 0 {
+			logger.Log.Info("Validation failed",
+				zap.String("correlation_id", correlationIDStr),
+				zap.Any("errors", errors),
+				zap.Any("request_body", logBody),
+			)
 			c.JSON(http.StatusBadRequest, ValidationErrors{Errors: errors})
 			c.Abort()
 			return
 		}
+
+		logger.Log.Info("Validation successful",
+			zap.String("correlation_id", correlationIDStr),
+		)
 
 		// Store validated body back to context for handler use
 		bodyBytes, _ := json.Marshal(body)
@@ -100,13 +143,32 @@ func validateFields(data map[string]interface{}, rules []ValidationRule, allowUn
 	var errors []ValidationError
 	validatedFields := make(map[string]bool)
 
+	logger.Log.Debug("Starting field validation",
+		zap.Int("field_count", len(data)),
+		zap.Int("rule_count", len(rules)),
+		zap.Bool("allow_unknown", allowUnknown),
+	)
+
 	// Check each rule
 	for _, rule := range rules {
 		validatedFields[rule.Field] = true
 		value, exists := data[rule.Field]
 
+		logger.Log.Debug("Validating field",
+			zap.String("field", rule.Field),
+			zap.Bool("exists", exists),
+			zap.Bool("required", rule.Required),
+			zap.String("type", rule.Type),
+			zap.Any("value", value),
+		)
+
 		// Check required fields
 		if rule.Required && (!exists || value == nil || value == "") {
+			logger.Log.Debug("Required field missing or empty",
+				zap.String("field", rule.Field),
+				zap.Bool("exists", exists),
+				zap.Any("value", value),
+			)
 			errors = append(errors, ValidationError{
 				Field:   rule.Field,
 				Message: fmt.Sprintf("%s is required", rule.Field),
@@ -116,6 +178,9 @@ func validateFields(data map[string]interface{}, rules []ValidationRule, allowUn
 
 		// Skip validation if field doesn't exist and not required
 		if !exists || value == nil {
+			logger.Log.Debug("Skipping non-existent optional field",
+				zap.String("field", rule.Field),
+			)
 			continue
 		}
 
@@ -124,6 +189,10 @@ func validateFields(data map[string]interface{}, rules []ValidationRule, allowUn
 		case "string":
 			err := validateString(value, rule)
 			if err != nil {
+				logger.Log.Debug("String validation failed",
+					zap.String("field", rule.Field),
+					zap.Error(err),
+				)
 				errors = append(errors, ValidationError{
 					Field:   rule.Field,
 					Message: err.Error(),
@@ -137,6 +206,10 @@ func validateFields(data map[string]interface{}, rules []ValidationRule, allowUn
 
 		case "number", "int", "float":
 			if err := validateNumber(value, rule); err != nil {
+				logger.Log.Debug("Number validation failed",
+					zap.String("field", rule.Field),
+					zap.Error(err),
+				)
 				errors = append(errors, ValidationError{
 					Field:   rule.Field,
 					Message: err.Error(),
@@ -145,6 +218,10 @@ func validateFields(data map[string]interface{}, rules []ValidationRule, allowUn
 
 		case "boolean", "bool":
 			if _, ok := value.(bool); !ok {
+				logger.Log.Debug("Boolean validation failed",
+					zap.String("field", rule.Field),
+					zap.Any("value", value),
+				)
 				errors = append(errors, ValidationError{
 					Field:   rule.Field,
 					Message: "must be a boolean",
@@ -153,6 +230,10 @@ func validateFields(data map[string]interface{}, rules []ValidationRule, allowUn
 
 		case "uuid":
 			if err := validateUUID(value); err != nil {
+				logger.Log.Debug("UUID validation failed",
+					zap.String("field", rule.Field),
+					zap.Error(err),
+				)
 				errors = append(errors, ValidationError{
 					Field:   rule.Field,
 					Message: err.Error(),
@@ -161,6 +242,10 @@ func validateFields(data map[string]interface{}, rules []ValidationRule, allowUn
 
 		case "email":
 			if err := validateEmail(value); err != nil {
+				logger.Log.Debug("Email validation failed",
+					zap.String("field", rule.Field),
+					zap.Error(err),
+				)
 				errors = append(errors, ValidationError{
 					Field:   rule.Field,
 					Message: err.Error(),
@@ -169,6 +254,10 @@ func validateFields(data map[string]interface{}, rules []ValidationRule, allowUn
 
 		case "url":
 			if err := validateURL(value); err != nil {
+				logger.Log.Debug("URL validation failed",
+					zap.String("field", rule.Field),
+					zap.Error(err),
+				)
 				errors = append(errors, ValidationError{
 					Field:   rule.Field,
 					Message: err.Error(),
@@ -177,6 +266,10 @@ func validateFields(data map[string]interface{}, rules []ValidationRule, allowUn
 
 		case "array":
 			if _, ok := value.([]interface{}); !ok {
+				logger.Log.Debug("Array validation failed",
+					zap.String("field", rule.Field),
+					zap.Any("value_type", fmt.Sprintf("%T", value)),
+				)
 				errors = append(errors, ValidationError{
 					Field:   rule.Field,
 					Message: "must be an array",
@@ -185,6 +278,10 @@ func validateFields(data map[string]interface{}, rules []ValidationRule, allowUn
 
 		case "object":
 			if _, ok := value.(map[string]interface{}); !ok {
+				logger.Log.Debug("Object validation failed",
+					zap.String("field", rule.Field),
+					zap.Any("value_type", fmt.Sprintf("%T", value)),
+				)
 				errors = append(errors, ValidationError{
 					Field:   rule.Field,
 					Message: "must be an object",
@@ -195,6 +292,10 @@ func validateFields(data map[string]interface{}, rules []ValidationRule, allowUn
 		// Custom validation
 		if rule.Custom != nil {
 			if err := rule.Custom(value); err != nil {
+				logger.Log.Debug("Custom validation failed",
+					zap.String("field", rule.Field),
+					zap.Error(err),
+				)
 				errors = append(errors, ValidationError{
 					Field:   rule.Field,
 					Message: err.Error(),
@@ -207,6 +308,9 @@ func validateFields(data map[string]interface{}, rules []ValidationRule, allowUn
 	if !allowUnknown {
 		for field := range data {
 			if !validatedFields[field] {
+				logger.Log.Debug("Unknown field detected",
+					zap.String("field", field),
+				)
 				errors = append(errors, ValidationError{
 					Field:   field,
 					Message: "unknown field",
@@ -214,6 +318,10 @@ func validateFields(data map[string]interface{}, rules []ValidationRule, allowUn
 			}
 		}
 	}
+
+	logger.Log.Debug("Field validation complete",
+		zap.Int("error_count", len(errors)),
+	)
 
 	return errors
 }

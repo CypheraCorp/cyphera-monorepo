@@ -32,6 +32,16 @@ export interface CreateProductTokenRequest {
 }
 
 /**
+ * Request payload for product tokens when creating a new product
+ * product_id is omitted as it will be set by the backend
+ */
+export interface CreateProductTokenWithoutIdRequest {
+  network_id: string;
+  token_id: string;
+  active?: boolean;
+}
+
+/**
  * Request payload for updating a product token (existing, assumed to be aligned or separately handled)
  */
 export interface UpdateProductTokenRequest {
@@ -106,7 +116,7 @@ export interface CreateProductRequest {
   active: boolean;
   metadata?: Record<string, unknown> | null; // json.RawMessage can be null
   prices: CreatePriceRequest[]; // Required, has dive binding
-  product_tokens?: CreateProductTokenRequest[];
+  product_tokens?: CreateProductTokenWithoutIdRequest[];
 }
 
 /**

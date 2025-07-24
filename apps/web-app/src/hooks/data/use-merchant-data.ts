@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { CACHE_DURATIONS } from '@/lib/query/query-client';
+import { useCSRF } from '@/hooks/security/use-csrf';
 import type { PaginatedResponse } from '@/types/common';
 import type { ProductResponse, CreateProductRequest, UpdateProductRequest } from '@/types/product';
 import type { WalletResponse } from '@/types/wallet';
@@ -180,17 +181,25 @@ export function useInvalidateQueries() {
 // Product mutation hooks
 export function useCreateProduct() {
   const queryClient = useQueryClient();
+  const { addCSRFHeader } = useCSRF();
 
   return useMutation({
     mutationFn: async (productData: CreateProductRequest): Promise<ProductResponse> => {
+      // Log the request data for debugging
+      console.log('Creating product with data:', JSON.stringify(productData, null, 2));
+      
       const response = await fetch('/api/products', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: addCSRFHeader({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(productData),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        // Log validation details if available
+        if (errorData.details) {
+          console.error('Validation errors:', JSON.stringify(errorData.details, null, 2));
+        }
         throw new Error(errorData.error || 'Failed to create product');
       }
 
@@ -205,6 +214,7 @@ export function useCreateProduct() {
 
 export function useUpdateProduct() {
   const queryClient = useQueryClient();
+  const { addCSRFHeader } = useCSRF();
 
   return useMutation({
     mutationFn: async ({
@@ -216,7 +226,7 @@ export function useUpdateProduct() {
     }): Promise<ProductResponse> => {
       const response = await fetch(`/api/products/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: addCSRFHeader({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(data),
       });
 
@@ -236,11 +246,13 @@ export function useUpdateProduct() {
 
 export function useDeleteProduct() {
   const queryClient = useQueryClient();
+  const { addCSRFHeader } = useCSRF();
 
   return useMutation({
     mutationFn: async (productId: string): Promise<void> => {
       const response = await fetch(`/api/products/${productId}`, {
         method: 'DELETE',
+        headers: addCSRFHeader({}),
       });
 
       if (!response.ok) {
@@ -258,6 +270,7 @@ export function useDeleteProduct() {
 // Wallet mutation hooks
 export function useCreateWallet() {
   const queryClient = useQueryClient();
+  const { addCSRFHeader } = useCSRF();
 
   return useMutation({
     mutationFn: async (walletData: {
@@ -268,7 +281,7 @@ export function useCreateWallet() {
     }): Promise<WalletResponse> => {
       const response = await fetch('/api/wallets', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: addCSRFHeader({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(walletData),
       });
 

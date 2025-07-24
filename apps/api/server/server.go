@@ -389,7 +389,7 @@ func InitializeRoutes(router *gin.Engine) {
 				admin.GET("/prices/:price_id", productHandler.GetPublicProductByPriceID)
 
 				// subscribe to a product
-				admin.POST("/prices/:price_id/subscribe", middleware.ValidateInput(middleware.CreateSubscriptionValidation), productHandler.SubscribeToProductByPriceID)
+				admin.POST("/prices/:price_id/subscribe", productHandler.SubscribeToProductByPriceID)
 
 				// Account management
 				admin.GET("/accounts", accountHandler.ListAccounts)

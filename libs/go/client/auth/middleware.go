@@ -113,6 +113,8 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerF
 			zap.String("path", c.Request.URL.Path),
 		)
 
+		logger.Log.Info("Checking for API key in header")
+
 		// First check for API key in header
 		apiKey := c.GetHeader("X-API-Key")
 		if apiKey != "" {
@@ -147,6 +149,8 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerF
 			return
 		}
 
+		logger.Log.Info("No API key found, checking for JWT token")
+
 		// If no API key, check for JWT token
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -155,7 +159,9 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerF
 			c.Abort()
 			return
 		}
-		
+
+		logger.Log.Info("JWT token found, starting validation")
+
 		// Special handling for Web3Auth users without JWT tokens
 		if authHeader == "Bearer no_jwt_token_available" {
 			logger.Log.Debug("Web3Auth user without JWT token - authentication not supported yet")
@@ -164,17 +170,41 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerF
 			return
 		}
 
+		logger.Log.Info("Starting JWT token validation",
+			zap.String("path", c.Request.URL.Path),
+			zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
+		)
+
+		logger.Log.Info("About to call validateJWTToken",
+			zap.String("path", c.Request.URL.Path),
+			zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
+		)
+
 		user, account, err := ac.validateJWTToken(c, queries, authHeader)
 		if err != nil {
-			logger.Log.Debug("JWT token validation failed",
+			logger.Log.Error("JWT token validation failed",
 				zap.Error(err),
+				zap.String("path", c.Request.URL.Path),
+				zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
 			)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			c.Abort()
 			return
 		}
 
+		logger.Log.Info("JWT token validated successfully",
+			zap.String("user_id", user.ID.String()),
+			zap.String("account_id", account.ID.String()),
+			zap.String("path", c.Request.URL.Path),
+			zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
+		)
+
 		// require workspace ID in the header - check both cases
+		logger.Log.Info("Starting workspace validation",
+			zap.String("path", c.Request.URL.Path),
+			zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
+		)
+
 		workspaceID := c.GetHeader("X-Workspace-ID")
 		if workspaceID == "" {
 			workspaceID = c.GetHeader("X-Workspace-Id")
@@ -184,12 +214,20 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerF
 				zap.String("X-Workspace-ID", c.GetHeader("X-Workspace-ID")),
 				zap.String("X-Workspace-Id", c.GetHeader("X-Workspace-Id")),
 				zap.Any("headers", c.Request.Header),
+				zap.String("path", c.Request.URL.Path),
+				zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
 			)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No workspace ID provided"})
 			c.Abort()
 			return
 		}
-		
+
+		logger.Log.Info("Found workspace ID in header",
+			zap.String("workspace_id", workspaceID),
+			zap.String("path", c.Request.URL.Path),
+			zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
+		)
+
 		// Validate that the workspace belongs to the user's account
 		workspaceUUID, err := uuid.Parse(workspaceID)
 		if err != nil {
@@ -201,7 +239,7 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerF
 			c.Abort()
 			return
 		}
-		
+
 		// Get workspace to verify it belongs to the account
 		workspace, err := queries.GetWorkspace(c.Request.Context(), workspaceUUID)
 		if err != nil {
@@ -214,7 +252,7 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerF
 			c.Abort()
 			return
 		}
-		
+
 		// Verify workspace belongs to the user's account
 		if workspace.AccountID != account.ID {
 			logger.Log.Error("Workspace does not belong to user's account",
@@ -337,16 +375,22 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, queries *db.Queries, apiKey
 
 // validateJWTToken validates the Web3Auth JWT token and returns user information
 func (ac *AuthClient) validateJWTToken(c *gin.Context, queries *db.Queries, authHeader string) (db.User, db.Account, error) {
+	logger.Log.Info("validateJWTToken called",
+		zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
+		zap.String("path", c.Request.URL.Path),
+		zap.Bool("has_auth_header", authHeader != ""),
+	)
+
 	claims, err := ac.validateWeb3AuthToken(authHeader)
 	if err != nil {
-		logger.Log.Debug("Web3Auth token validation failed", zap.Error(err))
+		logger.Log.Info("Web3Auth token validation failed", zap.Error(err))
 		return db.User{}, db.Account{}, ErrInvalidToken
 	}
 
 	// Extract Web3Auth ID from token - prefer userId over subject
 	// Parse the token as MapClaims to get all fields
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	
+
 	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
 	mapToken, _, mapErr := parser.ParseUnverified(tokenString, jwt.MapClaims{})
 
@@ -484,14 +528,14 @@ func (ac *AuthClient) validateWeb3AuthToken(tokenString string) (*Web3AuthClaims
 	// Parse and validate the token using JWKS
 	token, err := jwt.ParseWithClaims(tokenString, &Web3AuthClaims{}, ac.jwks.Keyfunc)
 	if err != nil {
-		logger.Log.Debug("Token parsing failed", zap.Error(err))
+		logger.Log.Info("Token parsing failed", zap.Error(err))
 
 		// For debugging, also try parsing without verification to see claims
 		parser := jwt.NewParser(jwt.WithoutClaimsValidation())
 		unverifiedToken, _, parseErr := parser.ParseUnverified(tokenString, &Web3AuthClaims{})
 		if parseErr == nil {
 			if claims, ok := unverifiedToken.Claims.(*Web3AuthClaims); ok {
-				logger.Log.Debug("Unverified token claims (for debugging)",
+				logger.Log.Info("Unverified token claims (for debugging)",
 					zap.String("sub", claims.Subject),
 					zap.String("email", claims.Email),
 					zap.String("iss", claims.Issuer),

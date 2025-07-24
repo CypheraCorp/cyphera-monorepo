@@ -132,6 +132,7 @@ const productFormSchema = z
           INTERVAL_TYPES.YEARLY,
         ])
         .optional(),
+      interval_count: z.coerce.number().positive().optional(),
       term_length: z.coerce.number().positive().optional(),
       active: z.boolean(),
     }),
@@ -356,7 +357,7 @@ export function CreateProductMultiStepDialog({
           network_id: token.network_id,
           token_id: token.token_id,
           active: token.active,
-          product_id: '', // This will be filled by the backend
+          // product_id will be filled by the backend
         })
       );
 
@@ -368,6 +369,10 @@ export function CreateProductMultiStepDialog({
         interval_type:
           data.priceDetails.type === PRICE_TYPES.RECURRING
             ? data.priceDetails.interval_type!
+            : undefined,
+        interval_count:
+          data.priceDetails.type === PRICE_TYPES.RECURRING
+            ? (data.priceDetails.interval_count || 1)
             : undefined,
         term_length:
           data.priceDetails.type === PRICE_TYPES.RECURRING
