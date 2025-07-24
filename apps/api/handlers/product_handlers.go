@@ -3,10 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
-	"github.com/cyphera/cyphera-api/libs/go/constants"
-	"github.com/cyphera/cyphera-api/libs/go/db"
-	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,6 +11,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
+	"github.com/cyphera/cyphera-api/libs/go/constants"
+	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
