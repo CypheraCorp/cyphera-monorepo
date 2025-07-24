@@ -16,7 +16,6 @@
     "dev:all": "concurrently \"npm run dev:api\" \"npm run dev:delegation\" \"npm run dev:web\" --names \"api,delegation,web\" --prefix-colors \"blue,green,yellow\"",
     "dev:services": "concurrently \"npm run dev:api\" \"npm run dev:delegation\" \"npm run dev:subscription\" --names \"api,delegation,sub\" --prefix-colors \"blue,green,magenta\"",
     "dev:backend": "concurrently \"npm run dev:api\" \"npm run dev:delegation\" --names \"api,delegation\" --prefix-colors \"blue,green\"",
-    
     "// Build Commands": "",
     "build": "cd apps/web-app && npm run build",
     "build:api": "cd apps/api && go build -o ../../dist/apps/api/cyphera-api ./cmd/main/main.go",
@@ -30,7 +29,6 @@
     "build:prod": "NODE_ENV=production npm run build:all",
     "build:affected": "npm run build:all",
     "build:lambdas": "make sam-build",
-    
     "// Test Commands": "",
     "test": "cd apps/web-app && npm run test",
     "test:api": "cd apps/api && go test -v ./...",
@@ -42,7 +40,6 @@
     "test:int": "make test-integration",
     "test:affected": "npm run test:all",
     "test:coverage": "npm run test:all",
-    
     "// Code Quality": "",
     "lint": "cd apps/web-app && npm run lint && cd ../delegation-server && npm run lint",
     "lint:fix": "cd apps/web-app && npm run lint --fix && cd ../delegation-server && npm run lint --fix",
@@ -50,19 +47,16 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "typecheck": "cd apps/web-app && npm run type-check",
     "type-check": "cd apps/web-app && npm run type-check",
-    
     "// Installation & Setup": "",
     "install:all": "npm install && cd apps/web-app && npm install --legacy-peer-deps && cd ../delegation-server && npm install && cd ../.. && go work sync",
     "install:go": "go work sync",
     "install:ts": "cd apps/web-app && npm install --legacy-peer-deps && cd ../delegation-server && npm install",
     "setup": "npm run install:all && npm run generate:all",
-    
     "// Code Generation": "",
     "generate:all": "make proto-gen && make swagger-gen",
     "generate:proto": "make proto-gen",
     "generate:db": "make db-migrate",
     "generate:swagger": "make swagger-gen",
-    
     "// Utility Commands": "",
     "clean": "rm -rf dist logs/**/*.log apps/*/tmp apps/*/.next apps/*/dist apps/*/build && rm -f *.log && go clean -cache -testcache",
     "clean:cache": "rm -rf .next apps/*/.next node_modules/.cache apps/*/tsconfig.tsbuildinfo",
@@ -72,29 +66,24 @@
     "clean:all": "npm run clean && npm run clean:cache && npm run clean:deps",
     "reset": "npm run clean:all && rm -rf node_modules apps/*/node_modules libs/*/node_modules",
     "reset:hard": "npm run reset && rm -rf package-lock.json apps/*/package-lock.json",
-    
     "// Process Management": "",
     "start:prod": "NODE_ENV=production npm run build:all",
     "start:web": "cd apps/web-app && npm start",
     "stop:all": "pkill -f 'next dev' || true && pkill -f 'go run' || true && pkill -f 'air' || true && pkill -f 'ts-node' || true",
     "restart:all": "npm run stop:all && npm run dev:all",
-    
     "// CI/CD Commands": "",
     "ci:build": "npm run build:all",
     "ci:test": "npm run test:all",
     "ci:lint": "npm run lint",
-    
     "// Docker Commands": "",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
-    
     "// Database Commands": "",
     "db:migrate": "make db-migrate",
     "db:reset": "make db-reset",
     "db:seed": "make db-seed",
-    
     "// Deployment": "",
     "deploy:staging": "make deploy-staging",
     "deploy:prod": "make deploy-prod"
@@ -106,5 +95,8 @@
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
+  },
+  "dependencies": {
+    "@radix-ui/react-progress": "^1.1.7"
   }
 }

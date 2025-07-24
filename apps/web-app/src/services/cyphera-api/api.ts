@@ -1,5 +1,6 @@
 // No longer need CypheraSupabaseUser here as setRequestData is removed
 import { clientLogger } from '@/lib/core/logger/logger-client';
+import { handleRateLimitedRequest } from '@/lib/api/rate-limit-handler';
 
 // Define a type for the user context data needed for authenticated requests
 export interface UserRequestContext {
@@ -94,6 +95,19 @@ export class CypheraAPI {
 
   // Removed setRequestData method
   // setRequestData(user: CypheraSupabaseUser) { ... }
+
+  /**
+   * Protected fetch method that handles rate limiting automatically
+   */
+  protected async fetchWithRateLimit<T>(
+    url: string,
+    options: RequestInit
+  ): Promise<T> {
+    return handleRateLimitedRequest(
+      () => fetch(url, options),
+      (response) => this.handleResponse<T>(response)
+    );
+  }
 
   /**
    * Helper method to handle API responses

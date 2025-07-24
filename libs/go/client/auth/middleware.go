@@ -14,6 +14,7 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 
 	"github.com/MicahParks/keyfunc/v2"
@@ -196,15 +197,43 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, queries *db.Queries, apiKey
 		zap.Int("key_length", len(apiKey)),
 	)
 
-	// Direct lookup of API key (works for both test keys and real generated keys)
-	key, err := queries.GetAPIKeyByKey(c.Request.Context(), apiKey)
+	// Get all active API keys to compare against (bcrypt comparison required)
+	// Note: In production with many keys, consider caching or using a different strategy
+	activeKeys, err := queries.GetAllActiveAPIKeys(c.Request.Context())
 	if err != nil {
-		logger.Log.Debug("API key lookup failed",
-			zap.String("key_preview", keyPreview),
+		logger.Log.Debug("Failed to retrieve active API keys",
 			zap.Error(err),
+		)
+		return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("authentication service error")
+	}
+
+	// Find matching key by comparing bcrypt hashes
+	var key db.ApiKey
+	found := false
+	for _, k := range activeKeys {
+		if err := helpers.CompareAPIKeyHash(apiKey, k.KeyHash); err == nil {
+			key = k
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		logger.Log.Debug("API key not found or invalid",
+			zap.String("key_preview", keyPreview),
 		)
 		return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid API key")
 	}
+
+	// Update last used timestamp
+	go func() {
+		if err := queries.UpdateAPIKeyLastUsed(context.Background(), key.ID); err != nil {
+			logger.Log.Warn("Failed to update API key last used timestamp",
+				zap.String("key_id", key.ID.String()),
+				zap.Error(err),
+			)
+		}
+	}()
 
 	logger.Log.Debug("API key found",
 		zap.String("key_id", key.ID.String()),

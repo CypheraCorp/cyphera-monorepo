@@ -21,12 +21,11 @@ export class WalletsAPI extends CypheraAPI {
    */
   async listWallets(context: UserRequestContext): Promise<WalletResponse[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/wallets?include_circle_data=true`, {
+      const result = await this.fetchWithRateLimit<WalletListResponse>(`${this.baseUrl}/wallets?include_circle_data=true`, {
         method: 'GET',
         headers: this.getHeaders(context),
         // Removed cache: 'no-store' to allow HTTP caching
       });
-      const result = await this.handleResponse<WalletListResponse>(response);
       return result.data;
     } catch (error) {
       logger.error_sync('Wallets fetch failed:', error);
@@ -43,11 +42,10 @@ export class WalletsAPI extends CypheraAPI {
    */
   async getWallet(context: UserRequestContext, walletId: string): Promise<WalletResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/wallets/${walletId}?include_circle_data=true`, {
+      return await this.fetchWithRateLimit<WalletResponse>(`${this.baseUrl}/wallets/${walletId}?include_circle_data=true`, {
         method: 'GET',
         headers: this.getHeaders(context),
       });
-      return await this.handleResponse<WalletResponse>(response);
     } catch (error) {
       logger.error_sync('Wallet fetch failed:', error);
       throw error;
@@ -66,12 +64,11 @@ export class WalletsAPI extends CypheraAPI {
     walletData: CreateWalletRequest
   ): Promise<WalletResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/wallets`, {
+      return await this.fetchWithRateLimit<WalletResponse>(`${this.baseUrl}/wallets`, {
         method: 'POST',
         headers: this.getHeaders(context),
         body: JSON.stringify(walletData),
       });
-      return await this.handleResponse<WalletResponse>(response);
     } catch (error) {
       logger.error_sync('Wallet creation failed:', error);
       throw error;
@@ -92,12 +89,11 @@ export class WalletsAPI extends CypheraAPI {
     walletData: UpdateWalletRequest
   ): Promise<WalletResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/wallets/${walletId}`, {
+      return await this.fetchWithRateLimit<WalletResponse>(`${this.baseUrl}/wallets/${walletId}`, {
         method: 'PUT',
         headers: this.getHeaders(context),
         body: JSON.stringify(walletData),
       });
-      return await this.handleResponse<WalletResponse>(response);
     } catch (error) {
       logger.error_sync('Wallet update failed:', error);
       throw error;
@@ -113,11 +109,10 @@ export class WalletsAPI extends CypheraAPI {
    */
   async deleteWallet(context: UserRequestContext, walletId: string): Promise<void> {
     try {
-      const response = await fetch(`${this.baseUrl}/wallets/${walletId}`, {
+      await this.fetchWithRateLimit<void>(`${this.baseUrl}/wallets/${walletId}`, {
         method: 'DELETE',
         headers: this.getHeaders(context),
       });
-      await this.handleResponse<void>(response);
     } catch (error) {
       logger.error_sync('Wallet deletion failed:', error);
       throw error;

@@ -24,14 +24,10 @@ export class SubscriptionsAPI extends CypheraAPI {
     const url = `${this.baseUrl}/subscriptions?${queryParams.toString()}`;
 
     try {
-      const response = await fetch(url, {
+      return await this.fetchWithRateLimit<PaginatedResponse<SubscriptionResponse>>(url, {
         method: 'GET',
         headers: this.getHeaders(context),
       });
-
-      const data = await this.handleResponse<PaginatedResponse<SubscriptionResponse>>(response);
-
-      return data;
     } catch (error) {
       logger.error('Subscriptions fetch failed:', error);
       throw error;
@@ -50,11 +46,10 @@ export class SubscriptionsAPI extends CypheraAPI {
     subscriptionId: string
   ): Promise<SubscriptionResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/subscriptions/${subscriptionId}`, {
+      return await this.fetchWithRateLimit<SubscriptionResponse>(`${this.baseUrl}/subscriptions/${subscriptionId}`, {
         method: 'GET',
         headers: this.getHeaders(context),
       });
-      return await this.handleResponse<SubscriptionResponse>(response);
     } catch (error) {
       logger.error('Subscription fetch failed:', error);
       throw error;

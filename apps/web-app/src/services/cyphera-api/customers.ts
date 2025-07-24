@@ -32,12 +32,10 @@ export class CustomersAPI extends CypheraAPI {
     const url = `${this.baseUrl}/customers?${queryParams.toString()}`;
 
     try {
-      const response = await fetch(url, {
+      return await this.fetchWithRateLimit<PaginatedResponse<CustomerResponse>>(url, {
         method: 'GET',
         headers: this.getHeaders(context),
       });
-      const data = await this.handleResponse<PaginatedResponse<CustomerResponse>>(response);
-      return data;
     } catch (error) {
       logger.error('Customers fetch failed:', error);
       throw error;
@@ -56,12 +54,10 @@ export class CustomersAPI extends CypheraAPI {
     customerId: string
   ): Promise<CustomerResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/customers/${customerId}`, {
+      return await this.fetchWithRateLimit<CustomerResponse>(`${this.baseUrl}/customers/${customerId}`, {
         method: 'GET',
         headers: this.getHeaders(context),
       });
-      const data = await this.handleResponse<CustomerResponse>(response);
-      return data;
     } catch (error) {
       logger.error('Customer fetch failed:', error);
       throw error;
@@ -80,13 +76,11 @@ export class CustomersAPI extends CypheraAPI {
     customerData: CreateCustomerRequest
   ): Promise<CustomerResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/customers`, {
+      return await this.fetchWithRateLimit<CustomerResponse>(`${this.baseUrl}/customers`, {
         method: 'POST',
         headers: this.getHeaders(context),
         body: JSON.stringify(customerData),
       });
-      const data = await this.handleResponse<CustomerResponse>(response);
-      return data;
     } catch (error) {
       logger.error('Customer creation failed:', error);
       throw error;
@@ -107,13 +101,11 @@ export class CustomersAPI extends CypheraAPI {
     customerData: Partial<CreateCustomerRequest>
   ): Promise<CustomerResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/customers/${customerId}`, {
+      return await this.fetchWithRateLimit<CustomerResponse>(`${this.baseUrl}/customers/${customerId}`, {
         method: 'PUT',
         headers: this.getHeaders(context),
         body: JSON.stringify(customerData),
       });
-      const data = await this.handleResponse<CustomerResponse>(response);
-      return data;
     } catch (error) {
       logger.error('Customer update failed:', error);
       throw error;
@@ -129,11 +121,10 @@ export class CustomersAPI extends CypheraAPI {
    */
   async deleteCustomer(context: UserRequestContext, customerId: string): Promise<void> {
     try {
-      const response = await fetch(`${this.baseUrl}/customers/${customerId}`, {
+      await this.fetchWithRateLimit<void>(`${this.baseUrl}/customers/${customerId}`, {
         method: 'DELETE',
         headers: this.getHeaders(context),
       });
-      await this.handleResponse<void>(response); // Use handleResponse for status check
     } catch (error) {
       logger.error('Customer deletion failed:', error);
       throw error;

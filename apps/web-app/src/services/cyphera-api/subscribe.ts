@@ -57,14 +57,11 @@ export class SubscribeAPI extends CypheraAPI {
       const apiEndpoint = `/admin/prices/${priceId}/subscribe`;
       const url = `${this.baseUrl}${apiEndpoint}`;
 
-      const response = await fetch(url, {
+      const responseData = await this.fetchWithRateLimit<SubscriptionResponse>(url, {
         method: 'POST',
         headers: this.getPublicHeaders(), // Use getPublicHeaders
         body: JSON.stringify(subscribeRequest),
       });
-
-      // Use handleResponse for consistent processing and error handling
-      const responseData = await this.handleResponse<SubscriptionResponse>(response);
 
       return {
         success: true,

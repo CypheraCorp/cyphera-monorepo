@@ -12,6 +12,7 @@ import (
 	"github.com/cyphera/cyphera-api/apps/api/handlers"
 	"github.com/cyphera/cyphera-api/libs/go/helpers" // Import helpers
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/middleware"
 	"fmt"
 	"log"
 	"net/http"
@@ -321,6 +322,10 @@ func InitializeRoutes(router *gin.Engine) {
 	// Configure and apply CORS middleware
 	router.Use(configureCORS())
 
+	// Apply rate limiting middleware globally
+	// This provides a default rate limit for all endpoints
+	router.Use(middleware.DefaultRateLimiter.Middleware())
+
 	// Add Swagger endpoint
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
@@ -369,12 +374,13 @@ func InitializeRoutes(router *gin.Engine) {
 			admin := protected.Group("/admin")
 			admin.Use(authClient.RequireRoles("admin"))
 			{
-				admin.POST("/accounts/signin", accountHandler.SignInRegisterAccount)
-				admin.POST("/customers/signin", customerHandler.SignInRegisterCustomer)
+				// Apply stricter rate limiting for auth endpoints
+				admin.POST("/accounts/signin", middleware.StrictRateLimiter.Middleware(), accountHandler.SignInRegisterAccount)
+				admin.POST("/customers/signin", middleware.StrictRateLimiter.Middleware(), customerHandler.SignInRegisterCustomer)
 				admin.GET("/prices/:price_id", productHandler.GetPublicProductByPriceID)
 
 				// subscribe to a product
-				admin.POST("/prices/:price_id/subscribe", productHandler.SubscribeToProductByPriceID)
+				admin.POST("/prices/:price_id/subscribe", middleware.ValidateInput(middleware.CreateSubscriptionValidation), productHandler.SubscribeToProductByPriceID)
 
 				// Account management
 				admin.GET("/accounts", accountHandler.ListAccounts)
@@ -384,7 +390,7 @@ func InitializeRoutes(router *gin.Engine) {
 				// User management
 				admin.POST("/users", userHandler.CreateUser)
 				admin.GET("/users/:user_id", userHandler.GetUser)
-				admin.PUT("/users/:user_id", userHandler.UpdateUser)
+				admin.PUT("/users/:user_id", middleware.ValidateInput(middleware.UpdateUserValidation), userHandler.UpdateUser)
 				admin.DELETE("/users/:user_id", userHandler.DeleteUser)
 
 				// Workspace management
@@ -424,7 +430,7 @@ func InitializeRoutes(router *gin.Engine) {
 					// Circle wallet endpoints
 					circleWallet := circle.Group("/wallets")
 					{
-						circleWallet.POST("/:workspace_id", circleHandler.CreateWallets)
+						circleWallet.POST("/:workspace_id", middleware.ValidateInput(middleware.CircleWalletValidation), circleHandler.CreateWallets)
 						circleWallet.GET("/:workspace_id", circleHandler.ListWallets)
 						circleWallet.GET("/get/:wallet_id", circleHandler.GetWallet)
 						circleWallet.GET("/balances/:wallet_id", circleHandler.GetWalletBalance)
@@ -459,10 +465,10 @@ func InitializeRoutes(router *gin.Engine) {
 			// Customers
 			customers := protected.Group("/customers")
 			{
-				customers.GET("", customerHandler.ListCustomers)
-				customers.POST("", customerHandler.CreateCustomer)
+				customers.GET("", middleware.ValidateQueryParams(middleware.ListQueryValidation), customerHandler.ListCustomers)
+				customers.POST("", middleware.ValidateInput(middleware.CreateCustomerValidation), customerHandler.CreateCustomer)
 				customers.GET("/:customer_id", customerHandler.GetCustomer)
-				customers.PUT("/:customer_id", customerHandler.UpdateCustomer)
+				customers.PUT("/:customer_id", middleware.ValidateInput(middleware.CreateCustomerValidation), customerHandler.UpdateCustomer)
 				customers.DELETE("/:customer_id", customerHandler.DeleteCustomer)
 
 				// Customer onboarding status
@@ -476,20 +482,20 @@ func InitializeRoutes(router *gin.Engine) {
 			apiKeys := protected.Group("/api-keys")
 			{
 				// Regular account routes (scoped to their workspace)
-				apiKeys.GET("", apiKeyHandler.ListAPIKeys)
-				apiKeys.POST("", apiKeyHandler.CreateAPIKey)
+				apiKeys.GET("", middleware.ValidateQueryParams(middleware.ListQueryValidation), apiKeyHandler.ListAPIKeys)
+				apiKeys.POST("", middleware.ValidateInput(middleware.CreateAPIKeyValidation), apiKeyHandler.CreateAPIKey)
 				apiKeys.GET("/:api_key_id", apiKeyHandler.GetAPIKeyByID)
-				apiKeys.PUT("/:api_key_id", apiKeyHandler.UpdateAPIKey)
+				apiKeys.PUT("/:api_key_id", middleware.ValidateInput(middleware.CreateAPIKeyValidation), apiKeyHandler.UpdateAPIKey)
 				apiKeys.DELETE("/:api_key_id", apiKeyHandler.DeleteAPIKey)
 			}
 
 			// Products
 			products := protected.Group("/products")
 			{
-				products.GET("", productHandler.ListProducts)
-				products.POST("", productHandler.CreateProduct)
+				products.GET("", middleware.ValidateQueryParams(middleware.ListQueryValidation), productHandler.ListProducts)
+				products.POST("", middleware.ValidateInput(middleware.CreateProductValidation), productHandler.CreateProduct)
 				products.GET("/:product_id", productHandler.GetProduct)
-				products.PUT("/:product_id", productHandler.UpdateProduct)
+				products.PUT("/:product_id", middleware.ValidateInput(middleware.CreateProductValidation), productHandler.UpdateProduct)
 				products.DELETE("/:product_id", productHandler.DeleteProduct)
 
 				// Product subscriptions
@@ -512,8 +518,8 @@ func InitializeRoutes(router *gin.Engine) {
 			// Wallets
 			wallets := protected.Group("/wallets")
 			{
-				wallets.GET("", walletHandler.ListWallets)
-				wallets.POST("", walletHandler.CreateWallet)
+				wallets.GET("", middleware.ValidateQueryParams(middleware.ListQueryValidation), walletHandler.ListWallets)
+				wallets.POST("", middleware.ValidateInput(middleware.CreateWalletValidation), walletHandler.CreateWallet)
 				wallets.GET("/:wallet_id", walletHandler.GetWallet)
 				wallets.DELETE("/:wallet_id", walletHandler.DeleteWallet)
 			}
@@ -651,6 +657,14 @@ func configureCORS() gin.HandlerFunc {
 			exposedHeaders[i] = strings.TrimSpace(header)
 		}
 		corsConfig.ExposeHeaders = exposedHeaders
+	} else {
+		// Default exposed headers including rate limit headers
+		corsConfig.ExposeHeaders = []string{
+			"X-RateLimit-Limit",
+			"X-RateLimit-Remaining", 
+			"X-RateLimit-Reset",
+			"Retry-After",
+		}
 	}
 
 	// Set credentials allowed

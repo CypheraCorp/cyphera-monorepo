@@ -31,12 +31,10 @@ export class ProductsAPI extends CypheraAPI {
     const url = `${this.baseUrl}/products?${queryParams.toString()}`;
 
     try {
-      const response = await fetch(url, {
+      return await this.fetchWithRateLimit<PaginatedResponse<ProductResponse>>(url, {
         method: 'GET',
         headers: this.getHeaders(context),
       });
-      const data = await this.handleResponse<PaginatedResponse<ProductResponse>>(response);
-      return data;
     } catch (error) {
       clientLogger.error('Products fetch failed', {
         error: error instanceof Error ? error.message : error,
@@ -54,11 +52,10 @@ export class ProductsAPI extends CypheraAPI {
    */
   async getProductById(context: UserRequestContext, productId: string): Promise<ProductResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/products/${productId}`, {
+      return await this.fetchWithRateLimit<ProductResponse>(`${this.baseUrl}/products/${productId}`, {
         method: 'GET',
         headers: this.getHeaders(context),
       });
-      return await this.handleResponse<ProductResponse>(response);
     } catch (error) {
       clientLogger.error('Product fetch failed', {
         error: error instanceof Error ? error.message : error,
@@ -82,13 +79,11 @@ export class ProductsAPI extends CypheraAPI {
       throw new Error('Wallet ID is required to create a product');
     }
     try {
-      const response = await fetch(`${this.baseUrl}/products`, {
+      return await this.fetchWithRateLimit<ProductResponse>(`${this.baseUrl}/products`, {
         method: 'POST',
         headers: this.getHeaders(context),
         body: JSON.stringify(productData),
       });
-      const data = await this.handleResponse<ProductResponse>(response);
-      return data;
     } catch (error) {
       clientLogger.error('Product creation failed', {
         error: error instanceof Error ? error.message : error,
@@ -111,13 +106,11 @@ export class ProductsAPI extends CypheraAPI {
     productData: UpdateProductRequest
   ): Promise<ProductResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/products/${productId}`, {
+      return await this.fetchWithRateLimit<ProductResponse>(`${this.baseUrl}/products/${productId}`, {
         method: 'PUT',
         headers: this.getHeaders(context),
         body: JSON.stringify(productData),
       });
-      const data = await this.handleResponse<ProductResponse>(response);
-      return data;
     } catch (error) {
       clientLogger.error('Product update failed', {
         error: error instanceof Error ? error.message : error,
@@ -144,7 +137,7 @@ export class ProductsAPI extends CypheraAPI {
     tokenData: UpdateProductTokenRequest
   ): Promise<ProductTokenResponse> {
     try {
-      const response = await fetch(
+      return await this.fetchWithRateLimit<ProductTokenResponse>(
         `${this.baseUrl}/products/${productId}/networks/${networkId}/tokens/${tokenId}`,
         {
           method: 'PUT',
@@ -152,7 +145,6 @@ export class ProductsAPI extends CypheraAPI {
           body: JSON.stringify(tokenData),
         }
       );
-      return await this.handleResponse<ProductTokenResponse>(response);
     } catch (error) {
       clientLogger.error('Product token update failed', {
         error: error instanceof Error ? error.message : error,
@@ -170,11 +162,10 @@ export class ProductsAPI extends CypheraAPI {
    */
   async deleteProduct(context: UserRequestContext, productId: string): Promise<void> {
     try {
-      const response = await fetch(`${this.baseUrl}/products/${productId}`, {
+      await this.fetchWithRateLimit<void>(`${this.baseUrl}/products/${productId}`, {
         method: 'DELETE',
         headers: this.getHeaders(context),
       });
-      await this.handleResponse<void>(response);
     } catch (error) {
       clientLogger.error('Product deletion failed', {
         error: error instanceof Error ? error.message : error,
@@ -199,14 +190,13 @@ export class ProductsAPI extends CypheraAPI {
     tokenId: string
   ): Promise<ProductTokenResponse> {
     try {
-      const response = await fetch(
+      return await this.fetchWithRateLimit<ProductTokenResponse>(
         `${this.baseUrl}/products/${productId}/networks/${networkId}/tokens/${tokenId}`,
         {
           method: 'GET',
           headers: this.getHeaders(context),
         }
       );
-      return await this.handleResponse<ProductTokenResponse>(response);
     } catch (error) {
       clientLogger.error('Product token fetch failed', {
         error: error instanceof Error ? error.message : error,
@@ -231,14 +221,13 @@ export class ProductsAPI extends CypheraAPI {
     tokenId: string
   ): Promise<void> {
     try {
-      const response = await fetch(
+      await this.fetchWithRateLimit<void>(
         `${this.baseUrl}/products/${productId}/networks/${networkId}/tokens/${tokenId}`,
         {
           method: 'DELETE',
           headers: this.getHeaders(context),
         }
       );
-      await this.handleResponse<void>(response);
     } catch (error) {
       clientLogger.error('Product token deletion failed', {
         error: error instanceof Error ? error.message : error,

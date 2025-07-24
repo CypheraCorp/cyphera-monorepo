@@ -20,11 +20,12 @@ INSERT INTO api_keys (
     workspace_id,
     name,
     key_hash,
+    key_prefix,
     access_level,
     expires_at,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
 RETURNING *;
 

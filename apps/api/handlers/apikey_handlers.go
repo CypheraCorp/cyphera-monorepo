@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -39,6 +40,8 @@ type APIKeyResponse struct {
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 	CreatedAt   int64                  `json:"created_at"`
 	UpdatedAt   int64                  `json:"updated_at"`
+	KeyPrefix   string                 `json:"key_prefix,omitempty"` // Shows first part of key for identification
+	Key         string                 `json:"key,omitempty"`        // Only included on creation
 }
 
 // CreateAPIKeyRequest represents the request body for creating an API key
@@ -206,10 +209,30 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 		expiresAt.Valid = true
 	}
 
+	// Generate the API key
+	fullKey, keyPrefix, err := helpers.GenerateAPIKey()
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to generate API key", err)
+		return
+	}
+
+	// Hash the key for storage
+	hashedKey, err := helpers.HashAPIKey(fullKey)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to hash API key", err)
+		return
+	}
+
+	keyPrefixPgText := pgtype.Text{
+		String: keyPrefix,
+		Valid:  true,
+	}
+
 	apiKey, err := h.common.db.CreateAPIKey(c.Request.Context(), db.CreateAPIKeyParams{
 		WorkspaceID: parsedWorkspaceID,
 		Name:        req.Name,
-		KeyHash:     generateAPIKeyHash(),
+		KeyHash:     hashedKey,
+		KeyPrefix:   keyPrefixPgText,
 		AccessLevel: db.ApiKeyLevel(req.AccessLevel),
 		ExpiresAt:   expiresAt,
 		Metadata:    metadata,
@@ -219,7 +242,12 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 		return
 	}
 
-	sendSuccess(c, http.StatusCreated, toAPIKeyResponse(apiKey))
+	// Include the full key in the response (only time it's shown)
+	response := toAPIKeyResponse(apiKey)
+	response.Key = fullKey
+	response.KeyPrefix = keyPrefix
+	
+	sendSuccess(c, http.StatusCreated, response)
 }
 
 // UpdateAPIKey godoc
@@ -346,6 +374,7 @@ func toAPIKeyResponse(a db.ApiKey) APIKeyResponse {
 		Metadata:    metadata,
 		CreatedAt:   a.CreatedAt.Time.Unix(),
 		UpdatedAt:   a.UpdatedAt.Time.Unix(),
+		KeyPrefix:   a.KeyPrefix.String,
 	}
 }
 

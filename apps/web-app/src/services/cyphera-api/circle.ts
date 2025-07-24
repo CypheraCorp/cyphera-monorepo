@@ -40,15 +40,13 @@ export class CircleAPI extends CypheraAPI {
       const url = `${this.baseUrl}/admin/circle/users/${workspaceId}`;
 
       // Use workspaceId in path, use public headers for admin API
-      const response = await fetch(url, {
+      // Assuming backend returns CircleUserData directly or within a data object
+      // Adjust this based on actual backend response structure if necessary
+      const result = await this.fetchWithRateLimit<{ data: CircleUserData } | CircleUserData>(url, {
         method: 'POST',
         headers,
         body: JSON.stringify(request),
       });
-
-      // Assuming backend returns CircleUserData directly or within a data object
-      // Adjust this based on actual backend response structure if necessary
-      const result = await this.handleResponse<{ data: CircleUserData } | CircleUserData>(response);
       return 'data' in result ? result.data : result;
     } catch (error) {
       logger.error('Failed to create Circle user:', error);
@@ -64,14 +62,13 @@ export class CircleAPI extends CypheraAPI {
     if (!context.workspace_id) throw new Error('Workspace ID is required in context');
     try {
       // Use workspaceId in path, use public headers for admin API
-      const response = await fetch(
+      return await this.fetchWithRateLimit<CircleUserResponse>(
         `${this.baseUrl}/admin/circle/users/${context.workspace_id}/token`,
         {
           method: 'GET',
           headers: this.getPublicHeaders(),
         }
       );
-      return await this.handleResponse<CircleUserResponse>(response);
     } catch (error) {
       logger.error('Failed to get user by token:', error);
       throw error;
@@ -84,11 +81,10 @@ export class CircleAPI extends CypheraAPI {
    */
   async getUserById(userId: string): Promise<CircleUserResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/admin/circle/users/${userId}`, {
+      return await this.fetchWithRateLimit<CircleUserResponse>(`${this.baseUrl}/admin/circle/users/${userId}`, {
         method: 'GET',
         headers: this.getPublicHeaders(),
       });
-      return await this.handleResponse<CircleUserResponse>(response);
     } catch (error) {
       logger.error('Failed to get user by ID:', error);
       throw error;
@@ -105,12 +101,11 @@ export class CircleAPI extends CypheraAPI {
   ): Promise<CircleUserTokenResponse> {
     if (!workspaceId) throw new Error('Workspace ID is required');
     try {
-      const response = await fetch(`${this.baseUrl}/admin/circle/users/${workspaceId}/token`, {
+      return await this.fetchWithRateLimit<CircleUserTokenResponse>(`${this.baseUrl}/admin/circle/users/${workspaceId}/token`, {
         method: 'POST',
         headers: this.getPublicHeaders(),
         body: JSON.stringify(request),
       });
-      return await this.handleResponse<CircleUserTokenResponse>(response);
     } catch (error) {
       logger.error('Failed to create user token:', error);
       throw error;
@@ -128,7 +123,7 @@ export class CircleAPI extends CypheraAPI {
     if (!context.workspace_id) throw new Error('Workspace ID is required in context');
     try {
       // Use workspaceId in path, use public headers
-      const response = await fetch(
+      return await this.fetchWithRateLimit<CircleUserInitResponse>(
         `${this.baseUrl}/admin/circle/users/${context.workspace_id}/initialize`,
         {
           method: 'POST',
@@ -137,7 +132,6 @@ export class CircleAPI extends CypheraAPI {
           body: JSON.stringify(request),
         }
       );
-      return await this.handleResponse<CircleUserInitResponse>(response);
     } catch (error) {
       logger.error('Failed to initialize user:', error);
       throw error;
@@ -157,14 +151,13 @@ export class CircleAPI extends CypheraAPI {
     if (!context.workspace_id) throw new Error('Workspace ID is required in context');
     try {
       // Use workspaceId in path, use public headers
-      const response = await fetch(
+      return await this.fetchWithRateLimit<CircleChallengeResponse>(
         `${this.baseUrl}/circle/${context.workspace_id}/challenges/${challengeId}`,
         {
           method: 'GET',
           headers: this.getPublicHeaders(),
         }
       );
-      return await this.handleResponse<CircleChallengeResponse>(response);
     } catch (error) {
       logger.error('Failed to get challenge:', error);
       throw error;
@@ -182,7 +175,7 @@ export class CircleAPI extends CypheraAPI {
     if (!workspaceId) throw new Error('Workspace ID is required in context');
     try {
       // Use workspaceId in path, use public headers
-      const response = await fetch(`${this.baseUrl}/admin/circle/users/${workspaceId}/pin/create`, {
+      return await this.fetchWithRateLimit<CircleCreateChallengeResponse>(`${this.baseUrl}/admin/circle/users/${workspaceId}/pin/create`, {
         method: 'POST',
         // Backend route requires user_token header, which *should* be in getHeaders
         // BUT user asked for public headers only. This might fail if backend strictly enforces user_token header.
@@ -190,7 +183,6 @@ export class CircleAPI extends CypheraAPI {
         // Go type RequestWithIdempotencyKey includes user_token in body
         body: JSON.stringify(request),
       });
-      return await this.handleResponse<CircleCreateChallengeResponse>(response);
     } catch (error) {
       logger.error('Failed to create PIN challenge:', error);
       throw error;
@@ -209,7 +201,7 @@ export class CircleAPI extends CypheraAPI {
     if (!context.workspace_id) throw new Error('Workspace ID is required in context');
     try {
       // Use workspaceId in path, use public headers
-      const response = await fetch(
+      return await this.fetchWithRateLimit<CircleChallengeResponse>(
         `${this.baseUrl}/admin/circle/users/${context.workspace_id}/pin/restore`,
         {
           method: 'POST',
@@ -226,7 +218,6 @@ export class CircleAPI extends CypheraAPI {
           }),
         }
       );
-      return await this.handleResponse<CircleChallengeResponse>(response);
     } catch (error) {
       logger.error('Failed to create PIN restore challenge:', error);
       throw error;
@@ -245,7 +236,7 @@ export class CircleAPI extends CypheraAPI {
     if (!context.workspace_id) throw new Error('Workspace ID is required in context');
     try {
       // Use workspaceId in path, use public headers
-      const response = await fetch(
+      return await this.fetchWithRateLimit<CircleChallengeResponse>(
         `${this.baseUrl}/admin/circle/users/${context.workspace_id}/pin/update`,
         {
           method: 'PUT',
@@ -262,7 +253,6 @@ export class CircleAPI extends CypheraAPI {
           }),
         }
       );
-      return await this.handleResponse<CircleChallengeResponse>(response);
     } catch (error) {
       logger.error('Failed to update PIN challenge:', error);
       throw error;
@@ -282,12 +272,11 @@ export class CircleAPI extends CypheraAPI {
     if (!workspace_id) throw new Error('Workspace ID is required in context');
     try {
       // Use workspaceId in path, use public headers for admin API
-      const response = await fetch(`${this.baseUrl}/admin/circle/wallets/${workspace_id}`, {
+      return await this.fetchWithRateLimit<CircleCreateWalletsResponse>(`${this.baseUrl}/admin/circle/wallets/${workspace_id}`, {
         method: 'POST',
         headers: this.getPublicHeaders(),
         body: JSON.stringify(params), // Send the params object
       });
-      return await this.handleResponse<CircleCreateWalletsResponse>(response);
     } catch (error) {
       logger.error('Failed to create wallets:', error);
       throw error;
@@ -322,11 +311,10 @@ export class CircleAPI extends CypheraAPI {
       const url = `${this.baseUrl}/admin/circle/wallets/${context.workspace_id}${queryString ? `?${queryString}` : ''}`;
 
       // Use workspaceId in path, use public headers for admin API
-      const response = await fetch(url, {
+      return await this.fetchWithRateLimit<CircleWalletListResponse>(url, {
         method: 'GET',
         headers: this.getPublicHeaders(),
       });
-      return await this.handleResponse<CircleWalletListResponse>(response);
     } catch (error) {
       logger.error('Failed to list Circle wallets:', error);
       throw error;
@@ -342,11 +330,10 @@ export class CircleAPI extends CypheraAPI {
     walletId: string
   ): Promise<CircleWalletResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/admin/circle/wallets/${walletId}`, {
+      return await this.fetchWithRateLimit<CircleWalletResponse>(`${this.baseUrl}/admin/circle/wallets/${walletId}`, {
         method: 'GET',
         headers: this.getPublicHeaders(),
       });
-      return await this.handleResponse<CircleWalletResponse>(response);
     } catch (error) {
       logger.error('Failed to get Circle wallet:', error);
       throw error;
@@ -385,11 +372,10 @@ export class CircleAPI extends CypheraAPI {
       const queryString = queryParams.toString();
       const url = `${this.baseUrl}/admin/circle/wallets/${walletId}/balances${queryString ? `?${queryString}` : ''}`;
 
-      const response = await fetch(url, {
+      return await this.fetchWithRateLimit<CircleWalletBalanceResponse>(url, {
         method: 'GET',
         headers: this.getPublicHeaders(),
       });
-      return await this.handleResponse<CircleWalletBalanceResponse>(response);
     } catch (error) {
       logger.error('Failed to get wallet balances:', error);
       throw error;
@@ -442,11 +428,10 @@ export class CircleAPI extends CypheraAPI {
       const queryString = queryParams.toString();
       const url = `${this.baseUrl}/admin/circle/transactions${queryString ? `?${queryString}` : ''}`;
 
-      const response = await fetch(url, {
+      return await this.fetchWithRateLimit<CircleTransactionListResponse>(url, {
         method: 'GET',
         headers: this.getPublicHeaders(),
       });
-      return await this.handleResponse<CircleTransactionListResponse>(response);
     } catch (error) {
       logger.error('Failed to list transactions:', error);
       throw error;
@@ -462,11 +447,10 @@ export class CircleAPI extends CypheraAPI {
     transactionId: string
   ): Promise<{ data: { transaction: CircleTransaction } }> {
     try {
-      const response = await fetch(`${this.baseUrl}/admin/circle/transactions/${transactionId}`, {
+      return await this.fetchWithRateLimit<{ data: { transaction: CircleTransaction } }>(`${this.baseUrl}/admin/circle/transactions/${transactionId}`, {
         method: 'GET',
         headers: this.getPublicHeaders(),
       });
-      return await this.handleResponse<{ data: { transaction: CircleTransaction } }>(response);
     } catch (error) {
       logger.error('Failed to get transaction:', error);
       throw error;
@@ -488,22 +472,19 @@ export class CircleAPI extends CypheraAPI {
     high: { amount: string; amountInUSD: string };
   }> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/admin/circle/transactions/transfer/estimate-fee`,
-        {
-          method: 'POST',
-          headers: this.getPublicHeaders(), // Use public headers
-          body: JSON.stringify(params),
-        }
-      );
       // Adjust based on actual backend response structure
       type FeeEstimateResponse = {
         low: { amount: string; amountInUSD: string };
         medium: { amount: string; amountInUSD: string };
         high: { amount: string; amountInUSD: string };
       };
-      const result = await this.handleResponse<{ data: FeeEstimateResponse } | FeeEstimateResponse>(
-        response
+      const result = await this.fetchWithRateLimit<{ data: FeeEstimateResponse } | FeeEstimateResponse>(
+        `${this.baseUrl}/admin/circle/transactions/transfer/estimate-fee`,
+        {
+          method: 'POST',
+          headers: this.getPublicHeaders(), // Use public headers
+          body: JSON.stringify(params),
+        }
       );
       return 'data' in result ? result.data : result;
     } catch (error) {
@@ -520,15 +501,14 @@ export class CircleAPI extends CypheraAPI {
     // Request body type if needed
     const requestBody = { address, blockchain };
     try {
-      const response = await fetch(`${this.baseUrl}/admin/circle/transactions/validate-address`, {
+      // Adjust based on actual backend response structure
+      const result = await this.fetchWithRateLimit<
+        { data: { isValid: boolean } } | { isValid: boolean }
+      >(`${this.baseUrl}/admin/circle/transactions/validate-address`, {
         method: 'POST',
         headers: this.getPublicHeaders(),
         body: JSON.stringify(requestBody),
       });
-      // Adjust based on actual backend response structure
-      const result = await this.handleResponse<
-        { data: { isValid: boolean } } | { isValid: boolean }
-      >(response);
       return 'data' in result ? result.data : result;
     } catch (error) {
       logger.error('Failed to validate address:', error);

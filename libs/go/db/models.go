@@ -579,6 +579,7 @@ type ApiKey struct {
 	WorkspaceID uuid.UUID          `json:"workspace_id"`
 	Name        string             `json:"name"`
 	KeyHash     string             `json:"key_hash"`
+	KeyPrefix   pgtype.Text        `json:"key_prefix"`
 	AccessLevel ApiKeyLevel        `json:"access_level"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
 	LastUsedAt  pgtype.Timestamptz `json:"last_used_at"`

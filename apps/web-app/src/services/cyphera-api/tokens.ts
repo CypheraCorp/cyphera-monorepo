@@ -20,16 +20,12 @@ export class TokensAPI extends CypheraAPI {
       }
 
       const url = `${this.baseUrl}/tokens/quote`;
-      const response = await fetch(url, {
+      return await this.fetchWithRateLimit<TokenQuoteResponse>(url, {
         method: 'POST',
         headers: this.getPublicHeaders(),
         body: JSON.stringify(payload),
         // Removed cache: 'no-store' to allow HTTP caching
       });
-
-      const data = await response.json();
-
-      return data;
     } catch (error) {
       logger.error('Error getting token price:', error);
       throw error;

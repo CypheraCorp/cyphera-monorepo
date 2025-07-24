@@ -18,11 +18,10 @@ export class UsersAPI extends CypheraAPI {
     supabaseId: string
   ): Promise<UserResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/users/supabase/${supabaseId}`, {
+      return await this.fetchWithRateLimit<UserResponse>(`${this.baseUrl}/users/supabase/${supabaseId}`, {
         method: 'GET',
         headers: this.getHeaders(context),
       });
-      return await this.handleResponse<UserResponse>(response);
     } catch (error) {
       logger.error('User info fetch by Supabase ID failed:', error);
       throw error;

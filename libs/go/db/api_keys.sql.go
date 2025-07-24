@@ -17,19 +17,21 @@ INSERT INTO api_keys (
     workspace_id,
     name,
     key_hash,
+    key_prefix,
     access_level,
     expires_at,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, workspace_id, name, key_hash, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, name, key_hash, key_prefix, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at
 `
 
 type CreateAPIKeyParams struct {
 	WorkspaceID uuid.UUID          `json:"workspace_id"`
 	Name        string             `json:"name"`
 	KeyHash     string             `json:"key_hash"`
+	KeyPrefix   pgtype.Text        `json:"key_prefix"`
 	AccessLevel ApiKeyLevel        `json:"access_level"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
 	Metadata    []byte             `json:"metadata"`
@@ -40,6 +42,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 		arg.WorkspaceID,
 		arg.Name,
 		arg.KeyHash,
+		arg.KeyPrefix,
 		arg.AccessLevel,
 		arg.ExpiresAt,
 		arg.Metadata,
@@ -50,6 +53,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 		&i.WorkspaceID,
 		&i.Name,
 		&i.KeyHash,
+		&i.KeyPrefix,
 		&i.AccessLevel,
 		&i.ExpiresAt,
 		&i.LastUsedAt,
@@ -78,7 +82,7 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) erro
 }
 
 const getAPIKey = `-- name: GetAPIKey :one
-SELECT id, workspace_id, name, key_hash, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at FROM api_keys
+SELECT id, workspace_id, name, key_hash, key_prefix, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at FROM api_keys
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -95,6 +99,7 @@ func (q *Queries) GetAPIKey(ctx context.Context, arg GetAPIKeyParams) (ApiKey, e
 		&i.WorkspaceID,
 		&i.Name,
 		&i.KeyHash,
+		&i.KeyPrefix,
 		&i.AccessLevel,
 		&i.ExpiresAt,
 		&i.LastUsedAt,
@@ -107,7 +112,7 @@ func (q *Queries) GetAPIKey(ctx context.Context, arg GetAPIKeyParams) (ApiKey, e
 }
 
 const getAPIKeyByKey = `-- name: GetAPIKeyByKey :one
-SELECT id, workspace_id, name, key_hash, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at FROM api_keys
+SELECT id, workspace_id, name, key_hash, key_prefix, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at FROM api_keys
 WHERE key_hash = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -119,6 +124,7 @@ func (q *Queries) GetAPIKeyByKey(ctx context.Context, keyHash string) (ApiKey, e
 		&i.WorkspaceID,
 		&i.Name,
 		&i.KeyHash,
+		&i.KeyPrefix,
 		&i.AccessLevel,
 		&i.ExpiresAt,
 		&i.LastUsedAt,
@@ -143,7 +149,7 @@ func (q *Queries) GetActiveAPIKeysCount(ctx context.Context, workspaceID uuid.UU
 }
 
 const getAllAPIKeys = `-- name: GetAllAPIKeys :many
-SELECT id, workspace_id, name, key_hash, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at FROM api_keys
+SELECT id, workspace_id, name, key_hash, key_prefix, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at FROM api_keys
 ORDER BY created_at DESC
 `
 
@@ -161,6 +167,7 @@ func (q *Queries) GetAllAPIKeys(ctx context.Context) ([]ApiKey, error) {
 			&i.WorkspaceID,
 			&i.Name,
 			&i.KeyHash,
+			&i.KeyPrefix,
 			&i.AccessLevel,
 			&i.ExpiresAt,
 			&i.LastUsedAt,
@@ -180,7 +187,7 @@ func (q *Queries) GetAllAPIKeys(ctx context.Context) ([]ApiKey, error) {
 }
 
 const getExpiredAPIKeys = `-- name: GetExpiredAPIKeys :many
-SELECT id, workspace_id, name, key_hash, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at FROM api_keys
+SELECT id, workspace_id, name, key_hash, key_prefix, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at FROM api_keys
 WHERE expires_at < CURRENT_TIMESTAMP AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -199,6 +206,7 @@ func (q *Queries) GetExpiredAPIKeys(ctx context.Context) ([]ApiKey, error) {
 			&i.WorkspaceID,
 			&i.Name,
 			&i.KeyHash,
+			&i.KeyPrefix,
 			&i.AccessLevel,
 			&i.ExpiresAt,
 			&i.LastUsedAt,
@@ -218,7 +226,7 @@ func (q *Queries) GetExpiredAPIKeys(ctx context.Context) ([]ApiKey, error) {
 }
 
 const listAPIKeys = `-- name: ListAPIKeys :many
-SELECT id, workspace_id, name, key_hash, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at FROM api_keys
+SELECT id, workspace_id, name, key_hash, key_prefix, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at FROM api_keys
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -237,6 +245,7 @@ func (q *Queries) ListAPIKeys(ctx context.Context, workspaceID uuid.UUID) ([]Api
 			&i.WorkspaceID,
 			&i.Name,
 			&i.KeyHash,
+			&i.KeyPrefix,
 			&i.AccessLevel,
 			&i.ExpiresAt,
 			&i.LastUsedAt,
@@ -264,7 +273,7 @@ SET
     metadata = COALESCE($6, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, name, key_hash, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, name, key_hash, key_prefix, access_level, expires_at, last_used_at, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdateAPIKeyParams struct {
@@ -291,6 +300,7 @@ func (q *Queries) UpdateAPIKey(ctx context.Context, arg UpdateAPIKeyParams) (Api
 		&i.WorkspaceID,
 		&i.Name,
 		&i.KeyHash,
+		&i.KeyPrefix,
 		&i.AccessLevel,
 		&i.ExpiresAt,
 		&i.LastUsedAt,

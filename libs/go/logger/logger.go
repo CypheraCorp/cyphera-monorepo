@@ -1,8 +1,6 @@
 package logger
 
 import (
-	"github.com/cyphera/cyphera-api/libs/go/helpers"
-
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -16,7 +14,7 @@ var (
 // based on the provided stage.
 func InitLogger(stage string) {
 	var config zap.Config
-	if stage == helpers.StageProd {
+	if stage == "prod" {
 		// Production config
 		config = zap.NewProductionConfig()
 		config.EncoderConfig.TimeKey = "timestamp"

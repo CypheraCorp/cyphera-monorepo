@@ -151,6 +151,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
     name VARCHAR(255) NOT NULL,
     key_hash VARCHAR(255) NOT NULL UNIQUE,
+    key_prefix VARCHAR(20), -- First part of key for identification
     access_level api_key_level NOT NULL DEFAULT 'read',
     expires_at TIMESTAMP WITH TIME ZONE,
     last_used_at TIMESTAMP WITH TIME ZONE,
@@ -641,6 +642,7 @@ CREATE INDEX idx_customers_payment_sync_status ON customers(payment_sync_status)
 
 -- api_keys
 CREATE INDEX idx_api_keys_workspace_id ON api_keys(workspace_id);
+CREATE INDEX idx_api_keys_key_prefix ON api_keys(key_prefix);
 
 -- networks
 CREATE INDEX idx_networks_chain_id ON networks(chain_id);
@@ -789,12 +791,15 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
-INSERT INTO api_keys (workspace_id, name, key_hash, access_level)
+-- Insert admin API key with proper bcrypt hash
+-- The actual key is: cyk_admin_test_key_do_not_use_in_production
+INSERT INTO api_keys (workspace_id, name, key_hash, key_prefix, access_level)
 VALUES 
     (
         (SELECT id FROM workspaces WHERE name = 'Admin Workspace'),
         'Admin API Key',
-        'admin_valid_key',
+        '$2a$10$WC3hxra/5dT.KzppxM0fVO1aALLOjq5cW78BRd.S6SgPV59AERLIa',
+        'cyk_admin***',
         'admin'
     )
 ON CONFLICT DO NOTHING;

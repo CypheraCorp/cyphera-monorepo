@@ -17,12 +17,11 @@ export class PublicAPI extends CypheraAPI {
    */
   async getPublicPrice(priceId: string): Promise<PriceResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/public/prices/${priceId}`, {
+      return await this.fetchWithRateLimit<PriceResponse>(`${this.baseUrl}/public/prices/${priceId}`, {
         method: 'GET',
         headers: this.getPublicHeaders(),
         // Removed cache: 'no-store' to allow HTTP caching
       });
-      return await this.handleResponse<PriceResponse>(response);
     } catch (error) {
       clientLogger.error('Public price fetch failed', {
         error: error instanceof Error ? error.message : error,
@@ -40,12 +39,10 @@ export class PublicAPI extends CypheraAPI {
    */
   async getPublicProductByPriceId(priceId: string): Promise<PublicProductResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/admin/prices/${priceId}`, {
+      return await this.fetchWithRateLimit<PublicProductResponse>(`${this.baseUrl}/admin/prices/${priceId}`, {
         method: 'GET',
         headers: this.getPublicHeaders(),
       });
-      const data = await this.handleResponse<PublicProductResponse>(response);
-      return data;
     } catch (error) {
       clientLogger.error('Public product fetch failed', {
         error: error instanceof Error ? error.message : error,
@@ -73,12 +70,11 @@ export class PublicAPI extends CypheraAPI {
         });
       }
 
-      const response = await fetch(`${this.baseUrl}/admin/accounts/signin`, {
+      return await this.fetchWithRateLimit<AccountAccessResponse>(`${this.baseUrl}/admin/accounts/signin`, {
         method: 'POST',
         headers: this.getPublicHeaders(),
         body: JSON.stringify(accountData),
       });
-      return await this.handleResponse<AccountAccessResponse>(response);
     } catch (error) {
       clientLogger.error('Account signin failed', {
         error: error instanceof Error ? error.message : error,
@@ -115,13 +111,11 @@ export class PublicAPI extends CypheraAPI {
         headers['X-Workspace-ID'] = workspaceId;
       }
 
-      const response = await fetch(`${this.baseUrl}/admin/customers/signin`, {
+      return await this.fetchWithRateLimit<CustomerSignInResponse>(`${this.baseUrl}/admin/customers/signin`, {
         method: 'POST',
         headers,
         body: JSON.stringify(customerData),
       });
-
-      return await this.handleResponse<CustomerSignInResponse>(response);
     } catch (error) {
       clientLogger.error('Customer signin failed', {
         error: error instanceof Error ? error.message : error,

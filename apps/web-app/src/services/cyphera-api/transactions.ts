@@ -24,15 +24,10 @@ export class TransactionsAPI extends CypheraAPI {
 
     try {
       logger.info('Fetching transactions from:', { url });
-      const response = await fetch(url, {
+      return await this.fetchWithRateLimit<PaginatedResponse<SubscriptionEventResponse>>(url, {
         method: 'GET',
         headers: this.getHeaders(context),
       });
-
-      const data =
-        await this.handleResponse<PaginatedResponse<SubscriptionEventResponse>>(response);
-
-      return data;
     } catch (error) {
       logger.error('Cyphera Transactions fetch failed:', error);
       throw error;
@@ -51,11 +46,10 @@ export class TransactionsAPI extends CypheraAPI {
     transactionId: string
   ): Promise<SubscriptionEventResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/subscription-events/${transactionId}`, {
+      return await this.fetchWithRateLimit<SubscriptionEventResponse>(`${this.baseUrl}/subscription-events/${transactionId}`, {
         method: 'GET',
         headers: this.getHeaders(context),
       });
-      return await this.handleResponse<SubscriptionEventResponse>(response);
     } catch (error) {
       logger.error('Cyphera Transaction fetch failed:', error);
       throw error;

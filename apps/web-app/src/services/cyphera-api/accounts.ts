@@ -22,15 +22,11 @@ export class AccountsAPI extends CypheraAPI {
       const headers = this.getHeaders(context);
       const body = JSON.stringify(accountData);
 
-      const response = await fetch(url, {
+      return await this.fetchWithRateLimit<AccountMessageResponse>(url, {
         method: 'POST',
         headers: headers,
         body: body,
       });
-
-      const result = await this.handleResponse<AccountMessageResponse>(response);
-
-      return result;
     } catch (error) {
       logger.error('❌ AccountsAPI: Account onboarding failed:', error);
       throw error;

@@ -22,12 +22,10 @@ export class NetworksAPI extends CypheraAPI {
         url += `&testnet=${params.testnet}`;
       }
 
-      const response = await fetch(url, {
+      const result = await this.fetchWithRateLimit<{ data: NetworkWithTokensResponse[] }>(url, {
         method: 'GET',
         headers: this.getPublicHeaders(),
       });
-
-      const result = await this.handleResponse<{ data: NetworkWithTokensResponse[] }>(response);
       return result.data;
     } catch (error) {
       logger.error('Networks with tokens fetch failed:', error);
@@ -42,12 +40,10 @@ export class NetworksAPI extends CypheraAPI {
    */
   async getNetworkById(networkId: string): Promise<NetworkResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/networks/${networkId}`, {
+      const result = await this.fetchWithRateLimit<{ data: NetworkResponse }>(`${this.baseUrl}/networks/${networkId}`, {
         method: 'GET',
         headers: this.getPublicHeaders(),
       });
-
-      const result = await this.handleResponse<{ data: NetworkResponse }>(response);
       return result.data;
     } catch (error) {
       logger.error(`Network fetch failed for ID ${networkId}:`, error);

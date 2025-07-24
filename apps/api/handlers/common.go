@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/cyphera/cyphera-api/libs/go/client/coinmarketcap"
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"errors"
 	"net/http"
@@ -62,6 +63,17 @@ func (s *CommonServices) GetDBConn() (interface{}, error) {
 	return nil, errors.New("database connection does not support transactions")
 }
 
+// GetDBPool returns the underlying pgxpool.Pool from the db.Queries
+// Returns an error if the underlying connection is not a pool
+func (s *CommonServices) GetDBPool() (*pgxpool.Pool, error) {
+	dbtx := s.db.GetDBTX()
+	pool, ok := dbtx.(*pgxpool.Pool)
+	if !ok {
+		return nil, errors.New("database connection is not a pool")
+	}
+	return pool, nil
+}
+
 // WithTx creates a new db.Queries instance that uses the provided transaction
 func (s *CommonServices) WithTx(tx pgx.Tx) *db.Queries {
 	return s.db.WithTx(tx)
@@ -98,6 +110,34 @@ func (s *CommonServices) BeginTx(ctx context.Context) (pgx.Tx, *db.Queries, erro
 	qtx := s.WithTx(tx)
 
 	return tx, qtx, nil
+}
+
+// RunInTransaction executes a function within a database transaction using the helper
+// It automatically handles commit/rollback and provides a queries instance that uses the transaction
+func (s *CommonServices) RunInTransaction(ctx context.Context, fn func(qtx *db.Queries) error) error {
+	pool, err := s.GetDBPool()
+	if err != nil {
+		return err
+	}
+
+	return helpers.WithTransaction(ctx, pool, func(tx pgx.Tx) error {
+		// Create queries instance that uses this transaction
+		qtx := s.db.WithTx(tx)
+		return fn(qtx)
+	})
+}
+
+// RunInTransactionWithRetry executes a function within a database transaction with retry logic
+func (s *CommonServices) RunInTransactionWithRetry(ctx context.Context, maxRetries int, fn func(qtx *db.Queries) error) error {
+	pool, err := s.GetDBPool()
+	if err != nil {
+		return err
+	}
+
+	return helpers.WithTransactionRetry(ctx, pool, maxRetries, func(tx pgx.Tx) error {
+		qtx := s.db.WithTx(tx)
+		return fn(qtx)
+	})
 }
 
 // GetCypheraSmartWalletAddress returns the Cyphera smart wallet address

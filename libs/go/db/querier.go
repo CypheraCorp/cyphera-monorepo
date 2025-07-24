@@ -143,6 +143,8 @@ type Querier interface {
 	GetActiveSyncSessionsByProvider(ctx context.Context, arg GetActiveSyncSessionsByProviderParams) ([]PaymentSyncSession, error)
 	GetAllAPIKeys(ctx context.Context) ([]ApiKey, error)
 	GetAllAccounts(ctx context.Context) ([]Account, error)
+	// Used for authentication - retrieves all active API keys for bcrypt comparison
+	GetAllActiveAPIKeys(ctx context.Context) ([]ApiKey, error)
 	GetAllCustomers(ctx context.Context) ([]Customer, error)
 	GetAllWorkspaces(ctx context.Context) ([]Workspace, error)
 	GetCircleUserByID(ctx context.Context, id uuid.UUID) (CircleUser, error)
@@ -415,6 +417,8 @@ type Querier interface {
 	// Unset primary flag for all wallets of a customer except the specified wallet
 	UnsetPrimaryForCustomerWallets(ctx context.Context, arg UnsetPrimaryForCustomerWalletsParams) error
 	UpdateAPIKey(ctx context.Context, arg UpdateAPIKeyParams) (ApiKey, error)
+	// Updates the last_used_at timestamp after successful authentication
+	UpdateAPIKeyLastUsed(ctx context.Context, id uuid.UUID) error
 	UpdateAccount(ctx context.Context, arg UpdateAccountParams) (Account, error)
 	UpdateCircleUser(ctx context.Context, arg UpdateCircleUserParams) (CircleUser, error)
 	UpdateCircleUserByWorkspaceID(ctx context.Context, arg UpdateCircleUserByWorkspaceIDParams) (CircleUser, error)
