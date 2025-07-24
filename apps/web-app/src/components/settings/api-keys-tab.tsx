@@ -23,12 +23,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { Plus, Copy, Trash2, AlertTriangle, Key, Check } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useCorrelationId } from '@/hooks/utils/use-correlation-id';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useCSRF } from '@/hooks/security/use-csrf';
 
 interface ApiKey {
   id: string;
@@ -55,16 +54,19 @@ export function ApiKeysTab({ workspaceId, accessToken }: ApiKeysTabProps) {
   const [selectedKey, setSelectedKey] = useState<ApiKey | null>(null);
   const [newKeyData, setNewKeyData] = useState<{
     name: string;
+    description: string;
     access_level: 'read' | 'write' | 'admin';
   }>({
     name: '',
-    access_level: 'read',
+    description: '',
+    access_level: 'write',
   });
   const [createdKey, setCreatedKey] = useState<{ id: string; key: string } | null>(null);
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
   
   const { logError } = useCorrelationId();
   const { toast } = useToast();
+  const { addCSRFHeader } = useCSRF();
 
   // Load API keys
   useEffect(() => {
@@ -111,17 +113,22 @@ export function ApiKeysTab({ workspaceId, accessToken }: ApiKeysTabProps) {
 
     setCreating(true);
     try {
+      const payload = {
+        name: newKeyData.name,
+        description: newKeyData.description,
+        access_level: newKeyData.access_level,
+      };
+      
+      console.log('Creating API key with payload:', payload);
+      
       const response = await fetch('/api/api-keys', {
         method: 'POST',
-        headers: {
+        headers: addCSRFHeader({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
           'X-Workspace-ID': workspaceId,
-        },
-        body: JSON.stringify({
-          name: newKeyData.name,
-          access_level: newKeyData.access_level,
         }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -136,7 +143,7 @@ export function ApiKeysTab({ workspaceId, accessToken }: ApiKeysTabProps) {
       await loadApiKeys();
       
       // Reset form
-      setNewKeyData({ name: '', access_level: 'read' });
+      setNewKeyData({ name: '', description: '', access_level: 'write' });
     } catch (error) {
       logError('Failed to create API key', error);
       toast({
@@ -156,10 +163,10 @@ export function ApiKeysTab({ workspaceId, accessToken }: ApiKeysTabProps) {
     try {
       const response = await fetch(`/api/api-keys/${selectedKey.id}`, {
         method: 'DELETE',
-        headers: {
+        headers: addCSRFHeader({
           Authorization: `Bearer ${accessToken}`,
           'X-Workspace-ID': workspaceId,
-        },
+        }),
       });
 
       if (!response.ok) {
@@ -210,19 +217,6 @@ export function ApiKeysTab({ workspaceId, accessToken }: ApiKeysTabProps) {
     }
   };
 
-  const getAccessLevelBadge = (level: string) => {
-    const variants: Record<string, 'default' | 'secondary' | 'destructive'> = {
-      read: 'secondary',
-      write: 'default',
-      admin: 'destructive',
-    };
-    
-    return (
-      <Badge variant={variants[level] || 'default'}>
-        {level.toUpperCase()}
-      </Badge>
-    );
-  };
 
   return (
     <div className="space-y-6">
@@ -264,23 +258,15 @@ export function ApiKeysTab({ workspaceId, accessToken }: ApiKeysTabProps) {
                       </div>
                       
                       <div className="space-y-2">
-                        <Label htmlFor="access_level">Access Level</Label>
-                        <Select
-                          value={newKeyData.access_level}
-                          onValueChange={(value: 'read' | 'write' | 'admin') => 
-                            setNewKeyData({ ...newKeyData, access_level: value })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="read">Read Only</SelectItem>
-                            <SelectItem value="write">Read & Write</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Label htmlFor="description">Description (optional)</Label>
+                        <Input
+                          id="description"
+                          placeholder="e.g., Used for production API calls"
+                          value={newKeyData.description}
+                          onChange={(e) => setNewKeyData({ ...newKeyData, description: e.target.value })}
+                        />
                       </div>
+                      
                     </div>
                     
                     <DialogFooter>
@@ -288,7 +274,7 @@ export function ApiKeysTab({ workspaceId, accessToken }: ApiKeysTabProps) {
                         variant="outline"
                         onClick={() => {
                           setShowCreateDialog(false);
-                          setNewKeyData({ name: '', access_level: 'read' });
+                          setNewKeyData({ name: '', description: '', access_level: 'write' });
                         }}
                       >
                         Cancel
@@ -366,7 +352,6 @@ export function ApiKeysTab({ workspaceId, accessToken }: ApiKeysTabProps) {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Key Prefix</TableHead>
-                  <TableHead>Access Level</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Last Used</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -379,7 +364,6 @@ export function ApiKeysTab({ workspaceId, accessToken }: ApiKeysTabProps) {
                     <TableCell>
                       <code className="text-sm">{key.key_prefix}</code>
                     </TableCell>
-                    <TableCell>{getAccessLevelBadge(key.access_level)}</TableCell>
                     <TableCell>
                       {formatDistanceToNow(new Date(key.created_at), { addSuffix: true })}
                     </TableCell>

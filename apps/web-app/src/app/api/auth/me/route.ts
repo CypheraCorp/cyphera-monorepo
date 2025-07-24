@@ -31,6 +31,16 @@ export async function GET() {
   try {
     // Get merchant session using unified service
     const session = await UnifiedSessionService.getByType('merchant');
+    
+    logger.info('[/api/auth/me] Session check', {
+      hasSession: !!session,
+      sessionData: session ? {
+        user_id: session.user_id,
+        email: session.email,
+        account_id: session.account_id,
+        workspace_id: session.workspace_id
+      } : null
+    });
 
     if (!session) {
       return NextResponse.json({ error: 'No session found' }, { status: 401 });

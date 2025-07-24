@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@/lib/auth/session/session';
 import { createHeadersWithCorrelationId } from '@/lib/utils/correlation';
+import { withCSRFProtection } from '@/lib/security/csrf-middleware';
+
+interface RouteParams {
+  params: Promise<Record<string, string>>;
+}
 
 // GET /api/api-keys/:id - Get API key by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: RouteParams
 ) {
   try {
     const { id } = await params;
@@ -41,12 +46,10 @@ export async function GET(
 }
 
 // PUT /api/api-keys/:id - Update API key
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PUT = withCSRFProtection(
+  async (request: NextRequest, context: RouteParams) => {
   try {
-    const { id } = await params;
+    const { id } = await context.params;
     const user = await getUser();
     if (!user || !user.access_token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -81,15 +84,14 @@ export async function PUT(
       { status: 500 }
     );
   }
-}
+  }
+);
 
 // DELETE /api/api-keys/:id - Delete API key
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withCSRFProtection(
+  async (request: NextRequest, context: RouteParams) => {
   try {
-    const { id } = await params;
+    const { id } = await context.params;
     const user = await getUser();
     if (!user || !user.access_token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -119,4 +121,5 @@ export async function DELETE(
       { status: 500 }
     );
   }
-}
+  }
+);

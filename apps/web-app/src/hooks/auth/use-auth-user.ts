@@ -12,6 +12,13 @@ interface AuthUserResponse {
   workspace: {
     id: string;
   };
+  session?: {
+    user_id?: string;
+    account_id?: string;
+    workspace_id?: string;
+    email?: string;
+    access_token?: string;
+  };
 }
 
 /**
@@ -19,7 +26,7 @@ interface AuthUserResponse {
  * This replaces the old pattern of storing user data in context/store
  */
 export function useAuthUser() {
-  const { isAuthenticated, accessToken, setUserData, setLoading, setError, clearAuth } = useAuthStore();
+  const { isAuthenticated, accessToken, setUserData, clearAuth } = useAuthStore();
   
   const query = useQuery({
     queryKey: ['auth', 'user'],
@@ -72,6 +79,7 @@ export function useAuthUser() {
     user: query.data?.user || null,
     account: query.data?.account || null,
     workspace: query.data?.workspace || null,
+    data: query.data,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,
@@ -85,7 +93,34 @@ export function useAuthUser() {
  */
 export function useAuth() {
   const authStore = useAuthStore();
-  const userData = useAuthUser();
+  const { data, isLoading, error, refetch } = useAuthUser();
+  
+  // Debug logging
+  console.log('[useAuth] Hook state:', {
+    isAuthenticated: authStore.isAuthenticated,
+    hasAccessToken: !!authStore.accessToken,
+    hasData: !!data,
+    isLoading,
+    error: error?.message
+  });
+  
+  // Debug log the data structure
+  if (data) {
+    console.log('[useAuth] API Response data:', data);
+  }
+  
+  // Create a properly formatted user object that matches CypheraUser interface
+  const user = data ? {
+    id: data.session?.user_id || data.user?.id || '',
+    email: data.session?.email || data.user?.email || '',
+    user_id: data.session?.user_id,
+    account_id: data.session?.account_id || data.account?.id,
+    workspace_id: data.session?.workspace_id || data.workspace?.id,
+    access_token: data.session?.access_token || authStore.accessToken || '',
+    // Additional fields that might be needed
+    finished_onboarding: true,
+    email_verified: true,
+  } : null;
   
   return {
     // Auth state
@@ -93,18 +128,18 @@ export function useAuth() {
     accessToken: authStore.accessToken,
     hasHydrated: authStore.hasHydrated,
     
-    // User data (always fresh from server)
-    user: userData.user,
-    account: userData.account,
-    workspace: userData.workspace,
+    // User data (always fresh from server, formatted as CypheraUser)
+    user,
+    account: data?.account || null,
+    workspace: data?.workspace || null,
     
     // Loading states
-    loading: authStore.loading || userData.isLoading,
-    error: authStore.error || userData.error?.message || null,
+    loading: authStore.loading || isLoading,
+    error: authStore.error || error?.message || null,
     
     // Actions
     login: authStore.login,
     logout: authStore.logout,
-    refetch: userData.refetch,
+    refetch,
   };
 }

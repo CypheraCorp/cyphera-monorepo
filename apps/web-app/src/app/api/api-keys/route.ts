@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@/lib/auth/session/session';
 import { createHeadersWithCorrelationId } from '@/lib/utils/correlation';
+import { withCSRFProtection } from '@/lib/security/csrf-middleware';
 
 // GET /api/api-keys - List API keys
 export async function GET(request: NextRequest) {
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/api-keys - Create API key
-export async function POST(request: NextRequest) {
+export const POST = withCSRFProtection(async (request: NextRequest) => {
   try {
     const user = await getUser();
     if (!user || !user.access_token) {
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, access_level } = body;
+    const { name, description, access_level } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json(
@@ -61,18 +62,32 @@ export async function POST(request: NextRequest) {
       'X-Workspace-ID': user.workspace_id || '',
     });
 
+    const requestBody: any = {
+      name: name.trim(),
+      access_level: access_level || 'write',
+    };
+    
+    // Only include description if provided
+    if (description && description.trim()) {
+      requestBody.description = description.trim();
+    }
+    
+    console.log('Sending to backend API:', requestBody);
+    
     const response = await fetch(`${apiUrl}/api/v1/api-keys`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        name: name.trim(),
-        access_level: access_level || 'read',
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
+      console.error('Backend API error:', {
+        status: response.status,
+        data,
+        requestBody,
+      });
       return NextResponse.json(data, { status: response.status });
     }
 
@@ -84,4 +99,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

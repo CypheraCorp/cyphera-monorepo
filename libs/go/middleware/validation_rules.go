@@ -285,6 +285,14 @@ var CreateAPIKeyValidation = ValidationConfig{
 			Sanitize:  true,
 		},
 		{
+			Field:     "description",
+			Type:      "string",
+			Required:  false,
+			MinLength: 0,
+			MaxLength: 200,
+			Sanitize:  true,
+		},
+		{
 			Field:         "access_level",
 			Type:          "string",
 			Required:      true,

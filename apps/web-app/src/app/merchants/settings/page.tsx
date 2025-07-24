@@ -1,69 +1,54 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Suspense } from 'react';
-import dynamic from 'next/dynamic';
-import { getUser } from '@/lib/auth/session/session-client';
-import type { CypheraUser } from '@/lib/auth/session/session';
-import { useRouter } from 'next/navigation';
-import { clientLogger } from '@/lib/core/logger/logger-client';
-
-// Dynamically import components to reduce initial bundle size
-
-const SettingsForm = dynamic(
-  () =>
-    import('@/components/settings/settings-form').then((mod) => ({ default: mod.SettingsForm })),
-  {
-    loading: () => <div className="h-64 w-full bg-muted animate-pulse rounded-md" />,
-    ssr: false,
-  }
-);
+import { useAuth } from '@/hooks/auth/use-auth-user';
+import { SettingsForm } from '@/components/settings/settings-form';
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 /**
  * Settings page component
  * Allows users to manage their account settings
  */
 export default function SettingsPage() {
-  const [user, setUser] = useState<CypheraUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
-
-  useEffect(() => {
-    async function loadUser() {
-      try {
-        const currentUser = await getUser();
-        if (!currentUser) {
-          router.push('/merchants/signin');
-          return;
-        }
-        setUser(currentUser);
-      } catch (error) {
-        clientLogger.error('Failed to load user', {
-          error: error instanceof Error ? error.message : error,
-        });
-        router.push('/merchants/signin');
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadUser();
-  }, [router]);
+  const { user, loading, error, isAuthenticated } = useAuth();
+  
+  // Debug logging
+  console.log('[Settings Page] Auth state:', {
+    isAuthenticated,
+    loading,
+    user,
+    error
+  });
 
   if (loading) {
-    return <div className="h-screen w-full bg-muted animate-pulse rounded-md" />;
+    return (
+      <div className="container mx-auto py-6 px-4">
+        <div className="h-64 w-full bg-muted animate-pulse rounded-md" />
+      </div>
+    );
   }
 
   if (!user) {
-    return null;
+    return (
+      <div className="container mx-auto py-6 px-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Authentication Required</CardTitle>
+            <CardDescription>
+              {error ? `Error: ${error}` : 'Please sign in to access your settings.'}
+              <br />
+              <span className="text-xs text-muted-foreground">
+                Auth status: {isAuthenticated ? 'Authenticated' : 'Not authenticated'}
+              </span>
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
   }
 
   return (
-    <Suspense fallback={<div className="h-screen w-full bg-muted animate-pulse rounded-md" />}>
-      <div className="container mx-auto py-6 px-4">
-        <Suspense fallback={<div className="h-64 w-full bg-muted animate-pulse rounded-md" />}>
-          <SettingsForm user={user} />
-        </Suspense>
-      </div>
-    </Suspense>
+    <div className="container mx-auto py-6 px-4">
+      <SettingsForm user={user} />
+    </div>
   );
 }

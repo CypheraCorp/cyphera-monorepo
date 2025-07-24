@@ -47,7 +47,7 @@ type APIKeyResponse struct {
 // CreateAPIKeyRequest represents the request body for creating an API key
 type CreateAPIKeyRequest struct {
 	Name        string                 `json:"name" binding:"required"`
-	Description string                 `json:"description" binding:"required"`
+	Description string                 `json:"description,omitempty"`
 	ExpiresAt   *time.Time             `json:"expires_at,omitempty"`
 	AccessLevel string                 `json:"access_level" binding:"required,oneof=read write admin"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
