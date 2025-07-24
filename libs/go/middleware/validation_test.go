@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+
 func TestValidateInput(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

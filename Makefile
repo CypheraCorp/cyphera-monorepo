@@ -180,6 +180,69 @@ ci-validate:
 	@$(NX) format:check --all
 
 # ==============================================================================
+# Testing Infrastructure
+# ==============================================================================
+
+.PHONY: test test-unit test-mock test-integration test-coverage test-coverage-html test-db-up test-db-down
+
+# Load test configuration
+TEST_CONFIG := test.config.json
+COVERAGE_THRESHOLD := $(shell jq -r '.coverage.threshold' $(TEST_CONFIG))
+TEST_DB_NAME := $(shell jq -r '.database.test_db_name' $(TEST_CONFIG))
+
+test: test-unit
+	@echo "✅ All tests completed"
+
+test-unit: test-mock
+	@echo "🧪 Running unit tests (includes mocked tests)..."
+	@$(GO) test -race -timeout=30s ./apps/api/... ./libs/go/... -v
+
+test-mock:
+	@echo "🎭 Running unit tests with database mocks (fast)..."
+	@$(GO) test -race -timeout=30s \
+		-run=".*Mock.*" \
+		./apps/api/handlers/... -v
+
+test-integration: test-db-up
+	@echo "🧪 Running integration tests with real database..."
+	@$(GO) test -race -timeout=30m -tags=integration ./tests/integration/... -v
+	@$(MAKE) test-db-down
+
+test-coverage:
+	@echo "📊 Running tests with coverage..."
+	@$(GO) test -race -timeout=30s -coverprofile=coverage.out \
+		-coverpkg=./apps/api/...,./libs/go/... \
+		./apps/api/... ./libs/go/...
+	@$(GO) tool cover -func=coverage.out | grep total:
+	@echo "Checking coverage threshold ($(COVERAGE_THRESHOLD)%)..."
+	@./scripts/check-coverage.sh $(COVERAGE_THRESHOLD)
+
+test-coverage-html: test-coverage
+	@echo "📊 Generating HTML coverage report..."
+	@$(GO) tool cover -html=coverage.out -o coverage.html
+	@echo "✅ Coverage report generated: coverage.html"
+
+test-db-up:
+	@echo "🐳 Starting test database..."
+	@docker run -d --name cyphera-test-db \
+		-e POSTGRES_DB=$(TEST_DB_NAME) \
+		-e POSTGRES_USER=postgres \
+		-e POSTGRES_PASSWORD=postgres \
+		-p 5433:5432 \
+		postgres:15-alpine || true
+	@sleep 3
+	@echo "✅ Test database ready"
+
+test-db-down:
+	@echo "🐳 Stopping test database..."
+	@docker stop cyphera-test-db || true
+	@docker rm cyphera-test-db || true
+
+generate-mocks:
+	@echo "🔧 Generating Go mocks..."
+	@./scripts/generate-mocks.sh
+
+# ==============================================================================
 # Advanced Operations (Use with caution)
 # ==============================================================================
 
@@ -193,6 +256,7 @@ deep-clean:
 	@find . -name "dist" -type d -prune -exec rm -rf {} +
 	@find . -name ".next" -type d -prune -exec rm -rf {} +
 	@$(GO) clean -cache -testcache -modcache
+	@rm -f coverage.out coverage.html
 
 nuke: deep-clean
 	@echo "☢️  Nuclear option - removing everything..."

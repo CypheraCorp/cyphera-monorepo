@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/cyphera/cyphera-api/libs/go/client/circle"
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"encoding/json"
 	"fmt"
@@ -871,38 +872,39 @@ func (h *CircleHandler) CreateWallets(c *gin.Context) {
 						return
 					}
 
-					// Begin a transaction for database operations
-					tx, qtx, err := h.common.BeginTx(ctx)
-					if err != nil {
-						logger.Error("Failed to begin transaction for wallet creation after challenge completion",
-							zap.Error(err))
+					// Get database pool
+					pool, poolErr := h.common.GetDBPool()
+					if poolErr != nil {
+						logger.Error("Failed to get database pool for wallet creation after challenge completion",
+							zap.Error(poolErr))
 						return
 					}
-					defer func() {
-						if rErr := tx.Rollback(ctx); rErr != nil && !errors.Is(rErr, pgx.ErrTxClosed) {
-							logger.Error("Failed to rollback transaction after challenge completion", zap.Error(rErr))
-						}
-					}()
 
-					spew.Dump(walletsListResponse.Data.Wallets)
-
-					// Process each wallet and create Cyphera wallet entries
+					// Execute within transaction
 					walletCount := 0
-					for _, walletData := range walletsListResponse.Data.Wallets {
-						err = h.createCypheraWalletEntry(ctx, qtx, walletData, workspaceID, circleUser.ID)
-						if err != nil {
-							logger.Error("Failed to create Cyphera wallet entry during challenge polling",
-								zap.String("address", walletData.Address),
-								zap.Error(err))
-							continue
-						}
-						walletCount++
-					}
+					txErr := helpers.WithTransaction(ctx, pool, func(tx pgx.Tx) error {
+						qtx := h.common.WithTx(tx)
 
-					// Commit transaction
-					if err := tx.Commit(ctx); err != nil {
-						logger.Error("Failed to commit transaction for wallet creation during challenge polling",
-							zap.Error(err))
+						spew.Dump(walletsListResponse.Data.Wallets)
+
+						// Process each wallet and create Cyphera wallet entries
+						for _, walletData := range walletsListResponse.Data.Wallets {
+							err = h.createCypheraWalletEntry(ctx, qtx, walletData, workspaceID, circleUser.ID)
+							if err != nil {
+								logger.Error("Failed to create Cyphera wallet entry during challenge polling",
+									zap.String("address", walletData.Address),
+									zap.Error(err))
+								continue
+							}
+							walletCount++
+						}
+
+						return nil
+					})
+
+					if txErr != nil {
+						logger.Error("Failed to process wallet creation transaction",
+							zap.Error(txErr))
 						return
 					}
 
@@ -1133,110 +1135,105 @@ func (h *CircleHandler) GetWallet(c *gin.Context) {
 		return
 	}
 
-	// Begin a transaction
-	tx, qtx, err := h.common.BeginTx(c.Request.Context())
+	// Get database pool
+	pool, err := h.common.GetDBPool()
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to begin transaction", err)
+		sendError(c, http.StatusInternalServerError, "Failed to get database pool", err)
 		return
 	}
-	defer func() {
-		if rErr := tx.Rollback(c.Request.Context()); rErr != nil && !errors.Is(rErr, pgx.ErrTxClosed) {
-			logger.Error("Failed to rollback transaction in GetWallet", zap.Error(rErr))
-		}
-	}()
 
-	// Check if wallet already exists in our database
-	dbWallet, err := h.common.db.GetWalletByAddressAndCircleNetworkType(c.Request.Context(), db.GetWalletByAddressAndCircleNetworkTypeParams{
-		WalletAddress:     walletData.Address,
-		CircleNetworkType: network.CircleNetworkType,
-	})
-	// Check if the error is "no rows found" or another error
-	walletExists := true
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			// Wallet doesn't exist, that's fine
-			walletExists = false
+	// Execute within transaction
+	err = helpers.WithTransaction(c.Request.Context(), pool, func(tx pgx.Tx) error {
+		qtx := h.common.WithTx(tx)
+
+		// Check if wallet already exists in our database
+		dbWallet, err := h.common.db.GetWalletByAddressAndCircleNetworkType(c.Request.Context(), db.GetWalletByAddressAndCircleNetworkTypeParams{
+			WalletAddress:     walletData.Address,
+			CircleNetworkType: network.CircleNetworkType,
+		})
+		// Check if the error is "no rows found" or another error
+		walletExists := true
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				// Wallet doesn't exist, that's fine
+				walletExists = false
+			} else {
+				// This is a real database error
+				return fmt.Errorf("failed to check if wallet exists: %w", err)
+			}
+		}
+
+		// Create metadata with wallet information
+		metadata := map[string]interface{}{
+			"circle_wallet_set_id": walletData.WalletSetID,
+			"circle_custody_type":  walletData.CustodyType,
+			"circle_ref_id":        walletData.RefID,
+			"circle_blockchain":    walletData.Blockchain,
+			"circle_user_id":       walletData.UserID,
+			"circle_account_type":  walletData.AccountType,
+			"circle_name":          walletData.Name,
+		}
+		metadataJSON, err := json.Marshal(metadata)
+		if err != nil {
+			return fmt.Errorf("failed to marshal metadata: %w", err)
+		}
+
+		if walletExists {
+			// Wallet exists, update it
+			_, err = qtx.UpdateWallet(c.Request.Context(), db.UpdateWalletParams{
+				ID:       dbWallet.ID,
+				Metadata: metadataJSON,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to update wallet: %w", err)
+			}
+
+			// Update Circle wallet entry
+			_, err = qtx.UpdateCircleWalletState(c.Request.Context(), db.UpdateCircleWalletStateParams{
+				WalletID: dbWallet.ID,
+				State:    walletData.State,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to update Circle wallet entry: %w", err)
+			}
 		} else {
-			// This is a real database error
-			sendError(c, http.StatusInternalServerError, "Failed to check if wallet exists", err)
-			return
-		}
-	}
+			// Wallet doesn't exist, create it
+			nicknamePgText := pgtype.Text{}
+			nicknamePgText.String = walletData.Name
+			nicknamePgText.Valid = walletData.Name != ""
 
-	// Create metadata with wallet information
-	metadata := map[string]interface{}{
-		"circle_wallet_set_id": walletData.WalletSetID,
-		"circle_custody_type":  walletData.CustodyType,
-		"circle_ref_id":        walletData.RefID,
-		"circle_blockchain":    walletData.Blockchain,
-		"circle_user_id":       walletData.UserID,
-		"circle_account_type":  walletData.AccountType,
-		"circle_name":          walletData.Name,
-	}
-	metadataJSON, err := json.Marshal(metadata)
+			// First create the wallet
+			newWallet, err := qtx.CreateWallet(c.Request.Context(), db.CreateWalletParams{
+				WorkspaceID:   workspaceID, // Use WorkspaceID
+				WalletType:    "circle_wallet",
+				WalletAddress: walletData.Address,
+				NetworkType:   getNetworkType(walletData.Blockchain),
+				NetworkID:     networkIDPgType,
+				Nickname:      nicknamePgText,
+				Metadata:      metadataJSON,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to create wallet: %w", err)
+			}
+
+			// Then create the Circle wallet entry
+			_, err = qtx.CreateCircleWalletEntry(c.Request.Context(), db.CreateCircleWalletEntryParams{
+				WalletID:       newWallet.ID,
+				CircleUserID:   circleUser.ID,
+				CircleWalletID: walletData.ID,
+				ChainID:        chainID,
+				State:          walletData.State,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to create Circle wallet entry: %w", err)
+			}
+		}
+
+		return nil
+	})
+
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to marshal metadata", err)
-		return
-	}
-
-	if walletExists {
-		// Wallet exists, update it
-		_, err = qtx.UpdateWallet(c.Request.Context(), db.UpdateWalletParams{
-			ID:       dbWallet.ID,
-			Metadata: metadataJSON,
-		})
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to update wallet", err)
-			return
-		}
-
-		// Update Circle wallet entry
-		_, err = qtx.UpdateCircleWalletState(c.Request.Context(), db.UpdateCircleWalletStateParams{
-			WalletID: dbWallet.ID,
-			State:    walletData.State,
-		})
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to update Circle wallet entry", err)
-			return
-		}
-	} else {
-		// Wallet doesn't exist, create it
-		nicknamePgText := pgtype.Text{}
-		nicknamePgText.String = walletData.Name
-		nicknamePgText.Valid = walletData.Name != ""
-
-		// First create the wallet
-		newWallet, err := qtx.CreateWallet(c.Request.Context(), db.CreateWalletParams{
-			WorkspaceID:   workspaceID, // Use WorkspaceID
-			WalletType:    "circle_wallet",
-			WalletAddress: walletData.Address,
-			NetworkType:   getNetworkType(walletData.Blockchain),
-			NetworkID:     networkIDPgType,
-			Nickname:      nicknamePgText,
-			Metadata:      metadataJSON,
-		})
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to create wallet", err)
-			return
-		}
-
-		// Then create the Circle wallet entry
-		_, err = qtx.CreateCircleWalletEntry(c.Request.Context(), db.CreateCircleWalletEntryParams{
-			WalletID:       newWallet.ID,
-			CircleUserID:   circleUser.ID,
-			CircleWalletID: walletData.ID,
-			ChainID:        chainID,
-			State:          walletData.State,
-		})
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to create Circle wallet entry", err)
-			return
-		}
-	}
-
-	// Commit the transaction
-	if err := tx.Commit(c.Request.Context()); err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to commit transaction", err)
+		sendError(c, http.StatusInternalServerError, "Transaction failed", err)
 		return
 	}
 

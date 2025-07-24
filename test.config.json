@@ -1,0 +1,31 @@
+{
+  "coverage": {
+    "threshold": 60,
+    "exclude_patterns": [
+      "**/main.go",
+      "**/gen/**",
+      "**/proto/**",
+      "**/*.pb.go",
+      "**/migrations/**",
+      "**/test/**",
+      "**/mocks/**",
+      "**/vendor/**"
+    ],
+    "include_patterns": [
+      "./apps/api/**",
+      "./libs/go/**"
+    ]
+  },
+  "database": {
+    "test_db_name": "cyphera_test",
+    "test_db_host": "localhost",
+    "test_db_port": 5432,
+    "test_db_user": "postgres",
+    "test_db_password": "postgres"
+  },
+  "integration": {
+    "timeout": "30m",
+    "parallel": true,
+    "race_detection": true
+  }
+}

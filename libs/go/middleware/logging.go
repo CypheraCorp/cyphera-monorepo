@@ -116,7 +116,7 @@ func EnhancedLoggingMiddleware(isDevelopment bool) gin.HandlerFunc {
 			for _, err := range c.Errors {
 				log.Error("Request error",
 					zap.Error(err.Err),
-					zap.String("type", string(err.Type)),
+					zap.Uint64("type", uint64(err.Type)),
 					zap.Any("meta", err.Meta),
 				)
 			}

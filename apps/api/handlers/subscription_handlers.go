@@ -4,6 +4,7 @@ import (
 	"context"
 	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"encoding/json"
 	"errors"
@@ -28,6 +29,15 @@ type SubscriptionHandler struct {
 	common               *CommonServices
 	delegationClient     *dsClient.DelegationClient
 	lastRedemptionTxHash string // Stores the transaction hash from the last successful redemption
+}
+
+// SubscriptionExistsError is a custom error for when a subscription already exists
+type SubscriptionExistsError struct {
+	Subscription *db.Subscription
+}
+
+func (e *SubscriptionExistsError) Error() string {
+	return fmt.Sprintf("subscription already exists with ID: %s", e.Subscription.ID)
 }
 
 // NewSubscriptionHandler creates a new subscription handler with the required dependencies
@@ -1072,49 +1082,42 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 	results := ProcessDueSubscriptionsResult{}
 	now := time.Now()
 
-	// Start a transaction using the BeginTx helper
-	tx, qtx, err := h.common.BeginTx(ctx)
+	// Get database pool
+	pool, err := h.common.GetDBPool()
 	if err != nil {
-		log.Printf("Error in ProcessDueSubscriptions: failed to begin transaction: %v", err)
-		return results, fmt.Errorf("failed to begin transaction: %w", err)
+		log.Printf("Error in ProcessDueSubscriptions: failed to get database pool: %v", err)
+		return results, fmt.Errorf("failed to get database pool: %w", err)
 	}
 
-	// Ensure transaction is rolled back on error
-	defer func() {
-		if tx != nil {
-			if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
-				log.Printf("Failed to rollback transaction: %v", err)
-			}
+	var processingTx pgx.Tx // Need this outside the transaction func for processSubscription
+
+	// Execute within transaction
+	err = helpers.WithTransaction(ctx, pool, func(tx pgx.Tx) error {
+		processingTx = tx // Store tx for use in processSubscription
+		qtx := h.common.WithTx(tx)
+
+		// Query for subscriptions due for redemption and lock them for processing
+		nowPgType := pgtype.Timestamptz{Time: now, Valid: true}
+		log.Printf("ProcessDueSubscriptions: Querying for subscriptions due before %v", now)
+		subscriptions, err := qtx.ListSubscriptionsDueForRedemption(ctx, nowPgType)
+		if err != nil {
+			log.Printf("Error in ProcessDueSubscriptions: failed to fetch subscriptions due for redemption: %v", err)
+			return fmt.Errorf("failed to fetch subscriptions due for redemption: %w", err)
 		}
-	}()
 
-	// Query for subscriptions due for redemption and lock them for processing
-	nowPgType := pgtype.Timestamptz{Time: now, Valid: true}
-	log.Printf("ProcessDueSubscriptions: Querying for subscriptions due before %v", now)
-	subscriptions, err := qtx.ListSubscriptionsDueForRedemption(ctx, nowPgType)
-	if err != nil {
-		log.Printf("Error in ProcessDueSubscriptions: failed to fetch subscriptions due for redemption: %v", err)
-		return results, fmt.Errorf("failed to fetch subscriptions due for redemption: %w", err)
-	}
-
-	// Update result count
-	results.Total = len(subscriptions)
-	if results.Total == 0 {
-		log.Printf("ProcessDueSubscriptions: No subscriptions found due for renewal.")
-		// No subscriptions to process, commit empty transaction
-		if err := tx.Commit(ctx); err != nil {
-			log.Printf("Error in ProcessDueSubscriptions: failed to commit empty transaction: %v", err)
-			return results, fmt.Errorf("failed to commit empty transaction: %w", err)
+		// Update result count
+		results.Total = len(subscriptions)
+		if results.Total == 0 {
+			log.Printf("ProcessDueSubscriptions: No subscriptions found due for renewal.")
+			// No subscriptions to process, transaction will commit automatically
+			log.Printf("Exiting ProcessDueSubscriptions. Total: 0, Succeeded: 0, Failed: 0")
+			return nil
 		}
-		tx = nil // Set to nil to avoid double rollback
-		log.Printf("Exiting ProcessDueSubscriptions. Total: 0, Succeeded: 0, Failed: 0")
-		return results, nil
-	}
 
-	log.Printf("Found %d subscriptions due for redemption", results.Total)
+		log.Printf("Found %d subscriptions due for redemption", results.Total)
 
-	// Process each subscription within the transaction
-	for i, subscription := range subscriptions {
+		// Process each subscription within the transaction
+		for i, subscription := range subscriptions {
 		log.Printf("Processing subscription %d/%d: ID: %s, Status: %s, ProductID: %s, CurrentPeriodEnd: %v",
 			i+1, results.Total, subscription.ID, subscription.Status, subscription.ProductID, subscription.CurrentPeriodEnd.Time)
 
@@ -1191,7 +1194,7 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 			token:          token,
 			now:            now,
 			queries:        qtx,
-			tx:             tx,
+			tx:             processingTx,
 			results:        &results,
 		}
 
@@ -1209,17 +1212,17 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 		// No need for explicit Succeeded++ here anymore, it's handled based on idempotency/completion inside.
 		log.Printf("Finished h.processSubscription call for subscription ID: %s (Results updated internally).", subscription.ID)
 
-	}
+		}
 
-	log.Printf("Attempting to commit transaction. Final results - Succeeded: %d, Failed: %d (based on processSubscription outcomes)",
-		results.Succeeded, results.Failed)
-	// Commit the transaction if we got this far
-	if err := tx.Commit(ctx); err != nil {
-		log.Printf("Error in ProcessDueSubscriptions: failed to commit transaction: %v", err)
-		return results, fmt.Errorf("failed to commit transaction: %w", err)
+		log.Printf("ProcessDueSubscriptions transaction scope complete. Results - Succeeded: %d, Failed: %d",
+			results.Succeeded, results.Failed)
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("Error in ProcessDueSubscriptions: transaction failed: %v", err)
+		return results, err
 	}
-	tx = nil // Set to nil to avoid double rollback
-	log.Printf("Transaction committed successfully.")
 
 	log.Printf("Exiting ProcessDueSubscriptions. Total Found: %d, Succeeded: %d, Failed: %d",
 		results.Total, results.Succeeded, results.Failed)
@@ -1426,118 +1429,122 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 
 	normalizedAddress := normalizeWalletAddress(request.SubscriberAddress, determineNetworkType(productToken.NetworkType))
 
-	tx, qtx, err := h.common.BeginTx(ctx)
+	// Get database pool
+	pool, err := h.common.GetDBPool()
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to start transaction", err)
+		sendError(c, http.StatusInternalServerError, "Failed to get database pool", err)
 		return
 	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
-			logger.Error("Failed to rollback transaction", zap.Error(err))
+
+	var subscription db.Subscription
+	var updatedSubscription db.Subscription
+	var customer db.Customer
+	var customerWallet db.CustomerWallet
+
+	// Execute within transaction
+	err = helpers.WithTransaction(ctx, pool, func(tx pgx.Tx) error {
+		qtx := h.common.WithTx(tx)
+
+		var err error
+		customer, customerWallet, err = h.processCustomerAndWallet(ctx, qtx, normalizedAddress, product, productToken)
+		if err != nil {
+			return fmt.Errorf("failed to process customer or wallet: %w", err)
 		}
-	}()
 
-	customer, customerWallet, err := h.processCustomerAndWallet(ctx, qtx, normalizedAddress, product, productToken)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to process customer or wallet", err)
-		return
-	}
-
-	subscriptions, err := h.common.db.ListSubscriptionsByCustomer(ctx, db.ListSubscriptionsByCustomerParams{
-		CustomerID:  customer.ID,
-		WorkspaceID: product.WorkspaceID,
-	})
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to check for existing subscription", err)
-		return
-	}
-
-	var existingSubscription *db.Subscription
-	for i, sub := range subscriptions {
-		if sub.PriceID == price.ID && sub.Status == db.SubscriptionStatusActive {
-			existingSubscription = &subscriptions[i]
-			break
+		subscriptions, err := h.common.db.ListSubscriptionsByCustomer(ctx, db.ListSubscriptionsByCustomerParams{
+			CustomerID:  customer.ID,
+			WorkspaceID: product.WorkspaceID,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to check for existing subscription: %w", err)
 		}
-	}
 
-	if existingSubscription != nil {
-		logger.Info("Subscription already exists for this price",
-			zap.String("subscription_id", existingSubscription.ID.String()),
-			zap.String("customer_id", customer.ID.String()),
-			zap.String("price_id", price.ID.String()))
-
-		duplicateErr := fmt.Errorf("subscription already exists for customer %s and price %s", customer.ID, price.ID)
-		h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, duplicateErr)
-
-		if tx != nil {
-			if commitErr := tx.Commit(ctx); commitErr != nil {
-				logger.Error("Failed to commit transaction", zap.Error(commitErr))
+		var existingSubscription *db.Subscription
+		for i, sub := range subscriptions {
+			if sub.PriceID == price.ID && sub.Status == db.SubscriptionStatusActive {
+				existingSubscription = &subscriptions[i]
+				break
 			}
 		}
 
-		c.JSON(http.StatusConflict, gin.H{
-			"message":      "Subscription already exists for this price",
-			"subscription": existingSubscription,
+		if existingSubscription != nil {
+			logger.Info("Subscription already exists for this price",
+				zap.String("subscription_id", existingSubscription.ID.String()),
+				zap.String("customer_id", customer.ID.String()),
+				zap.String("price_id", price.ID.String()))
+
+			duplicateErr := fmt.Errorf("subscription already exists for customer %s and price %s", customer.ID, price.ID)
+			h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, duplicateErr)
+
+			// Return a custom error that we'll handle after the transaction
+			return &SubscriptionExistsError{Subscription: existingSubscription}
+		}
+
+		delegationData, err := h.storeDelegationData(ctx, qtx, request.Delegation)
+		if err != nil {
+			return fmt.Errorf("failed to store delegation data: %w", err)
+		}
+
+		periodStart, periodEnd, nextRedemption := h.calculateSubscriptionPeriods(price)
+
+		subscription, err = h.createSubscription(ctx, qtx, CreateSubscriptionParams{
+			Customer:       customer,
+			CustomerWallet: customerWallet,
+			WorkspaceID:    product.WorkspaceID,
+			ProductID:      product.ID,
+			Price:          price,
+			ProductTokenID: parsedProductTokenID,
+			TokenAmount:    tokenAmount,
+			DelegationData: delegationData,
+			PeriodStart:    periodStart,
+			PeriodEnd:      periodEnd,
+			NextRedemption: nextRedemption,
 		})
-		return
-	}
+		if err != nil {
+			h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, err)
+			return fmt.Errorf("failed to create subscription: %w", err)
+		}
 
-	delegationData, err := h.storeDelegationData(ctx, qtx, request.Delegation)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to store delegation data", err)
-		return
-	}
+		eventMetadata, _ := json.Marshal(map[string]interface{}{
+			"product_name":   product.Name,
+			"price_type":     price.Type,
+			"wallet_address": customerWallet.WalletAddress,
+			"network_type":   customerWallet.NetworkType,
+		})
 
-	periodStart, periodEnd, nextRedemption := h.calculateSubscriptionPeriods(price)
+		_, err = qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+			SubscriptionID: subscription.ID,
+			EventType:      db.SubscriptionEventTypeCreated,
+			OccurredAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
+			AmountInCents:  price.UnitAmountInPennies,
+			Metadata:       eventMetadata,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create subscription creation event: %w", err)
+		}
 
-	subscription, err := h.createSubscription(ctx, qtx, CreateSubscriptionParams{
-		Customer:       customer,
-		CustomerWallet: customerWallet,
-		WorkspaceID:    product.WorkspaceID,
-		ProductID:      product.ID,
-		Price:          price,
-		ProductTokenID: parsedProductTokenID,
-		TokenAmount:    tokenAmount,
-		DelegationData: delegationData,
-		PeriodStart:    periodStart,
-		PeriodEnd:      periodEnd,
-		NextRedemption: nextRedemption,
-	})
-	if err != nil {
-		h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, err)
-		sendError(c, http.StatusInternalServerError, "Failed to create subscription", err)
-		return
-	}
+		logger.Info("Created subscription event",
+			zap.String("subscription_id", subscription.ID.String()),
+			zap.String("event_type", string(db.SubscriptionEventTypeCreated)))
 
-	eventMetadata, _ := json.Marshal(map[string]interface{}{
-		"product_name":   product.Name,
-		"price_type":     price.Type,
-		"wallet_address": customerWallet.WalletAddress,
-		"network_type":   customerWallet.NetworkType,
+		return nil
 	})
 
-	_, err = qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
-		SubscriptionID: subscription.ID,
-		EventType:      db.SubscriptionEventTypeCreated,
-		OccurredAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		AmountInCents:  price.UnitAmountInPennies,
-		Metadata:       eventMetadata,
-	})
+	// Handle transaction errors
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to create subscription creation event", err)
+		var subExistsErr *SubscriptionExistsError
+		if errors.As(err, &subExistsErr) {
+			c.JSON(http.StatusConflict, gin.H{
+				"message":      "Subscription already exists for this price",
+				"subscription": subExistsErr.Subscription,
+			})
+			return
+		}
+		sendError(c, http.StatusInternalServerError, "Transaction failed", err)
 		return
 	}
 
-	logger.Info("Created subscription event",
-		zap.String("subscription_id", subscription.ID.String()),
-		zap.String("event_type", string(db.SubscriptionEventTypeCreated)))
-
-	if err := tx.Commit(ctx); err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to commit transaction", err)
-		return
-	}
-
-	updatedSubscription, err := h.performInitialRedemption(ctx, customer, customerWallet, subscription, product, price, productToken, request.Delegation, executionObject)
+	updatedSubscription, err = h.performInitialRedemption(ctx, customer, customerWallet, subscription, product, price, productToken, request.Delegation, executionObject)
 	if err != nil {
 		logger.Error("Initial redemption failed, subscription marked as failed and soft-deleted",
 			zap.Error(err),

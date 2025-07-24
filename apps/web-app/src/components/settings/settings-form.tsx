@@ -1,9 +1,10 @@
 'use client';
 
-import { Building2 } from 'lucide-react';
+import { Building2, Key } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CompanyRegistrationForm } from '@/components/auth/company-registration-form';
+import { ApiKeysTab } from '@/components/settings/api-keys-tab';
 import type { CypheraUser } from '@/lib/auth/session/session';
 import { hasRequiredAccountInfo } from '@/lib/auth/guards/user-guards';
 
@@ -40,10 +41,14 @@ export function SettingsForm({ user }: SettingsFormProps) {
 
   return (
     <Tabs defaultValue="account" className="space-y-6">
-      <TabsList>
+      <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="account" className="flex items-center gap-2">
           <Building2 className="h-4 w-4" />
           Account
+        </TabsTrigger>
+        <TabsTrigger value="api-keys" className="flex items-center gap-2">
+          <Key className="h-4 w-4" />
+          API Keys
         </TabsTrigger>
       </TabsList>
 
@@ -59,6 +64,13 @@ export function SettingsForm({ user }: SettingsFormProps) {
             <CompanyRegistrationForm user={typedUser} />
           </CardContent>
         </Card>
+      </TabsContent>
+
+      <TabsContent value="api-keys" className="space-y-6">
+        <ApiKeysTab 
+          workspaceId={typedUser.workspace_id} 
+          accessToken={typedUser.access_token || ''} 
+        />
       </TabsContent>
     </Tabs>
   );

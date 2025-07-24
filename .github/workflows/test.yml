@@ -1,0 +1,307 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+env:
+  GO_VERSION: '1.23'
+  NODE_VERSION: '20'
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      run: |
+        cd libs/go
+        go mod download
+        cd ../../apps/api  
+        go mod download
+
+    - name: Run unit tests
+      run: |
+        cd apps/api
+        go test ./handlers/... -v -race -timeout=30s
+
+    - name: Generate coverage report
+      run: |
+        cd apps/api
+        go test ./handlers/... -coverprofile=coverage.out -coverpkg=./...
+        go tool cover -func=coverage.out
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cyphera_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Cache Node modules
+      uses: actions/cache@v3
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
+    - name: Install Go dependencies
+      run: |
+        cd libs/go
+        go mod download
+        cd ../../apps/api
+        go mod download
+
+    - name: Install Node.js dependencies
+      run: |
+        cd apps/delegation-server
+        npm ci
+
+    - name: Install additional tools
+      run: |
+        go install github.com/golang/mock/mockgen@latest
+        which jq || sudo apt-get update && sudo apt-get install -y jq
+
+    - name: Set up database
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
+        TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
+      run: |
+        # Wait for postgres to be ready
+        until pg_isready -h localhost -p 5432 -U postgres; do
+          echo "Waiting for postgres..."
+          sleep 2
+        done
+        
+        # Run any database migrations if they exist
+        echo "Database is ready for testing"
+
+    - name: Generate mocks
+      run: |
+        make generate-mocks
+
+    - name: Run integration tests
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
+        TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
+      run: |
+        # Run integration tests with database
+        cd apps/api
+        go test -tags=integration ./... -v -timeout=30m
+
+    - name: Run delegation server tests
+      run: |
+        cd apps/delegation-server
+        npm test
+
+  coverage:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cyphera_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        cd libs/go
+        go mod download
+        cd ../../apps/api
+        go mod download
+
+    - name: Generate comprehensive coverage
+      env:
+        TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
+      run: |
+        # Generate coverage for all packages
+        make test-coverage
+
+    - name: Check coverage threshold
+      run: |
+        ./scripts/check-coverage.sh 60
+
+    - name: Generate coverage HTML report
+      run: |
+        make test-coverage-html
+
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-reports
+        path: |
+          coverage.out
+          coverage.html
+
+  lint:
+    name: Lint and Format
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Install golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        working-directory: libs/go
+
+    - name: Run golangci-lint for API
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        working-directory: apps/api
+
+    - name: Check Go formatting
+      run: |
+        cd libs/go
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "The following files need formatting:"
+          gofmt -s -l .
+          exit 1
+        fi
+        cd ../../apps/api
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "The following files need formatting:"
+          gofmt -s -l .
+          exit 1
+        fi
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Build API
+      run: |
+        cd apps/api
+        go build -v ./...
+
+    - name: Build libs
+      run: |
+        cd libs/go
+        go build -v ./...
+
+    - name: Build other components
+      run: |
+        cd apps/subscription-processor
+        go build -v ./...
+        cd ../webhook-receiver
+        go build -v ./...
+        cd ../webhook-processor  
+        go build -v ./...
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Run Gosec Security Scanner
+      uses: securecodewarrior/github-action-gosec@master
+      with:
+        args: '-fmt sarif -out results.sarif ./...'
+        
+    - name: Upload SARIF file
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: results.sarif
