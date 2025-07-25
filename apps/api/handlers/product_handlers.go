@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,9 +12,10 @@ import (
 	"time"
 
 	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
-	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -30,6 +30,7 @@ type SwaggerMetadata map[string]interface{}
 type ProductHandler struct {
 	common           *CommonServices
 	delegationClient *dsClient.DelegationClient
+	productService   *services.ProductService
 }
 
 // NewProductHandler creates a new ProductHandler instance
@@ -37,6 +38,7 @@ func NewProductHandler(common *CommonServices, delegationClient *dsClient.Delega
 	return &ProductHandler{
 		common:           common,
 		delegationClient: delegationClient,
+		productService:   services.NewProductService(common.db),
 	}
 }
 
@@ -73,45 +75,45 @@ type CreatePriceRequest struct {
 
 // ProductResponse represents the standardized API response for product operations
 type ProductResponse struct {
-	ID            string                 `json:"id"`
-	Object        string                 `json:"object"`
-	WorkspaceID   string                 `json:"workspace_id"`
-	WalletID      string                 `json:"wallet_id"`
-	Name          string                 `json:"name"`
-	Description   string                 `json:"description,omitempty"`
-	ImageURL      string                 `json:"image_url,omitempty"`
-	URL           string                 `json:"url,omitempty"`
-	Active        bool                   `json:"active"`
-	Metadata      json.RawMessage        `json:"metadata,omitempty" swaggertype:"object"`
-	CreatedAt     int64                  `json:"created_at"`
-	UpdatedAt     int64                  `json:"updated_at"`
-	Prices        []PriceResponse        `json:"prices,omitempty"`
-	ProductTokens []ProductTokenResponse `json:"product_tokens,omitempty"`
+	ID            string                         `json:"id"`
+	Object        string                         `json:"object"`
+	WorkspaceID   string                         `json:"workspace_id"`
+	WalletID      string                         `json:"wallet_id"`
+	Name          string                         `json:"name"`
+	Description   string                         `json:"description,omitempty"`
+	ImageURL      string                         `json:"image_url,omitempty"`
+	URL           string                         `json:"url,omitempty"`
+	Active        bool                           `json:"active"`
+	Metadata      json.RawMessage                `json:"metadata,omitempty" swaggertype:"object"`
+	CreatedAt     int64                          `json:"created_at"`
+	UpdatedAt     int64                          `json:"updated_at"`
+	Prices        []PriceResponse                `json:"prices,omitempty"`
+	ProductTokens []helpers.ProductTokenResponse `json:"product_tokens,omitempty"`
 }
 
 // CreateProductRequest represents the request body for creating a product
 type CreateProductRequest struct {
-	Name          string                      `json:"name" binding:"required"`
-	WalletID      string                      `json:"wallet_id" binding:"required"`
-	Description   string                      `json:"description"`
-	ImageURL      string                      `json:"image_url"`
-	URL           string                      `json:"url"`
-	Active        bool                        `json:"active"`
-	Metadata      json.RawMessage             `json:"metadata" swaggertype:"object"`
-	Prices        []CreatePriceRequest        `json:"prices" binding:"required,dive"`
-	ProductTokens []CreateProductTokenRequest `json:"product_tokens,omitempty"`
+	Name          string                              `json:"name" binding:"required"`
+	WalletID      string                              `json:"wallet_id" binding:"required"`
+	Description   string                              `json:"description"`
+	ImageURL      string                              `json:"image_url"`
+	URL           string                              `json:"url"`
+	Active        bool                                `json:"active"`
+	Metadata      json.RawMessage                     `json:"metadata" swaggertype:"object"`
+	Prices        []CreatePriceRequest                `json:"prices" binding:"required,dive"`
+	ProductTokens []helpers.CreateProductTokenRequest `json:"product_tokens,omitempty"`
 }
 
 // UpdateProductRequest represents the request body for updating a product
 type UpdateProductRequest struct {
-	Name          string                      `json:"name,omitempty"`
-	WalletID      string                      `json:"wallet_id,omitempty"`
-	Description   string                      `json:"description,omitempty"`
-	ImageURL      string                      `json:"image_url,omitempty"`
-	URL           string                      `json:"url,omitempty"`
-	Active        *bool                       `json:"active,omitempty"`
-	Metadata      json.RawMessage             `json:"metadata,omitempty" swaggertype:"object"`
-	ProductTokens []CreateProductTokenRequest `json:"product_tokens,omitempty"`
+	Name          string                              `json:"name,omitempty"`
+	WalletID      string                              `json:"wallet_id,omitempty"`
+	Description   string                              `json:"description,omitempty"`
+	ImageURL      string                              `json:"image_url,omitempty"`
+	URL           string                              `json:"url,omitempty"`
+	Active        *bool                               `json:"active,omitempty"`
+	Metadata      json.RawMessage                     `json:"metadata,omitempty" swaggertype:"object"`
+	ProductTokens []helpers.CreateProductTokenRequest `json:"product_tokens,omitempty"`
 }
 
 type PublicProductResponse struct {
@@ -177,35 +179,39 @@ type DelegationStruct struct {
 // @Security ApiKeyAuth
 // @Router /products/{product_id} [get]
 func (h *ProductHandler) GetProduct(c *gin.Context) {
+	// Parse workspace ID
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
 		return
 	}
+
+	// Parse product ID
 	productId := c.Param("product_id")
-	parsedUUID, err := uuid.Parse(productId)
+	parsedProductID, err := uuid.Parse(productId)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
 		return
 	}
 
-	product, err := h.common.db.GetProduct(c.Request.Context(), db.GetProductParams{
-		ID:          parsedUUID,
+	// Get product using service
+	product, prices, err := h.productService.GetProduct(c.Request.Context(), services.GetProductParams{
+		ProductID:   parsedProductID,
 		WorkspaceID: parsedWorkspaceID,
 	})
 	if err != nil {
-		handleDBError(c, err, "Product not found")
+		if strings.Contains(err.Error(), "not found") {
+			sendError(c, http.StatusNotFound, "Product not found", err)
+		} else {
+			sendError(c, http.StatusInternalServerError, "Failed to retrieve product", err)
+		}
 		return
 	}
 
-	dbPrices, err := h.common.db.ListPricesByProduct(c.Request.Context(), product.ID)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve prices for product", err)
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, toProductResponse(product, dbPrices))
+	// Convert to response format
+	response := helpers.ToProductDetailResponse(*product, prices)
+	sendSuccess(c, http.StatusOK, response)
 }
 
 // GetPublicProductByPriceID godoc
@@ -220,6 +226,7 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Tags exclude
 func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
+	// Parse price ID
 	priceIDStr := c.Param("price_id")
 	parsedPriceID, err := uuid.Parse(priceIDStr)
 	if err != nil {
@@ -227,61 +234,18 @@ func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
 		return
 	}
 
-	price, err := h.common.db.GetPrice(c.Request.Context(), parsedPriceID)
+	// Get public product using service
+	response, err := h.productService.GetPublicProductByPriceID(c.Request.Context(), parsedPriceID)
 	if err != nil {
-		handleDBError(c, err, "Price not found")
-		return
-	}
-
-	if !price.Active {
-		sendError(c, http.StatusNotFound, "Price is not active", nil)
-		return
-	}
-
-	product, err := h.common.db.GetProductWithoutWorkspaceId(c.Request.Context(), price.ProductID)
-	if err != nil {
-		handleDBError(c, err, "Product not found for the given price")
-		return
-	}
-
-	if !product.Active {
-		sendError(c, http.StatusNotFound, "Product associated with this price is not active", nil)
-		return
-	}
-
-	wallet, err := h.common.db.GetWalletByID(c.Request.Context(), db.GetWalletByIDParams{
-		ID:          product.WalletID,
-		WorkspaceID: product.WorkspaceID,
-	})
-	if err != nil {
-		handleDBError(c, err, "Wallet not found for the product")
-		return
-	}
-
-	workspace, err := h.common.db.GetWorkspace(c.Request.Context(), product.WorkspaceID)
-	if err != nil {
-		handleDBError(c, err, "Workspace not found for the product")
-		return
-	}
-
-	productTokens, err := h.common.db.GetActiveProductTokensByProduct(c.Request.Context(), product.ID)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve product tokens", err)
-		return
-	}
-
-	response := toPublicProductResponse(workspace, product, price, productTokens, wallet)
-
-	for i, pt := range response.ProductTokens {
-		token, err := h.common.db.GetToken(c.Request.Context(), uuid.MustParse(pt.TokenID))
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to retrieve token", err)
-			return
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not active") {
+			sendError(c, http.StatusNotFound, err.Error(), err)
+		} else {
+			sendError(c, http.StatusInternalServerError, "Failed to retrieve product", err)
 		}
-		response.ProductTokens[i].TokenAddress = token.ContractAddress
+		return
 	}
 
-	sendSuccess(c, http.StatusOK, response)
+	sendSuccess(c, http.StatusOK, *response)
 }
 
 // validateSubscriptionRequest validates the basic request parameters
@@ -778,122 +742,7 @@ func toPublicProductResponse(workspace db.Workspace, product db.Product, price d
 	}
 }
 
-// validatePriceType validates the price type and returns a db.PriceType if valid
-func validatePriceType(priceTypeStr string) (db.PriceType, error) {
-	if priceTypeStr == "" {
-		return "", fmt.Errorf("price type is required")
-	}
-	if priceTypeStr != string(db.PriceTypeRecurring) && priceTypeStr != string(db.PriceTypeOneOff) {
-		return "", fmt.Errorf("invalid price type. Must be '%s' or '%s'", db.PriceTypeRecurring, db.PriceTypeOneOff)
-	}
-	return db.PriceType(priceTypeStr), nil
-}
-
-// validateIntervalType validates the interval type and returns a db.IntervalType if valid
-func validateIntervalType(intervalType string) (db.IntervalType, error) {
-	if intervalType == "" {
-		return "", nil
-	}
-
-	validIntervalTypes := map[string]bool{
-		constants.IntervalType1Minute:  true,
-		constants.IntervalType5Minutes: true,
-		constants.IntervalTypeDaily:    true,
-		constants.IntervalTypeWeekly:   true,
-		constants.IntervalTypeMonthly:  true,
-		constants.IntervalTypeYearly:   true,
-	}
-
-	if !validIntervalTypes[intervalType] {
-		return "", fmt.Errorf("invalid interval type")
-	}
-
-	return db.IntervalType(intervalType), nil
-}
-
-// validateWalletID validates and parses the wallet ID
-func validateWalletID(walletID string) (uuid.UUID, error) {
-	if walletID == "" {
-		return uuid.Nil, fmt.Errorf("wallet ID is required")
-	}
-	parsed, err := uuid.Parse(walletID)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("invalid wallet ID format: %w", err)
-	}
-	return parsed, nil
-}
-
-// updateProductParams creates the update parameters for a product
-func (h *ProductHandler) updateProductParams(id uuid.UUID, req UpdateProductRequest, existingProduct db.Product) (db.UpdateProductParams, error) {
-	params := db.UpdateProductParams{
-		ID:          id,
-		Name:        existingProduct.Name,
-		Description: existingProduct.Description,
-		ImageUrl:    existingProduct.ImageUrl,
-		Url:         existingProduct.Url,
-		Active:      existingProduct.Active,
-		Metadata:    existingProduct.Metadata,
-		WalletID:    existingProduct.WalletID,
-	}
-
-	if req.Name != "" && req.Name != existingProduct.Name {
-		params.Name = req.Name
-	}
-	if req.Description != "" && req.Description != existingProduct.Description.String {
-		params.Description = pgtype.Text{String: req.Description, Valid: true}
-	}
-	if req.ImageURL != "" && req.ImageURL != existingProduct.ImageUrl.String {
-		params.ImageUrl = pgtype.Text{String: req.ImageURL, Valid: true}
-	}
-	if req.URL != "" && req.URL != existingProduct.Url.String {
-		params.Url = pgtype.Text{String: req.URL, Valid: true}
-	}
-	if req.Active != nil && *req.Active != existingProduct.Active {
-		params.Active = *req.Active
-	}
-	if req.Metadata != nil && !bytes.Equal(req.Metadata, existingProduct.Metadata) {
-		params.Metadata = req.Metadata
-	}
-	if req.WalletID != "" && req.WalletID != existingProduct.WalletID.String() {
-		parsedWalletID, err := uuid.Parse(req.WalletID)
-		if err != nil {
-			return params, fmt.Errorf("invalid wallet ID format: %w", err)
-		}
-		params.WalletID = parsedWalletID
-	}
-
-	return params, nil
-}
-
-// validatePaginationParams validates and returns pagination parameters
-func validatePaginationParams(c *gin.Context) (limit int32, page int32, err error) {
-	const maxLimit int32 = 100
-	limit = 10
-
-	if limitStr := c.Query("limit"); limitStr != "" {
-		parsedLimit, err := strconv.ParseInt(limitStr, 10, 32)
-		if err != nil {
-			return 0, 0, fmt.Errorf("invalid limit parameter")
-		}
-		if parsedLimit > int64(maxLimit) {
-			limit = maxLimit
-		} else if parsedLimit > 0 {
-			limit = int32(parsedLimit)
-		}
-	}
-
-	if pageStr := c.Query("page"); pageStr != "" {
-		parsedPage, err := strconv.ParseInt(pageStr, 10, 32)
-		if err != nil {
-			return 0, 0, fmt.Errorf("invalid page parameter")
-		}
-		if parsedPage > 0 {
-			page = int32(parsedPage)
-		}
-	}
-
-	return limit, page, nil
-}
+// validatePaginationParams is defined in common.go
 
 // validateProductUpdate validates core product update parameters
 func (h *ProductHandler) validateProductUpdate(c *gin.Context, req UpdateProductRequest, existingProduct db.Product) error {
@@ -970,24 +819,19 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 
 	offset := (page - 1) * limit
 
-	total, err := h.common.db.CountProducts(c.Request.Context(), parsedWorkspaceID)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to count products", err)
-		return
-	}
-
-	products, err := h.common.db.ListProductsWithPagination(c.Request.Context(), db.ListProductsWithPaginationParams{
+	// Use service to list products
+	result, err := h.productService.ListProducts(c.Request.Context(), services.ListProductsParams{
 		WorkspaceID: parsedWorkspaceID,
-		Limit:       limit,
-		Offset:      offset,
+		Limit:       int32(limit),
+		Offset:      int32(offset),
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve products", err)
 		return
 	}
 
-	responseList := make([]ProductResponse, len(products))
-	for i, product := range products {
+	responseList := make([]ProductResponse, len(result.Products))
+	for i, product := range result.Products {
 		dbPrices, err := h.common.db.ListPricesByProduct(c.Request.Context(), product.ID)
 		if err != nil {
 			sendError(c, http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve prices for product %s", product.ID), err)
@@ -1000,24 +844,19 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 			sendError(c, http.StatusInternalServerError, "Failed to retrieve product tokens", err)
 			return
 		}
-		productTokenListResponse := make([]ProductTokenResponse, len(productTokenList))
+		productTokenListResponse := make([]helpers.ProductTokenResponse, len(productTokenList))
 		for j, productToken := range productTokenList {
-			productTokenListResponse[j] = toActiveProductTokenByProductResponse(productToken)
+			productTokenListResponse[j] = helpers.ToActiveProductTokenByProductResponse(productToken)
 		}
 		productResponse.ProductTokens = productTokenListResponse
 		responseList[i] = productResponse
 	}
 
-	var hasMore bool
-	if total > 0 {
-		hasMore = (int64(offset) + int64(limit)) < total
-	}
-
 	listProductsResponse := ListProductsResponse{
 		Object:  "list",
 		Data:    responseList,
-		HasMore: hasMore,
-		Total:   total,
+		HasMore: result.HasMore,
+		Total:   result.Total,
 	}
 
 	sendSuccess(c, http.StatusOK, listProductsResponse)
@@ -1063,7 +902,7 @@ func (h *ProductHandler) validateWallet(ctx *gin.Context, walletID uuid.UUID, wo
 }
 
 // createProductTokens creates the associated product tokens for a product
-func (h *ProductHandler) createProductTokens(c *gin.Context, productID uuid.UUID, tokens []CreateProductTokenRequest) error {
+func (h *ProductHandler) createProductTokens(c *gin.Context, productID uuid.UUID, tokens []helpers.CreateProductTokenRequest) error {
 	for _, pt := range tokens {
 		networkID, err := uuid.Parse(pt.NetworkID)
 		if err != nil {
@@ -1122,63 +961,47 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
-	parsedWalletID, err := validateWalletID(req.WalletID)
+	parsedWalletID, err := helpers.ValidateWalletID(req.WalletID)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	if err := h.validateWallet(c, parsedWalletID, parsedWorkspaceID); err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), nil)
-		return
+	// Convert request prices to service params
+	servicePrices := make([]services.CreatePriceParams, len(req.Prices))
+	for i, price := range req.Prices {
+		servicePrices[i] = services.CreatePriceParams{
+			Active:              price.Active,
+			Type:                price.Type,
+			Nickname:            price.Nickname,
+			Currency:            price.Currency,
+			UnitAmountInPennies: price.UnitAmountInPennies,
+			IntervalType:        price.IntervalType,
+			IntervalCount:       price.IntervalCount,
+			TermLength:          price.TermLength,
+			Metadata:            price.Metadata,
+		}
 	}
 
-	product, err := h.common.db.CreateProduct(c.Request.Context(), db.CreateProductParams{
-		WorkspaceID: parsedWorkspaceID,
-		WalletID:    parsedWalletID,
-		Name:        req.Name,
-		Description: pgtype.Text{String: req.Description, Valid: req.Description != ""},
-		ImageUrl:    pgtype.Text{String: req.ImageURL, Valid: req.ImageURL != ""},
-		Url:         pgtype.Text{String: req.URL, Valid: req.URL != ""},
-		Active:      req.Active,
-		Metadata:    req.Metadata,
+	// Use service to create product
+	product, prices, err := h.productService.CreateProduct(c.Request.Context(), services.CreateProductParams{
+		WorkspaceID:   parsedWorkspaceID,
+		WalletID:      parsedWalletID,
+		Name:          req.Name,
+		Description:   req.Description,
+		ImageURL:      req.ImageURL,
+		URL:           req.URL,
+		Active:        req.Active,
+		Metadata:      req.Metadata,
+		Prices:        servicePrices,
+		ProductTokens: req.ProductTokens,
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to create product", err)
 		return
 	}
 
-	prices := make([]db.Price, len(req.Prices))
-
-	if len(req.Prices) > 0 {
-		for i, price := range req.Prices {
-			dbPrice, err := h.common.db.CreatePrice(c, db.CreatePriceParams{
-				ProductID:           product.ID,
-				Active:              price.Active,
-				Type:                db.PriceType(price.Type),
-				Nickname:            pgtype.Text{String: price.Nickname, Valid: true},
-				Currency:            price.Currency,
-				UnitAmountInPennies: price.UnitAmountInPennies,
-				IntervalType:        db.IntervalType(price.IntervalType),
-				TermLength:          price.TermLength,
-				Metadata:            price.Metadata,
-			})
-			if err != nil {
-				sendError(c, http.StatusInternalServerError, "Failed to create prices", err)
-				return
-			}
-			prices[i] = dbPrice
-		}
-	}
-
-	if len(req.ProductTokens) > 0 {
-		if err := h.createProductTokens(c, product.ID, req.ProductTokens); err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to create product tokens", err)
-			return
-		}
-	}
-
-	sendSuccess(c, http.StatusCreated, toProductResponse(product, prices))
+	sendSuccess(c, http.StatusCreated, toProductResponse(*product, prices))
 }
 
 // UpdateProduct godoc
@@ -1215,34 +1038,51 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	existingProduct, err := h.common.db.GetProduct(c.Request.Context(), db.GetProductParams{
-		ID:          parsedUUID,
+	// Convert request to service params
+	updateParams := services.UpdateProductParams{
+		ProductID:   parsedUUID,
 		WorkspaceID: parsedWorkspaceID,
-	})
+	}
+
+	if req.Name != "" {
+		updateParams.Name = &req.Name
+	}
+	if req.Description != "" {
+		updateParams.Description = &req.Description
+	}
+	if req.ImageURL != "" {
+		updateParams.ImageURL = &req.ImageURL
+	}
+	if req.URL != "" {
+		updateParams.URL = &req.URL
+	}
+	if req.Active != nil {
+		updateParams.Active = req.Active
+	}
+	if req.Metadata != nil {
+		updateParams.Metadata = req.Metadata
+	}
+	if req.WalletID != "" {
+		parsedWalletID, err := uuid.Parse(req.WalletID)
+		if err != nil {
+			sendError(c, http.StatusBadRequest, "Invalid wallet ID format", err)
+			return
+		}
+		updateParams.WalletID = &parsedWalletID
+	}
+
+	// Use service to update product
+	product, err := h.productService.UpdateProduct(c.Request.Context(), updateParams)
 	if err != nil {
-		handleDBError(c, err, "Product not found")
+		if strings.Contains(err.Error(), "not found") {
+			sendError(c, http.StatusNotFound, "Product not found", err)
+		} else {
+			sendError(c, http.StatusInternalServerError, "Failed to update product", err)
+		}
 		return
 	}
 
-	if err := h.validateProductUpdate(c, req, existingProduct); err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), nil)
-		return
-	}
-
-	params, err := h.updateProductParams(parsedUUID, req, existingProduct)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid update parameters", err)
-		return
-	}
-	params.WorkspaceID = parsedWorkspaceID
-
-	product, err := h.common.db.UpdateProduct(c.Request.Context(), params)
-	if err != nil {
-		handleDBError(c, err, "Failed to update product")
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, toProductResponse(product, []db.Price{}))
+	sendSuccess(c, http.StatusOK, toProductResponse(*product, []db.Price{}))
 }
 
 // DeleteProduct godoc
@@ -1271,12 +1111,16 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 		return
 	}
 
-	err = h.common.db.DeleteProduct(c.Request.Context(), db.DeleteProductParams{
-		ID:          parsedUUID,
-		WorkspaceID: parsedWorkspaceID,
-	})
+	// Use service to delete product
+	err = h.productService.DeleteProduct(c.Request.Context(), parsedUUID, parsedWorkspaceID)
 	if err != nil {
-		handleDBError(c, err, "Failed to delete product")
+		if strings.Contains(err.Error(), "not found") {
+			sendError(c, http.StatusNotFound, "Product not found", err)
+		} else if strings.Contains(err.Error(), "active subscriptions") {
+			sendError(c, http.StatusConflict, "Cannot delete product with active subscriptions", err)
+		} else {
+			sendError(c, http.StatusInternalServerError, "Failed to delete product", err)
+		}
 		return
 	}
 
@@ -1510,7 +1354,7 @@ func (h *ProductHandler) toComprehensiveSubscriptionResponse(ctx context.Context
 			Active: true, // Assuming active for subscriptions
 			Object: "product",
 		},
-		ProductToken: ProductTokenResponse{
+		ProductToken: helpers.ProductTokenResponse{
 			ID:          subscriptionDetails.ProductTokenID.String(),
 			TokenSymbol: subscriptionDetails.TokenSymbol,
 			NetworkID:   subscriptionDetails.ProductTokenID.String(),

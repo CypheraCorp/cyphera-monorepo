@@ -2093,3 +2093,120 @@ The phased approach ensures continuous delivery of value while maintaining syste
 - [ ] Build invoice system with proper line item separation
 - [ ] Test multi-currency and multi-jurisdiction scenarios
 - [ ] Document API changes and migration steps
+
+## Code Review TODOs
+
+During the implementation of Phase 1.2 (Core Backend Services), the following TODOs were identified in the code that need to be addressed in future phases:
+
+### Payment Helper TODOs
+1. **Exchange Rate Integration**
+   - Location: `/libs/go/helpers/payment_helper.go`
+   - TODO: Get exchange rate from oracle service
+   - Priority: High - needed for accurate crypto to fiat conversions
+
+2. **Gas Fee Calculation**
+   - Location: `/libs/go/helpers/payment_helper.go`
+   - TODO: Calculate actual gas fees from blockchain transaction
+   - Priority: High - critical for accurate payment records
+
+3. **Gas Sponsorship Check**
+   - Location: `/libs/go/helpers/payment_helper.go`
+   - TODO: Check sponsorship status from gas sponsorship configs
+   - Priority: Medium - needed for gas sponsorship feature
+
+4. **Tax Calculation**
+   - Location: `/libs/go/helpers/payment_helper.go`
+   - TODO: Calculate taxes based on jurisdiction and customer type
+   - Priority: Medium - required for B2B compliance
+
+5. **Discount Application**
+   - Location: `/libs/go/helpers/payment_helper.go`
+   - TODO: Apply discounts from discount codes and subscription discounts
+   - Priority: Low - enhancement feature
+
+6. **Gas Fee Payment Record Creation**
+   - Location: `/libs/go/helpers/payment_helper.go`
+   - TODO: Create gas_fee_payment record when has_gas_fee is true
+   - Priority: High - needed for complete gas tracking
+
+### Dashboard Metrics Service TODOs
+1. **Revenue Breakdown Calculation**
+   - Location: `/libs/go/services/dashboard_metrics_service.go`
+   - TODO: Calculate expansion and contraction revenue by comparing subscription changes
+   - Priority: Medium - needed for comprehensive revenue analytics
+
+### Implementation Strategy for TODOs
+
+These TODOs should be addressed as follows:
+
+1. **Phase 2.1 - Gas Fee Services** (Priority: High)
+   - Implement gas fee calculation service
+   - Integrate with blockchain to get actual gas costs
+   - Create gas fee payment records automatically
+
+2. **Phase 2.2 - Exchange Rate Service** (Priority: High)
+   - Build oracle integration for real-time exchange rates
+   - Cache rates for performance
+   - Apply to all payment records
+
+3. **Phase 3 - Tax & Compliance** (Priority: Medium)
+   - Implement tax calculation engine
+   - Add jurisdiction detection
+   - Build tax reporting features
+
+4. **Phase 4 - Discounts & Promotions** (Priority: Low)
+   - Complete discount application logic
+   - Build promotion management UI
+   - Add subscription discount tracking
+
+5. **Phase 5 - Advanced Analytics** (Priority: Medium)
+   - Implement expansion/contraction revenue tracking
+   - Add cohort analysis
+   - Build revenue forecasting
+
+### Blockchain Service TODOs ✅ COMPLETED
+
+The CoinMarketCap client has been successfully integrated into the blockchain helper:
+
+1. **Exchange Rate Integration for Gas Costs** ✅
+   - Location: `/libs/go/helpers/blockchain_helper.go`
+   - COMPLETED: Now fetches real-time ETH/USD prices from CoinMarketCap
+   - Includes 5-minute caching to reduce API calls
+   - Falls back to $2000/ETH if API fails
+
+2. **Token Price Oracle Integration** ✅
+   - Location: `/libs/go/helpers/blockchain_helper.go`
+   - COMPLETED: ETH prices are now stored in gas_fee_payment records
+   - Converts prices to pgtype.Numeric for proper database storage
+   - Provides accurate historical gas cost tracking
+
+### Completed Blockchain Features
+
+1. **Transaction Data Fetching** ✅
+   - Fetches complete transaction data from blockchain via Infura RPC
+   - Supports both legacy and EIP-1559 transactions
+   - Extracts gas usage, gas price, and calculates total gas cost
+
+2. **Gas Fee Payment Records** ✅
+   - Creates detailed gas_fee_payments records
+   - Includes EIP-1559 fields (base fee, priority fee)
+   - Tracks gas sponsorship details
+
+3. **Gas Sponsorship Logic** ✅
+   - Checks workspace sponsorship configuration
+   - Validates against sponsorship thresholds
+   - Updates payment records with sponsorship status
+
+### Integration Notes
+
+The blockchain service is now fully functional with real-time price data:
+- Fetches transaction data from chain using Infura RPC
+- Gets real-time ETH/USD prices from CoinMarketCap
+- Calculates accurate gas costs in USD
+- Stores all data in payment and gas_fee_payment records
+
+**Important**: The BlockchainSyncHelper now requires a CoinMarketCap client instance when created. Make sure to pass the client when initializing the helper in any service that uses it:
+
+```go
+blockchainHelper := helpers.NewBlockchainSyncHelper(queries, blockchainService, cmcClient)
+```

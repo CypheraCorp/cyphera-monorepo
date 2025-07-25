@@ -1,49 +1,33 @@
 package handlers
 
 import (
-	"github.com/cyphera/cyphera-api/libs/go/db"
 	"encoding/json"
 	"log"
 	"net/http"
 
+	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/services"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/pkg/errors"
 )
 
 // Domain-specific handlers
 type AccountHandler struct {
-	common *CommonServices
+	common         *CommonServices
+	accountService *services.AccountService
+	walletService  *services.WalletService
 }
 
 func NewAccountHandler(common *CommonServices) *AccountHandler {
-	return &AccountHandler{common: common}
-}
-
-type AccountDetailsResponse struct {
-	AccountResponse AccountResponse  `json:"account"`
-	User            UserResponse     `json:"user,omitempty"`
-	Wallets         []WalletResponse `json:"wallets,omitempty"`
-}
-
-// AccountResponse represents the standardized API response for account operations
-type AccountResponse struct {
-	ID                 string                 `json:"id"`
-	Object             string                 `json:"object"`
-	Name               string                 `json:"name"`
-	AccountType        string                 `json:"account_type"`
-	BusinessName       string                 `json:"business_name,omitempty"`
-	BusinessType       string                 `json:"business_type,omitempty"`
-	WebsiteURL         string                 `json:"website_url,omitempty"`
-	SupportEmail       string                 `json:"support_email,omitempty"`
-	SupportPhone       string                 `json:"support_phone,omitempty"`
-	Metadata           map[string]interface{} `json:"metadata,omitempty"`
-	FinishedOnboarding bool                   `json:"finished_onboarding"`
-	CreatedAt          int64                  `json:"created_at"`
-	UpdatedAt          int64                  `json:"updated_at"`
-	Workspaces         []WorkspaceResponse    `json:"workspaces,omitempty"`
+	return &AccountHandler{
+		common:         common,
+		accountService: services.NewAccountService(common.db),
+		walletService:  services.NewWalletService(common.db),
+	}
 }
 
 // CreateAccountRequest represents the request body for creating an account
@@ -115,15 +99,15 @@ type OnboardAccountRequest struct {
 }
 
 func (h *AccountHandler) ListAccounts(c *gin.Context) {
-	accounts, err := h.common.db.ListAccounts(c.Request.Context())
+	accounts, err := h.accountService.ListAccounts(c.Request.Context())
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve accounts", err)
 		return
 	}
 
-	response := make([]AccountResponse, len(accounts))
+	response := make([]helpers.AccountResponse, len(accounts))
 	for i, account := range accounts {
-		response[i] = toAccountResponse(account, []db.Workspace{})
+		response[i] = helpers.ToAccountResponse(account, []db.Workspace{})
 	}
 
 	sendList(c, response)
@@ -147,7 +131,13 @@ func (h *AccountHandler) GetAccount(c *gin.Context) {
 		return
 	}
 
-	// Get and parse account ID from context
+	parsedAccountID, err := uuid.Parse(accountID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid account ID format", err)
+		return
+	}
+
+	// Get and parse workspace ID from context
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
@@ -155,20 +145,15 @@ func (h *AccountHandler) GetAccount(c *gin.Context) {
 		return
 	}
 
-	// Get the workspace
-	workspace, err := h.common.db.GetWorkspace(c.Request.Context(), parsedWorkspaceID)
+	// Validate account access through workspace
+	err = h.accountService.ValidateAccountAccess(c.Request.Context(), parsedAccountID, parsedWorkspaceID)
 	if err != nil {
-		sendError(c, http.StatusNotFound, "Workspace not found", err)
-		return
-	}
-
-	if workspace.AccountID.String() != accountID {
-		sendError(c, http.StatusForbidden, "You are not authorized to access this account", nil)
+		sendError(c, http.StatusForbidden, err.Error(), err)
 		return
 	}
 
 	// Get the account
-	account, err := h.common.db.GetAccount(c.Request.Context(), workspace.AccountID)
+	account, err := h.accountService.GetAccount(c.Request.Context(), parsedAccountID)
 	if err != nil {
 		sendError(c, http.StatusNotFound, "Account not found", err)
 		return
@@ -181,7 +166,7 @@ func (h *AccountHandler) GetAccount(c *gin.Context) {
 		return
 	}
 
-	response := toAccountResponse(account, workspaces)
+	response := helpers.ToAccountResponse(*account, workspaces)
 
 	sendSuccess(c, http.StatusOK, response)
 }
@@ -292,22 +277,17 @@ func (h *AccountHandler) CreateAccount(c *gin.Context) {
 		return
 	}
 
-	metadata, err := json.Marshal(req.Metadata)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
-		return
-	}
-
-	account, err := h.common.db.CreateAccount(c.Request.Context(), db.CreateAccountParams{
+	// Create account using service
+	account, err := h.accountService.CreateAccount(c.Request.Context(), services.CreateAccountParams{
 		Name:               req.Name,
-		AccountType:        db.AccountType(req.AccountType),
-		BusinessName:       pgtype.Text{String: req.BusinessName, Valid: req.BusinessName != ""},
-		BusinessType:       pgtype.Text{String: req.BusinessType, Valid: req.BusinessType != ""},
-		WebsiteUrl:         pgtype.Text{String: req.WebsiteURL, Valid: req.WebsiteURL != ""},
-		SupportEmail:       pgtype.Text{String: req.SupportEmail, Valid: req.SupportEmail != ""},
-		SupportPhone:       pgtype.Text{String: req.SupportPhone, Valid: req.SupportPhone != ""},
-		FinishedOnboarding: pgtype.Bool{Bool: req.FinishedOnboarding, Valid: true},
-		Metadata:           metadata,
+		AccountType:        req.AccountType,
+		BusinessName:       req.BusinessName,
+		BusinessType:       req.BusinessType,
+		WebsiteURL:         req.WebsiteURL,
+		SupportEmail:       req.SupportEmail,
+		SupportPhone:       req.SupportPhone,
+		FinishedOnboarding: req.FinishedOnboarding,
+		Metadata:           req.Metadata,
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to create account", err)
@@ -324,32 +304,7 @@ func (h *AccountHandler) CreateAccount(c *gin.Context) {
 		return
 	}
 
-	sendSuccess(c, http.StatusCreated, toAccountResponse(account, []db.Workspace{}))
-}
-
-// validateSignInRequest validates the sign in request and extracts required metadata
-func (h *AccountHandler) validateSignInRequest(req CreateAccountRequest) (string, string, []byte, error) {
-	metadata, err := json.Marshal(req.Metadata)
-	if err != nil {
-		return "", "", nil, errors.Wrap(err, "invalid metadata format")
-	}
-
-	metaDataMap := make(map[string]interface{})
-	err = json.Unmarshal(metadata, &metaDataMap)
-	if err != nil {
-		return "", "", nil, errors.Wrap(err, "failed to unmarshal metadata")
-	}
-
-	// Check for Web3Auth metadata format
-	if web3authId, ok := metaDataMap["ownerWeb3AuthId"].(string); ok {
-		email, ok := metaDataMap["email"].(string)
-		if !ok || email == "" {
-			return "", "", nil, errors.New("email is required")
-		}
-		return web3authId, email, metadata, nil
-	}
-
-	return "", "", nil, errors.New("ownerWeb3AuthId is required")
+	sendSuccess(c, http.StatusCreated, helpers.ToAccountResponse(*account, []db.Workspace{}))
 }
 
 // createWalletsForActiveNetworks creates wallet entries for all active networks
@@ -409,7 +364,7 @@ func (h *AccountHandler) createWalletsForActiveNetworks(ctx *gin.Context, worksp
 	return nil
 }
 
-func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAccountRequest, web3authId string, email string, metadata []byte) (*AccountDetailsResponse, error) {
+func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAccountRequest, web3authId string, email string, metadata []byte) (*helpers.AccountDetailsResponse, error) {
 	// Extract verifier and verifierId from metadata
 	var metadataMap map[string]interface{}
 	var verifier, verifierId string
@@ -485,9 +440,9 @@ func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAc
 		}
 	}
 
-	return &AccountDetailsResponse{
-		AccountResponse: toAccountResponse(account, []db.Workspace{workspace}),
-		User:            toUserResponse(user),
+	return &helpers.AccountDetailsResponse{
+		AccountResponse: helpers.ToAccountResponse(account, []db.Workspace{workspace}),
+		User:            helpers.ToUserResponse(user),
 	}, nil
 }
 
@@ -504,55 +459,47 @@ func (h *AccountHandler) SignInRegisterAccount(c *gin.Context) {
 		return
 	}
 
-	web3authId, email, metadata, err := h.validateSignInRequest(req)
+	// Validate sign-in request
+	web3authId, email, err := h.accountService.ValidateSignInRequest(req.Metadata)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
+		sendError(c, http.StatusBadRequest, err.Error(), err)
 		return
 	}
 
-	// Check if user already exists by Web3Auth ID
-	user, err := h.common.db.GetUserByWeb3AuthID(c.Request.Context(), pgtype.Text{String: web3authId, Valid: web3authId != ""})
+	// Handle sign-in or registration
+	result, err := h.accountService.SignInOrRegisterAccount(c.Request.Context(), services.CreateAccountParams{
+		Name:               req.Name,
+		AccountType:        req.AccountType,
+		BusinessName:       req.BusinessName,
+		BusinessType:       req.BusinessType,
+		WebsiteURL:         req.WebsiteURL,
+		SupportEmail:       req.SupportEmail,
+		SupportPhone:       req.SupportPhone,
+		FinishedOnboarding: req.FinishedOnboarding,
+		Metadata:           req.Metadata,
+	}, web3authId, email)
 	if err != nil {
-		if err != pgx.ErrNoRows {
-			sendError(c, http.StatusInternalServerError, "Failed to check existing user", err)
-			return
+		sendError(c, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	// Create wallets for all active networks if wallet data is provided and it's a new user
+	if result.IsNewUser && req.WalletData != nil {
+		err = h.createWalletsForActiveNetworks(c, result.Workspaces[0].ID, req.WalletData)
+		if err != nil {
+			log.Printf("Warning: Failed to create wallets for active networks: %v", err)
 		}
 	}
 
-	var response *AccountDetailsResponse
-	if errors.Is(err, pgx.ErrNoRows) {
-		// User doesn't exist, create new account and user
-		response, err = h.createNewAccountWithUser(c, req, web3authId, email, metadata)
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, err.Error(), err)
-			return
-		}
+	response := helpers.AccountDetailsResponse{
+		AccountResponse: helpers.ToAccountResponse(*result.Account, result.Workspaces),
+		User:            helpers.ToUserResponse(*result.User),
+	}
+
+	if result.IsNewUser {
 		sendSuccess(c, http.StatusCreated, response)
 	} else {
-		// User exists, get existing account details
-		account, err := h.common.db.GetAccount(c.Request.Context(), user.AccountID)
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, err.Error(), err)
-			return
-		}
-		workspaces, err := h.common.db.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, err.Error(), err)
-			return
-		}
-
-		sendSuccess(c, http.StatusOK, toAccountDetailsResponse(&AccountAccessResponse{
-			Account:   account,
-			User:      user,
-			Workspace: workspaces,
-		}))
-	}
-}
-
-func toAccountDetailsResponse(acc *AccountAccessResponse) AccountDetailsResponse {
-	return AccountDetailsResponse{
-		AccountResponse: toAccountResponse(acc.Account, acc.Workspace),
-		User:            toUserResponse(acc.User),
+		sendSuccess(c, http.StatusOK, response)
 	}
 }
 
@@ -577,21 +524,10 @@ func (h *AccountHandler) OnboardAccount(c *gin.Context) {
 		return
 	}
 
-	user, err := h.common.db.GetUserByID(c.Request.Context(), parsedUserID)
-	if err != nil {
-		sendError(c, http.StatusNotFound, "User not found", err)
-		return
-	}
-
+	// Get workspace to get account ID
 	workspace, err := h.common.db.GetWorkspace(c.Request.Context(), parsedWorkspaceID)
 	if err != nil {
 		sendError(c, http.StatusNotFound, "Workspace not found", err)
-		return
-	}
-
-	account, err := h.common.db.GetAccount(c.Request.Context(), workspace.AccountID)
-	if err != nil {
-		sendError(c, http.StatusNotFound, "Account not found", err)
 		return
 	}
 
@@ -601,50 +537,19 @@ func (h *AccountHandler) OnboardAccount(c *gin.Context) {
 		return
 	}
 
-	// Start with base params containing only the ID
-	accountParams := db.UpdateAccountParams{
-		ID:                 account.ID,
-		Name:               account.Name,
-		AccountType:        account.AccountType,
-		BusinessName:       account.BusinessName,
-		BusinessType:       account.BusinessType,
-		WebsiteUrl:         account.WebsiteUrl,
-		SupportEmail:       account.SupportEmail,
-		SupportPhone:       account.SupportPhone,
-		FinishedOnboarding: pgtype.Bool{Bool: true, Valid: true},
-		Metadata:           account.Metadata,
-		OwnerID:            pgtype.UUID{Bytes: user.ID, Valid: true},
-	}
-
-	_, err = h.common.db.UpdateAccount(c.Request.Context(), accountParams)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to onboard account", err)
-		return
-	}
-
-	userParams := db.UpdateUserParams{
-		ID:                 user.ID,
-		Email:              user.Email,
-		FirstName:          pgtype.Text{String: req.FirstName, Valid: req.FirstName != ""},
-		LastName:           pgtype.Text{String: req.LastName, Valid: req.LastName != ""},
-		AddressLine1:       pgtype.Text{String: req.AddressLine1, Valid: req.AddressLine1 != ""},
-		AddressLine2:       pgtype.Text{String: req.AddressLine2, Valid: req.AddressLine2 != ""},
-		City:               pgtype.Text{String: req.City, Valid: req.City != ""},
-		StateRegion:        pgtype.Text{String: req.State, Valid: req.State != ""},
-		PostalCode:         pgtype.Text{String: req.PostalCode, Valid: req.PostalCode != ""},
-		Country:            pgtype.Text{String: req.Country, Valid: req.Country != ""},
-		DisplayName:        user.DisplayName,
-		PictureUrl:         user.PictureUrl,
-		Phone:              user.Phone,
-		Timezone:           user.Timezone,
-		Locale:             user.Locale,
-		EmailVerified:      pgtype.Bool{Bool: true, Valid: true},
-		TwoFactorEnabled:   user.TwoFactorEnabled,
-		FinishedOnboarding: pgtype.Bool{Bool: true, Valid: true}, // Automatically set to true when onboarding
-		Status:             user.Status,
-	}
-
-	_, err = h.common.db.UpdateUser(c.Request.Context(), userParams)
+	// Onboard account using service
+	err = h.accountService.OnboardAccount(c.Request.Context(), services.OnboardAccountParams{
+		AccountID:    workspace.AccountID,
+		UserID:       parsedUserID,
+		FirstName:    req.FirstName,
+		LastName:     req.LastName,
+		AddressLine1: req.AddressLine1,
+		AddressLine2: req.AddressLine2,
+		City:         req.City,
+		State:        req.State,
+		PostalCode:   req.PostalCode,
+		Country:      req.Country,
+	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to onboard account", err)
 		return
@@ -692,43 +597,11 @@ func (h *AccountHandler) DeleteAccount(c *gin.Context) {
 		return
 	}
 
-	err = h.common.db.DeleteAccount(c.Request.Context(), parsedUUID)
+	err = h.accountService.DeleteAccount(c.Request.Context(), parsedUUID)
 	if err != nil {
 		handleDBError(c, err, "Account not found")
 		return
 	}
 
 	sendSuccessMessage(c, http.StatusNoContent, "Account successfully deleted")
-}
-
-// Helper function to convert database model to API response
-func toAccountResponse(a db.Account, workspaces []db.Workspace) AccountResponse {
-
-	workspacesResponses := make([]WorkspaceResponse, 0)
-	for _, workspace := range workspaces {
-		workspacesResponses = append(workspacesResponses, toWorkspaceResponse(workspace))
-	}
-
-	var metadata map[string]interface{}
-	if err := json.Unmarshal(a.Metadata, &metadata); err != nil {
-		log.Printf("Error unmarshaling account metadata: %v", err)
-		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
-	}
-
-	return AccountResponse{
-		ID:                 a.ID.String(),
-		Object:             "account",
-		Name:               a.Name,
-		AccountType:        string(a.AccountType),
-		BusinessName:       a.BusinessName.String,
-		BusinessType:       a.BusinessType.String,
-		WebsiteURL:         a.WebsiteUrl.String,
-		SupportEmail:       a.SupportEmail.String,
-		SupportPhone:       a.SupportPhone.String,
-		Metadata:           metadata,
-		FinishedOnboarding: a.FinishedOnboarding.Bool,
-		CreatedAt:          a.CreatedAt.Time.Unix(),
-		UpdatedAt:          a.UpdatedAt.Time.Unix(),
-		Workspaces:         workspacesResponses,
-	}
 }

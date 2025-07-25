@@ -205,6 +205,7 @@ CREATE TABLE networks (
     type TEXT NOT NULL,
     network_type network_type NOT NULL,
     circle_network_type circle_network_type NOT NULL,
+    rpc_id TEXT NOT NULL,
     block_explorer_url TEXT,
     chain_id INTEGER NOT NULL UNIQUE,
     is_testnet BOOLEAN NOT NULL DEFAULT false,
@@ -842,20 +843,20 @@ VALUES
     )
 ON CONFLICT DO NOTHING;
 
-INSERT INTO networks (name, type, network_type, circle_network_type, chain_id, is_testnet, active, block_explorer_url, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, average_block_time_ms, gas_priority_levels)
+INSERT INTO networks (name, type, network_type, rpc_id, circle_network_type, chain_id, is_testnet, active, block_explorer_url, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, average_block_time_ms, gas_priority_levels)
 VALUES 
-    ('Ethereum Sepolia', 'Sepolia', 'evm', 'ETH-SEPOLIA', 11155111, true, true, 'https://sepolia.etherscan.io', 'https://cryptologos.cc/logos/ethereum-eth-logo.png', 'Ethereum Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 12000, '{"slow":{"max_fee_per_gas":"1000000000","max_priority_fee_per_gas":"100000000"},"standard":{"max_fee_per_gas":"2000000000","max_priority_fee_per_gas":"200000000"},"fast":{"max_fee_per_gas":"5000000000","max_priority_fee_per_gas":"500000000"}}'),
-    ('Ethereum Mainnet', 'Mainnet', 'evm', 'ETH', 1, false, false, 'https://etherscan.io', 'https://cryptologos.cc/logos/ethereum-eth-logo.png', 'Ethereum', 'eip155', 1.2, 1.1, '500000', '100000', true, 12000, '{"slow":{"max_fee_per_gas":"20000000000","max_priority_fee_per_gas":"1000000000"},"standard":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"2000000000"},"fast":{"max_fee_per_gas":"50000000000","max_priority_fee_per_gas":"3000000000"}}'),
-    ('Polygon Amoy', 'Amoy', 'evm', 'MATIC-AMOY', 80002, true, false, 'https://www.oklink.com/amoy', 'https://cryptologos.cc/logos/polygon-matic-logo.png', 'Polygon Amoy', 'eip155', 1.3, 1.2, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"30000000000"},"standard":{"max_fee_per_gas":"35000000000","max_priority_fee_per_gas":"35000000000"},"fast":{"max_fee_per_gas":"40000000000","max_priority_fee_per_gas":"40000000000"}}'), 
-    ('Polygon Mainnet', 'Mainnet', 'evm', 'MATIC', 137, false, false, 'https://polygonscan.com', 'https://cryptologos.cc/logos/polygon-matic-logo.png', 'Polygon', 'eip155', 1.3, 1.2, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"30000000000"},"standard":{"max_fee_per_gas":"35000000000","max_priority_fee_per_gas":"35000000000"},"fast":{"max_fee_per_gas":"40000000000","max_priority_fee_per_gas":"40000000000"}}'),
-    ('Arbitrum Sepolia', 'Sepolia', 'evm', 'ARB-SEPOLIA', 421614, true, false, 'https://sepolia.arbiscan.io', 'https://cryptologos.cc/logos/arbitrum-arb-logo.png', 'Arbitrum Sepolia', 'eip155', 1.1, 1.1, '1000000', '150000', true, 250, '{"slow":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"0"},"standard":{"max_fee_per_gas":"150000000","max_priority_fee_per_gas":"0"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"0"}}'),
-    ('Arbitrum One', 'Mainnet', 'evm', 'ARB', 42161, false, false, 'https://arbiscan.io', 'https://cryptologos.cc/logos/arbitrum-arb-logo.png', 'Arbitrum', 'eip155', 1.1, 1.1, '1000000', '150000', true, 250, '{"slow":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"0"},"standard":{"max_fee_per_gas":"150000000","max_priority_fee_per_gas":"0"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"0"}}'),
-    ('Base Sepolia', 'Sepolia', 'evm', 'BASE-SEPOLIA', 84532, true, true, 'https://sepolia.basescan.org', 'https://basescan.org/images/svg/logos/chain-light.svg', 'Base Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
-    ('Base Mainnet', 'Mainnet', 'evm', 'BASE', 8453, false, true, 'https://basescan.org', 'https://basescan.org/images/svg/logos/chain-light.svg', 'Base', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
-    ('Optimism Sepolia', 'Sepolia', 'evm', 'OP-SEPOLIA', 11155420, true, false, 'https://sepolia.optimism.io', 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png', 'Optimism Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
-    ('Optimism Mainnet', 'Mainnet', 'evm', 'OP', 10, false, false, 'https://optimistic.etherscan.io', 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png', 'Optimism', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
-    ('Unichain Sepolia', 'Sepolia', 'evm', 'UNI-SEPOLIA', 1301, true, false, 'https://sepolia.unichain.io', 'https://cryptologos.cc/logos/uniswap-uni-logo.png', 'Unichain Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
-    ('Unichain Mainnet', 'Mainnet', 'evm', 'UNI', 130, false, false, 'https://unichain.io', 'https://cryptologos.cc/logos/uniswap-uni-logo.png', 'Unichain', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}')
+    ('Ethereum Sepolia', 'Sepolia', 'evm', 'sepolia', 'ETH-SEPOLIA', 11155111, true, true, 'https://sepolia.etherscan.io', 'https://cryptologos.cc/logos/ethereum-eth-logo.png', 'Ethereum Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 12000, '{"slow":{"max_fee_per_gas":"1000000000","max_priority_fee_per_gas":"100000000"},"standard":{"max_fee_per_gas":"2000000000","max_priority_fee_per_gas":"200000000"},"fast":{"max_fee_per_gas":"5000000000","max_priority_fee_per_gas":"500000000"}}'),
+    ('Ethereum Mainnet', 'Mainnet', 'evm', 'eth', 'ETH', 1, false, false, 'https://etherscan.io', 'https://cryptologos.cc/logos/ethereum-eth-logo.png', 'Ethereum', 'eip155', 1.2, 1.1, '500000', '100000', true, 12000, '{"slow":{"max_fee_per_gas":"20000000000","max_priority_fee_per_gas":"1000000000"},"standard":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"2000000000"},"fast":{"max_fee_per_gas":"50000000000","max_priority_fee_per_gas":"3000000000"}}'),
+    ('Polygon Amoy', 'Amoy', 'evm', 'amoy', 'MATIC-AMOY', 80002, true, false, 'https://www.oklink.com/amoy', 'https://cryptologos.cc/logos/polygon-matic-logo.png', 'Polygon Amoy', 'eip155', 1.3, 1.2, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"30000000000"},"standard":{"max_fee_per_gas":"35000000000","max_priority_fee_per_gas":"35000000000"},"fast":{"max_fee_per_gas":"40000000000","max_priority_fee_per_gas":"40000000000"}}'), 
+    ('Polygon Mainnet', 'Mainnet', 'evm', 'polygon', 'MATIC', 137, false, false, 'https://polygonscan.com', 'https://cryptologos.cc/logos/polygon-matic-logo.png', 'Polygon', 'eip155', 1.3, 1.2, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"30000000000"},"standard":{"max_fee_per_gas":"35000000000","max_priority_fee_per_gas":"35000000000"},"fast":{"max_fee_per_gas":"40000000000","max_priority_fee_per_gas":"40000000000"}}'),
+    ('Arbitrum Sepolia', 'Sepolia', 'evm', 'arbitrum-sepolia', 'ARB-SEPOLIA', 421614, true, false, 'https://sepolia.arbiscan.io', 'https://cryptologos.cc/logos/arbitrum-arb-logo.png', 'Arbitrum Sepolia', 'eip155', 1.1, 1.1, '1000000', '150000', true, 250, '{"slow":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"0"},"standard":{"max_fee_per_gas":"150000000","max_priority_fee_per_gas":"0"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"0"}}'),
+    ('Arbitrum One', 'Mainnet', 'evm', 'arbitrum-mainnet', 'ARB', 42161, false, false, 'https://arbiscan.io', 'https://cryptologos.cc/logos/arbitrum-arb-logo.png', 'Arbitrum', 'eip155', 1.1, 1.1, '1000000', '150000', true, 250, '{"slow":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"0"},"standard":{"max_fee_per_gas":"150000000","max_priority_fee_per_gas":"0"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"0"}}'),
+    ('Base Sepolia', 'Sepolia', 'evm', 'base-sepolia', 'BASE-SEPOLIA', 84532, true, true, 'https://sepolia.basescan.org', 'https://basescan.org/images/svg/logos/chain-light.svg', 'Base Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
+    ('Base Mainnet', 'Mainnet', 'evm', 'base-mainnet', 'BASE', 8453, false, true, 'https://basescan.org', 'https://basescan.org/images/svg/logos/chain-light.svg', 'Base', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
+    ('Optimism Sepolia', 'Sepolia', 'evm', 'optimism-sepolia', 'OP-SEPOLIA', 11155420, true, false, 'https://sepolia.optimism.io', 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png', 'Optimism Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
+    ('Optimism Mainnet', 'Mainnet', 'evm', 'optimism-mainnet', 'OP', 10, false, false, 'https://optimistic.etherscan.io', 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png', 'Optimism', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
+    ('Unichain Sepolia', 'Sepolia', 'evm', 'unichain-sepolia', 'UNI-SEPOLIA', 1301, true, false, 'https://sepolia.unichain.io', 'https://cryptologos.cc/logos/uniswap-uni-logo.png', 'Unichain Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
+    ('Unichain Mainnet', 'Mainnet', 'evm', 'unichain-mainnet', 'UNI', 130, false, false, 'https://unichain.io', 'https://cryptologos.cc/logos/uniswap-uni-logo.png', 'Unichain', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO tokens (network_id, name, symbol, contract_address, gas_token, active, decimals)
@@ -976,6 +977,389 @@ CREATE TRIGGER set_invoices_updated_at
 -- Add triggers for payment sync tables
 CREATE TRIGGER set_payment_sync_sessions_updated_at
     BEFORE UPDATE ON payment_sync_sessions
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+-- ============================================
+-- PLATFORM ENHANCEMENT TABLES
+-- ============================================
+
+-- Payments table - Core payment tracking
+CREATE TABLE payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    invoice_id UUID REFERENCES invoices(id),
+    subscription_id UUID REFERENCES subscriptions(id),
+    subscription_event UUID REFERENCES subscription_events(id),
+    customer_id UUID NOT NULL REFERENCES customers(id),
+    
+    -- Payment details
+    amount_in_cents BIGINT NOT NULL, -- Total amount including gas if customer pays
+    currency VARCHAR(3) NOT NULL REFERENCES fiat_currencies(code),
+    status VARCHAR(50) NOT NULL, -- pending, processing, completed, failed, refunded
+    payment_method VARCHAR(50) NOT NULL, -- crypto, card, bank_transfer
+    
+    -- Crypto specific
+    transaction_hash VARCHAR(255),
+    network_id UUID REFERENCES networks(id),
+    token_id UUID REFERENCES tokens(id),
+    crypto_amount DECIMAL(36,18), -- Actual token amount transferred
+    exchange_rate DECIMAL(20,8), -- Fiat to crypto rate at time of payment
+    
+    -- Gas fee reference (details in gas_fee_payments table)
+    has_gas_fee BOOLEAN DEFAULT FALSE,
+    gas_fee_usd_cents BIGINT, -- Quick reference for total gas cost
+    gas_sponsored BOOLEAN DEFAULT FALSE,
+    
+    -- External references
+    external_payment_id VARCHAR(255),
+    payment_provider VARCHAR(50), -- circle, stripe, internal
+    
+    -- Financial breakdown
+    product_amount_cents BIGINT NOT NULL, -- Amount for product/service
+    tax_amount_cents BIGINT DEFAULT 0,
+    gas_amount_cents BIGINT DEFAULT 0, -- Gas amount if customer pays
+    discount_amount_cents BIGINT DEFAULT 0,
+    
+    -- Timestamps
+    initiated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    failed_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Metadata
+    error_message TEXT,
+    metadata JSONB DEFAULT '{}',
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT unique_transaction_hash UNIQUE(transaction_hash),
+    CONSTRAINT unique_external_payment UNIQUE(workspace_id, external_payment_id, payment_provider),
+    CONSTRAINT check_amount_breakdown CHECK (
+        amount_in_cents = product_amount_cents + tax_amount_cents + gas_amount_cents - discount_amount_cents
+    )
+);
+
+-- Indexes for performance
+CREATE INDEX idx_payments_workspace_status ON payments(workspace_id, status);
+CREATE INDEX idx_payments_customer ON payments(customer_id);
+CREATE INDEX idx_payments_completed_at ON payments(workspace_id, completed_at);
+CREATE INDEX idx_payments_transaction_hash ON payments(transaction_hash) WHERE transaction_hash IS NOT NULL;
+
+-- Invoice Line Items table
+CREATE TABLE invoice_line_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    
+    -- Line item details
+    description TEXT NOT NULL,
+    quantity DECIMAL(10,4) NOT NULL DEFAULT 1,
+    unit_amount_in_cents BIGINT NOT NULL,
+    amount_in_cents BIGINT NOT NULL, -- quantity * unit_amount
+    
+    -- Currency details
+    fiat_currency VARCHAR(3) NOT NULL REFERENCES fiat_currencies(code), -- ISO 4217 currency code
+    
+    -- References
+    subscription_id UUID REFERENCES subscriptions(id),
+    product_id UUID REFERENCES products(id),
+    price_id UUID REFERENCES prices(id),
+    
+    -- Crypto payment details
+    network_id UUID REFERENCES networks(id),
+    token_id UUID REFERENCES tokens(id),
+    crypto_amount DECIMAL(36,18), -- Actual token amount (supports up to 18 decimals)
+    exchange_rate DECIMAL(20,8), -- Fiat to crypto rate at time of invoice
+    
+    -- Tax
+    tax_rate DECIMAL(5,4) DEFAULT 0, -- 0.0000 to 0.9999 (0% to 99.99%)
+    tax_amount_in_cents BIGINT DEFAULT 0,
+    tax_crypto_amount DECIMAL(36,18), -- Tax amount in crypto
+    
+    -- Period for subscription items
+    period_start TIMESTAMP WITH TIME ZONE,
+    period_end TIMESTAMP WITH TIME ZONE,
+    
+    -- Gas fee tracking
+    line_item_type VARCHAR(50) DEFAULT 'product', -- 'product', 'gas_fee', 'tax', 'discount'
+    gas_fee_payment_id UUID, -- Will reference gas_fee_payments(id) when created
+    is_gas_sponsored BOOLEAN DEFAULT FALSE,
+    gas_sponsor_type VARCHAR(50),
+    gas_sponsor_name VARCHAR(255), -- Human readable sponsor name
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}',
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_line_items_invoice ON invoice_line_items(invoice_id);
+CREATE INDEX idx_line_items_token ON invoice_line_items(token_id) WHERE token_id IS NOT NULL;
+CREATE INDEX idx_line_items_currency ON invoice_line_items(fiat_currency, invoice_id);
+CREATE INDEX idx_line_items_type ON invoice_line_items(line_item_type) WHERE line_item_type != 'product';
+
+-- Dashboard Metrics table
+CREATE TABLE dashboard_metrics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    
+    -- Time period
+    metric_date DATE NOT NULL,
+    metric_type VARCHAR(50) NOT NULL, -- hourly, daily, weekly, monthly, yearly
+    metric_hour INTEGER, -- 0-23 for hourly metrics
+    
+    -- Currency
+    fiat_currency VARCHAR(3) NOT NULL REFERENCES fiat_currencies(code),
+    
+    -- Revenue metrics (stored in cents)
+    mrr_cents BIGINT DEFAULT 0,
+    arr_cents BIGINT DEFAULT 0,
+    total_revenue_cents BIGINT DEFAULT 0,
+    new_revenue_cents BIGINT DEFAULT 0,
+    expansion_revenue_cents BIGINT DEFAULT 0, -- Upsells/upgrades
+    contraction_revenue_cents BIGINT DEFAULT 0, -- Downgrades
+    
+    -- Customer metrics
+    total_customers INTEGER DEFAULT 0,
+    new_customers INTEGER DEFAULT 0,
+    churned_customers INTEGER DEFAULT 0,
+    reactivated_customers INTEGER DEFAULT 0,
+    
+    -- Subscription metrics
+    active_subscriptions INTEGER DEFAULT 0,
+    new_subscriptions INTEGER DEFAULT 0,
+    cancelled_subscriptions INTEGER DEFAULT 0,
+    paused_subscriptions INTEGER DEFAULT 0,
+    trial_subscriptions INTEGER DEFAULT 0,
+    
+    -- Calculated rates
+    churn_rate DECIMAL(5,4) DEFAULT 0, -- 0.0000 to 0.9999
+    growth_rate DECIMAL(5,4) DEFAULT 0,
+    ltv_avg_cents BIGINT DEFAULT 0, -- Average customer lifetime value
+    
+    -- Payment metrics
+    successful_payments INTEGER DEFAULT 0,
+    failed_payments INTEGER DEFAULT 0,
+    pending_payments INTEGER DEFAULT 0,
+    total_payment_volume_cents BIGINT DEFAULT 0,
+    avg_payment_size_cents BIGINT DEFAULT 0,
+    
+    -- Crypto-specific metrics
+    total_gas_fees_cents BIGINT DEFAULT 0,
+    sponsored_gas_fees_cents BIGINT DEFAULT 0, -- Gas fees paid by merchant
+    customer_gas_fees_cents BIGINT DEFAULT 0, -- Gas fees paid by customer
+    avg_gas_fee_cents BIGINT DEFAULT 0,
+    gas_sponsorship_rate DECIMAL(5,2), -- Percentage of gas sponsored
+    unique_wallet_addresses INTEGER DEFAULT 0,
+    new_wallet_addresses INTEGER DEFAULT 0,
+    
+    -- Network breakdown (JSONB for flexibility)
+    network_metrics JSONB DEFAULT '{}', -- {ethereum: {payments: 10, volume_cents: 1000}, polygon: {...}}
+    token_metrics JSONB DEFAULT '{}', -- {USDC: {payments: 10, volume_cents: 1000}, USDT: {...}}
+    
+    -- Performance metrics
+    avg_payment_confirmation_time_seconds INTEGER,
+    payment_success_rate DECIMAL(5,4) DEFAULT 0, -- 0.0000 to 1.0000
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT unique_workspace_metric UNIQUE(workspace_id, metric_date, metric_type, metric_hour, fiat_currency)
+);
+
+CREATE INDEX idx_metrics_workspace_date ON dashboard_metrics(workspace_id, metric_date DESC, metric_type);
+CREATE INDEX idx_metrics_hourly ON dashboard_metrics(workspace_id, metric_date, metric_hour) WHERE metric_type = 'hourly';
+CREATE INDEX idx_metrics_currency ON dashboard_metrics(workspace_id, fiat_currency, metric_date DESC);
+
+-- Payment Links table
+CREATE TABLE payment_links (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    
+    -- Link details
+    slug VARCHAR(255) NOT NULL UNIQUE,
+    status VARCHAR(50) NOT NULL DEFAULT 'active', -- active, inactive, expired
+    
+    -- Payment configuration
+    product_id UUID REFERENCES products(id),
+    price_id UUID REFERENCES prices(id),
+    amount_in_cents BIGINT, -- For one-time custom amounts
+    currency VARCHAR(3) REFERENCES fiat_currencies(code),
+    payment_type VARCHAR(50) DEFAULT 'one_time', -- one_time, recurring
+    
+    -- Customer collection
+    collect_email BOOLEAN DEFAULT true,
+    collect_shipping BOOLEAN DEFAULT false,
+    collect_name BOOLEAN DEFAULT true,
+    
+    -- Expiration
+    expires_at TIMESTAMP WITH TIME ZONE,
+    max_uses INTEGER,
+    used_count INTEGER DEFAULT 0,
+    
+    -- Success behavior
+    redirect_url TEXT, -- Where to redirect after successful payment
+    
+    -- QR Code
+    qr_code_url TEXT,
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}',
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX idx_payment_links_slug ON payment_links(slug) WHERE deleted_at IS NULL;
+CREATE INDEX idx_payment_links_workspace ON payment_links(workspace_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_payment_links_status ON payment_links(status, expires_at) WHERE deleted_at IS NULL;
+
+-- Gas Fee Payments table
+-- Stores detailed gas fee information for crypto payments
+-- One-to-one relationship with payments table when has_gas_fee = true
+CREATE TABLE gas_fee_payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    payment_id UUID NOT NULL REFERENCES payments(id) UNIQUE, -- One-to-one with payments
+    
+    -- Gas details
+    gas_fee_wei TEXT NOT NULL, -- Exact gas fee in wei
+    gas_price_gwei TEXT NOT NULL, -- Gas price at execution
+    gas_units_used BIGINT NOT NULL, -- Actual gas consumed
+    max_gas_units BIGINT NOT NULL, -- Gas limit set
+    base_fee_gwei TEXT, -- EIP-1559 base fee
+    priority_fee_gwei TEXT, -- EIP-1559 priority fee
+    
+    -- Payment details
+    payment_token_id UUID REFERENCES tokens(id), -- Token used to pay gas
+    payment_token_amount TEXT, -- Amount of token used
+    payment_method VARCHAR(50) NOT NULL, -- 'native', 'relay', 'meta_transaction'
+    
+    -- Sponsorship
+    sponsor_type VARCHAR(50) NOT NULL, -- 'customer', 'merchant', 'platform', 'third_party'
+    sponsor_id UUID, -- References appropriate entity
+    sponsor_workspace_id UUID REFERENCES workspaces(id),
+    
+    -- Network specifics
+    network_id UUID NOT NULL REFERENCES networks(id),
+    block_number BIGINT,
+    block_timestamp TIMESTAMP WITH TIME ZONE,
+    
+    -- Conversion rates at time of payment
+    eth_usd_price DECIMAL(10, 2), -- ETH price in USD
+    token_usd_price DECIMAL(10, 2), -- Gas token price in USD
+    gas_fee_usd_cents BIGINT, -- Calculated USD value
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_payment_gas FOREIGN KEY (payment_id) 
+        REFERENCES payments(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_gas_fee_payments_sponsor ON gas_fee_payments(sponsor_type, sponsor_id);
+CREATE INDEX idx_gas_fee_payments_created ON gas_fee_payments(created_at);
+
+-- Gas Sponsorship Configs table
+CREATE TABLE gas_sponsorship_configs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    
+    -- Sponsorship settings
+    sponsorship_enabled BOOLEAN DEFAULT FALSE,
+    sponsor_customer_gas BOOLEAN DEFAULT FALSE, -- Merchant sponsors customer gas
+    sponsor_threshold_usd_cents BIGINT, -- Max sponsorship per transaction
+    monthly_budget_usd_cents BIGINT, -- Monthly sponsorship budget
+    
+    -- Rules
+    sponsor_for_products JSONB DEFAULT '[]'::jsonb, -- Array of product IDs
+    sponsor_for_customers JSONB DEFAULT '[]'::jsonb, -- Array of customer IDs
+    sponsor_for_tiers JSONB DEFAULT '[]'::jsonb, -- Customer tiers eligible
+    
+    -- Tracking
+    current_month_spent_cents BIGINT DEFAULT 0,
+    last_reset_date DATE,
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    UNIQUE(workspace_id)
+);
+
+-- Update invoice_line_items to add foreign key for gas_fee_payments
+ALTER TABLE invoice_line_items 
+ADD CONSTRAINT fk_gas_fee_payment 
+FOREIGN KEY (gas_fee_payment_id) 
+REFERENCES gas_fee_payments(id);
+
+-- Add constraint to ensure gas line items have proper references
+ALTER TABLE invoice_line_items 
+ADD CONSTRAINT chk_gas_line_item 
+CHECK (
+    (line_item_type != 'gas_fee') OR 
+    (line_item_type = 'gas_fee' AND gas_fee_payment_id IS NOT NULL)
+);
+
+-- Update invoices table with new columns
+ALTER TABLE invoices 
+ADD COLUMN IF NOT EXISTS invoice_number VARCHAR(255),
+ADD COLUMN IF NOT EXISTS subtotal_cents BIGINT,
+ADD COLUMN IF NOT EXISTS discount_cents BIGINT DEFAULT 0,
+ADD COLUMN IF NOT EXISTS payment_link_id UUID REFERENCES payment_links(id),
+ADD COLUMN IF NOT EXISTS delegation_address VARCHAR(255),
+ADD COLUMN IF NOT EXISTS qr_code_data TEXT,
+-- Tax fields
+ADD COLUMN IF NOT EXISTS tax_amount_cents BIGINT NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS tax_details JSONB DEFAULT '[]'::jsonb, -- Array of tax calculations
+ADD COLUMN IF NOT EXISTS customer_tax_id VARCHAR(255),
+ADD COLUMN IF NOT EXISTS customer_jurisdiction_id UUID, -- Will reference tax_jurisdictions(id) when created
+ADD COLUMN IF NOT EXISTS reverse_charge_applies BOOLEAN DEFAULT FALSE;
+
+-- Add unique constraint for invoice numbers per workspace
+ALTER TABLE invoices 
+ADD CONSTRAINT unique_workspace_invoice_number 
+UNIQUE(workspace_id, invoice_number);
+
+-- Update customers table for tax support
+ALTER TABLE customers 
+ADD COLUMN IF NOT EXISTS tax_jurisdiction_id UUID, -- Will reference tax_jurisdictions(id) when created
+ADD COLUMN IF NOT EXISTS tax_id VARCHAR(255), -- VAT number, EIN, etc.
+ADD COLUMN IF NOT EXISTS tax_id_type VARCHAR(50), -- 'vat', 'ein', 'gst', etc.
+ADD COLUMN IF NOT EXISTS tax_id_verified BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS tax_id_verified_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS is_business BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS business_name VARCHAR(255),
+ADD COLUMN IF NOT EXISTS billing_country VARCHAR(2), -- ISO country code
+ADD COLUMN IF NOT EXISTS billing_state VARCHAR(50),
+ADD COLUMN IF NOT EXISTS billing_city VARCHAR(255),
+ADD COLUMN IF NOT EXISTS billing_postal_code VARCHAR(20);
+
+-- Create indexes for new customer fields
+CREATE INDEX IF NOT EXISTS idx_customers_billing_location ON customers(billing_country, billing_state);
+
+-- Add triggers for new tables
+CREATE TRIGGER set_payments_updated_at
+    BEFORE UPDATE ON payments
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_invoice_line_items_updated_at
+    BEFORE UPDATE ON invoice_line_items
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_dashboard_metrics_updated_at
+    BEFORE UPDATE ON dashboard_metrics
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_payment_links_updated_at
+    BEFORE UPDATE ON payment_links
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_gas_sponsorship_configs_updated_at
+    BEFORE UPDATE ON gas_sponsorship_configs
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 

@@ -587,6 +587,17 @@ type Customer struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	TaxJurisdictionID  pgtype.UUID        `json:"tax_jurisdiction_id"`
+	TaxID              pgtype.Text        `json:"tax_id"`
+	TaxIDType          pgtype.Text        `json:"tax_id_type"`
+	TaxIDVerified      pgtype.Bool        `json:"tax_id_verified"`
+	TaxIDVerifiedAt    pgtype.Timestamptz `json:"tax_id_verified_at"`
+	IsBusiness         pgtype.Bool        `json:"is_business"`
+	BusinessName       pgtype.Text        `json:"business_name"`
+	BillingCountry     pgtype.Text        `json:"billing_country"`
+	BillingState       pgtype.Text        `json:"billing_state"`
+	BillingCity        pgtype.Text        `json:"billing_city"`
+	BillingPostalCode  pgtype.Text        `json:"billing_postal_code"`
 }
 
 type CustomerWallet struct {
@@ -603,6 +614,51 @@ type CustomerWallet struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt     pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type DashboardMetric struct {
+	ID                                uuid.UUID          `json:"id"`
+	WorkspaceID                       uuid.UUID          `json:"workspace_id"`
+	MetricDate                        pgtype.Date        `json:"metric_date"`
+	MetricType                        string             `json:"metric_type"`
+	MetricHour                        pgtype.Int4        `json:"metric_hour"`
+	FiatCurrency                      string             `json:"fiat_currency"`
+	MrrCents                          pgtype.Int8        `json:"mrr_cents"`
+	ArrCents                          pgtype.Int8        `json:"arr_cents"`
+	TotalRevenueCents                 pgtype.Int8        `json:"total_revenue_cents"`
+	NewRevenueCents                   pgtype.Int8        `json:"new_revenue_cents"`
+	ExpansionRevenueCents             pgtype.Int8        `json:"expansion_revenue_cents"`
+	ContractionRevenueCents           pgtype.Int8        `json:"contraction_revenue_cents"`
+	TotalCustomers                    pgtype.Int4        `json:"total_customers"`
+	NewCustomers                      pgtype.Int4        `json:"new_customers"`
+	ChurnedCustomers                  pgtype.Int4        `json:"churned_customers"`
+	ReactivatedCustomers              pgtype.Int4        `json:"reactivated_customers"`
+	ActiveSubscriptions               pgtype.Int4        `json:"active_subscriptions"`
+	NewSubscriptions                  pgtype.Int4        `json:"new_subscriptions"`
+	CancelledSubscriptions            pgtype.Int4        `json:"cancelled_subscriptions"`
+	PausedSubscriptions               pgtype.Int4        `json:"paused_subscriptions"`
+	TrialSubscriptions                pgtype.Int4        `json:"trial_subscriptions"`
+	ChurnRate                         pgtype.Numeric     `json:"churn_rate"`
+	GrowthRate                        pgtype.Numeric     `json:"growth_rate"`
+	LtvAvgCents                       pgtype.Int8        `json:"ltv_avg_cents"`
+	SuccessfulPayments                pgtype.Int4        `json:"successful_payments"`
+	FailedPayments                    pgtype.Int4        `json:"failed_payments"`
+	PendingPayments                   pgtype.Int4        `json:"pending_payments"`
+	TotalPaymentVolumeCents           pgtype.Int8        `json:"total_payment_volume_cents"`
+	AvgPaymentSizeCents               pgtype.Int8        `json:"avg_payment_size_cents"`
+	TotalGasFeesCents                 pgtype.Int8        `json:"total_gas_fees_cents"`
+	SponsoredGasFeesCents             pgtype.Int8        `json:"sponsored_gas_fees_cents"`
+	CustomerGasFeesCents              pgtype.Int8        `json:"customer_gas_fees_cents"`
+	AvgGasFeeCents                    pgtype.Int8        `json:"avg_gas_fee_cents"`
+	GasSponsorshipRate                pgtype.Numeric     `json:"gas_sponsorship_rate"`
+	UniqueWalletAddresses             pgtype.Int4        `json:"unique_wallet_addresses"`
+	NewWalletAddresses                pgtype.Int4        `json:"new_wallet_addresses"`
+	NetworkMetrics                    []byte             `json:"network_metrics"`
+	TokenMetrics                      []byte             `json:"token_metrics"`
+	AvgPaymentConfirmationTimeSeconds pgtype.Int4        `json:"avg_payment_confirmation_time_seconds"`
+	PaymentSuccessRate                pgtype.Numeric     `json:"payment_success_rate"`
+	CreatedAt                         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                         pgtype.Timestamptz `json:"updated_at"`
 }
 
 type DelegationDatum struct {
@@ -650,6 +706,46 @@ type FiatCurrency struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
+type GasFeePayment struct {
+	ID                 uuid.UUID          `json:"id"`
+	PaymentID          uuid.UUID          `json:"payment_id"`
+	GasFeeWei          string             `json:"gas_fee_wei"`
+	GasPriceGwei       string             `json:"gas_price_gwei"`
+	GasUnitsUsed       int64              `json:"gas_units_used"`
+	MaxGasUnits        int64              `json:"max_gas_units"`
+	BaseFeeGwei        pgtype.Text        `json:"base_fee_gwei"`
+	PriorityFeeGwei    pgtype.Text        `json:"priority_fee_gwei"`
+	PaymentTokenID     pgtype.UUID        `json:"payment_token_id"`
+	PaymentTokenAmount pgtype.Text        `json:"payment_token_amount"`
+	PaymentMethod      string             `json:"payment_method"`
+	SponsorType        string             `json:"sponsor_type"`
+	SponsorID          pgtype.UUID        `json:"sponsor_id"`
+	SponsorWorkspaceID pgtype.UUID        `json:"sponsor_workspace_id"`
+	NetworkID          uuid.UUID          `json:"network_id"`
+	BlockNumber        pgtype.Int8        `json:"block_number"`
+	BlockTimestamp     pgtype.Timestamptz `json:"block_timestamp"`
+	EthUsdPrice        pgtype.Numeric     `json:"eth_usd_price"`
+	TokenUsdPrice      pgtype.Numeric     `json:"token_usd_price"`
+	GasFeeUsdCents     pgtype.Int8        `json:"gas_fee_usd_cents"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+}
+
+type GasSponsorshipConfig struct {
+	ID                       uuid.UUID          `json:"id"`
+	WorkspaceID              uuid.UUID          `json:"workspace_id"`
+	SponsorshipEnabled       pgtype.Bool        `json:"sponsorship_enabled"`
+	SponsorCustomerGas       pgtype.Bool        `json:"sponsor_customer_gas"`
+	SponsorThresholdUsdCents pgtype.Int8        `json:"sponsor_threshold_usd_cents"`
+	MonthlyBudgetUsdCents    pgtype.Int8        `json:"monthly_budget_usd_cents"`
+	SponsorForProducts       []byte             `json:"sponsor_for_products"`
+	SponsorForCustomers      []byte             `json:"sponsor_for_customers"`
+	SponsorForTiers          []byte             `json:"sponsor_for_tiers"`
+	CurrentMonthSpentCents   pgtype.Int8        `json:"current_month_spent_cents"`
+	LastResetDate            pgtype.Date        `json:"last_reset_date"`
+	CreatedAt                pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Invoice struct {
 	ID                     uuid.UUID          `json:"id"`
 	WorkspaceID            uuid.UUID          `json:"workspace_id"`
@@ -685,6 +781,47 @@ type Invoice struct {
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt              pgtype.Timestamptz `json:"deleted_at"`
+	InvoiceNumber          pgtype.Text        `json:"invoice_number"`
+	SubtotalCents          pgtype.Int8        `json:"subtotal_cents"`
+	DiscountCents          pgtype.Int8        `json:"discount_cents"`
+	PaymentLinkID          pgtype.UUID        `json:"payment_link_id"`
+	DelegationAddress      pgtype.Text        `json:"delegation_address"`
+	QrCodeData             pgtype.Text        `json:"qr_code_data"`
+	TaxAmountCents         int64              `json:"tax_amount_cents"`
+	TaxDetails             []byte             `json:"tax_details"`
+	CustomerTaxID          pgtype.Text        `json:"customer_tax_id"`
+	CustomerJurisdictionID pgtype.UUID        `json:"customer_jurisdiction_id"`
+	ReverseChargeApplies   pgtype.Bool        `json:"reverse_charge_applies"`
+}
+
+type InvoiceLineItem struct {
+	ID                uuid.UUID          `json:"id"`
+	InvoiceID         uuid.UUID          `json:"invoice_id"`
+	Description       string             `json:"description"`
+	Quantity          pgtype.Numeric     `json:"quantity"`
+	UnitAmountInCents int64              `json:"unit_amount_in_cents"`
+	AmountInCents     int64              `json:"amount_in_cents"`
+	FiatCurrency      string             `json:"fiat_currency"`
+	SubscriptionID    pgtype.UUID        `json:"subscription_id"`
+	ProductID         pgtype.UUID        `json:"product_id"`
+	PriceID           pgtype.UUID        `json:"price_id"`
+	NetworkID         pgtype.UUID        `json:"network_id"`
+	TokenID           pgtype.UUID        `json:"token_id"`
+	CryptoAmount      pgtype.Numeric     `json:"crypto_amount"`
+	ExchangeRate      pgtype.Numeric     `json:"exchange_rate"`
+	TaxRate           pgtype.Numeric     `json:"tax_rate"`
+	TaxAmountInCents  pgtype.Int8        `json:"tax_amount_in_cents"`
+	TaxCryptoAmount   pgtype.Numeric     `json:"tax_crypto_amount"`
+	PeriodStart       pgtype.Timestamptz `json:"period_start"`
+	PeriodEnd         pgtype.Timestamptz `json:"period_end"`
+	LineItemType      pgtype.Text        `json:"line_item_type"`
+	GasFeePaymentID   pgtype.UUID        `json:"gas_fee_payment_id"`
+	IsGasSponsored    pgtype.Bool        `json:"is_gas_sponsored"`
+	GasSponsorType    pgtype.Text        `json:"gas_sponsor_type"`
+	GasSponsorName    pgtype.Text        `json:"gas_sponsor_name"`
+	Metadata          []byte             `json:"metadata"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Network struct {
@@ -693,6 +830,7 @@ type Network struct {
 	Type                  string             `json:"type"`
 	NetworkType           NetworkType        `json:"network_type"`
 	CircleNetworkType     CircleNetworkType  `json:"circle_network_type"`
+	RpcID                 string             `json:"rpc_id"`
 	BlockExplorerUrl      pgtype.Text        `json:"block_explorer_url"`
 	ChainID               int32              `json:"chain_id"`
 	IsTestnet             bool               `json:"is_testnet"`
@@ -713,6 +851,64 @@ type Network struct {
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt             pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type Payment struct {
+	ID                  uuid.UUID          `json:"id"`
+	WorkspaceID         uuid.UUID          `json:"workspace_id"`
+	InvoiceID           pgtype.UUID        `json:"invoice_id"`
+	SubscriptionID      pgtype.UUID        `json:"subscription_id"`
+	SubscriptionEvent   pgtype.UUID        `json:"subscription_event"`
+	CustomerID          uuid.UUID          `json:"customer_id"`
+	AmountInCents       int64              `json:"amount_in_cents"`
+	Currency            string             `json:"currency"`
+	Status              string             `json:"status"`
+	PaymentMethod       string             `json:"payment_method"`
+	TransactionHash     pgtype.Text        `json:"transaction_hash"`
+	NetworkID           pgtype.UUID        `json:"network_id"`
+	TokenID             pgtype.UUID        `json:"token_id"`
+	CryptoAmount        pgtype.Numeric     `json:"crypto_amount"`
+	ExchangeRate        pgtype.Numeric     `json:"exchange_rate"`
+	HasGasFee           pgtype.Bool        `json:"has_gas_fee"`
+	GasFeeUsdCents      pgtype.Int8        `json:"gas_fee_usd_cents"`
+	GasSponsored        pgtype.Bool        `json:"gas_sponsored"`
+	ExternalPaymentID   pgtype.Text        `json:"external_payment_id"`
+	PaymentProvider     pgtype.Text        `json:"payment_provider"`
+	ProductAmountCents  int64              `json:"product_amount_cents"`
+	TaxAmountCents      pgtype.Int8        `json:"tax_amount_cents"`
+	GasAmountCents      pgtype.Int8        `json:"gas_amount_cents"`
+	DiscountAmountCents pgtype.Int8        `json:"discount_amount_cents"`
+	InitiatedAt         pgtype.Timestamptz `json:"initiated_at"`
+	CompletedAt         pgtype.Timestamptz `json:"completed_at"`
+	FailedAt            pgtype.Timestamptz `json:"failed_at"`
+	ErrorMessage        pgtype.Text        `json:"error_message"`
+	Metadata            []byte             `json:"metadata"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+type PaymentLink struct {
+	ID              uuid.UUID          `json:"id"`
+	WorkspaceID     uuid.UUID          `json:"workspace_id"`
+	Slug            string             `json:"slug"`
+	Status          string             `json:"status"`
+	ProductID       pgtype.UUID        `json:"product_id"`
+	PriceID         pgtype.UUID        `json:"price_id"`
+	AmountInCents   pgtype.Int8        `json:"amount_in_cents"`
+	Currency        pgtype.Text        `json:"currency"`
+	PaymentType     pgtype.Text        `json:"payment_type"`
+	CollectEmail    pgtype.Bool        `json:"collect_email"`
+	CollectShipping pgtype.Bool        `json:"collect_shipping"`
+	CollectName     pgtype.Bool        `json:"collect_name"`
+	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
+	MaxUses         pgtype.Int4        `json:"max_uses"`
+	UsedCount       pgtype.Int4        `json:"used_count"`
+	RedirectUrl     pgtype.Text        `json:"redirect_url"`
+	QrCodeUrl       pgtype.Text        `json:"qr_code_url"`
+	Metadata        []byte             `json:"metadata"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt       pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type PaymentSyncEvent struct {

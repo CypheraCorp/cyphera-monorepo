@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"github.com/cyphera/cyphera-api/libs/go/db"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,18 +8,24 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 // WorkspaceHandler handles workspace related operations
 type WorkspaceHandler struct {
-	common *CommonServices
+	common           *CommonServices
+	workspaceService *services.WorkspaceService
 }
 
 // NewWorkspaceHandler creates a new instance of WorkspaceHandler
 func NewWorkspaceHandler(common *CommonServices) *WorkspaceHandler {
-	return &WorkspaceHandler{common: common}
+	return &WorkspaceHandler{
+		common:           common,
+		workspaceService: services.NewWorkspaceService(common.db),
+	}
 }
 
 // GetWorkspace retrieves a specific workspace by its ID
@@ -43,13 +48,17 @@ func (h *WorkspaceHandler) GetWorkspace(c *gin.Context) {
 		return
 	}
 
-	workspace, err := h.common.db.GetWorkspace(c.Request.Context(), parsedUUID)
+	workspace, err := h.workspaceService.GetWorkspace(c.Request.Context(), parsedUUID)
 	if err != nil {
-		handleDBError(c, err, "Workspace not found")
+		if err.Error() == "workspace not found" {
+			sendError(c, http.StatusNotFound, "Workspace not found", nil)
+			return
+		}
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve workspace", err)
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, toWorkspaceResponse(workspace))
+	sendSuccess(c, http.StatusOK, toWorkspaceResponse(*workspace))
 }
 
 // ListWorkspaces retrieves all workspaces for the current account
@@ -75,13 +84,15 @@ func (h *WorkspaceHandler) ListWorkspaces(c *gin.Context) {
 		return
 	}
 
-	account, err := h.common.db.GetAccount(c.Request.Context(), parsedWorkspaceID)
+	// Get account for the workspace using service
+	account, err := h.workspaceService.GetAccountByWorkspace(c.Request.Context(), parsedWorkspaceID)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve account", err)
 		return
 	}
 
-	workspaces, err := h.common.db.ListWorkspacesByAccountID(c.Request.Context(), account.ID)
+	// List workspaces for the account using service
+	workspaces, err := h.workspaceService.ListWorkspacesByAccount(c.Request.Context(), account.ID)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve workspaces", err)
 		return
@@ -96,7 +107,7 @@ func (h *WorkspaceHandler) ListWorkspaces(c *gin.Context) {
 }
 
 func (h *WorkspaceHandler) GetAllWorkspaces(c *gin.Context) {
-	workspaces, err := h.common.db.GetAllWorkspaces(c.Request.Context())
+	workspaces, err := h.workspaceService.ListAllWorkspaces(c.Request.Context())
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve workspaces", err)
 		return
@@ -184,16 +195,25 @@ func (h *WorkspaceHandler) CreateWorkspace(c *gin.Context) {
 		return
 	}
 
-	workspace, err := h.common.db.CreateWorkspace(c.Request.Context(), db.CreateWorkspaceParams{
-		Name:      req.Name,
-		AccountID: parsedAccountID,
+	// Create workspace using service
+	workspace, err := h.workspaceService.CreateWorkspace(c.Request.Context(), services.CreateWorkspaceParams{
+		Name:         req.Name,
+		Description:  req.Description,
+		BusinessName: req.BusinessName,
+		BusinessType: req.BusinessType,
+		WebsiteURL:   req.WebsiteURL,
+		SupportEmail: req.SupportEmail,
+		SupportPhone: req.SupportPhone,
+		AccountID:    parsedAccountID,
+		Metadata:     req.Metadata,
+		Livemode:     req.Livemode,
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to create workspace", err)
 		return
 	}
 
-	sendSuccess(c, http.StatusCreated, toWorkspaceResponse(workspace))
+	sendSuccess(c, http.StatusCreated, toWorkspaceResponse(*workspace))
 }
 
 // UpdateWorkspace godoc
@@ -217,16 +237,51 @@ func (h *WorkspaceHandler) UpdateWorkspace(c *gin.Context) {
 		return
 	}
 
-	workspace, err := h.common.db.UpdateWorkspace(c.Request.Context(), db.UpdateWorkspaceParams{
-		ID:   parsedUUID,
-		Name: req.Name,
-	})
+	// Build update params
+	updateParams := services.UpdateWorkspaceParams{
+		ID:       parsedUUID,
+		Metadata: req.Metadata,
+	}
+
+	// Set optional fields if provided
+	if req.Name != "" {
+		updateParams.Name = &req.Name
+	}
+	if req.Description != "" {
+		updateParams.Description = &req.Description
+	}
+	if req.BusinessName != "" {
+		updateParams.BusinessName = &req.BusinessName
+	}
+	if req.BusinessType != "" {
+		updateParams.BusinessType = &req.BusinessType
+	}
+	if req.WebsiteURL != "" {
+		updateParams.WebsiteURL = &req.WebsiteURL
+	}
+	if req.SupportEmail != "" {
+		updateParams.SupportEmail = &req.SupportEmail
+	}
+	if req.SupportPhone != "" {
+		updateParams.SupportPhone = &req.SupportPhone
+	}
+	// For boolean fields, always update if the request method is PUT
+	if c.Request.Method == "PUT" {
+		updateParams.Livemode = &req.Livemode
+	}
+
+	// Update workspace using service
+	workspace, err := h.workspaceService.UpdateWorkspace(c.Request.Context(), updateParams)
 	if err != nil {
-		handleDBError(c, err, "Failed to update workspace")
+		if err.Error() == "workspace not found" {
+			sendError(c, http.StatusNotFound, "Workspace not found", nil)
+			return
+		}
+		sendError(c, http.StatusInternalServerError, "Failed to update workspace", err)
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, toWorkspaceResponse(workspace))
+	sendSuccess(c, http.StatusOK, toWorkspaceResponse(*workspace))
 }
 
 // DeleteWorkspace godoc
@@ -244,9 +299,14 @@ func (h *WorkspaceHandler) DeleteWorkspace(c *gin.Context) {
 		return
 	}
 
-	err = h.common.db.DeleteWorkspace(c.Request.Context(), parsedUUID)
+	// Delete workspace using service
+	err = h.workspaceService.DeleteWorkspace(c.Request.Context(), parsedUUID)
 	if err != nil {
-		handleDBError(c, err, "Failed to delete workspace")
+		if err.Error() == "workspace not found" {
+			sendError(c, http.StatusNotFound, "Workspace not found", nil)
+			return
+		}
+		sendError(c, http.StatusInternalServerError, "Failed to delete workspace", err)
 		return
 	}
 
@@ -326,4 +386,35 @@ func toWorkspaceResponse(w db.Workspace) WorkspaceResponse {
 		CreatedAt:    w.CreatedAt.Time.Unix(),
 		UpdatedAt:    w.UpdatedAt.Time.Unix(),
 	}
+}
+
+// GetWorkspaceStats retrieves statistics for a workspace
+// @Summary Get workspace statistics
+// @Description Retrieves statistics for a specific workspace
+// @Tags workspaces
+// @Accept json
+// @Produce json
+// @Param workspace_id path string true "Workspace ID"
+// @Success 200 {object} services.WorkspaceStats
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /workspaces/{workspace_id}/stats [get]
+func (h *WorkspaceHandler) GetWorkspaceStats(c *gin.Context) {
+	workspaceId := c.Param("workspace_id")
+	parsedUUID, err := uuid.Parse(workspaceId)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		return
+	}
+
+	// Get workspace stats using service
+	stats, err := h.workspaceService.GetWorkspaceStats(c.Request.Context(), parsedUUID)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve workspace statistics", err)
+		return
+	}
+
+	sendSuccess(c, http.StatusOK, stats)
 }

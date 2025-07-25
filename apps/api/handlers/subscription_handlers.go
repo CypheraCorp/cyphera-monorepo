@@ -2,10 +2,6 @@ package handlers
 
 import (
 	"context"
-	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
-	"github.com/cyphera/cyphera-api/libs/go/db"
-	"github.com/cyphera/cyphera-api/libs/go/helpers"
-	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +12,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
+	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -28,6 +30,7 @@ import (
 type SubscriptionHandler struct {
 	common               *CommonServices
 	delegationClient     *dsClient.DelegationClient
+	paymentService       *services.PaymentService
 	lastRedemptionTxHash string // Stores the transaction hash from the last successful redemption
 }
 
@@ -45,6 +48,7 @@ func NewSubscriptionHandler(common *CommonServices, delegationClient *dsClient.D
 	return &SubscriptionHandler{
 		common:           common,
 		delegationClient: delegationClient,
+		paymentService:   services.NewPaymentService(common.db),
 	}
 }
 
@@ -59,32 +63,32 @@ type SubscribeRequest struct {
 
 // SubscriptionResponse represents a subscription along with its associated price and product details.
 type SubscriptionResponse struct {
-	ID                     uuid.UUID              `json:"id"`
-	WorkspaceID            uuid.UUID              `json:"workspace_id"`
-	CustomerID             uuid.UUID              `json:"customer_id,omitempty"`
-	CustomerName           string                 `json:"customer_name,omitempty"`
-	CustomerEmail          string                 `json:"customer_email,omitempty"`
-	Status                 string                 `json:"status"`
-	CurrentPeriodStart     time.Time              `json:"current_period_start"`
-	CurrentPeriodEnd       time.Time              `json:"current_period_end"`
-	NextRedemptionDate     *time.Time             `json:"next_redemption_date,omitempty"`
-	TotalRedemptions       int32                  `json:"total_redemptions"`
-	TotalAmountInCents     int32                  `json:"total_amount_in_cents"`
-	TokenAmount            int32                  `json:"token_amount"`
-	DelegationID           uuid.UUID              `json:"delegation_id"`
-	CustomerWalletID       *uuid.UUID             `json:"customer_wallet_id,omitempty"`
-	ExternalID             string                 `json:"external_id,omitempty"`
-	PaymentSyncStatus      string                 `json:"payment_sync_status,omitempty"`
-	PaymentSyncedAt        *time.Time             `json:"payment_synced_at,omitempty"`
-	PaymentSyncVersion     int32                  `json:"payment_sync_version,omitempty"`
-	PaymentProvider        string                 `json:"payment_provider,omitempty"`
-	InitialTransactionHash string                 `json:"initial_transaction_hash,omitempty"`
-	Metadata               map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt              time.Time              `json:"created_at"`
-	UpdatedAt              time.Time              `json:"updated_at"`
-	Price                  PriceResponse          `json:"price"`
-	Product                ProductResponse        `json:"product"`
-	ProductToken           ProductTokenResponse   `json:"product_token"`
+	ID                     uuid.UUID                    `json:"id"`
+	WorkspaceID            uuid.UUID                    `json:"workspace_id"`
+	CustomerID             uuid.UUID                    `json:"customer_id,omitempty"`
+	CustomerName           string                       `json:"customer_name,omitempty"`
+	CustomerEmail          string                       `json:"customer_email,omitempty"`
+	Status                 string                       `json:"status"`
+	CurrentPeriodStart     time.Time                    `json:"current_period_start"`
+	CurrentPeriodEnd       time.Time                    `json:"current_period_end"`
+	NextRedemptionDate     *time.Time                   `json:"next_redemption_date,omitempty"`
+	TotalRedemptions       int32                        `json:"total_redemptions"`
+	TotalAmountInCents     int32                        `json:"total_amount_in_cents"`
+	TokenAmount            int32                        `json:"token_amount"`
+	DelegationID           uuid.UUID                    `json:"delegation_id"`
+	CustomerWalletID       *uuid.UUID                   `json:"customer_wallet_id,omitempty"`
+	ExternalID             string                       `json:"external_id,omitempty"`
+	PaymentSyncStatus      string                       `json:"payment_sync_status,omitempty"`
+	PaymentSyncedAt        *time.Time                   `json:"payment_synced_at,omitempty"`
+	PaymentSyncVersion     int32                        `json:"payment_sync_version,omitempty"`
+	PaymentProvider        string                       `json:"payment_provider,omitempty"`
+	InitialTransactionHash string                       `json:"initial_transaction_hash,omitempty"`
+	Metadata               map[string]interface{}       `json:"metadata,omitempty"`
+	CreatedAt              time.Time                    `json:"created_at"`
+	UpdatedAt              time.Time                    `json:"updated_at"`
+	Price                  PriceResponse                `json:"price"`
+	Product                ProductResponse              `json:"product"`
+	ProductToken           helpers.ProductTokenResponse `json:"product_token"`
 }
 
 type CreateSubscriptionParams struct {
@@ -884,7 +888,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 
 		if params.tx != nil { // Transactional path
 			// 1. Create the "redeemed" event (always)
-			_, eventErr := params.queries.CreateSubscriptionEvent(params.ctx, db.CreateSubscriptionEventParams{
+			redeemedEvent, eventErr := params.queries.CreateSubscriptionEvent(params.ctx, db.CreateSubscriptionEventParams{
 				SubscriptionID:  originalSubscription.ID,
 				EventType:       db.SubscriptionEventTypeRedeemed,
 				TransactionHash: pgtype.Text{String: result.txHash, Valid: true},
@@ -912,6 +916,31 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 				}
 				return result, fmt.Errorf(errMsg)
 			}
+
+			// Create payment record for the redeemed event
+			payment, paymentErr := h.paymentService.CreatePaymentFromSubscriptionEvent(
+				params.ctx,
+				services.CreatePaymentFromSubscriptionEventParams{
+					SubscriptionEvent: &redeemedEvent,
+					Subscription:      &db.Subscription{ID: originalSubscription.ID, WorkspaceID: params.product.WorkspaceID, CustomerID: originalSubscription.CustomerID},
+					Product:           &params.product,
+					Price:             &params.Price,
+					Customer:          &db.Customer{ID: originalSubscription.CustomerID},
+					TransactionHash:   result.txHash,
+					NetworkID:         params.productToken.NetworkID,
+					TokenID:           params.productToken.TokenID,
+				},
+			)
+			if paymentErr != nil {
+				errMsg := fmt.Sprintf("CRITICAL: Failed to create payment record for subscription %s after successful redemption. Transaction will be rolled back: %v", originalSubscription.ID, paymentErr)
+				log.Printf(errMsg)
+				result.isProcessed = false
+				if params.results != nil {
+					params.results.Failed++
+				}
+				return result, fmt.Errorf(errMsg)
+			}
+			log.Printf("Created payment record %s for subscription %s redemption", payment.ID, originalSubscription.ID)
 
 			// 2. If this is the final payment, ALSO create a "completed" event (separate from redemption)
 			if result.isCompleted {
@@ -963,6 +992,40 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 				result.isProcessed = false
 				return result, fmt.Errorf(errMsg)
 			}
+
+			// Fetch the created event to get its ID for payment creation
+			redeemedEvents, evtErr := params.queries.GetLatestSubscriptionEventByType(params.ctx, db.GetLatestSubscriptionEventByTypeParams{
+				SubscriptionID: originalSubscription.ID,
+				EventType:      db.SubscriptionEventTypeRedeemed,
+			})
+			if evtErr != nil || len(redeemedEvents) == 0 {
+				errMsg := fmt.Sprintf("CRITICAL: Failed to fetch redeemed event for payment creation for subscription %s: %v", originalSubscription.ID, evtErr)
+				log.Printf(errMsg)
+				result.isProcessed = false
+				return result, fmt.Errorf(errMsg)
+			}
+
+			// Create payment record for the redeemed event
+			payment, paymentErr := h.paymentService.CreatePaymentFromSubscriptionEvent(
+				params.ctx,
+				services.CreatePaymentFromSubscriptionEventParams{
+					SubscriptionEvent: &redeemedEvents[0],
+					Subscription:      &db.Subscription{ID: originalSubscription.ID, WorkspaceID: params.product.WorkspaceID, CustomerID: originalSubscription.CustomerID},
+					Product:           &params.product,
+					Price:             &params.Price,
+					Customer:          &db.Customer{ID: originalSubscription.CustomerID},
+					TransactionHash:   result.txHash,
+					NetworkID:         params.productToken.NetworkID,
+					TokenID:           params.productToken.TokenID,
+				},
+			)
+			if paymentErr != nil {
+				errMsg := fmt.Sprintf("CRITICAL: Failed to create payment record for subscription %s after successful redemption (non-tx): %v", originalSubscription.ID, paymentErr)
+				log.Printf(errMsg)
+				result.isProcessed = false
+				return result, fmt.Errorf(errMsg)
+			}
+			log.Printf("Created payment record %s for subscription %s redemption (non-tx path)", payment.ID, originalSubscription.ID)
 
 			// 2. If this is the final payment, ALSO create a "completed" event (separate from redemption)
 			if result.isCompleted {
@@ -1118,99 +1181,99 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 
 		// Process each subscription within the transaction
 		for i, subscription := range subscriptions {
-		log.Printf("Processing subscription %d/%d: ID: %s, Status: %s, ProductID: %s, CurrentPeriodEnd: %v",
-			i+1, results.Total, subscription.ID, subscription.Status, subscription.ProductID, subscription.CurrentPeriodEnd.Time)
+			log.Printf("Processing subscription %d/%d: ID: %s, Status: %s, ProductID: %s, CurrentPeriodEnd: %v",
+				i+1, results.Total, subscription.ID, subscription.Status, subscription.ProductID, subscription.CurrentPeriodEnd.Time)
 
-		// Skip subscriptions that are not in a processable state (active or overdue)
-		if !(subscription.Status == db.SubscriptionStatusActive || subscription.Status == db.SubscriptionStatusOverdue) {
-			log.Printf("Skipping subscription %s with non-processable status %s", subscription.ID, subscription.Status)
-			continue
-		}
+			// Skip subscriptions that are not in a processable state (active or overdue)
+			if !(subscription.Status == db.SubscriptionStatusActive || subscription.Status == db.SubscriptionStatusOverdue) {
+				log.Printf("Skipping subscription %s with non-processable status %s", subscription.ID, subscription.Status)
+				continue
+			}
 
-		// Get required data for processing
-		product, err := qtx.GetProductWithoutWorkspaceId(ctx, subscription.ProductID)
-		if err != nil {
-			log.Printf("Failed to get product for subscription %s: %v", subscription.ID, err)
-			results.Failed++
-			continue
-		}
+			// Get required data for processing
+			product, err := qtx.GetProductWithoutWorkspaceId(ctx, subscription.ProductID)
+			if err != nil {
+				log.Printf("Failed to get product for subscription %s: %v", subscription.ID, err)
+				results.Failed++
+				continue
+			}
 
-		productToken, err := qtx.GetProductToken(ctx, subscription.ProductTokenID)
-		if err != nil {
-			log.Printf("Failed to get product token for subscription %s: %v", subscription.ID, err)
-			results.Failed++
-			continue
-		}
+			productToken, err := qtx.GetProductToken(ctx, subscription.ProductTokenID)
+			if err != nil {
+				log.Printf("Failed to get product token for subscription %s: %v", subscription.ID, err)
+				results.Failed++
+				continue
+			}
 
-		token, err := qtx.GetToken(ctx, productToken.TokenID)
-		if err != nil {
-			log.Printf("Failed to get token for subscription %s: %v", subscription.ID, err)
-			results.Failed++
-			continue
-		}
+			token, err := qtx.GetToken(ctx, productToken.TokenID)
+			if err != nil {
+				log.Printf("Failed to get token for subscription %s: %v", subscription.ID, err)
+				results.Failed++
+				continue
+			}
 
-		network, err := qtx.GetNetwork(ctx, token.NetworkID)
-		if err != nil {
-			log.Printf("Failed to get network for token %s: %v", token.ID, err)
-			results.Failed++
-			continue
-		}
+			network, err := qtx.GetNetwork(ctx, token.NetworkID)
+			if err != nil {
+				log.Printf("Failed to get network for token %s: %v", token.ID, err)
+				results.Failed++
+				continue
+			}
 
-		merchantWallet, err := qtx.GetWalletByID(ctx, db.GetWalletByIDParams{
-			ID:          product.WalletID,
-			WorkspaceID: product.WorkspaceID,
-		})
-		if err != nil {
-			log.Printf("Failed to get merchant wallet for subscription %s: %v", subscription.ID, err)
-			results.Failed++
-			continue
-		}
+			merchantWallet, err := qtx.GetWalletByID(ctx, db.GetWalletByIDParams{
+				ID:          product.WalletID,
+				WorkspaceID: product.WorkspaceID,
+			})
+			if err != nil {
+				log.Printf("Failed to get merchant wallet for subscription %s: %v", subscription.ID, err)
+				results.Failed++
+				continue
+			}
 
-		delegationData, err := qtx.GetDelegationData(ctx, subscription.DelegationID)
-		if err != nil {
-			log.Printf("Failed to get delegation data for subscription %s: %v", subscription.ID, err)
-			results.Failed++
-			continue
-		}
+			delegationData, err := qtx.GetDelegationData(ctx, subscription.DelegationID)
+			if err != nil {
+				log.Printf("Failed to get delegation data for subscription %s: %v", subscription.ID, err)
+				results.Failed++
+				continue
+			}
 
-		// Fetch the Price for the current subscription to determine term length and other price details
-		price, err := qtx.GetPrice(ctx, subscription.PriceID)
-		if err != nil {
-			log.Printf("Failed to get price %s for subscription %s: %v", subscription.PriceID, subscription.ID, err)
-			results.Failed++
-			continue
-		}
+			// Fetch the Price for the current subscription to determine term length and other price details
+			price, err := qtx.GetPrice(ctx, subscription.PriceID)
+			if err != nil {
+				log.Printf("Failed to get price %s for subscription %s: %v", subscription.PriceID, subscription.ID, err)
+				results.Failed++
+				continue
+			}
 
-		// Process the subscription
-		params := processSubscriptionParams{
-			ctx:            ctx,
-			subscription:   subscription,
-			product:        product,
-			Price:          price,
-			productToken:   productToken,
-			network:        network,
-			delegationData: delegationData,
-			merchantWallet: merchantWallet,
-			token:          token,
-			now:            now,
-			queries:        qtx,
-			tx:             processingTx,
-			results:        &results,
-		}
+			// Process the subscription
+			params := processSubscriptionParams{
+				ctx:            ctx,
+				subscription:   subscription,
+				product:        product,
+				Price:          price,
+				productToken:   productToken,
+				network:        network,
+				delegationData: delegationData,
+				merchantWallet: merchantWallet,
+				token:          token,
+				now:            now,
+				queries:        qtx,
+				tx:             processingTx,
+				results:        &results,
+			}
 
-		log.Printf("Calling h.processSubscription for subscription ID: %s", subscription.ID)
-		_, err = h.processSubscription(params)
-		if err != nil {
-			// Error handling is done in processSubscription, which updates results.Failed (potentially)
-			// and logs the specific error. We just log that we are continuing based on the error return.
-			log.Printf("Error returned by h.processSubscription for subscription ID %s: %v. Continuing.", subscription.ID, err)
-			// Note: The result counters (Failed/Completed/Succeeded) are primarily managed within processSubscription
-			// based on its internal logic and idempotency checks.
-			continue
-		}
-		// If processSubscription didn't return an error, we rely on the counters updated within it.
-		// No need for explicit Succeeded++ here anymore, it's handled based on idempotency/completion inside.
-		log.Printf("Finished h.processSubscription call for subscription ID: %s (Results updated internally).", subscription.ID)
+			log.Printf("Calling h.processSubscription for subscription ID: %s", subscription.ID)
+			_, err = h.processSubscription(params)
+			if err != nil {
+				// Error handling is done in processSubscription, which updates results.Failed (potentially)
+				// and logs the specific error. We just log that we are continuing based on the error return.
+				log.Printf("Error returned by h.processSubscription for subscription ID %s: %v. Continuing.", subscription.ID, err)
+				// Note: The result counters (Failed/Completed/Succeeded) are primarily managed within processSubscription
+				// based on its internal logic and idempotency checks.
+				continue
+			}
+			// If processSubscription didn't return an error, we rely on the counters updated within it.
+			// No need for explicit Succeeded++ here anymore, it's handled based on idempotency/completion inside.
+			log.Printf("Finished h.processSubscription call for subscription ID: %s (Results updated internally).", subscription.ID)
 
 		}
 
@@ -1290,7 +1353,7 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 			Active:      subDetails.ProductActive,
 			Metadata:    subDetails.ProductMetadata, // Expecting json.RawMessage
 		},
-		ProductToken: ProductTokenResponse{
+		ProductToken: helpers.ProductTokenResponse{
 			ID:          subDetails.ProductTokenID.String(),
 			TokenID:     subDetails.ProductTokenTokenID.String(),
 			TokenSymbol: subDetails.TokenSymbol,

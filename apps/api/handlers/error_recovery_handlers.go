@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/cyphera/cyphera-api/apps/api/services"
+	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

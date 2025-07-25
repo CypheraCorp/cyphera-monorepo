@@ -18,7 +18,7 @@ SET
     active = true,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at
+RETURNING id, name, type, network_type, circle_network_type, rpc_id, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) ActivateNetwork(ctx context.Context, id uuid.UUID) (Network, error) {
@@ -30,6 +30,7 @@ func (q *Queries) ActivateNetwork(ctx context.Context, id uuid.UUID) (Network, e
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.RpcID,
 		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,
@@ -80,7 +81,7 @@ INSERT INTO networks (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
 )
-RETURNING id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at
+RETURNING id, name, type, network_type, circle_network_type, rpc_id, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at
 `
 
 type CreateNetworkParams struct {
@@ -138,6 +139,7 @@ func (q *Queries) CreateNetwork(ctx context.Context, arg CreateNetworkParams) (N
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.RpcID,
 		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,
@@ -168,7 +170,7 @@ SET
     active = false,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at
+RETURNING id, name, type, network_type, circle_network_type, rpc_id, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) DeactivateNetwork(ctx context.Context, id uuid.UUID) (Network, error) {
@@ -180,6 +182,7 @@ func (q *Queries) DeactivateNetwork(ctx context.Context, id uuid.UUID) (Network,
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.RpcID,
 		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,
@@ -216,7 +219,7 @@ func (q *Queries) DeleteNetwork(ctx context.Context, id uuid.UUID) error {
 }
 
 const getNetwork = `-- name: GetNetwork :one
-SELECT id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at FROM networks
+SELECT id, name, type, network_type, circle_network_type, rpc_id, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at FROM networks
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -229,6 +232,7 @@ func (q *Queries) GetNetwork(ctx context.Context, id uuid.UUID) (Network, error)
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.RpcID,
 		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,
@@ -254,7 +258,7 @@ func (q *Queries) GetNetwork(ctx context.Context, id uuid.UUID) (Network, error)
 }
 
 const getNetworkByChainID = `-- name: GetNetworkByChainID :one
-SELECT id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at FROM networks
+SELECT id, name, type, network_type, circle_network_type, rpc_id, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at FROM networks
 WHERE chain_id = $1 AND deleted_at IS NULL
 `
 
@@ -267,6 +271,7 @@ func (q *Queries) GetNetworkByChainID(ctx context.Context, chainID int32) (Netwo
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.RpcID,
 		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,
@@ -292,7 +297,7 @@ func (q *Queries) GetNetworkByChainID(ctx context.Context, chainID int32) (Netwo
 }
 
 const getNetworkByCircleNetworkType = `-- name: GetNetworkByCircleNetworkType :one
-SELECT id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at FROM networks
+SELECT id, name, type, network_type, circle_network_type, rpc_id, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at FROM networks
 WHERE circle_network_type = $1 AND deleted_at IS NULL
 LIMIT 1
 `
@@ -306,6 +311,7 @@ func (q *Queries) GetNetworkByCircleNetworkType(ctx context.Context, circleNetwo
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.RpcID,
 		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,
@@ -330,8 +336,61 @@ func (q *Queries) GetNetworkByCircleNetworkType(ctx context.Context, circleNetwo
 	return i, err
 }
 
+const listActiveNetworks = `-- name: ListActiveNetworks :many
+SELECT id, name, type, network_type, circle_network_type, rpc_id, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at FROM networks
+WHERE active = true AND deleted_at IS NULL
+ORDER BY name
+`
+
+func (q *Queries) ListActiveNetworks(ctx context.Context) ([]Network, error) {
+	rows, err := q.db.Query(ctx, listActiveNetworks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Network{}
+	for rows.Next() {
+		var i Network
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Type,
+			&i.NetworkType,
+			&i.CircleNetworkType,
+			&i.RpcID,
+			&i.BlockExplorerUrl,
+			&i.ChainID,
+			&i.IsTestnet,
+			&i.Active,
+			&i.LogoUrl,
+			&i.DisplayName,
+			&i.ChainNamespace,
+			&i.BaseFeeMultiplier,
+			&i.PriorityFeeMultiplier,
+			&i.DeploymentGasLimit,
+			&i.TokenTransferGasLimit,
+			&i.SupportsEip1559,
+			&i.GasOracleUrl,
+			&i.GasRefreshIntervalMs,
+			&i.GasPriorityLevels,
+			&i.AverageBlockTimeMs,
+			&i.PeakHoursMultiplier,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listNetworks = `-- name: ListNetworks :many
-SELECT id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at FROM networks
+SELECT id, name, type, network_type, circle_network_type, rpc_id, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at FROM networks
 WHERE deleted_at IS NULL
     AND CASE WHEN $1::boolean IS NOT NULL THEN is_testnet = $1::boolean ELSE TRUE END
     AND CASE WHEN $2::boolean IS NOT NULL THEN active = $2::boolean ELSE TRUE END
@@ -358,6 +417,7 @@ func (q *Queries) ListNetworks(ctx context.Context, arg ListNetworksParams) ([]N
 			&i.Type,
 			&i.NetworkType,
 			&i.CircleNetworkType,
+			&i.RpcID,
 			&i.BlockExplorerUrl,
 			&i.ChainID,
 			&i.IsTestnet,
@@ -415,7 +475,7 @@ SET
     peak_hours_multiplier = COALESCE($22, peak_hours_multiplier),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, name, type, network_type, circle_network_type, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at
+RETURNING id, name, type, network_type, circle_network_type, rpc_id, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at
 `
 
 type UpdateNetworkParams struct {
@@ -475,6 +535,7 @@ func (q *Queries) UpdateNetwork(ctx context.Context, arg UpdateNetworkParams) (N
 		&i.Type,
 		&i.NetworkType,
 		&i.CircleNetworkType,
+		&i.RpcID,
 		&i.BlockExplorerUrl,
 		&i.ChainID,
 		&i.IsTestnet,

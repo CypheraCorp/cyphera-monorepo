@@ -3,13 +3,16 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/cyphera/cyphera-api/libs/go/client/coinmarketcap"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -22,6 +25,7 @@ type CommonServices struct {
 	db                        *db.Queries
 	cypheraSmartWalletAddress string
 	CMCClient                 *coinmarketcap.Client
+	APIKeyService             *services.APIKeyService
 	// other shared dependencies
 }
 
@@ -41,6 +45,7 @@ func NewCommonServices(db *db.Queries, cypheraSmartWalletAddress string, cmcClie
 		db:                        db,
 		cypheraSmartWalletAddress: cypheraSmartWalletAddress,
 		CMCClient:                 cmcClient,
+		APIKeyService:             services.NewAPIKeyService(db),
 	}
 }
 
@@ -287,4 +292,34 @@ func sendList(c *gin.Context, items interface{}) {
 		"object": "list",
 		"data":   items,
 	})
+}
+
+// validatePaginationParams validates and returns limit and page parameters
+func validatePaginationParams(c *gin.Context) (limit int32, page int32, err error) {
+	const maxLimit int32 = 100
+	limit = 10
+
+	if limitStr := c.Query("limit"); limitStr != "" {
+		parsedLimit, err := strconv.ParseInt(limitStr, 10, 32)
+		if err != nil {
+			return 0, 0, fmt.Errorf("invalid limit parameter")
+		}
+		if parsedLimit > int64(maxLimit) {
+			limit = maxLimit
+		} else if parsedLimit > 0 {
+			limit = int32(parsedLimit)
+		}
+	}
+
+	if pageStr := c.Query("page"); pageStr != "" {
+		parsedPage, err := strconv.ParseInt(pageStr, 10, 32)
+		if err != nil {
+			return 0, 0, fmt.Errorf("invalid page parameter")
+		}
+		if parsedPage > 0 {
+			page = int32(parsedPage)
+		}
+	}
+
+	return limit, page, nil
 }

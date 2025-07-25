@@ -5,6 +5,7 @@ import (
 	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/services"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +32,7 @@ type RedemptionProcessor struct {
 	tasks            chan RedemptionTask
 	dbQueries        *db.Queries
 	delegationClient *dsClient.DelegationClient
+	paymentService   *services.PaymentService
 	workerCount      int
 	wg               sync.WaitGroup
 	ctx              context.Context
@@ -60,6 +62,7 @@ func NewRedemptionProcessor(
 		tasks:            make(chan RedemptionTask, bufferSize),
 		dbQueries:        dbQueries,
 		delegationClient: delegationClient,
+		paymentService:   services.NewPaymentService(dbQueries),
 		workerCount:      workerCount,
 		ctx:              ctx,
 		cancel:           cancel,
@@ -357,7 +360,7 @@ func (rp *RedemptionProcessor) processRedemption(task RedemptionTask) error {
 
 	// Record successful redemption in database
 	metadataBytes, _ := json.Marshal(task.Metadata)
-	_, err = rp.dbQueries.CreateRedemptionEvent(ctx, db.CreateRedemptionEventParams{
+	event, err := rp.dbQueries.CreateRedemptionEvent(ctx, db.CreateRedemptionEventParams{
 		SubscriptionID:  task.SubscriptionID,
 		TransactionHash: stringToNullableText(txHash),
 		AmountInCents:   task.AmountInCents,
@@ -371,6 +374,18 @@ func (rp *RedemptionProcessor) processRedemption(task RedemptionTask) error {
 			zap.String("tx_hash", txHash),
 		)
 		return fmt.Errorf("failed to record redemption event: %w", err)
+	}
+
+	// Create payment record for this successful redemption
+	err = rp.createPaymentFromRedemption(ctx, event, subscription, product, token, network, txHash)
+	if err != nil {
+		logger.Error("Failed to create payment record from redemption",
+			zap.Error(err),
+			zap.String("subscription_id", task.SubscriptionID.String()),
+			zap.String("tx_hash", txHash),
+		)
+		// Don't return error here - the redemption was successful, we just failed to record the payment
+		// This can be retried later via a reconciliation process
 	}
 
 	// Update subscription next redemption date if needed
@@ -449,4 +464,60 @@ func (rp *RedemptionProcessor) monitorDelegationServerHealth() {
 			}
 		}
 	}
+}
+
+// createPaymentFromRedemption creates a payment record from a successful subscription redemption
+func (rp *RedemptionProcessor) createPaymentFromRedemption(
+	ctx context.Context,
+	event db.SubscriptionEvent,
+	subscription db.Subscription,
+	product db.Product,
+	token db.Token,
+	network db.Network,
+	txHash string,
+) error {
+	// Get the customer associated with this subscription
+	customer, err := rp.dbQueries.GetCustomer(ctx, subscription.CustomerID)
+	if err != nil {
+		return fmt.Errorf("failed to get customer: %w", err)
+	}
+
+	// Get the price for the subscription
+	price, err := rp.dbQueries.GetPrice(ctx, subscription.PriceID)
+	if err != nil {
+		return fmt.Errorf("failed to get price: %w", err)
+	}
+
+	// Create payment parameters
+	params := services.CreatePaymentFromSubscriptionEventParams{
+		SubscriptionEvent: &event,
+		Subscription:      &subscription,
+		Product:           &product,
+		Price:             &price,
+		Customer:          &customer,
+		TransactionHash:   txHash,
+		NetworkID:         network.ID,
+		TokenID:           token.ID,
+		// TODO: Add crypto amount and exchange rate if available
+		// These would need to be calculated or retrieved from the transaction
+		CryptoAmount:  "",
+		ExchangeRate:  "",
+		// TODO: Add gas fee information if available
+		GasFeeUSDCents: 0,
+		GasSponsored:   false,
+	}
+
+	// Create the payment
+	payment, err := rp.paymentService.CreatePaymentFromSubscriptionEvent(ctx, params)
+	if err != nil {
+		return fmt.Errorf("failed to create payment from subscription event: %w", err)
+	}
+
+	logger.Info("Payment created successfully from redemption",
+		zap.String("payment_id", payment.ID.String()),
+		zap.String("subscription_id", subscription.ID.String()),
+		zap.String("transaction_hash", txHash),
+		zap.Int64("amount_cents", payment.AmountInCents))
+
+	return nil
 }

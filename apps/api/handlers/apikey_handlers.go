@@ -1,48 +1,33 @@
 package handlers
 
 import (
-	"github.com/cyphera/cyphera-api/libs/go/db"
-	"github.com/cyphera/cyphera-api/libs/go/helpers"
-	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
-	"strconv"
 	"time"
 
-	"encoding/base64"
-
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // APIKeyHandler handles API key related operations
 type APIKeyHandler struct {
-	common *CommonServices
+	common        *CommonServices
+	apiKeyService *services.APIKeyService
 }
 
 // NewAPIKeyHandler creates a new instance of APIKeyHandler
 // @Summary Create new API key handler
 // @Description Creates a new handler for API key operations with common services
 func NewAPIKeyHandler(common *CommonServices) *APIKeyHandler {
-	return &APIKeyHandler{common: common}
+	return &APIKeyHandler{
+		common:        common,
+		apiKeyService: services.NewAPIKeyService(common.db),
+	}
 }
 
-// APIKeyResponse represents the standardized API response for API key operations
-type APIKeyResponse struct {
-	ID          string                 `json:"id"`
-	Object      string                 `json:"object"`
-	Name        string                 `json:"name"`
-	AccessLevel string                 `json:"access_level"`
-	ExpiresAt   *int64                 `json:"expires_at,omitempty"`
-	LastUsedAt  *int64                 `json:"last_used_at,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt   int64                  `json:"created_at"`
-	UpdatedAt   int64                  `json:"updated_at"`
-	KeyPrefix   string                 `json:"key_prefix,omitempty"` // Shows first part of key for identification
-	Key         string                 `json:"key,omitempty"`        // Only included on creation
-}
+// Use types from helpers
+type APIKeyResponse = helpers.APIKeyResponse
 
 // CreateAPIKeyRequest represents the request body for creating an API key
 type CreateAPIKeyRequest struct {
@@ -62,13 +47,8 @@ type UpdateAPIKeyRequest struct {
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// ListAPIKeysResponse represents the paginated response for API key list operations
-type ListAPIKeysResponse struct {
-	Object  string           `json:"object"`
-	Data    []APIKeyResponse `json:"data"`
-	HasMore bool             `json:"has_more"`
-	Total   int64            `json:"total"`
-}
+// Use types from helpers
+type ListAPIKeysResponse = helpers.ListAPIKeysResponse
 
 // GetAPIKeyByID godoc
 // @Summary Get an API key
@@ -97,16 +77,13 @@ func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
 		return
 	}
 
-	apiKey, err := h.common.db.GetAPIKey(c.Request.Context(), db.GetAPIKeyParams{
-		ID:          parsedUUID,
-		WorkspaceID: parsedWorkspaceID,
-	})
+	apiKey, err := h.common.APIKeyService.GetAPIKey(c.Request.Context(), parsedUUID, parsedWorkspaceID)
 	if err != nil {
 		handleDBError(c, err, "API key not found")
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, toAPIKeyResponse(apiKey))
+	sendSuccess(c, http.StatusOK, helpers.ToAPIKeyResponse(apiKey))
 }
 
 // ListAPIKeys godoc
@@ -128,7 +105,7 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 		return
 	}
 
-	apiKeys, err := h.common.db.ListAPIKeys(c.Request.Context(), parsedWorkspaceID)
+	apiKeys, err := h.common.APIKeyService.ListAPIKeys(c.Request.Context(), parsedWorkspaceID)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve API keys", err)
 		return
@@ -136,7 +113,7 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 
 	response := make([]APIKeyResponse, len(apiKeys))
 	for i, key := range apiKeys {
-		response[i] = toAPIKeyResponse(key)
+		response[i] = helpers.ToAPIKeyResponse(key)
 	}
 
 	listAPIKeysResponse := ListAPIKeysResponse{
@@ -156,7 +133,7 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 // @Accept json
 // @Tags exclude
 func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
-	apiKeys, err := h.common.db.GetAllAPIKeys(c.Request.Context())
+	apiKeys, err := h.common.APIKeyService.GetAllAPIKeys(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve API keys"})
 		return
@@ -164,7 +141,7 @@ func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
 
 	response := make([]APIKeyResponse, len(apiKeys))
 	for i, key := range apiKeys {
-		response[i] = toAPIKeyResponse(key)
+		response[i] = helpers.ToAPIKeyResponse(key)
 	}
 
 	listAPIKeysResponse := ListAPIKeysResponse{
@@ -197,45 +174,14 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 		return
 	}
 
-	metadata, err := json.Marshal(req.Metadata)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
-		return
-	}
-
-	var expiresAt pgtype.Timestamptz
-	if req.ExpiresAt != nil {
-		expiresAt.Time = *req.ExpiresAt
-		expiresAt.Valid = true
-	}
-
-	// Generate the API key
-	fullKey, keyPrefix, err := helpers.GenerateAPIKey()
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to generate API key", err)
-		return
-	}
-
-	// Hash the key for storage
-	hashedKey, err := helpers.HashAPIKey(fullKey)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to hash API key", err)
-		return
-	}
-
-	keyPrefixPgText := pgtype.Text{
-		String: keyPrefix,
-		Valid:  true,
-	}
-
-	apiKey, err := h.common.db.CreateAPIKey(c.Request.Context(), db.CreateAPIKeyParams{
+	// Create API key using service
+	apiKey, fullKey, keyPrefix, err := h.common.APIKeyService.CreateAPIKey(c.Request.Context(), services.CreateAPIKeyParams{
 		WorkspaceID: parsedWorkspaceID,
 		Name:        req.Name,
-		KeyHash:     hashedKey,
-		KeyPrefix:   keyPrefixPgText,
-		AccessLevel: db.ApiKeyLevel(req.AccessLevel),
-		ExpiresAt:   expiresAt,
-		Metadata:    metadata,
+		Description: req.Description,
+		ExpiresAt:   req.ExpiresAt,
+		AccessLevel: req.AccessLevel,
+		Metadata:    req.Metadata,
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to create API key", err)
@@ -243,10 +189,10 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	}
 
 	// Include the full key in the response (only time it's shown)
-	response := toAPIKeyResponse(apiKey)
+	response := helpers.ToAPIKeyResponse(apiKey)
 	response.Key = fullKey
 	response.KeyPrefix = keyPrefix
-	
+
 	sendSuccess(c, http.StatusCreated, response)
 }
 
@@ -277,32 +223,21 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 		return
 	}
 
-	metadata, err := json.Marshal(req.Metadata)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
-		return
-	}
-
-	var expiresAt pgtype.Timestamptz
-	if req.ExpiresAt != nil {
-		expiresAt.Time = *req.ExpiresAt
-		expiresAt.Valid = true
-	}
-
-	apiKey, err := h.common.db.UpdateAPIKey(c.Request.Context(), db.UpdateAPIKeyParams{
+	apiKey, err := h.common.APIKeyService.UpdateAPIKey(c.Request.Context(), services.UpdateAPIKeyParams{
 		WorkspaceID: parsedWorkspaceID,
 		ID:          parsedUUID,
 		Name:        req.Name,
-		AccessLevel: db.ApiKeyLevel(req.AccessLevel),
-		ExpiresAt:   expiresAt,
-		Metadata:    metadata,
+		Description: req.Description,
+		ExpiresAt:   req.ExpiresAt,
+		AccessLevel: req.AccessLevel,
+		Metadata:    req.Metadata,
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to update API key", err)
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, toAPIKeyResponse(apiKey))
+	sendSuccess(c, http.StatusOK, helpers.ToAPIKeyResponse(apiKey))
 }
 
 // DeleteAPIKey godoc
@@ -332,10 +267,7 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 		return
 	}
 
-	err = h.common.db.DeleteAPIKey(c.Request.Context(), db.DeleteAPIKeyParams{
-		ID:          parsedUUID,
-		WorkspaceID: parsedWorkspaceID,
-	})
+	err = h.common.APIKeyService.DeleteAPIKey(c.Request.Context(), parsedUUID, parsedWorkspaceID)
 	if err != nil {
 		handleDBError(c, err, "Failed to delete API key")
 		return
@@ -344,56 +276,4 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 	sendSuccess(c, http.StatusNoContent, nil)
 }
 
-// Helper function to convert database model to API response
-func toAPIKeyResponse(a db.ApiKey) APIKeyResponse {
-	var metadata map[string]interface{}
-	if err := json.Unmarshal(a.Metadata, &metadata); err != nil {
-		log.Printf("Error unmarshaling API key metadata: %v", err)
-		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
-	}
-
-	var expiresAt *int64
-	if a.ExpiresAt.Valid {
-		unix := a.ExpiresAt.Time.Unix()
-		expiresAt = &unix
-	}
-
-	var lastUsedAt *int64
-	if a.LastUsedAt.Valid {
-		unix := a.LastUsedAt.Time.Unix()
-		lastUsedAt = &unix
-	}
-
-	return APIKeyResponse{
-		ID:          a.ID.String(),
-		Object:      "api_key",
-		Name:        a.Name,
-		AccessLevel: string(a.AccessLevel),
-		ExpiresAt:   expiresAt,
-		LastUsedAt:  lastUsedAt,
-		Metadata:    metadata,
-		CreatedAt:   a.CreatedAt.Time.Unix(),
-		UpdatedAt:   a.UpdatedAt.Time.Unix(),
-		KeyPrefix:   a.KeyPrefix.String,
-	}
-}
-
-// Helper function to generate a secure API key hash
-// generateAPIKeyHash creates a secure, unique API key using UUID v4 and base64 encoding
-// The format is: prefix_base64(uuid)_timestamp
-// Example: cyk_dj8kDjf9sKq0pLm3nO7_1234567890
-func generateAPIKeyHash() string {
-	// Generate a UUID v4
-	keyUUID := uuid.New()
-
-	// Get current timestamp
-	timestamp := time.Now().Unix()
-
-	// Create the key components
-	prefix := "cyk" // Cyphera Key prefix
-	uuidStr := base64.RawURLEncoding.EncodeToString(keyUUID[:])
-	timestampStr := strconv.FormatInt(timestamp, 10)
-
-	// Combine components with underscores
-	return fmt.Sprintf("%s_%s_%s", prefix, uuidStr, timestampStr)
-}
+// Helper functions moved to helpers.ToAPIKeyResponse and services.APIKeyService

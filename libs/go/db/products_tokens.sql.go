@@ -343,7 +343,7 @@ func (q *Queries) GetActiveProductTokensByProduct(ctx context.Context, productID
 
 const getProductNetworks = `-- name: GetProductNetworks :many
 SELECT DISTINCT
-    n.id, n.name, n.type, n.network_type, n.circle_network_type, n.block_explorer_url, n.chain_id, n.is_testnet, n.active, n.logo_url, n.display_name, n.chain_namespace, n.base_fee_multiplier, n.priority_fee_multiplier, n.deployment_gas_limit, n.token_transfer_gas_limit, n.supports_eip1559, n.gas_oracle_url, n.gas_refresh_interval_ms, n.gas_priority_levels, n.average_block_time_ms, n.peak_hours_multiplier, n.created_at, n.updated_at, n.deleted_at,
+    n.id, n.name, n.type, n.network_type, n.circle_network_type, n.rpc_id, n.block_explorer_url, n.chain_id, n.is_testnet, n.active, n.logo_url, n.display_name, n.chain_namespace, n.base_fee_multiplier, n.priority_fee_multiplier, n.deployment_gas_limit, n.token_transfer_gas_limit, n.supports_eip1559, n.gas_oracle_url, n.gas_refresh_interval_ms, n.gas_priority_levels, n.average_block_time_ms, n.peak_hours_multiplier, n.created_at, n.updated_at, n.deleted_at,
     (
         SELECT COUNT(*) 
         FROM products_tokens pt2 
@@ -369,6 +369,7 @@ type GetProductNetworksRow struct {
 	Type                  string             `json:"type"`
 	NetworkType           NetworkType        `json:"network_type"`
 	CircleNetworkType     CircleNetworkType  `json:"circle_network_type"`
+	RpcID                 string             `json:"rpc_id"`
 	BlockExplorerUrl      pgtype.Text        `json:"block_explorer_url"`
 	ChainID               int32              `json:"chain_id"`
 	IsTestnet             bool               `json:"is_testnet"`
@@ -407,6 +408,7 @@ func (q *Queries) GetProductNetworks(ctx context.Context, productID uuid.UUID) (
 			&i.Type,
 			&i.NetworkType,
 			&i.CircleNetworkType,
+			&i.RpcID,
 			&i.BlockExplorerUrl,
 			&i.ChainID,
 			&i.IsTestnet,

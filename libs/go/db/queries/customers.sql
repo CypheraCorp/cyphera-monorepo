@@ -178,3 +178,51 @@ SET
     updated_at = CURRENT_TIMESTAMP
 WHERE id = @id AND deleted_at IS NULL
 RETURNING *;
+
+-- name: UpdateCustomerTaxInfo :one
+UPDATE customers
+SET
+    tax_jurisdiction_id = $2,
+    tax_id = $3,
+    tax_id_type = $4,
+    tax_id_verified = $5,
+    tax_id_verified_at = CASE WHEN $5 = true THEN CURRENT_TIMESTAMP ELSE tax_id_verified_at END,
+    is_business = $6,
+    business_name = $7,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: UpdateCustomerBillingAddress :one
+UPDATE customers
+SET
+    billing_country = $2,
+    billing_state = $3,
+    billing_city = $4,
+    billing_postal_code = $5,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: GetCustomersByBillingCountry :many
+SELECT * FROM customers
+WHERE billing_country = $1 AND deleted_at IS NULL
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: GetBusinessCustomers :many
+SELECT * FROM customers
+WHERE is_business = true AND deleted_at IS NULL
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: GetCustomersWithVerifiedTaxId :many
+SELECT * FROM customers
+WHERE tax_id_verified = true AND deleted_at IS NULL
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: GetCustomerByTaxId :one
+SELECT * FROM customers
+WHERE tax_id = $1 AND tax_id_type = $2 AND deleted_at IS NULL
+LIMIT 1;

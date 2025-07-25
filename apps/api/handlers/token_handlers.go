@@ -1,43 +1,28 @@
 package handlers
 
 import (
-	"github.com/cyphera/cyphera-api/libs/go/client/coinmarketcap"
-	"github.com/cyphera/cyphera-api/libs/go/db"
-	"github.com/cyphera/cyphera-api/libs/go/logger"
-	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/services"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"go.uber.org/zap"
 )
 
 // TokenHandler handles token-related operations
 type TokenHandler struct {
-	common *CommonServices
+	common       *CommonServices
+	tokenService *services.TokenService
 }
 
 // NewTokenHandler creates a new TokenHandler instance
 func NewTokenHandler(common *CommonServices) *TokenHandler {
-	return &TokenHandler{common: common}
-}
-
-// TokenResponse represents the standardized API response for token operations
-type TokenResponse struct {
-	ID              string `json:"id"`
-	Object          string `json:"object"`
-	NetworkID       string `json:"network_id"`
-	GasToken        bool   `json:"gas_token"`
-	Name            string `json:"name"`
-	Symbol          string `json:"symbol"`
-	ContractAddress string `json:"contract_address"`
-	Decimals        int32  `json:"decimals"`
-	Active          bool   `json:"active"`
-	CreatedAt       int64  `json:"created_at"`
-	UpdatedAt       int64  `json:"updated_at"`
-	DeletedAt       *int64 `json:"deleted_at,omitempty"`
+	return &TokenHandler{
+		common:       common,
+		tokenService: services.NewTokenService(common.db, common.CMCClient),
+	}
 }
 
 // CreateTokenRequest represents the request body for creating a token
@@ -63,8 +48,8 @@ type UpdateTokenRequest struct {
 
 // ListTokensResponse represents the paginated response for token list operations
 type ListTokensResponse struct {
-	Object string          `json:"object"`
-	Data   []TokenResponse `json:"data"`
+	Object string                  `json:"object"`
+	Data   []helpers.TokenResponse `json:"data"`
 }
 
 // GetTokenQuoteRequest mirrors TokenAmountPayload
@@ -100,13 +85,17 @@ func (h *TokenHandler) GetToken(c *gin.Context) {
 		return
 	}
 
-	token, err := h.common.db.GetToken(c.Request.Context(), parsedUUID)
+	token, err := h.tokenService.GetToken(c.Request.Context(), parsedUUID)
 	if err != nil {
-		handleDBError(c, err, "Token not found")
+		if err.Error() == "token not found" {
+			sendError(c, http.StatusNotFound, "Token not found", nil)
+			return
+		}
+		sendError(c, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, toTokenResponse(token))
+	sendSuccess(c, http.StatusOK, helpers.ToTokenResponse(*token))
 }
 
 // GetTokenByAddress godoc
@@ -131,16 +120,17 @@ func (h *TokenHandler) GetTokenByAddress(c *gin.Context) {
 	}
 
 	address := c.Param("address")
-	token, err := h.common.db.GetTokenByAddress(c.Request.Context(), db.GetTokenByAddressParams{
-		NetworkID:       parsedNetworkID,
-		ContractAddress: address,
-	})
+	token, err := h.tokenService.GetTokenByAddress(c.Request.Context(), parsedNetworkID, address)
 	if err != nil {
-		handleDBError(c, err, "Token not found")
+		if err.Error() == "token not found" {
+			sendError(c, http.StatusNotFound, "Token not found", nil)
+			return
+		}
+		sendError(c, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, toTokenResponse(token))
+	sendSuccess(c, http.StatusOK, helpers.ToTokenResponse(*token))
 }
 
 // ListTokens godoc
@@ -154,15 +144,15 @@ func (h *TokenHandler) GetTokenByAddress(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Router /tokens [get]
 func (h *TokenHandler) ListTokens(c *gin.Context) {
-	tokens, err := h.common.db.ListTokens(c.Request.Context())
+	tokens, err := h.tokenService.ListTokens(c.Request.Context())
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve tokens", err)
+		sendError(c, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
-	response := make([]TokenResponse, len(tokens))
+	response := make([]helpers.TokenResponse, len(tokens))
 	for i, token := range tokens {
-		response[i] = toTokenResponse(token)
+		response[i] = helpers.ToTokenResponse(token)
 	}
 
 	sendList(c, response)
@@ -188,15 +178,15 @@ func (h *TokenHandler) ListTokensByNetwork(c *gin.Context) {
 		return
 	}
 
-	tokens, err := h.common.db.ListTokensByNetwork(c.Request.Context(), parsedNetworkID)
+	tokens, err := h.tokenService.ListTokensByNetwork(c.Request.Context(), parsedNetworkID)
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve tokens", err)
+		sendError(c, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
-	response := make([]TokenResponse, len(tokens))
+	response := make([]helpers.TokenResponse, len(tokens))
 	for i, token := range tokens {
-		response[i] = toTokenResponse(token)
+		response[i] = helpers.ToTokenResponse(token)
 	}
 
 	sendList(c, response)
@@ -221,91 +211,31 @@ func (h *TokenHandler) GetTokenQuote(c *gin.Context) {
 		return
 	}
 
-	// Use the injected CMC client from CommonServices
-	if h.common.CMCClient == nil {
-		logger.Log.Error("CoinMarketCap client is not initialized in CommonServices")
-		sendError(c, http.StatusInternalServerError, "Price service is unavailable", nil)
-		return
-	}
-
-	tokenSymbols := []string{req.TokenSymbol}
-	fiatSymbols := []string{req.FiatSymbol}
-
-	cmcResponse, err := h.common.CMCClient.GetLatestQuotes(tokenSymbols, fiatSymbols)
+	// Get token quote using the service
+	result, err := h.tokenService.GetTokenQuote(c.Request.Context(), services.TokenQuoteParams{
+		TokenSymbol: req.TokenSymbol,
+		FiatSymbol:  req.FiatSymbol,
+	})
 	if err != nil {
-		logger.Log.Error("Failed to get quotes from CoinMarketCap", zap.Error(err))
-
-		// Handle specific CMC client errors if defined (like *coinmarketcap.Error)
-		var cmcErr *coinmarketcap.Error
-		if errors.As(err, &cmcErr) {
-			// Use CMC status code if available, otherwise default
-			statusCode := http.StatusInternalServerError
-			if cmcErr.StatusCode >= 400 && cmcErr.StatusCode < 500 {
-				statusCode = cmcErr.StatusCode // e.g., 400 Bad Request, 401 Unauthorized, 404 Not Found
-			}
-			sendError(c, statusCode, fmt.Sprintf("Failed to get price: %s", cmcErr.Message), err)
-		} else {
-			// Generic error
-			sendError(c, http.StatusInternalServerError, "Failed to fetch price data", err)
+		if err.Error() == "price service is unavailable" {
+			sendError(c, http.StatusServiceUnavailable, err.Error(), nil)
+			return
 		}
-		return
-	}
-
-	// Extract the price from the structured response
-	upperTokenSymbol := strings.ToUpper(req.TokenSymbol)
-	upperFiatSymbol := strings.ToUpper(req.FiatSymbol)
-
-	var amount float64
-	found := false
-
-	if tokenDataList, ok := cmcResponse.Data[upperTokenSymbol]; ok && len(tokenDataList) > 0 {
-		tokenData := tokenDataList[0]
-		if quoteData, ok := tokenData.Quote[upperFiatSymbol]; ok {
-			amount = quoteData.Price
-			found = true
+		// Check if it's a not found error
+		if strings.Contains(err.Error(), "price data not found") {
+			sendError(c, http.StatusNotFound, err.Error(), nil)
+			return
 		}
-	}
-
-	if !found {
-		logger.Log.Warn("Price not found in CoinMarketCap response",
-			zap.String("token", upperTokenSymbol),
-			zap.String("fiat", upperFiatSymbol),
-			zap.Any("cmc_response_data", cmcResponse.Data), // Log the data part for debugging
-		)
-		sendError(c, http.StatusNotFound, fmt.Sprintf("Price data not found for %s in %s", upperTokenSymbol, upperFiatSymbol), nil)
+		sendError(c, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
 	// Prepare and send success response
 	response := GetTokenQuoteResponse{
-		FiatSymbol:        upperFiatSymbol,
-		TokenSymbol:       upperTokenSymbol,
-		TokenAmountInFiat: amount,
+		FiatSymbol:        result.FiatSymbol,
+		TokenSymbol:       result.TokenSymbol,
+		TokenAmountInFiat: result.TokenAmountInFiat,
 	}
 
 	sendSuccess(c, http.StatusOK, response)
-}
-
-// Helper function to convert database model to API response
-func toTokenResponse(t db.Token) TokenResponse {
-	var deletedAt *int64
-	if t.DeletedAt.Valid {
-		unixTime := t.DeletedAt.Time.Unix()
-		deletedAt = &unixTime
-	}
-
-	return TokenResponse{
-		ID:              t.ID.String(),
-		Object:          "token",
-		NetworkID:       t.NetworkID.String(),
-		GasToken:        t.GasToken,
-		Name:            t.Name,
-		Symbol:          t.Symbol,
-		ContractAddress: t.ContractAddress,
-		Decimals:        t.Decimals,
-		Active:          t.Active,
-		CreatedAt:       t.CreatedAt.Time.Unix(),
-		UpdatedAt:       t.UpdatedAt.Time.Unix(),
-		DeletedAt:       deletedAt,
-	}
 }

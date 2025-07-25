@@ -119,6 +119,12 @@ WHERE subscription_id = $1
 ORDER BY occurred_at DESC
 LIMIT 1;
 
+-- name: GetLatestSubscriptionEventByType :many
+SELECT * FROM subscription_events
+WHERE subscription_id = $1 AND event_type = $2
+ORDER BY occurred_at DESC
+LIMIT 1;
+
 -- name: ListSubscriptionEventDetailsWithPagination :many
 SELECT
     se.id AS subscription_event_id,
@@ -187,3 +193,17 @@ WHERE s.deleted_at IS NULL
     AND pr.deleted_at IS NULL
     AND p.workspace_id = $1
     AND se.event_type IN ('redeemed', 'failed', 'failed_redemption');
+
+-- name: GetUnsyncedSubscriptionEventsWithTxHash :many
+SELECT se.* FROM subscription_events se
+JOIN subscriptions s ON se.subscription_id = s.id
+WHERE s.workspace_id = $1
+    AND se.transaction_hash IS NOT NULL
+    AND se.transaction_hash != ''
+    AND NOT EXISTS (
+        SELECT 1 FROM payments p
+        WHERE p.subscription_event = se.id
+        AND p.gas_fee_usd_cents IS NOT NULL
+    )
+ORDER BY se.occurred_at DESC
+LIMIT 100;

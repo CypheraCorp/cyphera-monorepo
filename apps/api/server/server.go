@@ -49,6 +49,8 @@ var (
 	redemptionProcessor      *handlers.RedemptionProcessor
 	circleHandler            *handlers.CircleHandler
 	currencyHandler          *handlers.CurrencyHandler
+	analyticsHandler         *handlers.AnalyticsHandler
+	gasSponsorshipHandler    *handlers.GasSponsorshipHandler
 
 	// Database
 	dbQueries *db.Queries
@@ -315,7 +317,12 @@ func InitializeHandlers() {
 	paymentSyncClient := payment_sync.NewPaymentSyncClient(dbQueries, logger.Log, paymentSyncEncryptionKey)
 
 	// Initialize PaymentSyncHandlers with the unified client
-	paymentSyncHandler = handlers.NewPaymentSyncHandlers(dbQueries, logger.Log, paymentSyncClient)
+	paymentSyncHandler = handlers.NewPaymentSyncHandlers(commonServices, paymentSyncClient)
+
+	// Analytics handler
+	analyticsHandler = handlers.NewAnalyticsHandler(commonServices)
+	// Gas sponsorship handler
+	gasSponsorshipHandler = handlers.NewGasSponsorshipHandler(commonServices)
 
 	// 3rd party handlers
 	circleHandler = handlers.NewCircleHandler(commonServices, circleClient)
@@ -414,6 +421,7 @@ func InitializeRoutes(router *gin.Engine) {
 				admin.GET("/workspaces/:workspace_id", workspaceHandler.GetWorkspace)
 				admin.PUT("/workspaces/:workspace_id", workspaceHandler.UpdateWorkspace)
 				admin.DELETE("/workspaces/:workspace_id", workspaceHandler.DeleteWorkspace)
+				admin.GET("/workspaces/:workspace_id/stats", workspaceHandler.GetWorkspaceStats)
 
 				// API Key management
 				admin.GET("/api-keys", apiKeyHandler.GetAllAPIKeys)
@@ -632,6 +640,39 @@ func InitializeRoutes(router *gin.Engine) {
 					sessions.GET("/:id", paymentSyncHandler.GetSyncSession)              // Get session details
 					sessions.GET("/:id/status", paymentSyncHandler.GetSyncSessionStatus) // Get session status and progress
 				}
+			}
+
+			// Analytics routes
+			analytics := protected.Group("/analytics")
+			{
+				// Dashboard overview
+				analytics.GET("/dashboard", analyticsHandler.GetDashboardSummary)
+
+				// Chart endpoints
+				analytics.GET("/revenue-chart", analyticsHandler.GetRevenueChart)
+				analytics.GET("/customer-chart", analyticsHandler.GetCustomerChart)
+				analytics.GET("/subscription-chart", analyticsHandler.GetSubscriptionChart)
+				analytics.GET("/mrr-chart", analyticsHandler.GetMRRChart)
+
+				// Metrics endpoints
+				analytics.GET("/payment-metrics", analyticsHandler.GetPaymentMetrics)
+				analytics.GET("/network-breakdown", analyticsHandler.GetNetworkBreakdown)
+				analytics.GET("/gas-fee-pie", analyticsHandler.GetGasFeePieChart)
+				analytics.GET("/hourly", analyticsHandler.GetHourlyMetrics)
+
+				// Refresh metrics
+				analytics.POST("/refresh", analyticsHandler.RefreshMetrics)
+			}
+
+			// Gas sponsorship routes
+			gasSponsorship := protected.Group("/gas-sponsorship")
+			{
+				// Configuration management
+				gasSponsorship.GET("/config", gasSponsorshipHandler.GetGasSponsorshipConfig)
+				gasSponsorship.PUT("/config", gasSponsorshipHandler.UpdateGasSponsorshipConfig)
+				
+				// Budget status
+				gasSponsorship.GET("/budget-status", gasSponsorshipHandler.GetGasSponsorshipBudgetStatus)
 			}
 		}
 	}

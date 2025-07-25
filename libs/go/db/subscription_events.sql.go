@@ -231,6 +231,49 @@ func (q *Queries) GetLatestSubscriptionEvent(ctx context.Context, subscriptionID
 	return i, err
 }
 
+const getLatestSubscriptionEventByType = `-- name: GetLatestSubscriptionEventByType :many
+SELECT id, subscription_id, event_type, transaction_hash, amount_in_cents, occurred_at, error_message, metadata, created_at, updated_at FROM subscription_events
+WHERE subscription_id = $1 AND event_type = $2
+ORDER BY occurred_at DESC
+LIMIT 1
+`
+
+type GetLatestSubscriptionEventByTypeParams struct {
+	SubscriptionID uuid.UUID             `json:"subscription_id"`
+	EventType      SubscriptionEventType `json:"event_type"`
+}
+
+func (q *Queries) GetLatestSubscriptionEventByType(ctx context.Context, arg GetLatestSubscriptionEventByTypeParams) ([]SubscriptionEvent, error) {
+	rows, err := q.db.Query(ctx, getLatestSubscriptionEventByType, arg.SubscriptionID, arg.EventType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SubscriptionEvent{}
+	for rows.Next() {
+		var i SubscriptionEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.SubscriptionID,
+			&i.EventType,
+			&i.TransactionHash,
+			&i.AmountInCents,
+			&i.OccurredAt,
+			&i.ErrorMessage,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSubscriptionEvent = `-- name: GetSubscriptionEvent :one
 SELECT id, subscription_id, event_type, transaction_hash, amount_in_cents, occurred_at, error_message, metadata, created_at, updated_at FROM subscription_events
 WHERE id = $1 LIMIT 1
@@ -301,6 +344,52 @@ func (q *Queries) GetTotalAmountBySubscription(ctx context.Context, subscription
 	var total_amount interface{}
 	err := row.Scan(&total_amount)
 	return total_amount, err
+}
+
+const getUnsyncedSubscriptionEventsWithTxHash = `-- name: GetUnsyncedSubscriptionEventsWithTxHash :many
+SELECT se.id, se.subscription_id, se.event_type, se.transaction_hash, se.amount_in_cents, se.occurred_at, se.error_message, se.metadata, se.created_at, se.updated_at FROM subscription_events se
+JOIN subscriptions s ON se.subscription_id = s.id
+WHERE s.workspace_id = $1
+    AND se.transaction_hash IS NOT NULL
+    AND se.transaction_hash != ''
+    AND NOT EXISTS (
+        SELECT 1 FROM payments p
+        WHERE p.subscription_event = se.id
+        AND p.gas_fee_usd_cents IS NOT NULL
+    )
+ORDER BY se.occurred_at DESC
+LIMIT 100
+`
+
+func (q *Queries) GetUnsyncedSubscriptionEventsWithTxHash(ctx context.Context, workspaceID uuid.UUID) ([]SubscriptionEvent, error) {
+	rows, err := q.db.Query(ctx, getUnsyncedSubscriptionEventsWithTxHash, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SubscriptionEvent{}
+	for rows.Next() {
+		var i SubscriptionEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.SubscriptionID,
+			&i.EventType,
+			&i.TransactionHash,
+			&i.AmountInCents,
+			&i.OccurredAt,
+			&i.ErrorMessage,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listFailedSubscriptionEvents = `-- name: ListFailedSubscriptionEvents :many

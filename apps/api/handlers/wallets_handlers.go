@@ -1,25 +1,30 @@
 package handlers
 
 import (
-	"github.com/cyphera/cyphera-api/libs/go/db"
-	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"encoding/json"
 	"net/http"
 
+	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/services"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
 )
 
 // WalletHandler handles wallet-related operations
 type WalletHandler struct {
-	common *CommonServices
+	common        *CommonServices
+	walletService *services.WalletService
 }
 
 // NewWalletHandler creates a new WalletHandler instance
 func NewWalletHandler(common *CommonServices) *WalletHandler {
-	return &WalletHandler{common: common}
+	return &WalletHandler{
+		common:        common,
+		walletService: services.NewWalletService(common.db),
+	}
 }
 
 // WalletResponse represents the standardized API response for wallet operations
@@ -280,55 +285,32 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 		return
 	}
 
-	// Marshal metadata
-	metadata, err := json.Marshal(req.Metadata)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
-		return
-	}
-
 	// Validate wallet type - only allow non-Circle wallets
 	if req.WalletType != "wallet" {
 		sendError(c, http.StatusBadRequest, "Invalid wallet type. Circle wallets should be created using the Circle API endpoints.", nil)
 		return
 	}
 
-	// Get all active networks
-	networks, err := h.common.db.ListNetworks(c.Request.Context(), db.ListNetworksParams{
-		IsActive: pgtype.Bool{Bool: true, Valid: true},
+	// Create wallets for all active networks using the service
+	wallets, err := h.walletService.CreateWalletsForAllNetworks(c.Request.Context(), services.CreateWalletParams{
+		WorkspaceID:   workspaceID,
+		WalletType:    req.WalletType,
+		WalletAddress: req.WalletAddress,
+		NetworkType:   req.NetworkType,
+		Nickname:      req.Nickname,
+		ENS:           req.ENS,
+		IsPrimary:     req.IsPrimary,
+		Verified:      req.Verified,
+		Metadata:      req.Metadata,
 	})
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve active networks", err)
+		sendError(c, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
-	if len(networks) == 0 {
-		sendError(c, http.StatusBadRequest, "No active networks found", nil)
-		return
-	}
-
-	// Create wallets for each active network
+	// Convert to response format
 	var createdWallets []WalletResponse
-	for _, network := range networks {
-
-		// Create wallet for this network
-		wallet, err := h.common.db.CreateWallet(c.Request.Context(), db.CreateWalletParams{
-			WorkspaceID:   workspaceID,
-			WalletType:    req.WalletType,
-			WalletAddress: req.WalletAddress,
-			NetworkType:   network.NetworkType,
-			NetworkID:     pgtype.UUID{Bytes: network.ID, Valid: true},
-			Nickname:      pgtype.Text{String: req.Nickname, Valid: req.Nickname != ""},
-			Ens:           pgtype.Text{String: req.ENS, Valid: req.ENS != ""},
-			IsPrimary:     pgtype.Bool{Bool: req.IsPrimary, Valid: true},
-			Verified:      pgtype.Bool{Bool: req.Verified, Valid: true},
-			Metadata:      metadata,
-		})
-		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to create wallet for network: "+network.Name, err)
-			return
-		}
-
+	for _, wallet := range wallets {
 		createdWallets = append(createdWallets, toWalletResponse(wallet))
 	}
 
@@ -373,29 +355,42 @@ func (h *WalletHandler) GetWallet(c *gin.Context) {
 	includeCircleData := c.Query("include_circle_data") == "true"
 
 	if includeCircleData {
-		wallet, err := h.common.db.GetWalletWithCircleDataByID(c.Request.Context(), db.GetWalletWithCircleDataByIDParams{
-			ID:          parsedUUID,
-			WorkspaceID: parsedWorkspaceID,
-		})
+		walletData, err := h.walletService.GetWalletWithCircleData(c.Request.Context(), parsedUUID, parsedWorkspaceID)
 		if err != nil {
-			handleDBError(c, err, "Wallet not found")
+			if err.Error() == "wallet not found" {
+				sendError(c, http.StatusNotFound, "Wallet not found", nil)
+				return
+			}
+			sendError(c, http.StatusInternalServerError, err.Error(), err)
 			return
 		}
 
-		sendSuccess(c, http.StatusOK, toWalletWithCircleDataByIDResponse(wallet))
+		// Convert to response format
+		response := toWalletResponse(walletData.Wallet)
+		if walletData.CircleData != nil {
+			response.CircleData = &CircleWalletData{
+				CircleWalletID: walletData.CircleData.CircleWalletID,
+				CircleUserID:   walletData.CircleData.CircleUserID,
+				ChainID:        walletData.CircleData.ChainID,
+				State:          walletData.CircleData.State,
+			}
+		}
+
+		sendSuccess(c, http.StatusOK, response)
 		return
 	}
 
-	wallet, err := h.common.db.GetWalletByID(c.Request.Context(), db.GetWalletByIDParams{
-		ID:          parsedUUID,
-		WorkspaceID: parsedWorkspaceID,
-	})
+	wallet, err := h.walletService.GetWallet(c.Request.Context(), parsedUUID, parsedWorkspaceID)
 	if err != nil {
-		handleDBError(c, err, "Wallet not found")
+		if err.Error() == "wallet not found" {
+			sendError(c, http.StatusNotFound, "Wallet not found", nil)
+			return
+		}
+		sendError(c, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, toWalletResponse(wallet))
+	sendSuccess(c, http.StatusOK, toWalletResponse(*wallet))
 }
 
 // ListWallets godoc
@@ -417,13 +412,13 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 		zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
 		zap.String("path", c.Request.URL.Path),
 	)
-	
+
 	// Get workspace ID from header - try both cases
 	workspaceIDStr := c.GetHeader("X-Workspace-ID")
 	if workspaceIDStr == "" {
 		workspaceIDStr = c.GetHeader("X-Workspace-Id")
 	}
-	
+
 	// Add debug logging with all header variations
 	logger.Log.Info("ListWallets called",
 		zap.String("workspace_id_header", workspaceIDStr),
@@ -438,7 +433,7 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 			return auth
 		}()),
 	)
-	
+
 	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		logger.Log.Error("Failed to parse workspace ID",
@@ -457,10 +452,10 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 	var response []WalletResponse
 
 	if walletType == "circle_wallet" {
-		// Get only Circle wallets (using workspace ID)
-		circleWallets, err := h.common.db.ListCircleWalletsByWorkspaceID(c.Request.Context(), parsedWorkspaceID)
+		// Get only Circle wallets
+		circleWallets, err := h.walletService.ListCircleWallets(c.Request.Context(), parsedWorkspaceID)
 		if err != nil {
-			handleDBError(c, err, "Failed to retrieve Circle wallets")
+			sendError(c, http.StatusInternalServerError, err.Error(), err)
 			return
 		}
 
@@ -469,13 +464,10 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 			response[i] = toListCircleWalletsResponse(wallet)
 		}
 	} else if walletType == "wallet" {
-		// Get only standard wallets (using workspace ID)
-		wallets, err := h.common.db.ListWalletsByWalletType(c.Request.Context(), db.ListWalletsByWalletTypeParams{
-			WorkspaceID: parsedWorkspaceID,
-			WalletType:  "wallet",
-		})
+		// Get only standard wallets
+		wallets, err := h.walletService.ListWalletsByType(c.Request.Context(), parsedWorkspaceID, "wallet")
 		if err != nil {
-			handleDBError(c, err, "Failed to retrieve standard wallets")
+			sendError(c, http.StatusInternalServerError, err.Error(), err)
 			return
 		}
 
@@ -484,10 +476,10 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 			response[i] = toWalletResponse(wallet)
 		}
 	} else if includeCircleData {
-		// Get all wallets with Circle data (using workspace ID)
-		walletsWithCircleData, err := h.common.db.ListWalletsWithCircleDataByWorkspaceID(c.Request.Context(), parsedWorkspaceID)
+		// Get all wallets with Circle data
+		walletsWithCircleData, err := h.walletService.ListWalletsWithCircleData(c.Request.Context(), parsedWorkspaceID)
 		if err != nil {
-			handleDBError(c, err, "Failed to retrieve wallets with Circle data")
+			sendError(c, http.StatusInternalServerError, err.Error(), err)
 			return
 		}
 
@@ -496,10 +488,10 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 			response[i] = toListWalletsWithCircleDataResponse(wallet)
 		}
 	} else {
-		// Get all wallets without Circle data (using workspace ID)
-		wallets, err := h.common.db.ListWalletsByWorkspaceID(c.Request.Context(), parsedWorkspaceID)
+		// Get all wallets without Circle data
+		wallets, err := h.walletService.ListWalletsByWorkspace(c.Request.Context(), parsedWorkspaceID)
 		if err != nil {
-			handleDBError(c, err, "Failed to retrieve wallets")
+			sendError(c, http.StatusInternalServerError, err.Error(), err)
 			return
 		}
 
@@ -545,47 +537,33 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 		return
 	}
 
-	// Get current wallet to verify ownership
-	currentWallet, err := h.common.db.GetWalletByID(c.Request.Context(), db.GetWalletByIDParams{
-		ID:          parsedUUID,
-		WorkspaceID: parsedWorkspaceID,
-	})
+	// Update wallet using the service
+	updateParams := services.UpdateWalletParams{
+		ID:       parsedUUID,
+		Metadata: req.Metadata,
+	}
+
+	// Set optional fields only if provided
+	if req.Nickname != "" {
+		updateParams.Nickname = &req.Nickname
+	}
+	if req.ENS != "" {
+		updateParams.ENS = &req.ENS
+	}
+	updateParams.IsPrimary = &req.IsPrimary
+	updateParams.Verified = &req.Verified
+
+	wallet, err := h.walletService.UpdateWallet(c.Request.Context(), parsedWorkspaceID, updateParams)
 	if err != nil {
-		handleDBError(c, err, "Wallet not found")
-		return
-	}
-
-	// Verify workspace access
-	if currentWallet.WorkspaceID != parsedWorkspaceID {
-		sendError(c, http.StatusForbidden, "Access denied to this wallet", nil)
-		return
-	}
-
-	// Marshal metadata if provided
-	var metadata []byte
-	if req.Metadata != nil {
-		metadata, err = json.Marshal(req.Metadata)
-		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid metadata format", err)
+		if err.Error() == "wallet not found" {
+			sendError(c, http.StatusNotFound, "Wallet not found", nil)
 			return
 		}
-	}
-
-	// Update wallet
-	wallet, err := h.common.db.UpdateWallet(c.Request.Context(), db.UpdateWalletParams{
-		ID:        parsedUUID,
-		Nickname:  pgtype.Text{String: req.Nickname, Valid: req.Nickname != ""},
-		Ens:       pgtype.Text{String: req.ENS, Valid: req.ENS != ""},
-		IsPrimary: pgtype.Bool{Bool: req.IsPrimary, Valid: true},
-		Verified:  pgtype.Bool{Bool: req.Verified, Valid: true},
-		Metadata:  metadata,
-	})
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to update wallet", err)
+		sendError(c, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, toWalletResponse(wallet))
+	sendSuccess(c, http.StatusOK, toWalletResponse(*wallet))
 }
 
 // DeleteWallet godoc
@@ -616,38 +594,19 @@ func (h *WalletHandler) DeleteWallet(c *gin.Context) {
 		return
 	}
 
-	// Cannot delete a wallet if there is a published product using it
-	products, err := h.common.db.GetActiveProductsByWalletID(c.Request.Context(), parsedUUID)
+	// Delete wallet using the service
+	err = h.walletService.DeleteWallet(c.Request.Context(), parsedUUID, parsedWorkspaceID)
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to get product", err)
-		return
-	}
-
-	if len(products) > 0 {
-		sendError(c, http.StatusBadRequest, "Cannot delete wallet with published product", nil)
-		return
-	}
-
-	// Get current wallet to verify ownership
-	currentWallet, err := h.common.db.GetWalletByID(c.Request.Context(), db.GetWalletByIDParams{
-		ID:          parsedUUID,
-		WorkspaceID: parsedWorkspaceID,
-	})
-	if err != nil {
-		handleDBError(c, err, "Wallet not found")
-		return
-	}
-
-	// Verify workspace access
-	if currentWallet.WorkspaceID != parsedWorkspaceID {
-		sendError(c, http.StatusForbidden, "Access denied to this wallet", nil)
-		return
-	}
-
-	// Delete wallet
-	err = h.common.db.SoftDeleteWallet(c.Request.Context(), parsedUUID)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to delete wallet", err)
+		if err.Error() == "wallet not found" {
+			sendError(c, http.StatusNotFound, "Wallet not found", nil)
+			return
+		}
+		// Check if it's a product usage error
+		if err.Error() != "" && err.Error()[:6] == "cannot" {
+			sendError(c, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
+		sendError(c, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 

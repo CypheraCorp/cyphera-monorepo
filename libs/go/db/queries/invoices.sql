@@ -251,4 +251,93 @@ UPDATE invoices SET
 WHERE workspace_id = $1 
     AND payment_provider = $3 
     AND external_id = ANY($4::text[]) 
-    AND deleted_at IS NULL; 
+    AND deleted_at IS NULL;
+
+-- name: CreateInvoiceWithDetails :one
+INSERT INTO invoices (
+    workspace_id,
+    customer_id,
+    subscription_id,
+    invoice_number,
+    status,
+    amount_due,
+    currency,
+    subtotal_cents,
+    discount_cents,
+    tax_amount_cents,
+    tax_details,
+    due_date,
+    payment_link_id,
+    delegation_address,
+    qr_code_data,
+    customer_tax_id,
+    customer_jurisdiction_id,
+    reverse_charge_applies,
+    metadata
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+) RETURNING *;
+
+-- name: UpdateInvoiceDetails :one
+UPDATE invoices SET
+    subtotal_cents = $3,
+    discount_cents = $4,
+    tax_amount_cents = $5,
+    tax_details = $6,
+    amount_due = $7,
+    customer_tax_id = $8,
+    customer_jurisdiction_id = $9,
+    reverse_charge_applies = $10,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: GetInvoiceWithLineItems :one
+SELECT 
+    i.*,
+    COALESCE(
+        (SELECT json_agg(ili.* ORDER BY ili.created_at)
+         FROM invoice_line_items ili
+         WHERE ili.invoice_id = i.id),
+        '[]'::json
+    ) as line_items_detail
+FROM invoices i
+WHERE i.id = $1 AND i.workspace_id = $2 AND i.deleted_at IS NULL;
+
+-- name: LinkInvoiceToPaymentLink :one
+UPDATE invoices SET
+    payment_link_id = $3,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: UpdateInvoiceQRCode :one
+UPDATE invoices SET
+    qr_code_data = $3,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: UpdateInvoiceNumber :one
+UPDATE invoices SET
+    invoice_number = $3,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: GetInvoiceByNumber :one
+SELECT * FROM invoices
+WHERE workspace_id = $1 AND invoice_number = $2 AND deleted_at IS NULL;
+
+-- name: GetNextInvoiceNumber :one
+SELECT 
+    COALESCE(MAX(CAST(REGEXP_REPLACE(invoice_number, '[^0-9]', '', 'g') AS INTEGER)), 0) + 1 as next_number
+FROM invoices
+WHERE workspace_id = $1 
+    AND invoice_number ~ '^[A-Z]*[0-9]+$'
+    AND deleted_at IS NULL;
+
+-- name: GetInvoicesByPaymentLink :many
+SELECT * FROM invoices
+WHERE workspace_id = $1 AND payment_link_id = $2 AND deleted_at IS NULL
+ORDER BY created_at DESC; 

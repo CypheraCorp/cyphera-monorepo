@@ -93,4 +93,9 @@ RETURNING *;
 -- name: GetNetworkByCircleNetworkType :one
 SELECT * FROM networks
 WHERE circle_network_type = $1 AND deleted_at IS NULL
-LIMIT 1; 
+LIMIT 1;
+
+-- name: ListActiveNetworks :many
+SELECT * FROM networks
+WHERE active = true AND deleted_at IS NULL
+ORDER BY name;

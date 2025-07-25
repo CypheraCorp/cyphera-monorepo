@@ -8,6 +8,7 @@ import (
 
 	ps "github.com/cyphera/cyphera-api/libs/go/client/payment_sync"
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -18,16 +19,14 @@ import (
 // PaymentSyncHandlers handles all payment sync related API endpoints
 // including both configuration management and sync operations
 type PaymentSyncHandlers struct {
-	db         *db.Queries
-	logger     *zap.Logger
+	common     *CommonServices
 	syncClient *ps.PaymentSyncClient // Unified client for all operations
 }
 
 // NewPaymentSyncHandlers creates a new payment sync handlers instance
-func NewPaymentSyncHandlers(dbQueries *db.Queries, logger *zap.Logger, syncClient *ps.PaymentSyncClient) *PaymentSyncHandlers {
+func NewPaymentSyncHandlers(common *CommonServices, syncClient *ps.PaymentSyncClient) *PaymentSyncHandlers {
 	return &PaymentSyncHandlers{
-		db:         dbQueries,
-		logger:     logger,
+		common:     common,
 		syncClient: syncClient,
 	}
 }
@@ -168,14 +167,14 @@ type ProviderAccountResponse struct {
 func (h *PaymentSyncHandlers) CreateConfiguration(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
-		h.logger.Error("No workspace ID found in header")
+		logger.Log.Error("No workspace ID found in header")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "workspace_id is required"})
 		return
 	}
 
 	var req CreateConfigurationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind request", zap.Error(err))
+		logger.Log.Error("Failed to bind request", zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request payload"})
 		return
 	}
@@ -193,7 +192,7 @@ func (h *PaymentSyncHandlers) CreateConfiguration(c *gin.Context) {
 
 	createdConfig, err := h.syncClient.CreateConfiguration(c.Request.Context(), config)
 	if err != nil {
-		h.logger.Error("Failed to create configuration", zap.Error(err))
+		logger.Log.Error("Failed to create configuration", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "failed to create configuration"})
 		return
 	}
@@ -216,21 +215,21 @@ func (h *PaymentSyncHandlers) CreateConfiguration(c *gin.Context) {
 func (h *PaymentSyncHandlers) GetConfiguration(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
-		h.logger.Error("No workspace ID found in header")
+		logger.Log.Error("No workspace ID found in header")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "workspace_id is required"})
 		return
 	}
 
 	provider := c.Param("provider")
 	if provider == "" {
-		h.logger.Error("No provider specified")
+		logger.Log.Error("No provider specified")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "provider is required"})
 		return
 	}
 
 	config, err := h.syncClient.GetConfiguration(c.Request.Context(), workspaceID, provider)
 	if err != nil {
-		h.logger.Error("Failed to get configuration", zap.Error(err))
+		logger.Log.Error("Failed to get configuration", zap.Error(err))
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "configuration not found"})
 		return
 	}
@@ -253,21 +252,21 @@ func (h *PaymentSyncHandlers) GetConfiguration(c *gin.Context) {
 func (h *PaymentSyncHandlers) GetConfigurationByID(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
-		h.logger.Error("No workspace ID found in header")
+		logger.Log.Error("No workspace ID found in header")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "workspace_id is required"})
 		return
 	}
 
 	configID := c.Param("config_id")
 	if _, err := uuid.Parse(configID); err != nil {
-		h.logger.Error("Invalid configuration ID", zap.Error(err))
+		logger.Log.Error("Invalid configuration ID", zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid configuration ID"})
 		return
 	}
 
 	config, err := h.syncClient.GetConfigurationByID(c.Request.Context(), workspaceID, configID)
 	if err != nil {
-		h.logger.Error("Failed to get configuration", zap.Error(err))
+		logger.Log.Error("Failed to get configuration", zap.Error(err))
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "configuration not found"})
 		return
 	}
@@ -291,7 +290,7 @@ func (h *PaymentSyncHandlers) GetConfigurationByID(c *gin.Context) {
 func (h *PaymentSyncHandlers) ListConfigurations(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
-		h.logger.Error("No workspace ID found in header")
+		logger.Log.Error("No workspace ID found in header")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "workspace_id is required"})
 		return
 	}
@@ -311,7 +310,7 @@ func (h *PaymentSyncHandlers) ListConfigurations(c *gin.Context) {
 
 	configs, err := h.syncClient.ListConfigurations(c.Request.Context(), workspaceID, limit, offset)
 	if err != nil {
-		h.logger.Error("Failed to list configurations", zap.Error(err))
+		logger.Log.Error("Failed to list configurations", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "failed to list configurations"})
 		return
 	}
@@ -346,21 +345,21 @@ func (h *PaymentSyncHandlers) ListConfigurations(c *gin.Context) {
 func (h *PaymentSyncHandlers) UpdateConfiguration(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
-		h.logger.Error("No workspace ID found in header")
+		logger.Log.Error("No workspace ID found in header")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "workspace_id is required"})
 		return
 	}
 
 	configID := c.Param("config_id")
 	if _, err := uuid.Parse(configID); err != nil {
-		h.logger.Error("Invalid configuration ID", zap.Error(err))
+		logger.Log.Error("Invalid configuration ID", zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid configuration ID"})
 		return
 	}
 
 	var req UpdateConfigurationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind request", zap.Error(err))
+		logger.Log.Error("Failed to bind request", zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request payload"})
 		return
 	}
@@ -368,7 +367,7 @@ func (h *PaymentSyncHandlers) UpdateConfiguration(c *gin.Context) {
 	// Get existing configuration to merge with updates
 	existing, err := h.syncClient.GetConfigurationByID(c.Request.Context(), workspaceID, configID)
 	if err != nil {
-		h.logger.Error("Failed to get existing configuration", zap.Error(err))
+		logger.Log.Error("Failed to get existing configuration", zap.Error(err))
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "configuration not found"})
 		return
 	}
@@ -395,7 +394,7 @@ func (h *PaymentSyncHandlers) UpdateConfiguration(c *gin.Context) {
 
 	updatedConfig, err := h.syncClient.UpdateConfiguration(c.Request.Context(), workspaceID, configID, *existing)
 	if err != nil {
-		h.logger.Error("Failed to update configuration", zap.Error(err))
+		logger.Log.Error("Failed to update configuration", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "failed to update configuration"})
 		return
 	}
@@ -419,21 +418,21 @@ func (h *PaymentSyncHandlers) UpdateConfiguration(c *gin.Context) {
 func (h *PaymentSyncHandlers) DeleteConfiguration(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
-		h.logger.Error("No workspace ID found in header")
+		logger.Log.Error("No workspace ID found in header")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "workspace_id is required"})
 		return
 	}
 
 	configID := c.Param("config_id")
 	if _, err := uuid.Parse(configID); err != nil {
-		h.logger.Error("Invalid configuration ID", zap.Error(err))
+		logger.Log.Error("Invalid configuration ID", zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid configuration ID"})
 		return
 	}
 
 	err := h.syncClient.DeleteConfiguration(c.Request.Context(), workspaceID, configID)
 	if err != nil {
-		h.logger.Error("Failed to delete configuration", zap.Error(err))
+		logger.Log.Error("Failed to delete configuration", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "failed to delete configuration"})
 		return
 	}
@@ -456,21 +455,21 @@ func (h *PaymentSyncHandlers) DeleteConfiguration(c *gin.Context) {
 func (h *PaymentSyncHandlers) TestConnection(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
-		h.logger.Error("No workspace ID found in header")
+		logger.Log.Error("No workspace ID found in header")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "workspace_id is required"})
 		return
 	}
 
 	configID := c.Param("config_id")
 	if _, err := uuid.Parse(configID); err != nil {
-		h.logger.Error("Invalid configuration ID", zap.Error(err))
+		logger.Log.Error("Invalid configuration ID", zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid configuration ID"})
 		return
 	}
 
 	err := h.syncClient.TestConnection(c.Request.Context(), workspaceID, configID)
 	if err != nil {
-		h.logger.Error("Connection test failed", zap.Error(err))
+		logger.Log.Error("Connection test failed", zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "connection test failed: " + err.Error()})
 		return
 	}
@@ -514,14 +513,14 @@ func (h *PaymentSyncHandlers) StartInitialSync(c *gin.Context) {
 	// Get workspace ID from header (following existing pattern)
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
-		h.logger.Error("No workspace ID found in header")
+		logger.Log.Error("No workspace ID found in header")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "workspace_id is required"})
 		return
 	}
 
 	wsID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		h.logger.Error("Invalid workspace ID format", zap.Error(err))
+		logger.Log.Error("Invalid workspace ID format", zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid workspace_id"})
 		return
 	}
@@ -529,14 +528,14 @@ func (h *PaymentSyncHandlers) StartInitialSync(c *gin.Context) {
 	// Get provider from URL path
 	provider := c.Param("provider")
 	if provider == "" {
-		h.logger.Error("No provider specified in URL")
+		logger.Log.Error("No provider specified in URL")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "provider is required"})
 		return
 	}
 
 	var req InitialSyncRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind request", zap.Error(err))
+		logger.Log.Error("Failed to bind request", zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request payload"})
 		return
 	}
@@ -563,14 +562,14 @@ func (h *PaymentSyncHandlers) StartInitialSync(c *gin.Context) {
 		config.EndingBefore = req.EndingBefore
 	}
 
-	h.logger.Info("Starting initial sync",
+	logger.Log.Info("Starting initial sync",
 		zap.String("provider", provider),
 		zap.String("workspace_id", wsID.String()),
 		zap.Any("config", config))
 
 	session, err := h.syncClient.StartInitialSync(c.Request.Context(), wsID.String(), provider, config)
 	if err != nil {
-		h.logger.Error("Failed to start initial sync", zap.Error(err))
+		logger.Log.Error("Failed to start initial sync", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "failed to start initial sync"})
 		return
 	}
@@ -584,7 +583,7 @@ func (h *PaymentSyncHandlers) StartInitialSync(c *gin.Context) {
 		CreatedAt:   time.Unix(session.CreatedAt, 0).Format("2006-01-02T15:04:05Z"),
 	}
 
-	h.logger.Info("Successfully started initial sync",
+	logger.Log.Info("Successfully started initial sync",
 		zap.String("session_id", session.ID),
 		zap.String("workspace_id", wsID.String()))
 
@@ -605,14 +604,14 @@ func (h *PaymentSyncHandlers) StartInitialSync(c *gin.Context) {
 func (h *PaymentSyncHandlers) GetSyncSession(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
-		h.logger.Error("No workspace ID found in header")
+		logger.Log.Error("No workspace ID found in header")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "workspace_id is required"})
 		return
 	}
 
 	wsID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		h.logger.Error("Invalid workspace ID format", zap.Error(err))
+		logger.Log.Error("Invalid workspace ID format", zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid workspace_id"})
 		return
 	}
@@ -620,17 +619,17 @@ func (h *PaymentSyncHandlers) GetSyncSession(c *gin.Context) {
 	sessionIDStr := c.Param("id")
 	sessionID, err := uuid.Parse(sessionIDStr)
 	if err != nil {
-		h.logger.Error("Invalid session ID", zap.String("session_id", sessionIDStr), zap.Error(err))
+		logger.Log.Error("Invalid session ID", zap.String("session_id", sessionIDStr), zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid session_id"})
 		return
 	}
 
-	session, err := h.db.GetSyncSession(c.Request.Context(), db.GetSyncSessionParams{
+	session, err := h.common.db.GetSyncSession(c.Request.Context(), db.GetSyncSessionParams{
 		ID:          sessionID,
 		WorkspaceID: wsID,
 	})
 	if err != nil {
-		h.logger.Error("Failed to get sync session", zap.Error(err))
+		logger.Log.Error("Failed to get sync session", zap.Error(err))
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "sync session not found"})
 		return
 	}
@@ -655,14 +654,14 @@ func (h *PaymentSyncHandlers) GetSyncSession(c *gin.Context) {
 func (h *PaymentSyncHandlers) ListSyncSessions(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
-		h.logger.Error("No workspace ID found in header")
+		logger.Log.Error("No workspace ID found in header")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "workspace_id is required"})
 		return
 	}
 
 	wsID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		h.logger.Error("Invalid workspace ID format", zap.Error(err))
+		logger.Log.Error("Invalid workspace ID format", zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid workspace_id"})
 		return
 	}
@@ -690,38 +689,38 @@ func (h *PaymentSyncHandlers) ListSyncSessions(c *gin.Context) {
 
 	// Get sessions based on filters
 	if provider != "" {
-		sessions, err = h.db.ListSyncSessionsByProvider(ctx, db.ListSyncSessionsByProviderParams{
+		sessions, err = h.common.db.ListSyncSessionsByProvider(ctx, db.ListSyncSessionsByProviderParams{
 			WorkspaceID:  wsID,
 			ProviderName: provider,
 			Limit:        int32(limit),
 			Offset:       int32(offset),
 		})
 		if err == nil {
-			total, _ = h.db.CountSyncSessionsByProvider(ctx, db.CountSyncSessionsByProviderParams{
+			total, _ = h.common.db.CountSyncSessionsByProvider(ctx, db.CountSyncSessionsByProviderParams{
 				WorkspaceID:  wsID,
 				ProviderName: provider,
 			})
 		}
 	} else if status != "" {
-		sessions, err = h.db.ListSyncSessionsByStatus(ctx, db.ListSyncSessionsByStatusParams{
+		sessions, err = h.common.db.ListSyncSessionsByStatus(ctx, db.ListSyncSessionsByStatusParams{
 			WorkspaceID: wsID,
 			Status:      status,
 			Limit:       int32(limit),
 			Offset:      int32(offset),
 		})
 	} else {
-		sessions, err = h.db.ListSyncSessions(ctx, db.ListSyncSessionsParams{
+		sessions, err = h.common.db.ListSyncSessions(ctx, db.ListSyncSessionsParams{
 			WorkspaceID: wsID,
 			Limit:       int32(limit),
 			Offset:      int32(offset),
 		})
 		if err == nil {
-			total, _ = h.db.CountSyncSessions(ctx, wsID)
+			total, _ = h.common.db.CountSyncSessions(ctx, wsID)
 		}
 	}
 
 	if err != nil {
-		h.logger.Error("Failed to list sync sessions", zap.Error(err))
+		logger.Log.Error("Failed to list sync sessions", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "failed to list sync sessions"})
 		return
 	}
@@ -754,14 +753,14 @@ func (h *PaymentSyncHandlers) ListSyncSessions(c *gin.Context) {
 func (h *PaymentSyncHandlers) GetSyncSessionStatus(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	if workspaceID == "" {
-		h.logger.Error("No workspace ID found in header")
+		logger.Log.Error("No workspace ID found in header")
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "workspace_id is required"})
 		return
 	}
 
 	wsID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		h.logger.Error("Invalid workspace ID format", zap.Error(err))
+		logger.Log.Error("Invalid workspace ID format", zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid workspace_id"})
 		return
 	}
@@ -769,17 +768,17 @@ func (h *PaymentSyncHandlers) GetSyncSessionStatus(c *gin.Context) {
 	sessionIDStr := c.Param("id")
 	sessionID, err := uuid.Parse(sessionIDStr)
 	if err != nil {
-		h.logger.Error("Invalid session ID", zap.String("session_id", sessionIDStr), zap.Error(err))
+		logger.Log.Error("Invalid session ID", zap.String("session_id", sessionIDStr), zap.Error(err))
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid session_id"})
 		return
 	}
 
-	session, err := h.db.GetSyncSession(c.Request.Context(), db.GetSyncSessionParams{
+	session, err := h.common.db.GetSyncSession(c.Request.Context(), db.GetSyncSessionParams{
 		ID:          sessionID,
 		WorkspaceID: wsID,
 	})
 	if err != nil {
-		h.logger.Error("Failed to get sync session", zap.Error(err))
+		logger.Log.Error("Failed to get sync session", zap.Error(err))
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "sync session not found"})
 		return
 	}
@@ -789,14 +788,14 @@ func (h *PaymentSyncHandlers) GetSyncSessionStatus(c *gin.Context) {
 
 	if len(session.Progress) > 0 {
 		if err := json.Unmarshal(session.Progress, &progress); err != nil {
-			h.logger.Warn("Failed to unmarshal progress", zap.Error(err))
+			logger.Log.Warn("Failed to unmarshal progress", zap.Error(err))
 			progress = make(map[string]interface{})
 		}
 	}
 
 	if len(session.ErrorSummary) > 0 {
 		if err := json.Unmarshal(session.ErrorSummary, &errorSummary); err != nil {
-			h.logger.Warn("Failed to unmarshal error summary", zap.Error(err))
+			logger.Log.Warn("Failed to unmarshal error summary", zap.Error(err))
 			errorSummary = make(map[string]interface{})
 		}
 	}
@@ -847,19 +846,19 @@ func (h *PaymentSyncHandlers) mapSyncSessionToResponse(session db.PaymentSyncSes
 	// Parse JSON fields
 	if len(session.Config) > 0 {
 		if err := json.Unmarshal(session.Config, &response.Config); err != nil {
-			h.logger.Warn("Failed to unmarshal config", zap.Error(err))
+			logger.Log.Warn("Failed to unmarshal config", zap.Error(err))
 		}
 	}
 
 	if len(session.Progress) > 0 {
 		if err := json.Unmarshal(session.Progress, &response.Progress); err != nil {
-			h.logger.Warn("Failed to unmarshal progress", zap.Error(err))
+			logger.Log.Warn("Failed to unmarshal progress", zap.Error(err))
 		}
 	}
 
 	if len(session.ErrorSummary) > 0 {
 		if err := json.Unmarshal(session.ErrorSummary, &response.ErrorSummary); err != nil {
-			h.logger.Warn("Failed to unmarshal error summary", zap.Error(err))
+			logger.Log.Warn("Failed to unmarshal error summary", zap.Error(err))
 		}
 	}
 
@@ -922,7 +921,7 @@ func (h *PaymentSyncHandlers) CreateProviderAccount(c *gin.Context) {
 	}
 
 	// Create provider account
-	providerAccount, err := h.db.CreateWorkspaceProviderAccount(c.Request.Context(), db.CreateWorkspaceProviderAccountParams{
+	providerAccount, err := h.common.db.CreateWorkspaceProviderAccount(c.Request.Context(), db.CreateWorkspaceProviderAccountParams{
 		WorkspaceID:       wsID,
 		ProviderName:      req.ProviderName,
 		ProviderAccountID: req.ProviderAccountID,
@@ -933,7 +932,7 @@ func (h *PaymentSyncHandlers) CreateProviderAccount(c *gin.Context) {
 		Metadata:          metadataBytes,
 	})
 	if err != nil {
-		h.logger.Error("Failed to create provider account", zap.Error(err))
+		logger.Log.Error("Failed to create provider account", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "failed to create provider account"})
 		return
 	}
@@ -973,13 +972,13 @@ func (h *PaymentSyncHandlers) GetProviderAccounts(c *gin.Context) {
 	}
 
 	// Get provider accounts
-	accounts, err := h.db.ListProviderAccountsByWorkspace(c.Request.Context(), db.ListProviderAccountsByWorkspaceParams{
+	accounts, err := h.common.db.ListProviderAccountsByWorkspace(c.Request.Context(), db.ListProviderAccountsByWorkspaceParams{
 		WorkspaceID: wsID,
 		Limit:       int32(limit),
 		Offset:      int32(offset),
 	})
 	if err != nil {
-		h.logger.Error("Failed to list provider accounts", zap.Error(err))
+		logger.Log.Error("Failed to list provider accounts", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "failed to list provider accounts"})
 		return
 	}
