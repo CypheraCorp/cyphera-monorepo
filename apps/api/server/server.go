@@ -2,17 +2,6 @@ package server
 
 import (
 	"context"
-	"github.com/cyphera/cyphera-api/libs/go/client/auth"
-	awsclient "github.com/cyphera/cyphera-api/libs/go/client/aws"
-	"github.com/cyphera/cyphera-api/libs/go/client/circle"
-	"github.com/cyphera/cyphera-api/libs/go/client/coinmarketcap" // Import CMC client
-	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
-	"github.com/cyphera/cyphera-api/libs/go/client/payment_sync"
-	"github.com/cyphera/cyphera-api/libs/go/db"
-	"github.com/cyphera/cyphera-api/apps/api/handlers"
-	"github.com/cyphera/cyphera-api/libs/go/helpers" // Import helpers
-	"github.com/cyphera/cyphera-api/libs/go/logger"
-	"github.com/cyphera/cyphera-api/libs/go/middleware"
 	"fmt"
 	"log"
 	"net/http"
@@ -20,6 +9,18 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/cyphera/cyphera-api/apps/api/handlers"
+	"github.com/cyphera/cyphera-api/libs/go/client/auth"
+	awsclient "github.com/cyphera/cyphera-api/libs/go/client/aws"
+	"github.com/cyphera/cyphera-api/libs/go/client/circle"
+	"github.com/cyphera/cyphera-api/libs/go/client/coinmarketcap" // Import CMC client
+	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
+	"github.com/cyphera/cyphera-api/libs/go/client/payment_sync"
+	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers" // Import helpers
+	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/middleware"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -47,6 +48,7 @@ var (
 	delegationClient         *dsClient.DelegationClient
 	redemptionProcessor      *handlers.RedemptionProcessor
 	circleHandler            *handlers.CircleHandler
+	currencyHandler          *handlers.CurrencyHandler
 
 	// Database
 	dbQueries *db.Queries
@@ -298,6 +300,9 @@ func InitializeHandlers() {
 	productHandler = handlers.NewProductHandler(commonServices, delegationClient)
 	walletHandler = handlers.NewWalletHandler(commonServices)
 
+	// Initialize currency handler
+	currencyHandler = handlers.NewCurrencyHandler(commonServices)
+
 	// Initialize subscription
 	subscriptionHandler = handlers.NewSubscriptionHandler(commonServices, delegationClient)
 	subscriptionEventHandler = handlers.NewSubscriptionEventHandler(commonServices)
@@ -328,11 +333,11 @@ func InitializeRoutes(router *gin.Engine) {
 	// Apply rate limiting middleware globally
 	// This provides a default rate limit for all endpoints
 	router.Use(middleware.DefaultRateLimiter.Middleware())
-	
+
 	// Add enhanced logging in development mode
 	isDevelopment := os.Getenv("GIN_MODE") != "release"
 	router.Use(middleware.EnhancedLoggingMiddleware(isDevelopment))
-	
+
 	// Add basic request logging for production
 	if !isDevelopment {
 		router.Use(middleware.RequestLoggingMiddleware())
@@ -511,6 +516,22 @@ func InitializeRoutes(router *gin.Engine) {
 				products.GET("/:product_id/subscriptions", subscriptionHandler.ListSubscriptionsByProduct)
 			}
 
+			// Currencies
+			currencies := protected.Group("/currencies")
+			{
+				currencies.GET("", currencyHandler.ListActiveCurrencies)
+				currencies.GET("/:code", currencyHandler.GetCurrency)
+				currencies.POST("/format", currencyHandler.FormatAmount)
+			}
+
+			// Workspace currency settings
+			workspacesCurrent := protected.Group("/workspaces/current")
+			{
+				workspacesCurrent.GET("/currency-settings", currencyHandler.GetWorkspaceCurrencySettings)
+				workspacesCurrent.PUT("/currency-settings", currencyHandler.UpdateWorkspaceCurrencySettings)
+				workspacesCurrent.GET("/currencies", currencyHandler.ListWorkspaceSupportedCurrencies)
+			}
+
 			// Workspaces
 			// workspaces := protected.Group("/workspaces")
 			// {
@@ -670,7 +691,7 @@ func configureCORS() gin.HandlerFunc {
 		// Default exposed headers including rate limit headers
 		corsConfig.ExposeHeaders = []string{
 			"X-RateLimit-Limit",
-			"X-RateLimit-Remaining", 
+			"X-RateLimit-Remaining",
 			"X-RateLimit-Reset",
 			"Retry-After",
 			"X-Correlation-ID",

@@ -1679,7 +1679,7 @@ func (q *Queries) GetWorkspaceSyncSummary(ctx context.Context, id uuid.UUID) (Ge
 }
 
 const getWorkspacesByProvider = `-- name: GetWorkspacesByProvider :many
-SELECT w.id, w.account_id, w.name, w.description, w.business_name, w.business_type, w.website_url, w.support_email, w.support_phone, w.metadata, w.livemode, w.created_at, w.updated_at, w.deleted_at
+SELECT w.id, w.account_id, w.name, w.description, w.business_name, w.business_type, w.website_url, w.support_email, w.support_phone, w.metadata, w.livemode, w.default_currency, w.supported_currencies, w.created_at, w.updated_at, w.deleted_at
 FROM workspaces w
 WHERE w.metadata -> 'payment_providers' ? $1 
   AND w.deleted_at IS NULL
@@ -1707,6 +1707,8 @@ func (q *Queries) GetWorkspacesByProvider(ctx context.Context, metadata []byte) 
 			&i.SupportPhone,
 			&i.Metadata,
 			&i.Livemode,
+			&i.DefaultCurrency,
+			&i.SupportedCurrencies,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -2533,7 +2535,7 @@ SET
     metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('payment_providers', $2),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, created_at, updated_at, deleted_at
+RETURNING id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, default_currency, supported_currencies, created_at, updated_at, deleted_at
 `
 
 type UpdateWorkspaceProviderConfigParams struct {
@@ -2556,6 +2558,8 @@ func (q *Queries) UpdateWorkspaceProviderConfig(ctx context.Context, arg UpdateW
 		&i.SupportPhone,
 		&i.Metadata,
 		&i.Livemode,
+		&i.DefaultCurrency,
+		&i.SupportedCurrencies,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,

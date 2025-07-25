@@ -27,7 +27,7 @@ INSERT INTO workspaces (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 )
-RETURNING id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, created_at, updated_at, deleted_at
+RETURNING id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, default_currency, supported_currencies, created_at, updated_at, deleted_at
 `
 
 type CreateWorkspaceParams struct {
@@ -69,6 +69,8 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.SupportPhone,
 		&i.Metadata,
 		&i.Livemode,
+		&i.DefaultCurrency,
+		&i.SupportedCurrencies,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -119,7 +121,7 @@ func (q *Queries) GetAccountByWorkspaceID(ctx context.Context, id uuid.UUID) (Ac
 }
 
 const getAllWorkspaces = `-- name: GetAllWorkspaces :many
-SELECT id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, created_at, updated_at, deleted_at FROM workspaces
+SELECT id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, default_currency, supported_currencies, created_at, updated_at, deleted_at FROM workspaces
 ORDER BY created_at DESC
 `
 
@@ -144,6 +146,8 @@ func (q *Queries) GetAllWorkspaces(ctx context.Context) ([]Workspace, error) {
 			&i.SupportPhone,
 			&i.Metadata,
 			&i.Livemode,
+			&i.DefaultCurrency,
+			&i.SupportedCurrencies,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -159,7 +163,7 @@ func (q *Queries) GetAllWorkspaces(ctx context.Context) ([]Workspace, error) {
 }
 
 const getWorkspace = `-- name: GetWorkspace :one
-SELECT id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, created_at, updated_at, deleted_at FROM workspaces
+SELECT id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, default_currency, supported_currencies, created_at, updated_at, deleted_at FROM workspaces
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -178,6 +182,8 @@ func (q *Queries) GetWorkspace(ctx context.Context, id uuid.UUID) (Workspace, er
 		&i.SupportPhone,
 		&i.Metadata,
 		&i.Livemode,
+		&i.DefaultCurrency,
+		&i.SupportedCurrencies,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -196,7 +202,7 @@ func (q *Queries) HardDeleteWorkspace(ctx context.Context, id uuid.UUID) error {
 }
 
 const listWorkspaces = `-- name: ListWorkspaces :many
-SELECT id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, created_at, updated_at, deleted_at FROM workspaces
+SELECT id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, default_currency, supported_currencies, created_at, updated_at, deleted_at FROM workspaces
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -222,6 +228,8 @@ func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
 			&i.SupportPhone,
 			&i.Metadata,
 			&i.Livemode,
+			&i.DefaultCurrency,
+			&i.SupportedCurrencies,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -237,7 +245,7 @@ func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
 }
 
 const listWorkspacesByAccountID = `-- name: ListWorkspacesByAccountID :many
-SELECT id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, created_at, updated_at, deleted_at FROM workspaces
+SELECT id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, default_currency, supported_currencies, created_at, updated_at, deleted_at FROM workspaces
 WHERE account_id = $1 
 AND deleted_at IS NULL
 ORDER BY created_at DESC
@@ -264,6 +272,8 @@ func (q *Queries) ListWorkspacesByAccountID(ctx context.Context, accountID uuid.
 			&i.SupportPhone,
 			&i.Metadata,
 			&i.Livemode,
+			&i.DefaultCurrency,
+			&i.SupportedCurrencies,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -292,7 +302,7 @@ SET
     livemode = COALESCE($10, livemode),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, created_at, updated_at, deleted_at
+RETURNING id, account_id, name, description, business_name, business_type, website_url, support_email, support_phone, metadata, livemode, default_currency, supported_currencies, created_at, updated_at, deleted_at
 `
 
 type UpdateWorkspaceParams struct {
@@ -334,6 +344,8 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.SupportPhone,
 		&i.Metadata,
 		&i.Livemode,
+		&i.DefaultCurrency,
+		&i.SupportedCurrencies,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,

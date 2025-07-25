@@ -164,11 +164,6 @@ type DelegationStruct struct {
 	Signature string         `json:"signature"`
 }
 
-const (
-	CurrencyUSD = "USD"
-	CurrencyEUR = "EUR"
-)
-
 // GetProduct godoc
 // @Summary Get product by ID
 // @Description Get product details by product ID
@@ -794,24 +789,6 @@ func validatePriceType(priceTypeStr string) (db.PriceType, error) {
 	return db.PriceType(priceTypeStr), nil
 }
 
-// validateCurrency validates the currency and returns a db.Currency if valid
-func validateCurrency(currency string) (db.Currency, error) {
-	if currency == "" {
-		return "", fmt.Errorf("currency is required")
-	}
-
-	validCurrencies := map[string]bool{
-		CurrencyUSD: true,
-		CurrencyEUR: true,
-	}
-
-	if !validCurrencies[currency] {
-		return "", fmt.Errorf("invalid currency. Must be '%s' or '%s'", CurrencyUSD, CurrencyEUR)
-	}
-
-	return db.Currency(currency), nil
-}
-
 // validateIntervalType validates the interval type and returns a db.IntervalType if valid
 func validateIntervalType(intervalType string) (db.IntervalType, error) {
 	if intervalType == "" {
@@ -1180,7 +1157,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 				Active:              price.Active,
 				Type:                db.PriceType(price.Type),
 				Nickname:            pgtype.Text{String: price.Nickname, Valid: true},
-				Currency:            db.Currency(price.Currency),
+				Currency:            price.Currency,
 				UnitAmountInPennies: price.UnitAmountInPennies,
 				IntervalType:        db.IntervalType(price.IntervalType),
 				TermLength:          price.TermLength,

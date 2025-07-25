@@ -15,6 +15,7 @@ help:
 	@echo "  Protocol generation, database operations, Docker management"
 	@echo ""
 	@echo "Available make targets:"
+	@echo "  make gen            - Generate SQLC database code"
 	@echo "  make proto-gen      - Generate all protobuf code"
 	@echo "  make swagger-gen    - Generate Swagger/OpenAPI docs"
 	@echo "  make db-reset       - Reset database to clean state"
@@ -62,7 +63,7 @@ proto-gen-ts:
 # Database Operations
 # ==============================================================================
 
-.PHONY: db-reset db-migrate db-seed db-console
+.PHONY: db-reset db-migrate db-seed db-console gen
 
 db-reset:
 	@echo "🗄️  Resetting database..."
@@ -79,6 +80,12 @@ db-seed:
 db-console:
 	@echo "🗄️  Opening database console..."
 	@psql "$(DATABASE_URL)"
+
+# Generate SQLC code
+gen:
+	@echo "🔧 Generating SQLC code..."
+	@cd libs/go/db && sqlc generate
+	@echo "✅ SQLC code generated"
 
 # ==============================================================================
 # Docker Development Environment

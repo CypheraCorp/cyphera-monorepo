@@ -1,11 +1,12 @@
 package handlers
 
 import (
-	"github.com/cyphera/cyphera-api/libs/go/db"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/cyphera/cyphera-api/libs/go/db"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

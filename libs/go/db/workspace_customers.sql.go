@@ -106,7 +106,7 @@ func (q *Queries) IsCustomerInWorkspace(ctx context.Context, arg IsCustomerInWor
 
 const listCustomerWorkspaces = `-- name: ListCustomerWorkspaces :many
 SELECT 
-    w.id, w.account_id, w.name, w.description, w.business_name, w.business_type, w.website_url, w.support_email, w.support_phone, w.metadata, w.livemode, w.created_at, w.updated_at, w.deleted_at
+    w.id, w.account_id, w.name, w.description, w.business_name, w.business_type, w.website_url, w.support_email, w.support_phone, w.metadata, w.livemode, w.default_currency, w.supported_currencies, w.created_at, w.updated_at, w.deleted_at
 FROM workspaces w
 INNER JOIN workspace_customers wc ON w.id = wc.workspace_id
 WHERE wc.customer_id = $1 AND wc.deleted_at IS NULL AND w.deleted_at IS NULL
@@ -134,6 +134,8 @@ func (q *Queries) ListCustomerWorkspaces(ctx context.Context, customerID uuid.UU
 			&i.SupportPhone,
 			&i.Metadata,
 			&i.Livemode,
+			&i.DefaultCurrency,
+			&i.SupportedCurrencies,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,

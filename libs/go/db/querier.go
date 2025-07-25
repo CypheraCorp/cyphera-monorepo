@@ -12,12 +12,14 @@ import (
 )
 
 type Querier interface {
+	ActivateFiatCurrency(ctx context.Context, code string) error
 	ActivateNetwork(ctx context.Context, id uuid.UUID) (Network, error)
 	ActivatePrice(ctx context.Context, id uuid.UUID) (Price, error)
 	ActivateProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	ActivateProductToken(ctx context.Context, id uuid.UUID) (ProductsToken, error)
 	ActivateToken(ctx context.Context, id uuid.UUID) (Token, error)
 	AddCustomerToWorkspace(ctx context.Context, arg AddCustomerToWorkspaceParams) (WorkspaceCustomer, error)
+	AddWorkspaceSupportedCurrency(ctx context.Context, arg AddWorkspaceSupportedCurrencyParams) error
 	// Bulk Operations for Initial Sync
 	BulkUpdateCustomerSyncStatus(ctx context.Context, arg BulkUpdateCustomerSyncStatusParams) error
 	BulkUpdateInvoiceSyncStatus(ctx context.Context, arg BulkUpdateInvoiceSyncStatusParams) error
@@ -98,6 +100,7 @@ type Querier interface {
 	CreateWorkspaceProviderAccount(ctx context.Context, arg CreateWorkspaceProviderAccountParams) (WorkspaceProviderAccount, error)
 	DeactivateAllProductTokens(ctx context.Context, productID uuid.UUID) error
 	DeactivateAllProductTokensForNetwork(ctx context.Context, arg DeactivateAllProductTokensForNetworkParams) error
+	DeactivateFiatCurrency(ctx context.Context, code string) error
 	DeactivateNetwork(ctx context.Context, id uuid.UUID) (Network, error)
 	DeactivatePrice(ctx context.Context, id uuid.UUID) (Price, error)
 	DeactivateProduct(ctx context.Context, id uuid.UUID) (Product, error)
@@ -187,6 +190,8 @@ type Querier interface {
 	GetFailedSyncSessionsForRecovery(ctx context.Context, arg GetFailedSyncSessionsForRecoveryParams) ([]GetFailedSyncSessionsForRecoveryRow, error)
 	// Get failed webhook events that are eligible for retry
 	GetFailedWebhooksForRetry(ctx context.Context, arg GetFailedWebhooksForRetryParams) ([]GetFailedWebhooksForRetryRow, error)
+	GetFiatCurrency(ctx context.Context, code string) (FiatCurrency, error)
+	GetFiatCurrencyByCode(ctx context.Context, code string) (FiatCurrency, error)
 	GetGasToken(ctx context.Context, networkID uuid.UUID) (Token, error)
 	GetInvoiceByExternalID(ctx context.Context, arg GetInvoiceByExternalIDParams) (Invoice, error)
 	GetInvoiceByID(ctx context.Context, arg GetInvoiceByIDParams) (Invoice, error)
@@ -294,6 +299,7 @@ type Querier interface {
 	GetWorkspaceCustomerAssociation(ctx context.Context, arg GetWorkspaceCustomerAssociationParams) (WorkspaceCustomer, error)
 	GetWorkspaceCustomersByPaymentProvider(ctx context.Context, arg GetWorkspaceCustomersByPaymentProviderParams) ([]Customer, error)
 	GetWorkspaceCustomersByPaymentSyncStatus(ctx context.Context, arg GetWorkspaceCustomersByPaymentSyncStatusParams) ([]Customer, error)
+	GetWorkspaceDefaultCurrency(ctx context.Context, id uuid.UUID) (FiatCurrency, error)
 	GetWorkspacePaymentConfiguration(ctx context.Context, arg GetWorkspacePaymentConfigurationParams) (WorkspacePaymentConfiguration, error)
 	GetWorkspacePaymentConfigurationByConnectedAccount(ctx context.Context, arg GetWorkspacePaymentConfigurationByConnectedAccountParams) (WorkspacePaymentConfiguration, error)
 	GetWorkspacePaymentConfigurationByID(ctx context.Context, arg GetWorkspacePaymentConfigurationByIDParams) (WorkspacePaymentConfiguration, error)
@@ -313,6 +319,7 @@ type Querier interface {
 	ListAccounts(ctx context.Context) ([]Account, error)
 	ListAccountsByType(ctx context.Context, accountType AccountType) ([]Account, error)
 	ListAccountsByUser(ctx context.Context, id uuid.UUID) ([]Account, error)
+	ListActiveFiatCurrencies(ctx context.Context) ([]FiatCurrency, error)
 	ListActivePricesByProduct(ctx context.Context, productID uuid.UUID) ([]Price, error)
 	ListActivePricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]Price, error)
 	ListActiveProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
@@ -321,6 +328,7 @@ type Querier interface {
 	ListActiveSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListActiveTokensByNetwork(ctx context.Context, networkID uuid.UUID) ([]Token, error)
 	ListActiveWorkspacePaymentConfigurations(ctx context.Context, workspaceID uuid.UUID) ([]WorkspacePaymentConfiguration, error)
+	ListAllFiatCurrencies(ctx context.Context) ([]FiatCurrency, error)
 	ListCircleUsers(ctx context.Context) ([]CircleUser, error)
 	ListCircleWalletsByCircleUserID(ctx context.Context, circleUserID uuid.UUID) ([]ListCircleWalletsByCircleUserIDRow, error)
 	ListCircleWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListCircleWalletsByWorkspaceIDRow, error)
@@ -393,6 +401,7 @@ type Querier interface {
 	ListWorkspaceCustomersWithPagination(ctx context.Context, arg ListWorkspaceCustomersWithPaginationParams) ([]Customer, error)
 	ListWorkspacePaymentConfigurations(ctx context.Context, arg ListWorkspacePaymentConfigurationsParams) ([]WorkspacePaymentConfiguration, error)
 	ListWorkspacePaymentConfigurationsByProvider(ctx context.Context, providerName string) ([]WorkspacePaymentConfiguration, error)
+	ListWorkspaceSupportedCurrencies(ctx context.Context, id uuid.UUID) ([]FiatCurrency, error)
 	ListWorkspaces(ctx context.Context) ([]Workspace, error)
 	ListWorkspacesByAccountID(ctx context.Context, accountID uuid.UUID) ([]Workspace, error)
 	LockSubscriptionForProcessing(ctx context.Context, id uuid.UUID) (Subscription, error)
@@ -405,6 +414,7 @@ type Querier interface {
 	// Mark a webhook event for retry processing
 	MarkWebhookForRetry(ctx context.Context, id uuid.UUID) (PaymentSyncEvent, error)
 	RemoveCustomerFromWorkspace(ctx context.Context, arg RemoveCustomerFromWorkspaceParams) error
+	RemoveWorkspaceSupportedCurrency(ctx context.Context, arg RemoveWorkspaceSupportedCurrencyParams) error
 	// Create a new event record for webhook replay
 	ReplayWebhookEvent(ctx context.Context, arg ReplayWebhookEventParams) (PaymentSyncEvent, error)
 	// Resume a failed sync session by updating its status
@@ -431,6 +441,7 @@ type Querier interface {
 	UpdateCustomerWalletUsageTime(ctx context.Context, id uuid.UUID) (CustomerWallet, error)
 	UpdateCustomerWithSync(ctx context.Context, arg UpdateCustomerWithSyncParams) (Customer, error)
 	UpdateDelegationData(ctx context.Context, arg UpdateDelegationDataParams) (DelegationDatum, error)
+	UpdateFiatCurrency(ctx context.Context, arg UpdateFiatCurrencyParams) (FiatCurrency, error)
 	UpdateInvoice(ctx context.Context, arg UpdateInvoiceParams) (Invoice, error)
 	UpdateInvoiceSyncStatus(ctx context.Context, arg UpdateInvoiceSyncStatusParams) (Invoice, error)
 	// Update the last webhook received time for a workspace configuration
@@ -465,12 +476,14 @@ type Querier interface {
 	// Update webhook processing status (success/failure)
 	UpdateWebhookProcessingStatus(ctx context.Context, arg UpdateWebhookProcessingStatusParams) (PaymentSyncEvent, error)
 	UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams) (Workspace, error)
+	UpdateWorkspaceDefaultCurrency(ctx context.Context, arg UpdateWorkspaceDefaultCurrencyParams) error
 	UpdateWorkspacePaymentConfiguration(ctx context.Context, arg UpdateWorkspacePaymentConfigurationParams) (WorkspacePaymentConfiguration, error)
 	UpdateWorkspacePaymentConfigurationConfig(ctx context.Context, arg UpdateWorkspacePaymentConfigurationConfigParams) (WorkspacePaymentConfiguration, error)
 	UpdateWorkspacePaymentConfigurationLastSync(ctx context.Context, arg UpdateWorkspacePaymentConfigurationLastSyncParams) (WorkspacePaymentConfiguration, error)
 	UpdateWorkspacePaymentConfigurationLastWebhook(ctx context.Context, arg UpdateWorkspacePaymentConfigurationLastWebhookParams) (WorkspacePaymentConfiguration, error)
 	UpdateWorkspaceProviderAccount(ctx context.Context, arg UpdateWorkspaceProviderAccountParams) (WorkspaceProviderAccount, error)
 	UpdateWorkspaceProviderConfig(ctx context.Context, arg UpdateWorkspaceProviderConfigParams) (Workspace, error)
+	UpdateWorkspaceSupportedCurrencies(ctx context.Context, arg UpdateWorkspaceSupportedCurrenciesParams) error
 	UpsertInvoice(ctx context.Context, arg UpsertInvoiceParams) (Invoice, error)
 	// Check if provider account ID already exists (for constraint validation)
 	ValidateProviderAccountUnique(ctx context.Context, arg ValidateProviderAccountUniqueParams) (int64, error)

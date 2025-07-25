@@ -150,48 +150,6 @@ func (ns NullCircleNetworkType) Value() (driver.Value, error) {
 	return string(ns.CircleNetworkType), nil
 }
 
-type Currency string
-
-const (
-	CurrencyUSD Currency = "USD"
-	CurrencyEUR Currency = "EUR"
-)
-
-func (e *Currency) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = Currency(s)
-	case string:
-		*e = Currency(s)
-	default:
-		return fmt.Errorf("unsupported scan type for Currency: %T", src)
-	}
-	return nil
-}
-
-type NullCurrency struct {
-	Currency Currency `json:"currency"`
-	Valid    bool     `json:"valid"` // Valid is true if Currency is not NULL
-}
-
-// Scan implements the Scanner interface.
-func (ns *NullCurrency) Scan(value interface{}) error {
-	if value == nil {
-		ns.Currency, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.Currency.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullCurrency) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.Currency), nil
-}
-
 type IntervalType string
 
 const (
@@ -677,6 +635,21 @@ type FailedSubscriptionAttempt struct {
 	UpdatedAt           pgtype.Timestamptz    `json:"updated_at"`
 }
 
+type FiatCurrency struct {
+	ID                uuid.UUID          `json:"id"`
+	Code              string             `json:"code"`
+	Name              string             `json:"name"`
+	Symbol            string             `json:"symbol"`
+	DecimalPlaces     int32              `json:"decimal_places"`
+	IsActive          pgtype.Bool        `json:"is_active"`
+	SymbolPosition    pgtype.Text        `json:"symbol_position"`
+	ThousandSeparator pgtype.Text        `json:"thousand_separator"`
+	DecimalSeparator  pgtype.Text        `json:"decimal_separator"`
+	Countries         []byte             `json:"countries"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Invoice struct {
 	ID                     uuid.UUID          `json:"id"`
 	WorkspaceID            uuid.UUID          `json:"workspace_id"`
@@ -785,7 +758,7 @@ type Price struct {
 	Active              bool               `json:"active"`
 	Type                PriceType          `json:"type"`
 	Nickname            pgtype.Text        `json:"nickname"`
-	Currency            Currency           `json:"currency"`
+	Currency            string             `json:"currency"`
 	UnitAmountInPennies int32              `json:"unit_amount_in_pennies"`
 	IntervalType        IntervalType       `json:"interval_type"`
 	TermLength          int32              `json:"term_length"`
@@ -939,20 +912,22 @@ type Wallet struct {
 }
 
 type Workspace struct {
-	ID           uuid.UUID          `json:"id"`
-	AccountID    uuid.UUID          `json:"account_id"`
-	Name         string             `json:"name"`
-	Description  pgtype.Text        `json:"description"`
-	BusinessName pgtype.Text        `json:"business_name"`
-	BusinessType pgtype.Text        `json:"business_type"`
-	WebsiteUrl   pgtype.Text        `json:"website_url"`
-	SupportEmail pgtype.Text        `json:"support_email"`
-	SupportPhone pgtype.Text        `json:"support_phone"`
-	Metadata     []byte             `json:"metadata"`
-	Livemode     pgtype.Bool        `json:"livemode"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+	ID                  uuid.UUID          `json:"id"`
+	AccountID           uuid.UUID          `json:"account_id"`
+	Name                string             `json:"name"`
+	Description         pgtype.Text        `json:"description"`
+	BusinessName        pgtype.Text        `json:"business_name"`
+	BusinessType        pgtype.Text        `json:"business_type"`
+	WebsiteUrl          pgtype.Text        `json:"website_url"`
+	SupportEmail        pgtype.Text        `json:"support_email"`
+	SupportPhone        pgtype.Text        `json:"support_phone"`
+	Metadata            []byte             `json:"metadata"`
+	Livemode            pgtype.Bool        `json:"livemode"`
+	DefaultCurrency     pgtype.Text        `json:"default_currency"`
+	SupportedCurrencies []byte             `json:"supported_currencies"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type WorkspaceCustomer struct {

@@ -499,7 +499,7 @@ type ListSubscriptionEventDetailsWithPaginationRow struct {
 	ProductName              string                `json:"product_name"`
 	PriceID                  uuid.UUID             `json:"price_id"`
 	PriceType                PriceType             `json:"price_type"`
-	PriceCurrency            Currency              `json:"price_currency"`
+	PriceCurrency            string                `json:"price_currency"`
 	PriceUnitAmountInPennies int32                 `json:"price_unit_amount_in_pennies"`
 	PriceIntervalType        IntervalType          `json:"price_interval_type"`
 	PriceTermLength          int32                 `json:"price_term_length"`

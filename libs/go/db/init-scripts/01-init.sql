@@ -9,7 +9,7 @@ CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended', 'pending');
 CREATE TYPE price_type AS ENUM ('recurring', 'one_off');
 CREATE TYPE interval_type AS ENUM ('1min', '5mins', 'daily', 'week', 'month', 'year');
 CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkadot');
-CREATE TYPE currency AS ENUM ('USD', 'EUR');
+-- Currency enum removed - using fiat_currencies table instead
 CREATE TYPE wallet_type AS ENUM ('wallet', 'circle_wallet', 'web3auth');
 CREATE TYPE circle_network_type AS ENUM ('ARB', 'ARB-SEPOLIA', 'ETH', 'ETH-SEPOLIA', 'MATIC', 'MATIC-AMOY', 'OP', 'OP-SEPOLIA', 'BASE', 'BASE-SEPOLIA', 'UNI', 'UNI-SEPOLIA');
 CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'overdue', 'suspended', 'failed', 'completed');
@@ -32,6 +32,41 @@ CREATE TYPE subscription_event_type AS ENUM (
 );
 
 -- Create Tables in dependency order
+
+-- Fiat Currencies table (no dependencies - replaces currency enum)
+CREATE TABLE IF NOT EXISTS fiat_currencies (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code VARCHAR(3) NOT NULL UNIQUE, -- ISO 4217 currency code (USD, EUR, GBP, etc.)
+    name VARCHAR(100) NOT NULL, -- Full currency name
+    symbol VARCHAR(10) NOT NULL, -- Currency symbol ($, €, £, etc.)
+    decimal_places INTEGER NOT NULL DEFAULT 2, -- Number of decimal places
+    is_active BOOLEAN DEFAULT true,
+    
+    -- Display settings
+    symbol_position VARCHAR(10) DEFAULT 'before', -- before or after the amount
+    thousand_separator VARCHAR(2) DEFAULT ',',
+    decimal_separator VARCHAR(2) DEFAULT '.',
+    
+    -- Regional info
+    countries JSONB DEFAULT '[]', -- Array of country codes using this currency
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert common currencies (only USD and EUR are active initially)
+INSERT INTO fiat_currencies (code, name, symbol, decimal_places, is_active, countries) VALUES
+    ('USD', 'US Dollar', '$', 2, true, '["US"]'),
+    ('EUR', 'Euro', '€', 2, true, '["DE", "FR", "IT", "ES", "NL", "BE", "AT", "IE", "FI", "PT", "GR", "LU"]'),
+    ('GBP', 'British Pound', '£', 2, false, '["GB"]'),
+    ('JPY', 'Japanese Yen', '¥', 0, false, '["JP"]'),
+    ('CAD', 'Canadian Dollar', 'C$', 2, false, '["CA"]'),
+    ('AUD', 'Australian Dollar', 'A$', 2, false, '["AU"]'),
+    ('CHF', 'Swiss Franc', 'Fr', 2, false, '["CH"]'),
+    ('CNY', 'Chinese Yuan', '¥', 2, false, '["CN"]'),
+    ('INR', 'Indian Rupee', '₹', 2, false, '["IN"]'),
+    ('SGD', 'Singapore Dollar', 'S$', 2, false, '["SG"]')
+ON CONFLICT (code) DO NOTHING;
 
 -- Accounts table (top level organization)
 CREATE TABLE IF NOT EXISTS accounts (
@@ -99,6 +134,8 @@ CREATE TABLE IF NOT EXISTS workspaces (
     support_phone VARCHAR(255),
     metadata JSONB,
     livemode BOOLEAN DEFAULT false,
+    default_currency VARCHAR(3) DEFAULT 'USD' REFERENCES fiat_currencies(code),
+    supported_currencies JSONB DEFAULT '["USD"]'::jsonb, -- Array of supported currency codes
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE
@@ -282,7 +319,7 @@ CREATE TABLE prices (
     active BOOLEAN NOT NULL DEFAULT true,
     type price_type NOT NULL, -- 'recurring' or 'one_off'
     nickname TEXT,
-    currency currency NOT NULL, -- 'USD', 'EUR'
+    currency VARCHAR(3) NOT NULL REFERENCES fiat_currencies(code), -- ISO 4217 currency code
     unit_amount_in_pennies INTEGER NOT NULL,
     interval_type interval_type NOT NULL,
     term_length INTEGER NOT NULL, -- Nullable, for 'recurring' type, e.g., 12 for 12 months
@@ -687,6 +724,7 @@ CREATE INDEX idx_prices_product_id ON prices(product_id);
 CREATE INDEX idx_prices_active ON prices(active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_prices_type ON prices(type);
 CREATE INDEX idx_prices_currency ON prices(currency);
+CREATE INDEX idx_fiat_currencies_active ON fiat_currencies(is_active, code);
 CREATE INDEX idx_prices_payment_provider ON prices(payment_provider) WHERE deleted_at IS NULL;
 CREATE INDEX idx_prices_payment_sync_status ON prices(payment_sync_status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_prices_external_id ON prices(external_id) WHERE deleted_at IS NULL;

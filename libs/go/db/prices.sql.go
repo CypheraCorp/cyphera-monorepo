@@ -99,7 +99,7 @@ type CreatePriceParams struct {
 	Active              bool         `json:"active"`
 	Type                PriceType    `json:"type"`
 	Nickname            pgtype.Text  `json:"nickname"`
-	Currency            Currency     `json:"currency"`
+	Currency            string       `json:"currency"`
 	UnitAmountInPennies int32        `json:"unit_amount_in_pennies"`
 	IntervalType        IntervalType `json:"interval_type"`
 	TermLength          int32        `json:"term_length"`
@@ -174,7 +174,7 @@ type CreatePriceWithSyncParams struct {
 	Active              bool               `json:"active"`
 	Type                PriceType          `json:"type"`
 	Nickname            pgtype.Text        `json:"nickname"`
-	Currency            Currency           `json:"currency"`
+	Currency            string             `json:"currency"`
 	UnitAmountInPennies int32              `json:"unit_amount_in_pennies"`
 	IntervalType        IntervalType       `json:"interval_type"`
 	TermLength          int32              `json:"term_length"`
@@ -355,7 +355,7 @@ type GetPriceWithProductRow struct {
 	Active              bool               `json:"active"`
 	Type                PriceType          `json:"type"`
 	Nickname            pgtype.Text        `json:"nickname"`
-	Currency            Currency           `json:"currency"`
+	Currency            string             `json:"currency"`
 	UnitAmountInPennies int32              `json:"unit_amount_in_pennies"`
 	IntervalType        IntervalType       `json:"interval_type"`
 	TermLength          int32              `json:"term_length"`

@@ -2,13 +2,14 @@ package handlers
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"strings"
+
 	"github.com/cyphera/cyphera-api/libs/go/client/coinmarketcap"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
-	"errors"
-	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -205,14 +206,14 @@ func sendError(c *gin.Context, statusCode int, message string, err error) {
 	if id, exists := c.Get("correlationID"); exists {
 		correlationID, _ = id.(string)
 	}
-	
+
 	logger.Error(message,
 		zap.Error(err),
 		zap.String("path", c.Request.URL.Path),
 		zap.String("method", c.Request.Method),
 		zap.String("correlation_id", correlationID),
 	)
-	
+
 	// Include correlation ID in error response for debugging
 	response := struct {
 		Error         string `json:"error"`
@@ -221,7 +222,7 @@ func sendError(c *gin.Context, statusCode int, message string, err error) {
 		Error:         message,
 		CorrelationID: correlationID,
 	}
-	
+
 	c.JSON(statusCode, response)
 }
 

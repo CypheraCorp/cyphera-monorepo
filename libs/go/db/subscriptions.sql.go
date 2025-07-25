@@ -545,7 +545,7 @@ type GetSubscriptionWithDetailsRow struct {
 	NetworkName              string             `json:"network_name"`
 	ChainID                  int32              `json:"chain_id"`
 	PriceType                PriceType          `json:"price_type"`
-	PriceCurrency            Currency           `json:"price_currency"`
+	PriceCurrency            string             `json:"price_currency"`
 	PriceUnitAmountInPennies int32              `json:"price_unit_amount_in_pennies"`
 	PriceIntervalType        IntervalType       `json:"price_interval_type"`
 	PriceTermLength          int32              `json:"price_term_length"`
@@ -1062,7 +1062,7 @@ type ListSubscriptionDetailsWithPaginationRow struct {
 	PriceActive                    bool               `json:"price_active"`
 	PriceType                      PriceType          `json:"price_type"`
 	PriceNickname                  pgtype.Text        `json:"price_nickname"`
-	PriceCurrency                  Currency           `json:"price_currency"`
+	PriceCurrency                  string             `json:"price_currency"`
 	PriceUnitAmountInPennies       int32              `json:"price_unit_amount_in_pennies"`
 	PriceIntervalType              IntervalType       `json:"price_interval_type"`
 	PriceTermLength                int32              `json:"price_term_length"`

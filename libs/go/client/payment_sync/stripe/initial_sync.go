@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	ps "github.com/cyphera/cyphera-api/libs/go/client/payment_sync"
@@ -537,16 +538,8 @@ func (s *StripeService) UpsertPrice(ctx context.Context, session *db.PaymentSync
 		priceType = db.PriceTypeOneOff // default
 	}
 
-	// Convert currency to enum
-	var currency db.Currency
-	switch price.Currency {
-	case "usd":
-		currency = db.CurrencyUSD
-	case "eur":
-		currency = db.CurrencyEUR
-	default:
-		currency = db.CurrencyUSD // default
-	}
+	// Convert currency to uppercase string for database
+	currency := strings.ToUpper(price.Currency)
 
 	// Handle interval type for recurring prices
 	var intervalType db.IntervalType
