@@ -674,6 +674,113 @@ type DelegationDatum struct {
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 }
 
+type DunningAnalytic struct {
+	ID                       uuid.UUID          `json:"id"`
+	WorkspaceID              uuid.UUID          `json:"workspace_id"`
+	PeriodStart              pgtype.Date        `json:"period_start"`
+	PeriodEnd                pgtype.Date        `json:"period_end"`
+	PeriodType               string             `json:"period_type"`
+	TotalCampaignsStarted    pgtype.Int4        `json:"total_campaigns_started"`
+	TotalCampaignsRecovered  pgtype.Int4        `json:"total_campaigns_recovered"`
+	TotalCampaignsLost       pgtype.Int4        `json:"total_campaigns_lost"`
+	RecoveryRate             pgtype.Numeric     `json:"recovery_rate"`
+	TotalAtRiskCents         pgtype.Int8        `json:"total_at_risk_cents"`
+	TotalRecoveredCents      pgtype.Int8        `json:"total_recovered_cents"`
+	TotalLostCents           pgtype.Int8        `json:"total_lost_cents"`
+	TotalPaymentRetries      pgtype.Int4        `json:"total_payment_retries"`
+	SuccessfulPaymentRetries pgtype.Int4        `json:"successful_payment_retries"`
+	TotalEmailsSent          pgtype.Int4        `json:"total_emails_sent"`
+	EmailOpenRate            pgtype.Numeric     `json:"email_open_rate"`
+	EmailClickRate           pgtype.Numeric     `json:"email_click_rate"`
+	RecoveryByAttempt        []byte             `json:"recovery_by_attempt"`
+	AvgHoursToRecovery       pgtype.Numeric     `json:"avg_hours_to_recovery"`
+	CreatedAt                pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                pgtype.Timestamptz `json:"updated_at"`
+}
+
+type DunningAttempt struct {
+	ID                 uuid.UUID          `json:"id"`
+	CampaignID         uuid.UUID          `json:"campaign_id"`
+	AttemptNumber      int32              `json:"attempt_number"`
+	AttemptType        string             `json:"attempt_type"`
+	Status             string             `json:"status"`
+	StartedAt          pgtype.Timestamptz `json:"started_at"`
+	CompletedAt        pgtype.Timestamptz `json:"completed_at"`
+	PaymentID          pgtype.UUID        `json:"payment_id"`
+	PaymentStatus      pgtype.Text        `json:"payment_status"`
+	PaymentError       pgtype.Text        `json:"payment_error"`
+	CommunicationType  pgtype.Text        `json:"communication_type"`
+	CommunicationSent  pgtype.Bool        `json:"communication_sent"`
+	CommunicationError pgtype.Text        `json:"communication_error"`
+	EmailTemplateID    pgtype.UUID        `json:"email_template_id"`
+	CustomerResponse   pgtype.Text        `json:"customer_response"`
+	CustomerResponseAt pgtype.Timestamptz `json:"customer_response_at"`
+	Metadata           []byte             `json:"metadata"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+}
+
+type DunningCampaign struct {
+	ID                    uuid.UUID          `json:"id"`
+	WorkspaceID           uuid.UUID          `json:"workspace_id"`
+	ConfigurationID       uuid.UUID          `json:"configuration_id"`
+	SubscriptionID        pgtype.UUID        `json:"subscription_id"`
+	PaymentID             pgtype.UUID        `json:"payment_id"`
+	CustomerID            uuid.UUID          `json:"customer_id"`
+	Status                string             `json:"status"`
+	StartedAt             pgtype.Timestamptz `json:"started_at"`
+	CompletedAt           pgtype.Timestamptz `json:"completed_at"`
+	CurrentAttempt        int32              `json:"current_attempt"`
+	NextRetryAt           pgtype.Timestamptz `json:"next_retry_at"`
+	LastRetryAt           pgtype.Timestamptz `json:"last_retry_at"`
+	Recovered             pgtype.Bool        `json:"recovered"`
+	RecoveredAt           pgtype.Timestamptz `json:"recovered_at"`
+	RecoveredAmountCents  pgtype.Int8        `json:"recovered_amount_cents"`
+	FinalActionTaken      pgtype.Text        `json:"final_action_taken"`
+	FinalActionAt         pgtype.Timestamptz `json:"final_action_at"`
+	OriginalFailureReason pgtype.Text        `json:"original_failure_reason"`
+	OriginalAmountCents   int64              `json:"original_amount_cents"`
+	Currency              string             `json:"currency"`
+	Metadata              []byte             `json:"metadata"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+type DunningConfiguration struct {
+	ID                     uuid.UUID          `json:"id"`
+	WorkspaceID            uuid.UUID          `json:"workspace_id"`
+	Name                   string             `json:"name"`
+	Description            pgtype.Text        `json:"description"`
+	IsActive               pgtype.Bool        `json:"is_active"`
+	IsDefault              pgtype.Bool        `json:"is_default"`
+	MaxRetryAttempts       int32              `json:"max_retry_attempts"`
+	RetryIntervalDays      []int32            `json:"retry_interval_days"`
+	AttemptActions         json.RawMessage    `json:"attempt_actions"`
+	FinalAction            string             `json:"final_action"`
+	FinalActionConfig      []byte             `json:"final_action_config"`
+	SendPreDunningReminder pgtype.Bool        `json:"send_pre_dunning_reminder"`
+	PreDunningDays         pgtype.Int4        `json:"pre_dunning_days"`
+	AllowCustomerRetry     pgtype.Bool        `json:"allow_customer_retry"`
+	GracePeriodHours       pgtype.Int4        `json:"grace_period_hours"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt              pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type DunningEmailTemplate struct {
+	ID                 uuid.UUID          `json:"id"`
+	WorkspaceID        uuid.UUID          `json:"workspace_id"`
+	Name               string             `json:"name"`
+	TemplateType       string             `json:"template_type"`
+	Subject            string             `json:"subject"`
+	BodyHtml           string             `json:"body_html"`
+	BodyText           pgtype.Text        `json:"body_text"`
+	AvailableVariables []byte             `json:"available_variables"`
+	IsActive           pgtype.Bool        `json:"is_active"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+}
+
 type FailedSubscriptionAttempt struct {
 	ID                  uuid.UUID             `json:"id"`
 	CustomerID          pgtype.UUID           `json:"customer_id"`
@@ -1024,6 +1131,13 @@ type Subscription struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	CancelAt           pgtype.Timestamptz `json:"cancel_at"`
+	CancelledAt        pgtype.Timestamptz `json:"cancelled_at"`
+	CancellationReason pgtype.Text        `json:"cancellation_reason"`
+	PausedAt           pgtype.Timestamptz `json:"paused_at"`
+	PauseEndsAt        pgtype.Timestamptz `json:"pause_ends_at"`
+	TrialStart         pgtype.Timestamptz `json:"trial_start"`
+	TrialEnd           pgtype.Timestamptz `json:"trial_end"`
 }
 
 type SubscriptionEvent struct {
@@ -1037,6 +1151,57 @@ type SubscriptionEvent struct {
 	Metadata        []byte                `json:"metadata"`
 	CreatedAt       pgtype.Timestamptz    `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz    `json:"updated_at"`
+}
+
+type SubscriptionProration struct {
+	ID                  uuid.UUID          `json:"id"`
+	SubscriptionID      uuid.UUID          `json:"subscription_id"`
+	ScheduleChangeID    pgtype.UUID        `json:"schedule_change_id"`
+	ProrationType       string             `json:"proration_type"`
+	PeriodStart         pgtype.Timestamptz `json:"period_start"`
+	PeriodEnd           pgtype.Timestamptz `json:"period_end"`
+	DaysTotal           int32              `json:"days_total"`
+	DaysUsed            int32              `json:"days_used"`
+	DaysRemaining       int32              `json:"days_remaining"`
+	OriginalAmountCents int64              `json:"original_amount_cents"`
+	UsedAmountCents     int64              `json:"used_amount_cents"`
+	CreditAmountCents   int64              `json:"credit_amount_cents"`
+	AppliedToInvoiceID  pgtype.UUID        `json:"applied_to_invoice_id"`
+	AppliedToPaymentID  pgtype.UUID        `json:"applied_to_payment_id"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+}
+
+type SubscriptionScheduleChange struct {
+	ID                   uuid.UUID          `json:"id"`
+	SubscriptionID       uuid.UUID          `json:"subscription_id"`
+	ChangeType           string             `json:"change_type"`
+	ScheduledFor         pgtype.Timestamptz `json:"scheduled_for"`
+	FromLineItems        []byte             `json:"from_line_items"`
+	ToLineItems          []byte             `json:"to_line_items"`
+	ProrationAmountCents pgtype.Int8        `json:"proration_amount_cents"`
+	ProrationCalculation []byte             `json:"proration_calculation"`
+	Status               string             `json:"status"`
+	ProcessedAt          pgtype.Timestamptz `json:"processed_at"`
+	ErrorMessage         pgtype.Text        `json:"error_message"`
+	Reason               pgtype.Text        `json:"reason"`
+	InitiatedBy          pgtype.Text        `json:"initiated_by"`
+	Metadata             []byte             `json:"metadata"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
+type SubscriptionStateHistory struct {
+	ID                uuid.UUID              `json:"id"`
+	SubscriptionID    uuid.UUID              `json:"subscription_id"`
+	FromStatus        NullSubscriptionStatus `json:"from_status"`
+	ToStatus          SubscriptionStatus     `json:"to_status"`
+	FromAmountCents   pgtype.Int8            `json:"from_amount_cents"`
+	ToAmountCents     pgtype.Int8            `json:"to_amount_cents"`
+	LineItemsSnapshot []byte                 `json:"line_items_snapshot"`
+	ChangeReason      pgtype.Text            `json:"change_reason"`
+	ScheduleChangeID  pgtype.UUID            `json:"schedule_change_id"`
+	InitiatedBy       pgtype.Text            `json:"initiated_by"`
+	OccurredAt        pgtype.Timestamptz     `json:"occurred_at"`
 }
 
 type Token struct {

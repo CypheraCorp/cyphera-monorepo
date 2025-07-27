@@ -1,0 +1,333 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Multi-Provider Webhook Infrastructure with Error Recovery'
+
+# ============================================================================
+# Template Parameters
+# ============================================================================
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Deployment stage
+
+  # Database Configuration
+  RdsSecretArnValue:
+    Type: String
+    Description: ARN of the RDS secret containing database credentials
+    
+  DbHostValue:
+    Type: String
+    Description: Database host endpoint
+
+  # Terraform-managed Infrastructure References
+  WebhookSqsQueueUrl:
+    Type: String
+    Description: ARN of the SQS queue for webhook events (converted from URL by deployment script)
+
+  WebhookDlqQueueUrl:
+    Type: String
+    Description: ARN of the SQS DLQ for failed webhook events (converted from URL by deployment script)
+
+  # Global encryption key for workspace credentials
+  PaymentSyncEncryptionKeySecretArn:
+    Type: String
+    Description: ARN of the payment sync encryption key secret (from Terraform)
+
+  # VPC Configuration (for Lambda functions)
+  LambdaSecurityGroupId:
+    Type: String
+    Description: Security group ID for Lambda functions
+
+  PrivateSubnet1Id:
+    Type: String
+    Description: First private subnet ID for Lambda functions
+
+  PrivateSubnet2Id:
+    Type: String
+    Description: Second private subnet ID for Lambda functions
+
+  # IAM Policy ARNs (managed by Terraform)
+  WebhookSecretsManagerPolicyArn:
+    Type: String
+    Description: ARN of the webhook secrets manager policy (from Terraform)
+
+# ============================================================================
+# Global Function Configuration
+# ============================================================================
+Globals:
+  Function:
+    Runtime: provided.al2
+    Architectures:
+      - x86_64
+    MemorySize: 512
+    Timeout: 60
+
+# ============================================================================
+# Lambda Functions
+# ============================================================================
+Resources:
+  # ============================================================================
+  # API Gateway for Webhook Endpoints
+  # ============================================================================
+  WebhookApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "cyphera-webhook-api-${Stage}"
+      StageName: !Ref Stage
+      Description: !Sub "Multi-provider webhook endpoints for ${Stage}"
+      
+      # Enable CORS for webhook endpoints
+      Cors:
+        AllowMethods: "'OPTIONS,POST'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Workspace-ID,Stripe-Signature'"
+        AllowOrigin: "'*'"
+        
+      # API Gateway configuration
+      EndpointConfiguration:
+        Type: EDGE
+      
+      # Enable X-Ray tracing
+      TracingEnabled: true
+      
+      # Binary media types for webhook payloads
+      BinaryMediaTypes:
+        - application/octet-stream
+        - application/json
+
+  # Webhook Receiver Function - Receives webhooks from API Gateway
+  WebhookReceiverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "cyphera-webhook-receiver-${Stage}"
+      CodeUri: ../ # Point to project root relative to template location
+      Handler: bootstrap # Standard handler for Go custom runtime
+      Environment:
+        Variables:
+          STAGE: !Ref Stage
+          # Database configuration
+          RDS_SECRET_ARN: !Ref RdsSecretArnValue
+          DB_HOST: !Ref DbHostValue
+          DB_NAME: cyphera
+          DB_SSLMODE: require
+          # Webhook configuration - using the variable names expected by the Go code
+          SQS_QUEUE_URL: !Ref WebhookSqsQueueUrl
+          PAYMENT_SYNC_ENCRYPTION_KEY_ARN: !Ref PaymentSyncEncryptionKeySecretArn
+          # Lambda Function Type for routing
+          LAMBDA_FUNCTION_TYPE: webhook_receiver
+      # VPC Configuration
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroupId
+        SubnetIds:
+          - !Ref PrivateSubnet1Id
+          - !Ref PrivateSubnet2Id
+      # IAM Permissions
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSLambdaVPCAccessExecutionRole
+        # Attach Terraform-managed policies
+        - !Ref WebhookSecretsManagerPolicyArn
+      # API Gateway Events
+      Events:
+        HealthCheck:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WebhookApi
+            Path: /health
+            Method: GET
+        WebhookEndpoint:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WebhookApi
+            Path: /webhooks/{provider}
+            Method: POST
+    Metadata:
+      BuildMethod: makefile
+
+  # Webhook Processor Function - Processes webhooks from SQS
+  WebhookProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "cyphera-webhook-processor-${Stage}"
+      CodeUri: ../ # Point to project root relative to template location
+      Handler: bootstrap # Standard handler for Go custom runtime
+      Timeout: 30 # Reduced to work with SQS visibility timeout
+      MemorySize: 1024 # More memory for processing complex webhooks
+      Environment:
+        Variables:
+          STAGE: !Ref Stage
+          # Database configuration
+          RDS_SECRET_ARN: !Ref RdsSecretArnValue
+          DB_HOST: !Ref DbHostValue
+          DB_NAME: cyphera
+          DB_SSLMODE: require
+          # Webhook configuration
+          PAYMENT_SYNC_ENCRYPTION_KEY_ARN: !Ref PaymentSyncEncryptionKeySecretArn
+          # Lambda Function Type for routing
+          LAMBDA_FUNCTION_TYPE: webhook_processor
+      # VPC Configuration
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroupId
+        SubnetIds:
+          - !Ref PrivateSubnet1Id
+          - !Ref PrivateSubnet2Id
+      # IAM Permissions
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSLambdaVPCAccessExecutionRole
+        # Attach Terraform-managed policies
+        - !Ref WebhookSecretsManagerPolicyArn
+        # Specific permission for RDS secret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource:
+                - !Ref RdsSecretArnValue
+      # SQS Event Source Mapping
+      Events:
+        SqsEvent:
+          Type: SQS
+          Properties:
+            Queue: !Ref WebhookSqsQueueUrl
+            BatchSize: 1 # Process one message at a time
+            MaximumBatchingWindowInSeconds: 0 # Process immediately
+    Metadata:
+      BuildMethod: makefile
+
+  # DLQ Processor Function - Processes failed webhook events from DLQ
+  DLQProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "cyphera-dlq-processor-${Stage}"
+      CodeUri: ../ # Point to project root relative to template location
+      Handler: bootstrap # Standard handler for Go custom runtime
+      Timeout: 30 # Reduced to work with SQS visibility timeout
+      MemorySize: 1024 # More memory for complex retry logic
+      Environment:
+        Variables:
+          STAGE: !Ref Stage
+          # Database configuration
+          RDS_SECRET_ARN: !Ref RdsSecretArnValue
+          DB_HOST: !Ref DbHostValue
+          DB_NAME: cyphera
+          DB_SSLMODE: require
+          # DLQ Processing configuration
+          PAYMENT_SYNC_ENCRYPTION_KEY_ARN: !Ref PaymentSyncEncryptionKeySecretArn
+          # Lambda Function Type for routing
+          LAMBDA_FUNCTION_TYPE: dlq_processor
+          # DLQ specific configuration
+          MAX_RETRY_ATTEMPTS: "3"
+          RETRY_BACKOFF_MS: "1000"
+      # VPC Configuration
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroupId
+        SubnetIds:
+          - !Ref PrivateSubnet1Id
+          - !Ref PrivateSubnet2Id
+      # IAM Permissions
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSLambdaVPCAccessExecutionRole
+        # Attach Terraform-managed policies
+        - !Ref WebhookSecretsManagerPolicyArn
+        # Specific permission for RDS secret
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource:
+                - !Ref RdsSecretArnValue
+      # SQS Event Source Mapping for DLQ
+      Events:
+        DlqEvent:
+          Type: SQS
+          Properties:
+            Queue: !Ref WebhookDlqQueueUrl
+            BatchSize: 1 # Process one DLQ message at a time
+            MaximumBatchingWindowInSeconds: 30 # Small batching window for efficiency
+    Metadata:
+      BuildMethod: makefile
+
+# ============================================================================
+# CloudWatch Log Groups
+# ============================================================================
+  WebhookReceiverLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/cyphera-webhook-receiver-${Stage}"
+      RetentionInDays: 14
+
+  WebhookProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/cyphera-webhook-processor-${Stage}"
+      RetentionInDays: 14
+
+  DLQProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/cyphera-dlq-processor-${Stage}"
+      RetentionInDays: 30 # Longer retention for DLQ processing logs
+
+# ============================================================================
+# Outputs
+# ============================================================================
+Outputs:
+  WebhookReceiverFunctionName:
+    Description: "Webhook Receiver Lambda Function Name"
+    Value: !Ref WebhookReceiverFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-WebhookReceiverFunction"
+
+  WebhookReceiverFunctionArn:
+    Description: "Webhook Receiver Lambda Function ARN"
+    Value: !GetAtt WebhookReceiverFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-WebhookReceiverFunctionArn"
+
+  WebhookProcessorFunctionName:
+    Description: "Webhook Processor Lambda Function Name"
+    Value: !Ref WebhookProcessorFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-WebhookProcessorFunction"
+
+  WebhookProcessorFunctionArn:
+    Description: "Webhook Processor Lambda Function ARN"
+    Value: !GetAtt WebhookProcessorFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-WebhookProcessorFunctionArn"
+
+  DLQProcessorFunctionName:
+    Description: "DLQ Processor Lambda Function Name"
+    Value: !Ref DLQProcessorFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-DLQProcessorFunction"
+
+  DLQProcessorFunctionArn:
+    Description: "DLQ Processor Lambda Function ARN"
+    Value: !GetAtt DLQProcessorFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-DLQProcessorFunctionArn"
+
+  WebhookApiId:
+    Description: "Webhook API Gateway ID"
+    Value: !Ref WebhookApi
+    Export:
+      Name: !Sub "${AWS::StackName}-WebhookApiId"
+
+  WebhookApiUrl:
+    Description: "Webhook API Gateway URL"
+    Value: !Sub "https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+    Export:
+      Name: !Sub "${AWS::StackName}-WebhookApiUrl"
+
+  WebhookEndpoint:
+    Description: "Webhook endpoint URL for providers"
+    Value: !Sub "https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/webhooks/{provider}"
+    Export:
+      Name: !Sub "${AWS::StackName}-WebhookEndpoint" 

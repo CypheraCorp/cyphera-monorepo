@@ -100,7 +100,7 @@ type RequestLog struct {
 }
 
 // EnsureValidAPIKeyOrToken is a middleware that checks for either a valid API key or JWT token
-func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerFunc {
+func (ac *AuthClient) EnsureValidAPIKeyOrToken(services CommonServicesInterface) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Debug: Log all headers to see what's being sent
 		logger.Log.Info("Request headers in auth middleware",
@@ -129,7 +129,7 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerF
 				zap.String("key_preview", keyPreview),
 			)
 
-			workspace, account, key, err := ac.validateAPIKey(c, queries, apiKey)
+			workspace, account, key, err := ac.validateAPIKey(c, services, apiKey)
 			if err != nil {
 				logger.Log.Debug("API key validation failed",
 					zap.Error(err),
@@ -180,7 +180,7 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerF
 			zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
 		)
 
-		user, account, err := ac.validateJWTToken(c, queries, authHeader)
+		user, account, err := ac.validateJWTToken(c, services, authHeader)
 		if err != nil {
 			logger.Log.Error("JWT token validation failed",
 				zap.Error(err),
@@ -241,7 +241,7 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerF
 		}
 
 		// Get workspace to verify it belongs to the account
-		workspace, err := queries.GetWorkspace(c.Request.Context(), workspaceUUID)
+		workspace, err := services.GetDB().GetWorkspace(c.Request.Context(), workspaceUUID)
 		if err != nil {
 			logger.Log.Error("Failed to get workspace",
 				zap.String("workspace_id", workspaceID),
@@ -277,7 +277,7 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(queries *db.Queries) gin.HandlerF
 }
 
 // validateAPIKey validates the API key and returns workspace and account information
-func (ac *AuthClient) validateAPIKey(c *gin.Context, queries *db.Queries, apiKey string) (db.Workspace, db.Account, db.ApiKey, error) {
+func (ac *AuthClient) validateAPIKey(c *gin.Context, services CommonServicesInterface, apiKey string) (db.Workspace, db.Account, db.ApiKey, error) {
 	// Log the API key being validated (first few characters for security)
 	keyPreview := ""
 	if len(apiKey) > 4 {
@@ -292,7 +292,7 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, queries *db.Queries, apiKey
 
 	// Get all active API keys to compare against (bcrypt comparison required)
 	// Note: In production with many keys, consider caching or using a different strategy
-	activeKeys, err := queries.GetAllActiveAPIKeys(c.Request.Context())
+	activeKeys, err := services.GetDB().GetAllActiveAPIKeys(c.Request.Context())
 	if err != nil {
 		logger.Log.Debug("Failed to retrieve active API keys",
 			zap.Error(err),
@@ -320,7 +320,7 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, queries *db.Queries, apiKey
 
 	// Update last used timestamp
 	go func() {
-		if err := queries.UpdateAPIKeyLastUsed(context.Background(), key.ID); err != nil {
+		if err := services.GetDB().UpdateAPIKeyLastUsed(context.Background(), key.ID); err != nil {
 			logger.Log.Warn("Failed to update API key last used timestamp",
 				zap.String("key_id", key.ID.String()),
 				zap.Error(err),
@@ -343,7 +343,7 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, queries *db.Queries, apiKey
 	}
 
 	// Get workspace associated with API key
-	workspace, err := queries.GetWorkspace(c.Request.Context(), key.WorkspaceID)
+	workspace, err := services.GetDB().GetWorkspace(c.Request.Context(), key.WorkspaceID)
 	if err != nil {
 		logger.Log.Debug("Failed to get workspace for API key",
 			zap.String("key_id", key.ID.String()),
@@ -354,7 +354,7 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, queries *db.Queries, apiKey
 	}
 
 	// Get account associated with workspace
-	account, err := queries.GetAccount(c.Request.Context(), workspace.AccountID)
+	account, err := services.GetDB().GetAccount(c.Request.Context(), workspace.AccountID)
 	if err != nil {
 		logger.Log.Debug("Failed to get account for workspace",
 			zap.String("workspace_id", workspace.ID.String()),
@@ -374,7 +374,7 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, queries *db.Queries, apiKey
 }
 
 // validateJWTToken validates the Web3Auth JWT token and returns user information
-func (ac *AuthClient) validateJWTToken(c *gin.Context, queries *db.Queries, authHeader string) (db.User, db.Account, error) {
+func (ac *AuthClient) validateJWTToken(c *gin.Context, services CommonServicesInterface, authHeader string) (db.User, db.Account, error) {
 	logger.Log.Info("validateJWTToken called",
 		zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
 		zap.String("path", c.Request.URL.Path),
@@ -446,7 +446,7 @@ func (ac *AuthClient) validateJWTToken(c *gin.Context, queries *db.Queries, auth
 	)
 
 	// Try to get existing user by Web3Auth ID
-	user, err := queries.GetUserByWeb3AuthID(c.Request.Context(), pgtype.Text{String: web3AuthID, Valid: true})
+	user, err := services.GetDB().GetUserByWeb3AuthID(c.Request.Context(), pgtype.Text{String: web3AuthID, Valid: true})
 	if err != nil {
 		logger.Log.Debug("GetUserByWeb3AuthID returned error",
 			zap.Error(err),
@@ -463,7 +463,7 @@ func (ac *AuthClient) validateJWTToken(c *gin.Context, queries *db.Queries, auth
 				zap.String("user_id", claims.UserId),
 			)
 
-			user, err = ac.createUserFromWeb3AuthClaims(c.Request.Context(), queries, claims, web3AuthID)
+			user, err = ac.createUserFromWeb3AuthClaims(c.Request.Context(), services, claims, web3AuthID)
 			if err != nil {
 				logger.Log.Error("Failed to create user from Web3Auth claims",
 					zap.Error(err),
@@ -484,7 +484,7 @@ func (ac *AuthClient) validateJWTToken(c *gin.Context, queries *db.Queries, auth
 	}
 
 	// Get user's account
-	account, err := queries.GetAccountByID(c.Request.Context(), user.AccountID)
+	account, err := services.GetDB().GetAccountByID(c.Request.Context(), user.AccountID)
 	if err != nil {
 		logger.Log.Error("Failed to get user account",
 			zap.String("user_id", user.ID.String()),
@@ -757,7 +757,7 @@ func (ac *AuthClient) initializeJWKS() error {
 	return nil
 }
 
-func (ac *AuthClient) createUserFromWeb3AuthClaims(ctx context.Context, queries *db.Queries, claims *Web3AuthClaims, web3AuthID string) (db.User, error) {
+func (ac *AuthClient) createUserFromWeb3AuthClaims(ctx context.Context, services CommonServicesInterface, claims *Web3AuthClaims, web3AuthID string) (db.User, error) {
 	logger.Log.Debug("Starting user creation from Web3Auth claims",
 		zap.String("web3auth_id", web3AuthID),
 		zap.String("email", claims.Email),
@@ -765,7 +765,7 @@ func (ac *AuthClient) createUserFromWeb3AuthClaims(ctx context.Context, queries 
 	)
 
 	// Create account first (assuming AccountType.MERCHANT for Web3Auth users)
-	account, err := queries.CreateAccount(ctx, db.CreateAccountParams{
+	account, err := services.GetDB().CreateAccount(ctx, db.CreateAccountParams{
 		Name:         fmt.Sprintf("%s's Account", claims.Name),
 		AccountType:  db.AccountTypeMerchant, // Web3Auth users default to merchant accounts
 		BusinessName: pgtype.Text{String: fmt.Sprintf("%s's Business", claims.Name), Valid: claims.Name != ""},
@@ -781,7 +781,7 @@ func (ac *AuthClient) createUserFromWeb3AuthClaims(ctx context.Context, queries 
 	logger.Log.Debug("Created account", zap.String("account_id", account.ID.String()))
 
 	// Create workspace for the account
-	workspace, err := queries.CreateWorkspace(ctx, db.CreateWorkspaceParams{
+	workspace, err := services.GetDB().CreateWorkspace(ctx, db.CreateWorkspaceParams{
 		AccountID:    account.ID,
 		Name:         fmt.Sprintf("%s's Workspace", claims.Name),
 		Description:  pgtype.Text{String: "Auto-created workspace for Web3Auth user", Valid: true},
@@ -807,7 +807,7 @@ func (ac *AuthClient) createUserFromWeb3AuthClaims(ctx context.Context, queries 
 		zap.String("verifier_id", claims.VerifierId),
 	)
 
-	user, err := queries.CreateUser(ctx, db.CreateUserParams{
+	user, err := services.GetDB().CreateUser(ctx, db.CreateUserParams{
 		AccountID:      account.ID,
 		Email:          claims.Email,
 		Role:           db.UserRoleDeveloper,                 // Default role for Web3Auth users
@@ -846,7 +846,7 @@ func (ac *AuthClient) createUserFromWeb3AuthClaims(ctx context.Context, queries 
 	// Create Smart Account wallets from the wallets array
 	for _, wallet := range claims.Wallets {
 		if wallet.Address != "" {
-			err = ac.createSmartAccountWallet(ctx, queries, user, wallet.Address, workspace.ID)
+			err = ac.createSmartAccountWallet(ctx, services.GetDB(), user, wallet.Address, workspace.ID)
 			if err != nil {
 				// Log error but don't fail user creation
 				logger.Log.Error("Failed to create Smart Account wallet",

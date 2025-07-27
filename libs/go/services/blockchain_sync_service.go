@@ -31,11 +31,11 @@ type ethPriceCache struct {
 }
 
 // NewBlockchainSyncHelper creates a new blockchain sync helper
-func NewBlockchainSyncHelper(queries db.Querier, blockchainService *BlockchainService, cmcClient *coinmarketcap.Client) *BlockchainSyncHelper {
+func NewBlockchainSyncHelper(queries db.Querier, blockchainService *BlockchainService, cmcClient *coinmarketcap.Client, cmcAPIKey string) *BlockchainSyncHelper {
 	return &BlockchainSyncHelper{
 		queries:              queries,
 		blockchainService:    blockchainService,
-		paymentHelper:        NewPaymentService(queries),
+		paymentHelper:        NewPaymentService(queries, cmcAPIKey),
 		gasSponsorshipHelper: NewGasSponsorshipHelper(queries),
 		cmcClient:            cmcClient,
 		priceCache:           make(map[string]*ethPriceCache),

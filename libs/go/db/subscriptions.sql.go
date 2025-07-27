@@ -18,7 +18,7 @@ SET
     status = 'canceled',
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end
 `
 
 func (q *Queries) CancelSubscription(ctx context.Context, id uuid.UUID) (Subscription, error) {
@@ -49,6 +49,13 @@ func (q *Queries) CancelSubscription(ctx context.Context, id uuid.UUID) (Subscri
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 	)
 	return i, err
 }
@@ -60,7 +67,7 @@ SET
     next_redemption_date = NULL,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end
 `
 
 func (q *Queries) CompleteSubscription(ctx context.Context, id uuid.UUID) (Subscription, error) {
@@ -91,6 +98,13 @@ func (q *Queries) CompleteSubscription(ctx context.Context, id uuid.UUID) (Subsc
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 	)
 	return i, err
 }
@@ -155,7 +169,7 @@ INSERT INTO subscriptions (
     COALESCE($16, 'pending'),
     $17
 )
-RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end
 `
 
 type CreateSubscriptionParams struct {
@@ -224,6 +238,13 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscription
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 	)
 	return i, err
 }
@@ -253,7 +274,7 @@ INSERT INTO subscriptions (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
 )
-RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end
 `
 
 type CreateSubscriptionWithSyncParams struct {
@@ -328,6 +349,13 @@ func (q *Queries) CreateSubscriptionWithSync(ctx context.Context, arg CreateSubs
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 	)
 	return i, err
 }
@@ -344,7 +372,7 @@ func (q *Queries) DeleteSubscription(ctx context.Context, id uuid.UUID) error {
 }
 
 const getOverdueSubscriptions = `-- name: GetOverdueSubscriptions :many
-SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM subscriptions
+SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions
 WHERE 
     (current_period_end < CURRENT_TIMESTAMP OR status = 'overdue')
     AND deleted_at IS NULL
@@ -385,6 +413,13 @@ func (q *Queries) GetOverdueSubscriptions(ctx context.Context) ([]Subscription, 
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.CancelAt,
+			&i.CancelledAt,
+			&i.CancellationReason,
+			&i.PausedAt,
+			&i.PauseEndsAt,
+			&i.TrialStart,
+			&i.TrialEnd,
 		); err != nil {
 			return nil, err
 		}
@@ -397,7 +432,7 @@ func (q *Queries) GetOverdueSubscriptions(ctx context.Context) ([]Subscription, 
 }
 
 const getSubscription = `-- name: GetSubscription :one
-SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM subscriptions
+SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -429,12 +464,19 @@ func (q *Queries) GetSubscription(ctx context.Context, id uuid.UUID) (Subscripti
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 	)
 	return i, err
 }
 
 const getSubscriptionByExternalID = `-- name: GetSubscriptionByExternalID :one
-SELECT s.id, s.customer_id, s.product_id, s.workspace_id, s.price_id, s.product_token_id, s.external_id, s.token_amount, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.payment_sync_status, s.payment_synced_at, s.payment_sync_version, s.payment_provider, s.created_at, s.updated_at, s.deleted_at FROM subscriptions s
+SELECT s.id, s.customer_id, s.product_id, s.workspace_id, s.price_id, s.product_token_id, s.external_id, s.token_amount, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.payment_sync_status, s.payment_synced_at, s.payment_sync_version, s.payment_provider, s.created_at, s.updated_at, s.deleted_at, s.cancel_at, s.cancelled_at, s.cancellation_reason, s.paused_at, s.pause_ends_at, s.trial_start, s.trial_end FROM subscriptions s
 WHERE s.workspace_id = $1
   AND s.external_id = $2
   AND s.payment_provider = $3
@@ -475,13 +517,20 @@ func (q *Queries) GetSubscriptionByExternalID(ctx context.Context, arg GetSubscr
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 	)
 	return i, err
 }
 
 const getSubscriptionWithDetails = `-- name: GetSubscriptionWithDetails :one
 SELECT 
-    s.id, s.customer_id, s.product_id, s.workspace_id, s.price_id, s.product_token_id, s.external_id, s.token_amount, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.payment_sync_status, s.payment_synced_at, s.payment_sync_version, s.payment_provider, s.created_at, s.updated_at, s.deleted_at,
+    s.id, s.customer_id, s.product_id, s.workspace_id, s.price_id, s.product_token_id, s.external_id, s.token_amount, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.payment_sync_status, s.payment_synced_at, s.payment_sync_version, s.payment_provider, s.created_at, s.updated_at, s.deleted_at, s.cancel_at, s.cancelled_at, s.cancellation_reason, s.paused_at, s.pause_ends_at, s.trial_start, s.trial_end,
     p.name as product_name,
     c.name as customer_name,
     c.email as customer_email,
@@ -536,6 +585,13 @@ type GetSubscriptionWithDetailsRow struct {
 	CreatedAt                pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt                pgtype.Timestamptz `json:"deleted_at"`
+	CancelAt                 pgtype.Timestamptz `json:"cancel_at"`
+	CancelledAt              pgtype.Timestamptz `json:"cancelled_at"`
+	CancellationReason       pgtype.Text        `json:"cancellation_reason"`
+	PausedAt                 pgtype.Timestamptz `json:"paused_at"`
+	PauseEndsAt              pgtype.Timestamptz `json:"pause_ends_at"`
+	TrialStart               pgtype.Timestamptz `json:"trial_start"`
+	TrialEnd                 pgtype.Timestamptz `json:"trial_end"`
 	ProductName              string             `json:"product_name"`
 	CustomerName             pgtype.Text        `json:"customer_name"`
 	CustomerEmail            pgtype.Text        `json:"customer_email"`
@@ -579,6 +635,13 @@ func (q *Queries) GetSubscriptionWithDetails(ctx context.Context, arg GetSubscri
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 		&i.ProductName,
 		&i.CustomerName,
 		&i.CustomerEmail,
@@ -597,7 +660,7 @@ func (q *Queries) GetSubscriptionWithDetails(ctx context.Context, arg GetSubscri
 }
 
 const getSubscriptionWithWorkspace = `-- name: GetSubscriptionWithWorkspace :one
-SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM subscriptions s
+SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions s
 WHERE s.id = $1 AND s.workspace_id = $2 AND s.deleted_at IS NULL LIMIT 1
 `
 
@@ -634,12 +697,19 @@ func (q *Queries) GetSubscriptionWithWorkspace(ctx context.Context, arg GetSubsc
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 	)
 	return i, err
 }
 
 const getSubscriptionsByDelegation = `-- name: GetSubscriptionsByDelegation :many
-SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM subscriptions
+SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions
 WHERE delegation_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -678,6 +748,13 @@ func (q *Queries) GetSubscriptionsByDelegation(ctx context.Context, delegationID
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.CancelAt,
+			&i.CancelledAt,
+			&i.CancellationReason,
+			&i.PausedAt,
+			&i.PauseEndsAt,
+			&i.TrialStart,
+			&i.TrialEnd,
 		); err != nil {
 			return nil, err
 		}
@@ -691,7 +768,7 @@ func (q *Queries) GetSubscriptionsByDelegation(ctx context.Context, delegationID
 
 const getSubscriptionsNeedingSync = `-- name: GetSubscriptionsNeedingSync :many
 
-SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM subscriptions 
+SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions 
 WHERE workspace_id = $1 AND payment_sync_status = 'pending' AND deleted_at IS NULL
 ORDER BY created_at ASC
 `
@@ -731,6 +808,13 @@ func (q *Queries) GetSubscriptionsNeedingSync(ctx context.Context, workspaceID u
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.CancelAt,
+			&i.CancelledAt,
+			&i.CancellationReason,
+			&i.PausedAt,
+			&i.PauseEndsAt,
+			&i.TrialStart,
+			&i.TrialEnd,
 		); err != nil {
 			return nil, err
 		}
@@ -743,7 +827,7 @@ func (q *Queries) GetSubscriptionsNeedingSync(ctx context.Context, workspaceID u
 }
 
 const getSubscriptionsSyncedByProvider = `-- name: GetSubscriptionsSyncedByProvider :many
-SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM subscriptions 
+SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions 
 WHERE workspace_id = $1 AND payment_provider = $2 AND payment_sync_status != 'pending' AND deleted_at IS NULL
 ORDER BY payment_synced_at DESC
 `
@@ -787,6 +871,13 @@ func (q *Queries) GetSubscriptionsSyncedByProvider(ctx context.Context, arg GetS
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.CancelAt,
+			&i.CancelledAt,
+			&i.CancellationReason,
+			&i.PausedAt,
+			&i.PauseEndsAt,
+			&i.TrialStart,
+			&i.TrialEnd,
 		); err != nil {
 			return nil, err
 		}
@@ -799,7 +890,7 @@ func (q *Queries) GetSubscriptionsSyncedByProvider(ctx context.Context, arg GetS
 }
 
 const getSubscriptionsWithSyncConflicts = `-- name: GetSubscriptionsWithSyncConflicts :many
-SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM subscriptions 
+SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions 
 WHERE workspace_id = $1 AND payment_sync_status = 'conflict' AND deleted_at IS NULL
 ORDER BY payment_synced_at DESC
 `
@@ -838,6 +929,13 @@ func (q *Queries) GetSubscriptionsWithSyncConflicts(ctx context.Context, workspa
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.CancelAt,
+			&i.CancelledAt,
+			&i.CancellationReason,
+			&i.PausedAt,
+			&i.PauseEndsAt,
+			&i.TrialStart,
+			&i.TrialEnd,
 		); err != nil {
 			return nil, err
 		}
@@ -857,7 +955,7 @@ SET
     next_redemption_date = $3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end
 `
 
 type IncrementSubscriptionRedemptionParams struct {
@@ -894,12 +992,19 @@ func (q *Queries) IncrementSubscriptionRedemption(ctx context.Context, arg Incre
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 	)
 	return i, err
 }
 
 const listActiveSubscriptions = `-- name: ListActiveSubscriptions :many
-SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM subscriptions
+SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions
 WHERE (status = 'active' OR status = 'overdue') AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -938,6 +1043,13 @@ func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]Subscription, 
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.CancelAt,
+			&i.CancelledAt,
+			&i.CancellationReason,
+			&i.PausedAt,
+			&i.PauseEndsAt,
+			&i.TrialStart,
+			&i.TrialEnd,
 		); err != nil {
 			return nil, err
 		}
@@ -1147,7 +1259,7 @@ func (q *Queries) ListSubscriptionDetailsWithPagination(ctx context.Context, arg
 }
 
 const listSubscriptions = `-- name: ListSubscriptions :many
-SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM subscriptions
+SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -1186,6 +1298,13 @@ func (q *Queries) ListSubscriptions(ctx context.Context) ([]Subscription, error)
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.CancelAt,
+			&i.CancelledAt,
+			&i.CancellationReason,
+			&i.PausedAt,
+			&i.PauseEndsAt,
+			&i.TrialStart,
+			&i.TrialEnd,
 		); err != nil {
 			return nil, err
 		}
@@ -1198,7 +1317,7 @@ func (q *Queries) ListSubscriptions(ctx context.Context) ([]Subscription, error)
 }
 
 const listSubscriptionsByCustomer = `-- name: ListSubscriptionsByCustomer :many
-SELECT s.id, s.customer_id, s.product_id, s.workspace_id, s.price_id, s.product_token_id, s.external_id, s.token_amount, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.payment_sync_status, s.payment_synced_at, s.payment_sync_version, s.payment_provider, s.created_at, s.updated_at, s.deleted_at FROM subscriptions s
+SELECT s.id, s.customer_id, s.product_id, s.workspace_id, s.price_id, s.product_token_id, s.external_id, s.token_amount, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.payment_sync_status, s.payment_synced_at, s.payment_sync_version, s.payment_provider, s.created_at, s.updated_at, s.deleted_at, s.cancel_at, s.cancelled_at, s.cancellation_reason, s.paused_at, s.pause_ends_at, s.trial_start, s.trial_end FROM subscriptions s
 JOIN products p ON p.id = s.product_id
 WHERE s.customer_id = $1 AND s.workspace_id = $2 AND s.deleted_at IS NULL
 ORDER BY s.created_at DESC
@@ -1243,6 +1362,13 @@ func (q *Queries) ListSubscriptionsByCustomer(ctx context.Context, arg ListSubsc
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.CancelAt,
+			&i.CancelledAt,
+			&i.CancellationReason,
+			&i.PausedAt,
+			&i.PauseEndsAt,
+			&i.TrialStart,
+			&i.TrialEnd,
 		); err != nil {
 			return nil, err
 		}
@@ -1255,7 +1381,7 @@ func (q *Queries) ListSubscriptionsByCustomer(ctx context.Context, arg ListSubsc
 }
 
 const listSubscriptionsByProduct = `-- name: ListSubscriptionsByProduct :many
-SELECT s.id, s.customer_id, s.product_id, s.workspace_id, s.price_id, s.product_token_id, s.external_id, s.token_amount, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.payment_sync_status, s.payment_synced_at, s.payment_sync_version, s.payment_provider, s.created_at, s.updated_at, s.deleted_at FROM subscriptions s
+SELECT s.id, s.customer_id, s.product_id, s.workspace_id, s.price_id, s.product_token_id, s.external_id, s.token_amount, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.payment_sync_status, s.payment_synced_at, s.payment_sync_version, s.payment_provider, s.created_at, s.updated_at, s.deleted_at, s.cancel_at, s.cancelled_at, s.cancellation_reason, s.paused_at, s.pause_ends_at, s.trial_start, s.trial_end FROM subscriptions s
 JOIN products p ON s.product_id = p.id
 WHERE s.product_id = $1 AND s.workspace_id = $2 AND s.deleted_at IS NULL
 ORDER BY s.created_at DESC
@@ -1300,6 +1426,13 @@ func (q *Queries) ListSubscriptionsByProduct(ctx context.Context, arg ListSubscr
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.CancelAt,
+			&i.CancelledAt,
+			&i.CancellationReason,
+			&i.PausedAt,
+			&i.PauseEndsAt,
+			&i.TrialStart,
+			&i.TrialEnd,
 		); err != nil {
 			return nil, err
 		}
@@ -1385,7 +1518,7 @@ func (q *Queries) ListSubscriptionsDueForRedemption(ctx context.Context, nextRed
 }
 
 const listSubscriptionsWithPagination = `-- name: ListSubscriptionsWithPagination :many
-SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM subscriptions
+SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -1430,6 +1563,13 @@ func (q *Queries) ListSubscriptionsWithPagination(ctx context.Context, arg ListS
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.CancelAt,
+			&i.CancelledAt,
+			&i.CancellationReason,
+			&i.PausedAt,
+			&i.PauseEndsAt,
+			&i.TrialStart,
+			&i.TrialEnd,
 		); err != nil {
 			return nil, err
 		}
@@ -1442,7 +1582,7 @@ func (q *Queries) ListSubscriptionsWithPagination(ctx context.Context, arg ListS
 }
 
 const lockSubscriptionForProcessing = `-- name: LockSubscriptionForProcessing :one
-SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end
 FROM subscriptions
 WHERE id = $1 AND (status = 'active' OR status = 'overdue') AND deleted_at IS NULL
 FOR UPDATE NOWAIT
@@ -1477,6 +1617,13 @@ func (q *Queries) LockSubscriptionForProcessing(ctx context.Context, id uuid.UUI
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 	)
 	return i, err
 }
@@ -1501,7 +1648,7 @@ SET
     metadata = COALESCE($16, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end
 `
 
 type UpdateSubscriptionParams struct {
@@ -1568,6 +1715,13 @@ func (q *Queries) UpdateSubscription(ctx context.Context, arg UpdateSubscription
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 	)
 	return i, err
 }
@@ -1580,7 +1734,7 @@ SET payment_sync_status = $3,
     payment_provider = COALESCE($4, payment_provider),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end
 `
 
 type UpdateSubscriptionPaymentSyncStatusParams struct {
@@ -1623,6 +1777,13 @@ func (q *Queries) UpdateSubscriptionPaymentSyncStatus(ctx context.Context, arg U
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 	)
 	return i, err
 }
@@ -1633,7 +1794,7 @@ SET
     status = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end
 `
 
 type UpdateSubscriptionStatusParams struct {
@@ -1669,6 +1830,13 @@ func (q *Queries) UpdateSubscriptionStatus(ctx context.Context, arg UpdateSubscr
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 	)
 	return i, err
 }
@@ -1697,7 +1865,7 @@ SET
     payment_provider = COALESCE($20, payment_provider),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end
 `
 
 type UpdateSubscriptionWithSyncParams struct {
@@ -1772,6 +1940,13 @@ func (q *Queries) UpdateSubscriptionWithSync(ctx context.Context, arg UpdateSubs
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
 	)
 	return i, err
 }

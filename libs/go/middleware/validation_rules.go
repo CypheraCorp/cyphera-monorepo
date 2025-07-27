@@ -549,6 +549,67 @@ func ValidateBlockchainAddress(blockchain string) func(interface{}) error {
 	}
 }
 
+// Invoice validation rules
+var CreateInvoiceValidation = ValidationConfig{
+	MaxBodySize: 1024 * 1024, // 1MB for invoices with line items
+	Rules: []ValidationRule{
+		{
+			Field:    "customer_id",
+			Type:     "uuid",
+			Required: true,
+		},
+		{
+			Field:    "subscription_id",
+			Type:     "uuid",
+			Required: false,
+		},
+		{
+			Field:     "currency",
+			Type:      "string",
+			Required:  true,
+			MinLength: 3,
+			MaxLength: 3,
+			Pattern:   `^[A-Z]{3}$`,
+		},
+		{
+			Field:    "due_date",
+			Type:     "string",
+			Required: false,
+			Pattern:  `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$`, // ISO 8601
+		},
+		{
+			Field:    "discount_code",
+			Type:     "string",
+			Required: false,
+			MaxLength: 50,
+		},
+		{
+			Field:    "line_items",
+			Type:     "array",
+			Required: true,
+			Custom: func(value interface{}) error {
+				// Custom validation for line items array
+				items, ok := value.([]interface{})
+				if !ok {
+					return fmt.Errorf("line_items must be an array")
+				}
+				if len(items) < 1 {
+					return fmt.Errorf("at least one line item is required")
+				}
+				if len(items) > 100 {
+					return fmt.Errorf("maximum 100 line items allowed")
+				}
+				return nil
+			},
+		},
+		{
+			Field:    "metadata",
+			Type:     "object",
+			Required: false,
+		},
+	},
+}
+
 // ValidateQueryParams creates validation for URL query parameters
 func ValidateQueryParams(config ValidationConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {

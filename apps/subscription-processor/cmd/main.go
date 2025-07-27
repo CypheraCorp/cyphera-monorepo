@@ -15,6 +15,7 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/apps/subscription-processor/internal/processor"
+	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -24,9 +25,12 @@ import (
 
 // Application holds all dependencies for the Lambda handler
 type Application struct {
-	subscriptionProcessor *processor.SubscriptionProcessor
+	subscriptionProcessor      *processor.SubscriptionProcessor
+	scheduledChangesProcessor  *processor.ScheduledChangesProcessor
 	// Add other dependencies here if HandleRequest needs them directly
 	// e.g., dbPool *pgxpool.Pool, delegationClient *dsClient.DelegationClient
+	failureDetector *services.PaymentFailureDetector
+	dunningService  *services.DunningService
 }
 
 // HandleRequest is the actual Lambda handler function
@@ -48,6 +52,31 @@ func (app *Application) HandleRequest(ctx context.Context /*, event MyEvent - if
 		zap.Int("failed", results.Failed),
 	)
 
+	// --- Detect Failed Payments and Create Dunning Campaigns ---
+	if results.Failed > 0 {
+		logger.Info("Detecting failed payments and creating dunning campaigns...")
+		
+		// Look back 10 minutes for failed payments (adjust based on Lambda schedule)
+		detectionResult, err := app.failureDetector.DetectAndCreateCampaigns(ctx, 10)
+		if err != nil {
+			logger.Error("Error detecting failed payments", zap.Error(err))
+			// Don't fail the entire Lambda execution, just log the error
+		} else {
+			logger.Info("Failed payment detection results",
+				zap.Int("failed_events_found", len(detectionResult.FailedEvents)),
+				zap.Int("campaigns_created", detectionResult.CampaignsCreated),
+				zap.Int("campaigns_skipped", detectionResult.CampaignsSkipped),
+				zap.Int("errors", len(detectionResult.Errors)),
+			)
+		}
+	}
+
+	// --- Process Scheduled Subscription Changes ---
+	if app.scheduledChangesProcessor != nil {
+		logger.Info("Processing scheduled subscription changes...")
+		app.scheduledChangesProcessor.ProcessChanges()
+	}
+
 	logger.Info("Subscription processing finished successfully in HandleRequest.")
 	return nil // Indicate successful execution to Lambda runtime
 }
@@ -68,6 +97,31 @@ func (a *Application) LocalHandleRequest(ctx context.Context) error {
 		zap.Int("succeeded", results.Succeeded),
 		zap.Int("failed", results.Failed),
 	)
+
+	// --- Detect Failed Payments and Create Dunning Campaigns ---
+	if results.Failed > 0 {
+		logger.Info("Detecting failed payments and creating dunning campaigns...")
+		
+		// Look back 10 minutes for failed payments (adjust based on Lambda schedule)
+		detectionResult, err := a.failureDetector.DetectAndCreateCampaigns(ctx, 10)
+		if err != nil {
+			logger.Error("Error detecting failed payments", zap.Error(err))
+			// Don't fail the entire execution, just log the error
+		} else {
+			logger.Info("Failed payment detection results",
+				zap.Int("failed_events_found", len(detectionResult.FailedEvents)),
+				zap.Int("campaigns_created", detectionResult.CampaignsCreated),
+				zap.Int("campaigns_skipped", detectionResult.CampaignsSkipped),
+				zap.Int("errors", len(detectionResult.Errors)),
+			)
+		}
+	}
+
+	// --- Process Scheduled Subscription Changes ---
+	if a.scheduledChangesProcessor != nil {
+		logger.Info("Processing scheduled subscription changes...")
+		a.scheduledChangesProcessor.ProcessChanges()
+	}
 
 	logger.Info("Subscription processing finished successfully in LocalHandleRequest.")
 	return nil // Indicate successful execution to Lambda runtime
@@ -228,9 +282,46 @@ func main() {
 	// Similarly, don't defer delegationClient.Close() here.
 
 	// --- Create Handler and Application Struct ---
+	// Initialize email service if API key is available
+	var emailService *services.EmailService
+	resendAPIKey := os.Getenv("RESEND_API_KEY")
+	if resendAPIKey != "" {
+		fromEmail := os.Getenv("EMAIL_FROM_ADDRESS")
+		if fromEmail == "" {
+			fromEmail = "noreply@cypherapay.com"
+		}
+		fromName := os.Getenv("EMAIL_FROM_NAME")
+		if fromName == "" {
+			fromName = "Cyphera"
+		}
+		emailService = services.NewEmailService(resendAPIKey, fromEmail, fromName, logger.Log)
+		logger.Info("Email service initialized",
+			zap.String("from_email", fromEmail),
+			zap.String("from_name", fromName))
+	}
+
+	// Create the dunning service
+	dunningService := services.NewDunningService(dbQueries, logger.Log)
+	
+	// Create the payment failure detector
+	failureDetector := services.NewPaymentFailureDetector(dbQueries, logger.Log, dunningService)
+	
+	// Initialize payment service for subscription management
+	cmcApiKey := os.Getenv("CMC_API_KEY")
+	paymentService := services.NewPaymentService(dbQueries, cmcApiKey)
+	
+	// Create the scheduled changes processor
+	var scheduledChangesProcessor *processor.ScheduledChangesProcessor
+	if emailService != nil {
+		scheduledChangesProcessor = processor.NewScheduledChangesProcessor(dbQueries, paymentService, emailService, 5*time.Minute)
+	}
+	
 	// Create the subscription processor
 	app := &Application{
-		subscriptionProcessor: processor.NewSubscriptionProcessor(dbQueries, cypheraSmartWalletAddress, delegationClient),
+		subscriptionProcessor:     processor.NewSubscriptionProcessor(dbQueries, cypheraSmartWalletAddress, delegationClient),
+		scheduledChangesProcessor: scheduledChangesProcessor,
+		failureDetector:          failureDetector,
+		dunningService:           dunningService,
 		// Store connPool and delegationClient in App struct if HandleRequest needs to close them,
 		// though typically you don't close them between warm invocations.
 	}

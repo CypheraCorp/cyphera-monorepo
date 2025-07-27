@@ -10,7 +10,7 @@ on:
       - 'go.sum'
       - 'go.work'
       - 'Makefile'
-      - 'deployment/template-subprocessor.yaml'
+      - 'infrastructure/aws-sam/template-subprocessor.yaml'
       - '.github/workflows/subscription-processor.yml'
       - 'scripts/deploy_subprocessor.sh'
   pull_request:
@@ -22,7 +22,7 @@ on:
       - 'go.sum'
       - 'go.work'
       - 'Makefile'
-      - 'deployment/template-subprocessor.yaml'
+      - 'infrastructure/aws-sam/template-subprocessor.yaml'
       - '.github/workflows/subscription-processor.yml'
       - 'scripts/deploy_subprocessor.sh'
 
@@ -30,7 +30,7 @@ env:
   GO_VERSION: '1.23'
   AWS_REGION: us-east-1
   STAGE: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
-  TEMPLATE_FILE: deployment/template-subprocessor.yaml
+  TEMPLATE_FILE: infrastructure/aws-sam/template-subprocessor.yaml
 
 jobs:
   deploy:

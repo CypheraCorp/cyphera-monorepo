@@ -134,9 +134,9 @@ swagger-serve:
 # AWS SAM Build Targets
 # ==============================================================================
 
-.PHONY: sam-build sam-build-api sam-build-webhooks sam-build-processor
+.PHONY: sam-build sam-build-api sam-build-webhooks sam-build-processor sam-build-dunning
 
-sam-build: sam-build-api sam-build-webhooks sam-build-processor
+sam-build: sam-build-api sam-build-webhooks sam-build-processor sam-build-dunning
 	@echo "✅ All SAM applications built"
 
 sam-build-api:
@@ -155,6 +155,11 @@ sam-build-processor:
 	@echo "🔨 Building subscription processor for SAM..."
 	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
 		$(GO) build -o ./apps/subscription-processor/bootstrap ./apps/subscription-processor/cmd/main.go
+
+sam-build-dunning:
+	@echo "🔨 Building dunning processor for SAM..."
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+		$(GO) build -o ./apps/dunning-processor/bin/bootstrap ./apps/dunning-processor/cmd/main.go
 
 # ==============================================================================
 # Local Development Utilities

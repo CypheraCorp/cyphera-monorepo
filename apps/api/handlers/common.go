@@ -25,7 +25,14 @@ type CommonServices struct {
 	db                        *db.Queries
 	cypheraSmartWalletAddress string
 	CMCClient                 *coinmarketcap.Client
+	CMCAPIKey                 string
 	APIKeyService             *services.APIKeyService
+	logger                    *zap.Logger
+	TaxService                *services.TaxService
+	DiscountService           *services.DiscountService
+	GasSponsorshipService     *services.GasSponsorshipService
+	CurrencyService           *services.CurrencyService
+	ExchangeRateService       *services.ExchangeRateService
 	// other shared dependencies
 }
 
@@ -40,12 +47,37 @@ type SuccessResponse struct {
 }
 
 // NewCommonServices creates a new instance of CommonServices
-func NewCommonServices(db *db.Queries, cypheraSmartWalletAddress string, cmcClient *coinmarketcap.Client) *CommonServices {
+func NewCommonServices(db *db.Queries, cypheraSmartWalletAddress string, cmcClient *coinmarketcap.Client, cmcAPIKey string) *CommonServices {
+	// Initialize logger
+	log := logger.Log
+
+	// Initialize currency service
+	currencyService := services.NewCurrencyService(db)
+
+	// Initialize exchange rate service
+	exchangeRateService := services.NewExchangeRateService(db, cmcAPIKey)
+
+	// Initialize tax service
+	taxService := services.NewTaxService(db)
+
+	// Initialize discount service
+	discountService := services.NewDiscountService(db)
+
+	// Initialize gas sponsorship service
+	gasSponsorshipService := services.NewGasSponsorshipService(db)
+
 	return &CommonServices{
 		db:                        db,
 		cypheraSmartWalletAddress: cypheraSmartWalletAddress,
 		CMCClient:                 cmcClient,
+		CMCAPIKey:                 cmcAPIKey,
 		APIKeyService:             services.NewAPIKeyService(db),
+		logger:                    log,
+		TaxService:                taxService,
+		DiscountService:           discountService,
+		GasSponsorshipService:     gasSponsorshipService,
+		CurrencyService:           currencyService,
+		ExchangeRateService:       exchangeRateService,
 	}
 }
 
@@ -149,6 +181,25 @@ func (s *CommonServices) RunInTransactionWithRetry(ctx context.Context, maxRetri
 // GetCypheraSmartWalletAddress returns the Cyphera smart wallet address
 func (s *CommonServices) GetCypheraSmartWalletAddress() string {
 	return s.cypheraSmartWalletAddress
+}
+
+// GetDB returns the database queries instance
+func (s *CommonServices) GetDB() *db.Queries {
+	return s.db
+}
+
+// HandleError is a helper method to handle errors consistently
+func (s *CommonServices) HandleError(c *gin.Context, err error, message string, statusCode int, logger *zap.Logger) {
+	if err != nil {
+		logger.Error(message,
+			zap.Error(err),
+			zap.String("path", c.Request.URL.Path),
+			zap.String("method", c.Request.Method))
+	}
+	
+	c.JSON(statusCode, ErrorResponse{
+		Error: message,
+	})
 }
 
 // IsAddressValid checks if the provided string is a valid Ethereum address

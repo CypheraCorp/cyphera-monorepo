@@ -199,8 +199,19 @@ func (h *GasSponsorshipHandler) UpdateGasSponsorshipConfig(c *gin.Context) {
 		params.SponsorForTiers = tiersJSON
 	}
 
+	// Convert to service update type
+	updates := services.SponsorshipConfigUpdates{
+		SponsorshipEnabled:       &req.SponsorshipEnabled,
+		SponsorCustomerGas:       &req.SponsorCustomerGas,
+		MonthlyBudgetUSDCents:    req.MonthlyBudgetUsdCents,
+		SponsorThresholdUSDCents: req.SponsorThresholdUsdCents,
+		SponsorForProducts:       &req.SponsorForProducts,
+		SponsorForCustomers:      &req.SponsorForCustomers,
+		SponsorForTiers:          &req.SponsorForTiers,
+	}
+	
 	// Update configuration
-	err = h.service.UpdateSponsorshipConfig(c.Request.Context(), workspaceID, params)
+	err = h.service.UpdateSponsorshipConfig(c.Request.Context(), workspaceID, updates)
 	if err != nil {
 		logger.Log.Error("Failed to update gas sponsorship config", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update configuration"})

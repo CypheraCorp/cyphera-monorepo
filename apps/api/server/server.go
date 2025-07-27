@@ -21,6 +21,7 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/helpers" // Import helpers
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/middleware"
+	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -33,30 +34,40 @@ import (
 
 // Handler Definitions
 var (
-	accountHandler           *handlers.AccountHandler
-	workspaceHandler         *handlers.WorkspaceHandler
-	customerHandler          *handlers.CustomerHandler
-	apiKeyHandler            *handlers.APIKeyHandler
-	userHandler              *handlers.UserHandler
-	networkHandler           *handlers.NetworkHandler
-	tokenHandler             *handlers.TokenHandler
-	productHandler           *handlers.ProductHandler
-	walletHandler            *handlers.WalletHandler
-	subscriptionHandler      *handlers.SubscriptionHandler
-	subscriptionEventHandler *handlers.SubscriptionEventHandler
-	paymentSyncHandler       *handlers.PaymentSyncHandlers
-	delegationClient         *dsClient.DelegationClient
-	redemptionProcessor      *handlers.RedemptionProcessor
+	accountHandler                *handlers.AccountHandler
+	workspaceHandler              *handlers.WorkspaceHandler
+	customerHandler               *handlers.CustomerHandler
+	apiKeyHandler                 *handlers.APIKeyHandler
+	userHandler                   *handlers.UserHandler
+	networkHandler                *handlers.NetworkHandler
+	tokenHandler                  *handlers.TokenHandler
+	productHandler                *handlers.ProductHandler
+	walletHandler                 *handlers.WalletHandler
+	subscriptionHandler           *handlers.SubscriptionHandler
+	subscriptionEventHandler      *handlers.SubscriptionEventHandler
+	subscriptionManagementHandler *handlers.SubscriptionManagementHandler
+	paymentSyncHandler            *handlers.PaymentSyncHandlers
+	delegationClient              *dsClient.DelegationClient
+	redemptionProcessor           *handlers.RedemptionProcessor
 	circleHandler            *handlers.CircleHandler
 	currencyHandler          *handlers.CurrencyHandler
 	analyticsHandler         *handlers.AnalyticsHandler
 	gasSponsorshipHandler    *handlers.GasSponsorshipHandler
+	invoiceHandler           *handlers.InvoiceHandler
+	paymentLinkHandler       *handlers.PaymentLinkHandler
+	paymentPageHandler       *handlers.PaymentPageHandler
+	dunningHandler           *handlers.DunningHandler
 
 	// Database
 	dbQueries *db.Queries
 
 	// Clients
 	authClient *auth.AuthClient
+
+	// Services
+	commonServices     *handlers.CommonServices
+	cmcApiKey          string
+	dunningRetryEngine *services.DunningRetryEngine
 )
 
 func InitializeHandlers() {
@@ -187,7 +198,7 @@ func InitializeHandlers() {
 	circleClient := circle.NewCircleClient(circleApiKey)
 
 	// --- CoinMarketCap API Key --- (Add this section)
-	cmcApiKey, err := secretsClient.GetSecretString(ctx, "COIN_MARKET_CAP_API_KEY_ARN", "COIN_MARKET_CAP_API_KEY") // Use appropriate names
+	cmcApiKey, err = secretsClient.GetSecretString(ctx, "COIN_MARKET_CAP_API_KEY_ARN", "COIN_MARKET_CAP_API_KEY") // Use appropriate names
 	if err != nil || cmcApiKey == "" {
 		// Log a warning instead of fatal if price checks are optional
 		logger.Log.Warn("Failed to get CoinMarketCap API Key (COIN_MARKET_CAP_API_KEY_ARN or COIN_MARKET_CAP_API_KEY). Price conversions will fail.", zap.Error(err))
@@ -204,6 +215,15 @@ func InitializeHandlers() {
 	paymentSyncEncryptionKey, err := secretsClient.GetSecretString(ctx, "PAYMENT_SYNC_ENCRYPTION_KEY_ARN", "PAYMENT_SYNC_ENCRYPTION_KEY")
 	if err != nil || paymentSyncEncryptionKey == "" {
 		logger.Fatal("Failed to get Payment Sync Encryption Key", zap.Error(err))
+	}
+
+	// --- Resend API Key ---
+	resendAPIKey, err := secretsClient.GetSecretString(ctx, "RESEND_API_KEY_ARN", "RESEND_API_KEY")
+	if err != nil || resendAPIKey == "" {
+		logger.Log.Warn("Failed to get Resend API Key. Email functionality will be disabled.", zap.Error(err))
+		resendAPIKey = "" // Allow initialization but email sending will be skipped
+	} else {
+		logger.Log.Info("Successfully retrieved Resend API Key")
 	}
 
 	// --- Database Pool Initialization ---
@@ -285,10 +305,11 @@ func InitializeHandlers() {
 		logger.Fatal("Unable to create delegation client", zap.Error(err))
 	}
 
-	commonServices := handlers.NewCommonServices(
+	commonServices = handlers.NewCommonServices(
 		dbQueries,
 		cypheraSmartWalletAddress,
 		cmcClient, // Pass CMC client to common services
+		cmcApiKey, // Pass CMC API key to common services
 	)
 
 	// API Handler initialization
@@ -304,6 +325,9 @@ func InitializeHandlers() {
 
 	// Initialize currency handler
 	currencyHandler = handlers.NewCurrencyHandler(commonServices)
+
+	// Initialize payment service
+	paymentService := services.NewPaymentService(dbQueries, cmcApiKey)
 
 	// Initialize subscription
 	subscriptionHandler = handlers.NewSubscriptionHandler(commonServices, delegationClient)
@@ -323,6 +347,40 @@ func InitializeHandlers() {
 	analyticsHandler = handlers.NewAnalyticsHandler(commonServices)
 	// Gas sponsorship handler
 	gasSponsorshipHandler = handlers.NewGasSponsorshipHandler(commonServices)
+	// Invoice handler
+	invoiceHandler = handlers.NewInvoiceHandler(commonServices)
+	// Payment link handler
+	paymentLinkHandler = handlers.NewPaymentLinkHandler(commonServices)
+	// Payment page handler
+	paymentPageHandler = handlers.NewPaymentPageHandler(commonServices)
+
+	// Dunning management
+	dunningService := services.NewDunningService(dbQueries, logger.Log)
+
+	// Initialize email service if API key is available
+	var emailService *services.EmailService
+	if resendAPIKey != "" {
+		fromEmail := os.Getenv("EMAIL_FROM_ADDRESS")
+		if fromEmail == "" {
+			fromEmail = "noreply@cypherapay.com"
+		}
+		fromName := os.Getenv("EMAIL_FROM_NAME")
+		if fromName == "" {
+			fromName = "Cyphera"
+		}
+		emailService = services.NewEmailService(resendAPIKey, fromEmail, fromName, logger.Log)
+		logger.Log.Info("Email service initialized",
+			zap.String("from_email", fromEmail),
+			zap.String("from_name", fromName))
+	}
+
+	// Initialize dunning retry engine
+	dunningRetryEngine = services.NewDunningRetryEngine(dbQueries, logger.Log, dunningService, emailService, delegationClient)
+
+	dunningHandler = handlers.NewDunningHandler(commonServices, dunningService, dunningRetryEngine)
+
+	// Initialize subscription management handler after email service is ready
+	subscriptionManagementHandler = handlers.NewSubscriptionManagementHandler(dbQueries, paymentService, emailService)
 
 	// 3rd party handlers
 	circleHandler = handlers.NewCircleHandler(commonServices, circleClient)
@@ -367,7 +425,7 @@ func InitializeRoutes(router *gin.Engine) {
 	})
 
 	// Initialize and start the redemption processor with 3 workers and a buffer size of 100
-	redemptionProcessor = handlers.NewRedemptionProcessor(dbQueries, delegationClient, 3, 100)
+	redemptionProcessor = handlers.NewRedemptionProcessor(dbQueries, delegationClient, 3, 100, cmcApiKey)
 	redemptionProcessor.Start()
 
 	// Ensure we gracefully stop the redemption processor when the server shuts down
@@ -386,10 +444,18 @@ func InitializeRoutes(router *gin.Engine) {
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 	{
+		// Public routes (no authentication required)
+		// Payment link by slug - public endpoint for customers to view payment links
+		v1.GET("/payment-links/slug/:slug", paymentLinkHandler.GetPaymentLinkBySlug)
+
+		// Payment page endpoints - public endpoints for payment processing
+		v1.GET("/payment-pages/:slug", paymentPageHandler.GetPaymentPageData)
+		v1.POST("/payment-pages/:slug/intent", paymentPageHandler.CreatePaymentIntent)
 
 		// Protected routes (authentication required)
 		protected := v1.Group("/")
-		protected.Use(authClient.EnsureValidAPIKeyOrToken(dbQueries))
+		authAdapter := handlers.NewAuthServicesAdapter(commonServices)
+		protected.Use(authClient.EnsureValidAPIKeyOrToken(authAdapter))
 		{
 			// Admin-only routes
 			admin := protected.Group("/admin")
@@ -540,18 +606,15 @@ func InitializeRoutes(router *gin.Engine) {
 				workspacesCurrent.GET("/currencies", currencyHandler.ListWorkspaceSupportedCurrencies)
 			}
 
-			// Workspaces
-			// workspaces := protected.Group("/workspaces")
-			// {
-			// 	workspaces.GET("", workspaceHandler.ListWorkspaces)
-			// 	workspaces.POST("", workspaceHandler.CreateWorkspace)
-			// 	workspaces.GET("/all", workspaceHandler.GetAllWorkspaces)
-			// 	workspaces.GET("/:workspace_id", workspaceHandler.GetWorkspace)
-			// 	workspaces.PUT("/:workspace_id", workspaceHandler.UpdateWorkspace)
-			// 	workspaces.DELETE("/:workspace_id", workspaceHandler.DeleteWorkspace)
-			// 	workspaces.DELETE("/:workspace_id/hard", workspaceHandler.HardDeleteWorkspace)
-			// 	workspaces.GET("/:workspace_id/customers", workspaceHandler.ListWorkspaceCustomers)
-			// }
+			// Workspaces (non-admin routes for regular users)
+			workspaces := protected.Group("/workspaces")
+			{
+				workspaces.GET("", workspaceHandler.ListWorkspaces) // List workspaces user has access to
+				workspaces.GET("/:workspace_id", workspaceHandler.GetWorkspace)
+				// TODO: Implement ListWorkspaceCustomers
+				// workspaces.GET("/:workspace_id/customers", workspaceHandler.ListWorkspaceCustomers)
+				workspaces.GET("/:workspace_id/stats", workspaceHandler.GetWorkspaceStats)
+			}
 
 			// Wallets
 			wallets := protected.Group("/wallets")
@@ -566,20 +629,35 @@ func InitializeRoutes(router *gin.Engine) {
 			subscriptions := protected.Group("/subscriptions")
 			{
 				subscriptions.GET("", subscriptionHandler.ListSubscriptions)
+				// TODO: Implement these subscription methods
 				// subscriptions.GET("/active", subscriptionHandler.ListActiveSubscriptions)
 				// subscriptions.GET("/expired", subscriptionHandler.GetExpiredSubscriptions)
 				// subscriptions.POST("", subscriptionHandler.CreateSubscription)
-				// subscriptions.GET("/:subscription_id", subscriptionHandler.GetSubscription)
+				subscriptions.GET("/:subscription_id", subscriptionHandler.GetSubscription)
+				// TODO: Implement GetSubscriptionWithDetails
 				// subscriptions.GET("/:subscription_id/details", subscriptionHandler.GetSubscriptionWithDetails)
-				// subscriptions.PUT("/:subscription_id", subscriptionHandler.UpdateSubscription)
+				subscriptions.PUT("/:subscription_id", subscriptionHandler.UpdateSubscription)
+				// TODO: Implement these subscription status methods
 				// subscriptions.PATCH("/:subscription_id/status", subscriptionHandler.UpdateSubscriptionStatus)
 				// subscriptions.POST("/:subscription_id/cancel", subscriptionHandler.CancelSubscription)
-				// subscriptions.DELETE("/:subscription_id", subscriptionHandler.DeleteSubscription)
+				subscriptions.DELETE("/:subscription_id", subscriptionHandler.DeleteSubscription)
+
+				// Subscription management endpoints
+				subscriptions.POST("/:subscription_id/upgrade", subscriptionManagementHandler.UpgradeSubscription)
+				subscriptions.POST("/:subscription_id/downgrade", subscriptionManagementHandler.DowngradeSubscription)
+				subscriptions.POST("/:subscription_id/cancel", subscriptionManagementHandler.CancelSubscription)
+				subscriptions.POST("/:subscription_id/pause", subscriptionManagementHandler.PauseSubscription)
+				subscriptions.POST("/:subscription_id/resume", subscriptionManagementHandler.ResumeSubscription)
+				subscriptions.POST("/:subscription_id/reactivate", subscriptionManagementHandler.ReactivateSubscription)
+				subscriptions.POST("/:subscription_id/preview-change", subscriptionManagementHandler.PreviewChange)
+				subscriptions.GET("/:subscription_id/history", subscriptionManagementHandler.GetSubscriptionHistory)
+
 				// Subscription analytics
+				// TODO: Implement these subscription event analytics methods
 				// subscriptions.GET("/:subscription_id/total-amount", subscriptionEventHandler.GetTotalAmountBySubscription)
 				// subscriptions.GET("/:subscription_id/redemption-count", subscriptionEventHandler.GetSuccessfulRedemptionCount)
 				// subscriptions.GET("/:subscription_id/latest-event", subscriptionEventHandler.GetLatestSubscriptionEvent)
-				// subscriptions.GET("/:subscription_id/events", subscriptionEventHandler.ListSubscriptionEventsBySubscription)
+				subscriptions.GET("/:subscription_id/events", subscriptionEventHandler.ListSubscriptionEventsBySubscription)
 			}
 
 			// Subscription events
@@ -587,9 +665,11 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				subEvents.GET("/transactions", subscriptionEventHandler.ListSubscriptionEvents)
 				subEvents.GET("/:event_id", subscriptionEventHandler.GetSubscriptionEvent)
+				// TODO: Implement CreateSubscriptionEvent and UpdateSubscriptionEvent
 				// subEvents.POST("", subscriptionEventHandler.CreateSubscriptionEvent)
 				// subEvents.PUT("/:event_id", subscriptionEventHandler.UpdateSubscriptionEvent)
-				// subEvents.GET("/transaction/:tx_hash", subscriptionEventHandler.GetSubscriptionEventByTxHash)
+				subEvents.GET("/transaction/:tx_hash", subscriptionEventHandler.GetSubscriptionEventByTxHash)
+				// TODO: Implement these subscription event filtering methods
 				// subEvents.GET("/type/:event_type", subscriptionEventHandler.ListSubscriptionEventsByType)
 				// subEvents.GET("/failed", subscriptionEventHandler.ListFailedSubscriptionEvents)
 				// subEvents.GET("/recent", subscriptionEventHandler.ListRecentSubscriptionEvents)
@@ -670,9 +750,69 @@ func InitializeRoutes(router *gin.Engine) {
 				// Configuration management
 				gasSponsorship.GET("/config", gasSponsorshipHandler.GetGasSponsorshipConfig)
 				gasSponsorship.PUT("/config", gasSponsorshipHandler.UpdateGasSponsorshipConfig)
-				
+
 				// Budget status
 				gasSponsorship.GET("/budget-status", gasSponsorshipHandler.GetGasSponsorshipBudgetStatus)
+			}
+
+			// Invoice routes
+			invoices := protected.Group("/invoices")
+			{
+				// Invoice management
+				invoices.GET("", invoiceHandler.ListInvoices)
+				invoices.POST("", middleware.ValidateInput(middleware.CreateInvoiceValidation), invoiceHandler.CreateInvoice)
+				invoices.GET("/:invoice_id", invoiceHandler.GetInvoice)
+				invoices.GET("/:invoice_id/preview", invoiceHandler.PreviewInvoice)
+				invoices.POST("/:invoice_id/finalize", invoiceHandler.FinalizeInvoice)
+				invoices.POST("/:invoice_id/send", invoiceHandler.SendInvoice)
+				invoices.GET("/:invoice_id/payment-link", invoiceHandler.GetInvoicePaymentLink)
+				// Create payment link for invoice
+				invoices.POST("/:invoice_id/payment-link", paymentLinkHandler.CreateInvoicePaymentLink)
+			}
+
+			// Payment Links
+			paymentLinks := protected.Group("/payment-links")
+			{
+				// Payment link management
+				paymentLinks.GET("", paymentLinkHandler.ListPaymentLinks)
+				paymentLinks.POST("", paymentLinkHandler.CreatePaymentLink)
+				paymentLinks.GET("/:link_id", paymentLinkHandler.GetPaymentLink)
+				paymentLinks.PUT("/:link_id", paymentLinkHandler.UpdatePaymentLink)
+				paymentLinks.POST("/:link_id/deactivate", paymentLinkHandler.DeactivatePaymentLink)
+				paymentLinks.GET("/stats", paymentLinkHandler.GetPaymentLinkStats)
+			}
+
+			// Dunning Management
+			dunning := protected.Group("/dunning")
+			{
+				// Configuration management
+				dunning.GET("/configurations", dunningHandler.ListConfigurations)
+				dunning.POST("/configurations", dunningHandler.CreateConfiguration)
+				dunning.GET("/configurations/:id", dunningHandler.GetConfiguration)
+
+				// Campaign management
+				dunning.GET("/campaigns", dunningHandler.ListCampaigns)
+				dunning.GET("/campaigns/:id", dunningHandler.GetCampaign)
+				dunning.POST("/campaigns/:id/pause", dunningHandler.PauseCampaign)
+				dunning.POST("/campaigns/:id/resume", dunningHandler.ResumeCampaign)
+
+				// Email template management
+				dunning.GET("/email-templates", dunningHandler.ListEmailTemplates)
+				dunning.POST("/email-templates", dunningHandler.CreateEmailTemplate)
+
+				// Analytics
+				dunning.GET("/stats", dunningHandler.GetCampaignStats)
+
+				// Manual processing (for testing)
+				dunning.POST("/process", dunningHandler.ProcessDueCampaigns)
+			}
+
+			// Webhook routes for payment failures
+			webhooks := protected.Group("/webhooks")
+			{
+				paymentFailureHandler := handlers.NewPaymentFailureWebhookHandler(commonServices)
+				webhooks.POST("/payment-failure", paymentFailureHandler.HandlePaymentFailure)
+				webhooks.POST("/payment-failures/batch", paymentFailureHandler.HandleBatchPaymentFailures)
 			}
 		}
 	}

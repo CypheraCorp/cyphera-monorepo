@@ -48,7 +48,7 @@ func NewSubscriptionHandler(common *CommonServices, delegationClient *dsClient.D
 	return &SubscriptionHandler{
 		common:           common,
 		delegationClient: delegationClient,
-		paymentService:   services.NewPaymentService(common.db),
+		paymentService:   services.NewPaymentService(common.db, common.CMCAPIKey),
 	}
 }
 

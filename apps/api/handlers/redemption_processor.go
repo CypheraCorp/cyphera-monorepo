@@ -55,6 +55,7 @@ func NewRedemptionProcessor(
 	delegationClient *dsClient.DelegationClient,
 	workerCount int,
 	bufferSize int,
+	cmcAPIKey string,
 ) *RedemptionProcessor {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -62,7 +63,7 @@ func NewRedemptionProcessor(
 		tasks:            make(chan RedemptionTask, bufferSize),
 		dbQueries:        dbQueries,
 		delegationClient: delegationClient,
-		paymentService:   services.NewPaymentService(dbQueries),
+		paymentService:   services.NewPaymentService(dbQueries, cmcAPIKey),
 		workerCount:      workerCount,
 		ctx:              ctx,
 		cancel:           cancel,

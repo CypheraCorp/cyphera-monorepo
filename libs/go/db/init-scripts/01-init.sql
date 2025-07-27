@@ -1363,3 +1363,329 @@ CREATE TRIGGER set_gas_sponsorship_configs_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 
+-- ============================================================================
+-- DUNNING MANAGEMENT TABLES
+-- ============================================================================
+
+-- Dunning configuration per workspace
+CREATE TABLE dunning_configurations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    
+    -- Configuration settings
+    is_active BOOLEAN DEFAULT true,
+    is_default BOOLEAN DEFAULT false, -- Default config for workspace
+    
+    -- Retry settings
+    max_retry_attempts INTEGER NOT NULL DEFAULT 4,
+    retry_interval_days INTEGER[] NOT NULL DEFAULT ARRAY[3, 7, 7, 7], -- Days between each retry
+    
+    -- Actions for each attempt
+    attempt_actions JSONB NOT NULL DEFAULT '[]'::jsonb, 
+    -- Format: [{attempt: 1, actions: ["email", "in_app"], email_template_id: "uuid"}, ...]
+    
+    -- Final action after all retries fail
+    final_action VARCHAR(50) NOT NULL DEFAULT 'cancel', -- cancel, pause, downgrade
+    final_action_config JSONB DEFAULT '{}'::jsonb, -- Config for final action (e.g., downgrade_to_plan_id)
+    
+    -- Email settings
+    send_pre_dunning_reminder BOOLEAN DEFAULT true,
+    pre_dunning_days INTEGER DEFAULT 3, -- Days before payment due date
+    
+    -- Customer communication
+    allow_customer_retry BOOLEAN DEFAULT true, -- Allow customers to manually retry payment
+    grace_period_hours INTEGER DEFAULT 24, -- Hours after failure before first retry
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Dunning campaigns for individual subscriptions/payments
+CREATE TABLE dunning_campaigns (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    configuration_id UUID NOT NULL REFERENCES dunning_configurations(id),
+    
+    -- Target of dunning
+    subscription_id UUID REFERENCES subscriptions(id),
+    payment_id UUID REFERENCES payments(id),
+    customer_id UUID NOT NULL REFERENCES customers(id),
+    
+    -- Campaign details
+    status VARCHAR(50) NOT NULL DEFAULT 'active', -- active, paused, completed, cancelled
+    started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Tracking
+    current_attempt INTEGER NOT NULL DEFAULT 0,
+    next_retry_at TIMESTAMP WITH TIME ZONE,
+    last_retry_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Results
+    recovered BOOLEAN DEFAULT false,
+    recovered_at TIMESTAMP WITH TIME ZONE,
+    recovered_amount_cents BIGINT,
+    final_action_taken VARCHAR(50), -- What action was taken if not recovered
+    final_action_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Original failure details
+    original_failure_reason TEXT,
+    original_amount_cents BIGINT NOT NULL,
+    currency VARCHAR(3) NOT NULL,
+    
+    metadata JSONB DEFAULT '{}'::jsonb,
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT chk_dunning_target CHECK (
+        (subscription_id IS NOT NULL AND payment_id IS NULL) OR 
+        (subscription_id IS NULL AND payment_id IS NOT NULL)
+    )
+);
+
+-- Dunning attempt history
+CREATE TABLE dunning_attempts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    campaign_id UUID NOT NULL REFERENCES dunning_campaigns(id),
+    
+    attempt_number INTEGER NOT NULL,
+    attempt_type VARCHAR(50) NOT NULL, -- retry_payment, send_email, send_sms, in_app_notification
+    
+    -- Attempt details
+    status VARCHAR(50) NOT NULL, -- pending, processing, success, failed
+    started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Payment retry details (if applicable)
+    payment_id UUID REFERENCES payments(id),
+    payment_status VARCHAR(50),
+    payment_error TEXT,
+    
+    -- Communication details (if applicable)
+    communication_type VARCHAR(50), -- email, sms, in_app
+    communication_sent BOOLEAN DEFAULT false,
+    communication_error TEXT,
+    email_template_id UUID,
+    
+    -- Response tracking
+    customer_response VARCHAR(50), -- clicked, opened, retried_manually
+    customer_response_at TIMESTAMP WITH TIME ZONE,
+    
+    metadata JSONB DEFAULT '{}'::jsonb,
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Dunning email templates
+CREATE TABLE dunning_email_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    
+    name VARCHAR(255) NOT NULL,
+    template_type VARCHAR(50) NOT NULL, -- pre_dunning, attempt_1, attempt_2, final_notice, recovery_success
+    
+    -- Email content
+    subject VARCHAR(500) NOT NULL,
+    body_html TEXT NOT NULL,
+    body_text TEXT, -- Plain text version
+    
+    -- Variables available: {{customer_name}}, {{amount}}, {{retry_date}}, {{product_name}}, etc.
+    available_variables JSONB DEFAULT '[]'::jsonb,
+    
+    is_active BOOLEAN DEFAULT true,
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Dunning analytics aggregated data
+CREATE TABLE dunning_analytics (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    
+    -- Time period
+    period_start DATE NOT NULL,
+    period_end DATE NOT NULL,
+    period_type VARCHAR(20) NOT NULL, -- daily, weekly, monthly
+    
+    -- Campaign metrics
+    total_campaigns_started INTEGER DEFAULT 0,
+    total_campaigns_recovered INTEGER DEFAULT 0,
+    total_campaigns_lost INTEGER DEFAULT 0,
+    recovery_rate DECIMAL(5,4) DEFAULT 0, -- 0.0000 to 1.0000
+    
+    -- Financial metrics
+    total_at_risk_cents BIGINT DEFAULT 0,
+    total_recovered_cents BIGINT DEFAULT 0,
+    total_lost_cents BIGINT DEFAULT 0,
+    
+    -- Attempt metrics
+    total_payment_retries INTEGER DEFAULT 0,
+    successful_payment_retries INTEGER DEFAULT 0,
+    total_emails_sent INTEGER DEFAULT 0,
+    email_open_rate DECIMAL(5,4) DEFAULT 0,
+    email_click_rate DECIMAL(5,4) DEFAULT 0,
+    
+    -- Recovery by attempt number
+    recovery_by_attempt JSONB DEFAULT '{}'::jsonb, -- {1: 20, 2: 15, 3: 10, 4: 5}
+    
+    -- Average time to recovery
+    avg_hours_to_recovery DECIMAL(10,2),
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT unique_workspace_analytics_period UNIQUE(workspace_id, period_start, period_end, period_type)
+);
+
+-- Indexes for dunning tables
+CREATE INDEX idx_dunning_configs_workspace ON dunning_configurations(workspace_id) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_dunning_configs_default ON dunning_configurations(workspace_id, is_default) WHERE is_default = true AND deleted_at IS NULL;
+CREATE INDEX idx_dunning_campaigns_workspace ON dunning_campaigns(workspace_id, status);
+CREATE INDEX idx_dunning_campaigns_customer ON dunning_campaigns(customer_id);
+CREATE INDEX idx_dunning_campaigns_next_retry ON dunning_campaigns(next_retry_at) WHERE status = 'active';
+CREATE INDEX idx_dunning_attempts_campaign ON dunning_attempts(campaign_id);
+CREATE INDEX idx_dunning_templates_workspace ON dunning_email_templates(workspace_id, template_type) WHERE deleted_at IS NULL;
+CREATE INDEX idx_dunning_analytics_workspace_period ON dunning_analytics(workspace_id, period_type, period_start DESC);
+
+-- Triggers for dunning tables
+CREATE TRIGGER set_dunning_configurations_updated_at
+    BEFORE UPDATE ON dunning_configurations
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_dunning_campaigns_updated_at
+    BEFORE UPDATE ON dunning_campaigns
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_dunning_email_templates_updated_at
+    BEFORE UPDATE ON dunning_email_templates
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_dunning_analytics_updated_at
+    BEFORE UPDATE ON dunning_analytics
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+-- =====================================================
+-- SUBSCRIPTION MANAGEMENT TABLES
+-- =====================================================
+
+-- First, update the subscriptions table to add cancellation and pause fields
+ALTER TABLE subscriptions 
+ADD COLUMN IF NOT EXISTS cancel_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS cancellation_reason TEXT,
+ADD COLUMN IF NOT EXISTS paused_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS pause_ends_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS trial_start TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS trial_end TIMESTAMP WITH TIME ZONE;
+
+-- Subscription schedule changes table
+CREATE TABLE subscription_schedule_changes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id UUID NOT NULL REFERENCES subscriptions(id),
+    
+    -- Change details
+    change_type VARCHAR(50) NOT NULL CHECK (change_type IN ('upgrade', 'downgrade', 'cancel', 'pause', 'resume', 'modify_items')),
+    scheduled_for TIMESTAMP WITH TIME ZONE NOT NULL,
+    
+    -- For upgrades/downgrades - store line items as JSONB
+    from_line_items JSONB,
+    to_line_items JSONB,
+    
+    -- Proration details
+    proration_amount_cents BIGINT,
+    proration_calculation JSONB,
+    
+    -- Status tracking
+    status VARCHAR(20) NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'processing', 'completed', 'cancelled', 'failed')),
+    processed_at TIMESTAMP WITH TIME ZONE,
+    error_message TEXT,
+    
+    -- Metadata
+    reason TEXT,
+    initiated_by VARCHAR(50) CHECK (initiated_by IN ('customer', 'admin', 'system', 'dunning')),
+    metadata JSONB DEFAULT '{}',
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Subscription proration records
+CREATE TABLE subscription_prorations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id UUID NOT NULL REFERENCES subscriptions(id),
+    schedule_change_id UUID REFERENCES subscription_schedule_changes(id),
+    
+    -- Proration type
+    proration_type VARCHAR(50) NOT NULL CHECK (proration_type IN ('upgrade_credit', 'downgrade_adjustment', 'cancellation_credit', 'pause_credit')),
+    
+    -- Time period for calculation
+    period_start TIMESTAMP WITH TIME ZONE NOT NULL,
+    period_end TIMESTAMP WITH TIME ZONE NOT NULL,
+    days_total INTEGER NOT NULL,
+    days_used INTEGER NOT NULL,
+    days_remaining INTEGER NOT NULL,
+    
+    -- Financial amounts
+    original_amount_cents BIGINT NOT NULL,
+    used_amount_cents BIGINT NOT NULL,
+    credit_amount_cents BIGINT NOT NULL,
+    
+    -- Where the credit was applied
+    applied_to_invoice_id UUID REFERENCES invoices(id),
+    applied_to_payment_id UUID REFERENCES payments(id),
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Subscription state history for audit trail
+CREATE TABLE subscription_state_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id UUID NOT NULL REFERENCES subscriptions(id),
+    
+    -- State transition
+    from_status subscription_status,
+    to_status subscription_status NOT NULL,
+    
+    -- Financial changes
+    from_amount_cents BIGINT,
+    to_amount_cents BIGINT,
+    
+    -- Line items snapshot (JSONB for flexibility)
+    line_items_snapshot JSONB,
+    
+    -- Context
+    change_reason TEXT,
+    schedule_change_id UUID REFERENCES subscription_schedule_changes(id),
+    initiated_by VARCHAR(50),
+    
+    occurred_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for subscription management tables
+CREATE INDEX idx_schedule_changes_subscription ON subscription_schedule_changes(subscription_id, scheduled_for);
+CREATE INDEX idx_schedule_changes_status ON subscription_schedule_changes(status, scheduled_for) WHERE status = 'scheduled';
+CREATE INDEX idx_schedule_changes_type ON subscription_schedule_changes(change_type);
+
+CREATE INDEX idx_prorations_subscription ON subscription_prorations(subscription_id);
+CREATE INDEX idx_prorations_schedule_change ON subscription_prorations(schedule_change_id);
+
+CREATE INDEX idx_state_history_subscription ON subscription_state_history(subscription_id, occurred_at DESC);
+CREATE INDEX idx_state_history_schedule_change ON subscription_state_history(schedule_change_id);
+
+-- Subscription management triggers
+CREATE TRIGGER set_subscription_schedule_changes_updated_at
+    BEFORE UPDATE ON subscription_schedule_changes
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+

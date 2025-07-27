@@ -16,7 +16,7 @@ echo "--- Starting SAM Deployment for Subscription Processor: ${STAGE} in region
 
 # 2. Define Stack Name and Template File
 STACK_NAME="cyphera-subprocessor-${STAGE}"
-TEMPLATE_FILE="template-subprocessor.yaml"
+TEMPLATE_FILE="infrastructure/aws-sam/template-subprocessor.yaml"
 # SAM build output template path
 BUILD_TEMPLATE_FILE=".aws-sam/build/template.yaml" # Default SAM build output
 

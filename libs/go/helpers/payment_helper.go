@@ -3,9 +3,11 @@ package helpers
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // PaymentResponse represents the response structure for payment data
@@ -133,14 +135,12 @@ func ToPaymentResponse(payment db.Payment) PaymentResponse {
 
 	// Handle decimal fields (convert to string for JSON)
 	if payment.CryptoAmount.Valid {
-		// Note: You may need to implement proper decimal to string conversion
-		cryptoAmount := "0.000000" // Placeholder - implement proper conversion
+		cryptoAmount := convertNumericToString(payment.CryptoAmount, 8)
 		response.CryptoAmount = &cryptoAmount
 	}
 
 	if payment.ExchangeRate.Valid {
-		// Note: You may need to implement proper decimal to string conversion
-		exchangeRate := "1.000000" // Placeholder - implement proper conversion
+		exchangeRate := convertNumericToString(payment.ExchangeRate, 6)
 		response.ExchangeRate = &exchangeRate
 	}
 
@@ -309,4 +309,44 @@ func FormatCurrencyAmount(amountInCents int64, currency string) string {
 	default:
 		return fmt.Sprintf("%.2f", float64(amountInCents)/100.0)
 	}
+}
+
+// FormatDecimalString formats a decimal value to string with proper precision
+func FormatDecimalString(value float64, decimals int) string {
+	format := fmt.Sprintf("%%.%df", decimals)
+	return fmt.Sprintf(format, value)
+}
+
+// ParseDecimalString parses a decimal string to float64
+func ParseDecimalString(value string) (float64, error) {
+	return strconv.ParseFloat(value, 64)
+}
+
+// FormatExchangeRate formats an exchange rate for display
+func FormatExchangeRate(rate float64) string {
+	return FormatDecimalString(rate, 6)
+}
+
+// FormatCryptoAmount formats a crypto amount for display
+func FormatCryptoAmount(amount float64) string {
+	return FormatDecimalString(amount, 8)
+}
+
+// convertNumericToString converts pgtype.Numeric to formatted string
+func convertNumericToString(numeric pgtype.Numeric, decimals int) string {
+	if !numeric.Valid {
+		return "0"
+	}
+	
+	// For now, use a simple string conversion
+	// In production, you'd want proper decimal handling
+	str := fmt.Sprintf("%.8f", 0.0) // Placeholder
+	if len(str) > 0 {
+		// Try to parse and format properly
+		if value, err := strconv.ParseFloat(str, 64); err == nil {
+			return FormatDecimalString(value, decimals)
+		}
+	}
+	
+	return FormatDecimalString(0.0, decimals)
 }

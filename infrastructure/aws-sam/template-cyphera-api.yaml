@@ -1,0 +1,188 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Cyphera API - Minimal Test Deployment
+
+Parameters:
+  Stage:
+    Type: String
+    Description: Deployment stage (e.g., dev, prod)
+    Default: dev
+  DeploymentBucketName:
+    Type: String
+    Description: S3 bucket name for SAM deployment artifacts (Required by deploy command)
+  LambdaSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security Group ID for the Lambda function
+  PrivateSubnet1Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: Private Subnet 1 ID
+  PrivateSubnet2Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: Private Subnet 2 ID
+  # --- Existing Parameters ---
+  ParamDelegationServerAlbDns:
+    Type: String
+    Description: DNS Name of the Delegation Server ALB (from SSM)
+  ParamRdsSecretArn:
+    Type: String
+    Description: ARN of the RDS Secret (from SSM)
+  ParamRdsEndpoint:
+    Type: String
+    Description: Endpoint address of the RDS instance (from SSM)
+  ParamSupabaseUrl:
+    Type: String
+    Description: Supabase URL (from SSM SecureString)
+  ParamSmartWalletAddress:
+    Type: String
+    Description: Smart Wallet Address (from SSM SecureString)
+  ParamCorsAllowedOrigins:
+    Type: String
+    Description: CORS Allowed Origins (from SSM)
+  ParamCorsAllowedMethods:
+    Type: String
+    Description: CORS Allowed Methods (from SSM)
+  ParamCorsAllowedHeaders:
+    Type: String
+    Description: CORS Allowed Headers (from SSM)
+  ParamCorsExposedHeaders:
+    Type: String
+    Description: CORS Exposed Headers (from SSM)
+  ParamCorsAllowCredentials:
+    Type: String # CloudFormation expects boolean as string 'true'/'false' for parameters
+    Description: CORS Allow Credentials (from SSM)
+  ParamSupabaseJwtSecretArn:
+    Type: String
+    Description: ARN of the Supabase JWT Secret in Secrets Manager
+  ParamCircleApiKeyArn:
+    Type: String
+    Description: ARN of the Circle API Key Secret in Secrets Manager
+  ParamCoinMarketCapApiKeyArn:
+    Type: String
+    Description: ARN of the CoinMarketCap API Key Secret in Secrets Manager
+
+Globals:
+  Function:
+    Timeout: 29
+    MemorySize: 256
+    Runtime: provided.al2
+    Architectures:
+      - x86_64
+    Tracing: Active # Enable X-Ray for Lambda
+    Environment:
+      Variables:
+        GIN_MODE: release
+        STAGE: !Ref Stage
+        # --- Reference Parameterized Environment Variables ---
+        RDS_SECRET_ARN: !Ref ParamRdsSecretArn
+        DB_HOST: !Ref ParamRdsEndpoint
+        DB_NAME: cyphera # Static value
+        DB_PORT: '5432' # Static value
+        DB_SSLMODE: require # Static value
+        SUPABASE_URL: !Ref ParamSupabaseUrl
+        SUPABASE_JWT_SECRET_ARN: !Ref ParamSupabaseJwtSecretArn
+        CIRCLE_API_KEY_ARN: !Ref ParamCircleApiKeyArn
+        COIN_MARKET_CAP_API_KEY_ARN: !Ref ParamCoinMarketCapApiKeyArn
+        CYPHERA_SMART_WALLET_ADDRESS: !Ref ParamSmartWalletAddress
+        # Pass only the ALB DNS name; Go code will append port
+        DELEGATION_SERVER_URL: !Ref ParamDelegationServerAlbDns
+        CORS_ALLOWED_ORIGINS: !Ref ParamCorsAllowedOrigins
+        CORS_ALLOWED_METHODS: !Ref ParamCorsAllowedMethods
+        CORS_ALLOWED_HEADERS: !Ref ParamCorsAllowedHeaders
+        CORS_EXPOSED_HEADERS: !Ref ParamCorsExposedHeaders
+        CORS_ALLOW_CREDENTIALS: !Ref ParamCorsAllowCredentials
+    VpcConfig: # Reference new parameters
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroupId
+      SubnetIds:
+        - !Ref PrivateSubnet1Id
+        - !Ref PrivateSubnet2Id
+
+Resources:
+  # --- Lambda Function (Minimal) ---
+  MainFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "cyphera-api-${Stage}"
+      Handler: bootstrap # Your Go binary
+      CodeUri: ../ # UPDATED: Point to project root relative to template location
+      Policies:
+        # Base policies
+        - AWSLambdaBasicExecutionRole
+        - AWSLambdaVPCAccessExecutionRole
+        - AmazonEC2FullAccess # Add policy for X-Ray Daemon in VPC
+        # Explicit policy to read specific secrets (Ensure these match the NEW names/ARNs passed)
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource:
+                - !Ref ParamSupabaseJwtSecretArn
+                - !Ref ParamCircleApiKeyArn
+                - !Ref ParamCoinMarketCapApiKeyArn
+                - !Ref ParamRdsSecretArn
+        # Policy to read SSM parameters (Ensure this covers the ARN params too)
+        - SSMParameterReadPolicy:
+            ParameterName: !Sub "/cyphera/*-${Stage}"
+      Events:
+        HealthCheck:
+          Type: HttpApi
+          Properties:
+            Path: /health
+            Method: GET
+            ApiId: !Ref HttpApi
+            PayloadFormatVersion: "1.0"
+        CatchAll:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+            ApiId: !Ref HttpApi
+            PayloadFormatVersion: "1.0"
+
+  # --- HTTP API Gateway --- (Adding back) 
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Stage
+      CorsConfiguration: # Reference parameters instead of direct resolve
+        AllowOrigins: !Ref ParamCorsAllowedOrigins
+        AllowMethods: !Ref ParamCorsAllowedMethods
+        AllowHeaders: !Ref ParamCorsAllowedHeaders
+        ExposeHeaders: !Ref ParamCorsExposedHeaders
+        AllowCredentials: !Ref ParamCorsAllowCredentials
+
+  # --- Custom Domain Name --- (Adding back)
+  # Ensure the Route53 Hosted Zone for cypherapay.com exists and the certificate ARN is correct
+  ApiDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: !Sub "${Stage}.api.cypherapay.com" # e.g., dev.api.cypherapay.com
+      DomainNameConfigurations:
+        - CertificateArn: arn:aws:acm:us-east-1:699475955358:certificate/6f8bb8d4-4200-4128-a680-d9854890993b # Use actual ARN
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Properties:
+      ApiId: !Ref HttpApi
+      DomainName: !Ref ApiDomainName # Link to the custom domain resource above
+      Stage: !Ref Stage             # Link to the 'dev' or 'prod' stage
+
+  # --- Explicit Log Group ---
+  MainFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/cyphera-api-${Stage}"
+      RetentionInDays: 14
+
+Outputs:
+  ApiEndpoint: # Add back API endpoint output
+    Description: "API Gateway endpoint URL for Stage"
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+  FunctionArn:
+    Description: "Main Lambda Function ARN"
+    Value: !GetAtt MainFunction.Arn
+  HttpApiId:
+    Description: "HTTP API ID"
+    Value: !Ref HttpApi 

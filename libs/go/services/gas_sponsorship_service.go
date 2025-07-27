@@ -68,6 +68,13 @@ func NewGasSponsorshipService(queries db.Querier) *GasSponsorshipService {
 
 // ShouldSponsorGas determines if gas fees should be sponsored for a transaction
 func (s *GasSponsorshipService) ShouldSponsorGas(ctx context.Context, params SponsorshipCheckParams) (*SponsorshipDecision, error) {
+	s.logger.Info("Evaluating gas sponsorship eligibility",
+		zap.String("workspace_id", params.WorkspaceID.String()),
+		zap.String("customer_id", params.CustomerID.String()),
+		zap.Int64("gas_cost_cents", params.GasCostUSDCents),
+		zap.String("customer_tier", params.CustomerTier),
+		zap.String("transaction_type", params.TransactionType))
+
 	// Default decision is no sponsorship
 	decision := &SponsorshipDecision{
 		ShouldSponsor: false,
@@ -168,6 +175,12 @@ func (s *GasSponsorshipService) ShouldSponsorGas(ctx context.Context, params Spo
 	decision.SponsorType = "merchant"
 	decision.SponsorID = params.WorkspaceID
 	decision.Reason = "Sponsorship approved"
+	decision.RemainingBudget = config.MonthlyBudgetUsdCents.Int64 - config.CurrentMonthSpentCents.Int64
+	
+	s.logger.Info("Gas sponsorship approved",
+		zap.String("workspace_id", params.WorkspaceID.String()),
+		zap.String("reason", decision.Reason),
+		zap.Int64("remaining_budget", decision.RemainingBudget))
 	
 	return decision, nil
 }
@@ -275,32 +288,117 @@ func (s *GasSponsorshipService) ResetMonthlySponsorshipBudgets(ctx context.Conte
 
 // CreateDefaultSponsorshipConfig creates a default sponsorship configuration for a workspace
 func (s *GasSponsorshipService) CreateDefaultSponsorshipConfig(ctx context.Context, workspaceID uuid.UUID) error {
-	_, err := s.queries.CreateGasSponsorshipConfig(ctx, db.CreateGasSponsorshipConfigParams{
-		WorkspaceID:              workspaceID,
-		SponsorshipEnabled:       pgtype.Bool{Bool: false, Valid: true},
-		SponsorCustomerGas:       pgtype.Bool{Bool: false, Valid: true},
-		SponsorThresholdUsdCents: pgtype.Int8{Int64: 100, Valid: true}, // Default $1.00 threshold
-		MonthlyBudgetUsdCents:    pgtype.Int8{Int64: 10000, Valid: true}, // Default $100 monthly budget
-		SponsorForProducts:       []byte("[]"),
-		SponsorForCustomers:      []byte("[]"),
-		SponsorForTiers:          []byte("[]"),
-	})
+	params := db.CreateGasSponsorshipConfigParams{
+		WorkspaceID:               workspaceID,
+		SponsorshipEnabled:        pgtype.Bool{Bool: false, Valid: true}, // Disabled by default
+		SponsorCustomerGas:        pgtype.Bool{Bool: false, Valid: true},
+		MonthlyBudgetUsdCents:     pgtype.Int8{Int64: 0, Valid: false}, // No budget set
+		SponsorThresholdUsdCents:  pgtype.Int8{Int64: 0, Valid: false}, // No threshold
+	}
 
+	_, err := s.queries.CreateGasSponsorshipConfig(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to create default sponsorship config: %w", err)
 	}
+
+	s.logger.Info("Created default gas sponsorship config",
+		zap.String("workspace_id", workspaceID.String()))
 
 	return nil
 }
 
 // UpdateSponsorshipConfig updates sponsorship configuration for a workspace
-func (s *GasSponsorshipService) UpdateSponsorshipConfig(ctx context.Context, workspaceID uuid.UUID, updates db.UpdateGasSponsorshipConfigParams) error {
-	updates.WorkspaceID = workspaceID
-	
-	_, err := s.queries.UpdateGasSponsorshipConfig(ctx, updates)
+func (s *GasSponsorshipService) UpdateSponsorshipConfig(ctx context.Context, workspaceID uuid.UUID, updates SponsorshipConfigUpdates) error {
+	// Get existing config
+	existingConfig, err := s.queries.GetGasSponsorshipConfig(ctx, workspaceID)
+	if err != nil {
+		return fmt.Errorf("failed to get existing config: %w", err)
+	}
+
+	// Prepare update parameters
+	params := db.UpdateGasSponsorshipConfigParams{
+		WorkspaceID: workspaceID,
+	}
+
+	// Update fields based on what's provided
+	if updates.SponsorshipEnabled != nil {
+		params.SponsorshipEnabled = pgtype.Bool{Bool: *updates.SponsorshipEnabled, Valid: true}
+	} else {
+		params.SponsorshipEnabled = existingConfig.SponsorshipEnabled
+	}
+
+	if updates.SponsorCustomerGas != nil {
+		params.SponsorCustomerGas = pgtype.Bool{Bool: *updates.SponsorCustomerGas, Valid: true}
+	} else {
+		params.SponsorCustomerGas = existingConfig.SponsorCustomerGas
+	}
+
+	if updates.MonthlyBudgetUSDCents != nil {
+		params.MonthlyBudgetUsdCents = pgtype.Int8{Int64: *updates.MonthlyBudgetUSDCents, Valid: true}
+	} else {
+		params.MonthlyBudgetUsdCents = existingConfig.MonthlyBudgetUsdCents
+	}
+
+	if updates.SponsorThresholdUSDCents != nil {
+		params.SponsorThresholdUsdCents = pgtype.Int8{Int64: *updates.SponsorThresholdUSDCents, Valid: true}
+	} else {
+		params.SponsorThresholdUsdCents = existingConfig.SponsorThresholdUsdCents
+	}
+
+	_, err = s.queries.UpdateGasSponsorshipConfig(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to update sponsorship config: %w", err)
 	}
 
+	s.logger.Info("Updated gas sponsorship config",
+		zap.String("workspace_id", workspaceID.String()))
+
 	return nil
+}
+
+// GetSponsorshipAnalytics returns sponsorship analytics for a workspace
+func (s *GasSponsorshipService) GetSponsorshipAnalytics(ctx context.Context, workspaceID uuid.UUID, days int) (*SponsorshipAnalytics, error) {
+	// TODO: Implement once GetGasSponsorshipAnalytics query is added
+	// Will use startDate and endDate for analytics query
+	// startDate := time.Now().AddDate(0, 0, -days)
+	// endDate := time.Now()
+	return &SponsorshipAnalytics{
+		TotalTransactions:     0,
+		SponsoredTransactions: 0,
+		TotalGasCostCents:     0,
+		SponsoredCostCents:    0,
+		SavingsPercentage:     0.0,
+		Period:                days,
+	}, nil
+}
+
+// SponsorshipConfigUpdates contains fields that can be updated in sponsorship config
+type SponsorshipConfigUpdates struct {
+	SponsorshipEnabled        *bool
+	SponsorCustomerGas        *bool
+	MonthlyBudgetUSDCents     *int64
+	SponsorThresholdUSDCents  *int64
+	SponsorForProducts        *[]uuid.UUID
+	SponsorForCustomers       *[]uuid.UUID
+	SponsorForTiers           *[]string
+}
+
+// SponsorshipAnalytics contains analytics data for gas sponsorship
+type SponsorshipAnalytics struct {
+	TotalTransactions     int64   `json:"total_transactions"`
+	SponsoredTransactions int64   `json:"sponsored_transactions"`
+	TotalGasCostCents     int64   `json:"total_gas_cost_cents"`
+	SponsoredCostCents    int64   `json:"sponsored_cost_cents"`
+	SavingsPercentage     float64 `json:"savings_percentage"`
+	Period                int     `json:"period_days"`
+}
+
+// Helper functions
+
+// calculateSavingsPercentage calculates the percentage of gas costs that were sponsored
+func calculateSavingsPercentage(sponsoredCents, totalCents int64) float64 {
+	if totalCents == 0 {
+		return 0.0
+	}
+	return (float64(sponsoredCents) / float64(totalCents)) * 100.0
 }
