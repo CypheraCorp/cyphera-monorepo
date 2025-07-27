@@ -14,16 +14,22 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 )
 
 type DunningHandler struct {
 	common         *CommonServices
-	dunningService *services.DunningService
-	retryEngine    *services.DunningRetryEngine
+	dunningService interfaces.DunningService
+	retryEngine    interfaces.DunningRetryEngine
 }
 
-func NewDunningHandler(common *CommonServices, dunningService *services.DunningService, retryEngine *services.DunningRetryEngine) *DunningHandler {
+// NewDunningHandler creates a handler with interface dependencies
+func NewDunningHandler(
+	common *CommonServices,
+	dunningService interfaces.DunningService,
+	retryEngine interfaces.DunningRetryEngine,
+) *DunningHandler {
 	return &DunningHandler{
 		common:         common,
 		dunningService: dunningService,
@@ -160,13 +166,13 @@ func (h *DunningHandler) ListCampaigns(c *gin.Context) {
 	}
 
 	limit, offset := GetPaginationParams(c)
-	
+
 	// Parse filters
 	var status *string
 	if s := c.Query("status"); s != "" {
 		status = &s
 	}
-	
+
 	var customerID *uuid.UUID
 	if cid := c.Query("customer_id"); cid != "" {
 		parsed, err := uuid.Parse(cid)
@@ -180,7 +186,7 @@ func (h *DunningHandler) ListCampaigns(c *gin.Context) {
 		Limit:       int32(limit),
 		Offset:      int32(offset),
 	}
-	
+
 	// Set optional parameters
 	if status != nil {
 		params.Status = *status
@@ -439,7 +445,7 @@ func (h *DunningHandler) GetCampaignStats(c *gin.Context) {
 
 	startStr := c.Query("start_date")
 	endStr := c.Query("end_date")
-	
+
 	if startStr == "" || endStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "start_date and end_date are required"})
 		return
@@ -465,13 +471,13 @@ func (h *DunningHandler) GetCampaignStats(c *gin.Context) {
 	}
 
 	response := CampaignStatsResponse{
-		ActiveCampaigns:       stats.ActiveCampaigns,
-		RecoveredCampaigns:    stats.RecoveredCampaigns,
-		LostCampaigns:         stats.LostCampaigns,
-		AtRiskAmountCents:     stats.AtRiskAmountCents,
-		RecoveredAmountCents:  stats.RecoveredAmountCents,
-		LostAmountCents:       stats.LostAmountCents,
-		RecoveryRate:          calculateRecoveryRate(stats.RecoveredCampaigns, stats.LostCampaigns),
+		ActiveCampaigns:      stats.ActiveCampaigns,
+		RecoveredCampaigns:   stats.RecoveredCampaigns,
+		LostCampaigns:        stats.LostCampaigns,
+		AtRiskAmountCents:    stats.AtRiskAmountCents,
+		RecoveredAmountCents: stats.RecoveredAmountCents,
+		LostAmountCents:      stats.LostAmountCents,
+		RecoveryRate:         calculateRecoveryRate(stats.RecoveredCampaigns, stats.LostCampaigns),
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -506,32 +512,32 @@ type CreateEmailTemplateRequest struct {
 }
 
 type DunningCampaignResponse struct {
-	ID                    uuid.UUID           `json:"id"`
-	WorkspaceID           uuid.UUID           `json:"workspace_id"`
-	ConfigurationID       uuid.UUID           `json:"configuration_id"`
-	SubscriptionID        pgtype.UUID         `json:"subscription_id"`
-	PaymentID             pgtype.UUID         `json:"payment_id"`
-	CustomerID            uuid.UUID           `json:"customer_id"`
-	Status                string              `json:"status"`
-	StartedAt             pgtype.Timestamptz  `json:"started_at"`
-	CompletedAt           pgtype.Timestamptz  `json:"completed_at"`
-	CurrentAttempt        int32               `json:"current_attempt"`
-	NextRetryAt           pgtype.Timestamptz  `json:"next_retry_at"`
-	LastRetryAt           pgtype.Timestamptz  `json:"last_retry_at"`
-	Recovered             pgtype.Bool         `json:"recovered"`
-	RecoveredAt           pgtype.Timestamptz  `json:"recovered_at"`
-	RecoveredAmountCents  pgtype.Int8         `json:"recovered_amount_cents"`
-	FinalActionTaken      pgtype.Text         `json:"final_action_taken"`
-	FinalActionAt         pgtype.Timestamptz  `json:"final_action_at"`
-	OriginalFailureReason pgtype.Text         `json:"original_failure_reason"`
-	OriginalAmountCents   int64               `json:"original_amount_cents"`
-	Currency              string              `json:"currency"`
-	Metadata              []byte              `json:"metadata"`
-	CreatedAt             pgtype.Timestamptz  `json:"created_at"`
-	UpdatedAt             pgtype.Timestamptz  `json:"updated_at"`
-	CustomerEmail         string              `json:"customer_email"`
-	CustomerName          string              `json:"customer_name"`
-	SubscriptionProductID uuid.UUID           `json:"subscription_product_id,omitempty"`
+	ID                    uuid.UUID          `json:"id"`
+	WorkspaceID           uuid.UUID          `json:"workspace_id"`
+	ConfigurationID       uuid.UUID          `json:"configuration_id"`
+	SubscriptionID        pgtype.UUID        `json:"subscription_id"`
+	PaymentID             pgtype.UUID        `json:"payment_id"`
+	CustomerID            uuid.UUID          `json:"customer_id"`
+	Status                string             `json:"status"`
+	StartedAt             pgtype.Timestamptz `json:"started_at"`
+	CompletedAt           pgtype.Timestamptz `json:"completed_at"`
+	CurrentAttempt        int32              `json:"current_attempt"`
+	NextRetryAt           pgtype.Timestamptz `json:"next_retry_at"`
+	LastRetryAt           pgtype.Timestamptz `json:"last_retry_at"`
+	Recovered             pgtype.Bool        `json:"recovered"`
+	RecoveredAt           pgtype.Timestamptz `json:"recovered_at"`
+	RecoveredAmountCents  pgtype.Int8        `json:"recovered_amount_cents"`
+	FinalActionTaken      pgtype.Text        `json:"final_action_taken"`
+	FinalActionAt         pgtype.Timestamptz `json:"final_action_at"`
+	OriginalFailureReason pgtype.Text        `json:"original_failure_reason"`
+	OriginalAmountCents   int64              `json:"original_amount_cents"`
+	Currency              string             `json:"currency"`
+	Metadata              []byte             `json:"metadata"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	CustomerEmail         string             `json:"customer_email"`
+	CustomerName          string             `json:"customer_name"`
+	SubscriptionProductID uuid.UUID          `json:"subscription_product_id,omitempty"`
 }
 
 type DunningCampaignDetailResponse struct {
@@ -573,9 +579,9 @@ func (h *DunningHandler) ProcessDueCampaigns(c *gin.Context) {
 
 	// NOTE: Automatic dunning campaign processing is handled by the subscription processor Lambda.
 	// This endpoint is for manual testing and debugging purposes only.
-	
+
 	h.common.logger.Info("manually processing due campaigns", zap.Int("limit", limit))
-	
+
 	// Process campaigns if retry engine is available
 	if h.retryEngine != nil {
 		go func() {
@@ -584,7 +590,7 @@ func (h *DunningHandler) ProcessDueCampaigns(c *gin.Context) {
 				h.common.logger.Error("failed to process due campaigns", zap.Error(err))
 			}
 		}()
-		
+
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Campaign processing initiated",
 			"limit":   limit,

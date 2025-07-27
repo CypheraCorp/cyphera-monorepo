@@ -319,7 +319,7 @@ func (p *ScheduledChangesProcessor) sendCancellationEmail(ctx context.Context, s
 	}
 
 	// Get product details
-	product, err := p.db.GetProduct(ctx, sub.ProductID)
+	product, err := p.db.GetProductWithoutWorkspaceId(ctx, sub.ProductID)
 	if err != nil {
 		return fmt.Errorf("failed to get product: %w", err)
 	}
@@ -358,10 +358,10 @@ func (p *ScheduledChangesProcessor) sendCancellationEmail(ctx context.Context, s
         </div>
     </div>
 </body>
-</html>`, customer.Name, product.Name, workspace.Name)
+</html>`, customer.Name.String, product.Name, workspace.Name)
 
 	params := services.TransactionalEmailParams{
-		To:       []string{customer.Email},
+		To:       []string{customer.Email.String},
 		Subject:  subject,
 		HTMLBody: htmlBody,
 		Tags: map[string]string{
@@ -382,7 +382,7 @@ func (p *ScheduledChangesProcessor) sendResumptionEmail(ctx context.Context, sub
 	}
 
 	// Get product details
-	product, err := p.db.GetProduct(ctx, sub.ProductID)
+	product, err := p.db.GetProductWithoutWorkspaceId(ctx, sub.ProductID)
 	if err != nil {
 		return fmt.Errorf("failed to get product: %w", err)
 	}
@@ -421,10 +421,10 @@ func (p *ScheduledChangesProcessor) sendResumptionEmail(ctx context.Context, sub
         </div>
     </div>
 </body>
-</html>`, customer.Name, product.Name, workspace.Name)
+</html>`, customer.Name.String, product.Name, workspace.Name)
 
 	params := services.TransactionalEmailParams{
-		To:       []string{customer.Email},
+		To:       []string{customer.Email.String},
 		Subject:  subject,
 		HTMLBody: htmlBody,
 		Tags: map[string]string{
@@ -451,7 +451,7 @@ func (p *ScheduledChangesProcessor) sendDunningCancellationEmail(ctx context.Con
 	}
 
 	// Get product details
-	product, err := p.db.GetProduct(ctx, sub.ProductID)
+	product, err := p.db.GetProductWithoutWorkspaceId(ctx, sub.ProductID)
 	if err != nil {
 		return fmt.Errorf("failed to get product: %w", err)
 	}
@@ -497,10 +497,10 @@ func (p *ScheduledChangesProcessor) sendDunningCancellationEmail(ctx context.Con
         </div>
     </div>
 </body>
-</html>`, customer.Name, product.Name, workspace.Domain, workspace.Name)
+</html>`, customer.Name.String, product.Name, workspace.Name, workspace.Name)
 
 	params := services.TransactionalEmailParams{
-		To:       []string{customer.Email},
+		To:       []string{customer.Email.String},
 		Subject:  subject,
 		HTMLBody: htmlBody,
 		Tags: map[string]string{

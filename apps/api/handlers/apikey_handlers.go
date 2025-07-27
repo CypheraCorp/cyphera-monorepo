@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -13,16 +14,17 @@ import (
 // APIKeyHandler handles API key related operations
 type APIKeyHandler struct {
 	common        *CommonServices
-	apiKeyService *services.APIKeyService
+	apiKeyService interfaces.APIKeyService
 }
 
-// NewAPIKeyHandler creates a new instance of APIKeyHandler
-// @Summary Create new API key handler
-// @Description Creates a new handler for API key operations with common services
-func NewAPIKeyHandler(common *CommonServices) *APIKeyHandler {
+// NewAPIKeyHandler creates a handler with interface dependency
+func NewAPIKeyHandler(
+	common *CommonServices,
+	apiKeyService interfaces.APIKeyService,
+) *APIKeyHandler {
 	return &APIKeyHandler{
 		common:        common,
-		apiKeyService: services.NewAPIKeyService(common.db),
+		apiKeyService: apiKeyService,
 	}
 }
 
@@ -77,7 +79,7 @@ func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
 		return
 	}
 
-	apiKey, err := h.common.APIKeyService.GetAPIKey(c.Request.Context(), parsedUUID, parsedWorkspaceID)
+	apiKey, err := h.apiKeyService.GetAPIKey(c.Request.Context(), parsedUUID, parsedWorkspaceID)
 	if err != nil {
 		handleDBError(c, err, "API key not found")
 		return
@@ -105,7 +107,7 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 		return
 	}
 
-	apiKeys, err := h.common.APIKeyService.ListAPIKeys(c.Request.Context(), parsedWorkspaceID)
+	apiKeys, err := h.apiKeyService.ListAPIKeys(c.Request.Context(), parsedWorkspaceID)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, "Failed to retrieve API keys", err)
 		return
@@ -133,7 +135,7 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 // @Accept json
 // @Tags exclude
 func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
-	apiKeys, err := h.common.APIKeyService.GetAllAPIKeys(c.Request.Context())
+	apiKeys, err := h.apiKeyService.GetAllAPIKeys(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve API keys"})
 		return
@@ -175,7 +177,7 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	}
 
 	// Create API key using service
-	apiKey, fullKey, keyPrefix, err := h.common.APIKeyService.CreateAPIKey(c.Request.Context(), services.CreateAPIKeyParams{
+	apiKey, fullKey, keyPrefix, err := h.apiKeyService.CreateAPIKey(c.Request.Context(), services.CreateAPIKeyParams{
 		WorkspaceID: parsedWorkspaceID,
 		Name:        req.Name,
 		Description: req.Description,
@@ -223,7 +225,7 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 		return
 	}
 
-	apiKey, err := h.common.APIKeyService.UpdateAPIKey(c.Request.Context(), services.UpdateAPIKeyParams{
+	updatedAPIKey, err := h.apiKeyService.UpdateAPIKey(c.Request.Context(), services.UpdateAPIKeyParams{
 		WorkspaceID: parsedWorkspaceID,
 		ID:          parsedUUID,
 		Name:        req.Name,
@@ -237,7 +239,7 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, helpers.ToAPIKeyResponse(apiKey))
+	sendSuccess(c, http.StatusOK, helpers.ToAPIKeyResponse(updatedAPIKey))
 }
 
 // DeleteAPIKey godoc
@@ -267,7 +269,7 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 		return
 	}
 
-	err = h.common.APIKeyService.DeleteAPIKey(c.Request.Context(), parsedUUID, parsedWorkspaceID)
+	err = h.apiKeyService.DeleteAPIKey(c.Request.Context(), parsedUUID, parsedWorkspaceID)
 	if err != nil {
 		handleDBError(c, err, "Failed to delete API key")
 		return

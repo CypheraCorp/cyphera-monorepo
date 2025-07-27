@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/gin-gonic/gin"
@@ -13,14 +14,17 @@ import (
 // SubscriptionEventHandler manages subscription event-related HTTP endpoints
 type SubscriptionEventHandler struct {
 	common                   *CommonServices
-	subscriptionEventService *services.SubscriptionEventService
+	subscriptionEventService interfaces.SubscriptionEventService
 }
 
 // NewSubscriptionEventHandler creates a new subscription event handler with the required dependencies
-func NewSubscriptionEventHandler(common *CommonServices) *SubscriptionEventHandler {
+func NewSubscriptionEventHandler(
+	common *CommonServices,
+	subscriptionEventService interfaces.SubscriptionEventService,
+) *SubscriptionEventHandler {
 	return &SubscriptionEventHandler{
 		common:                   common,
-		subscriptionEventService: services.NewSubscriptionEventService(common.db),
+		subscriptionEventService: subscriptionEventService,
 	}
 }
 

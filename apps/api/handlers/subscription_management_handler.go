@@ -6,8 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/cyphera/cyphera-api/libs/go/db"
-	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,18 +14,21 @@ import (
 )
 
 type SubscriptionManagementHandler struct {
-	service *services.SubscriptionManagementService
+	service interfaces.SubscriptionManagementService
 	logger  *zap.Logger
 }
 
+// NewSubscriptionManagementHandler creates a handler with an interface
 func NewSubscriptionManagementHandler(
-	db db.Querier,
-	paymentService *services.PaymentService,
-	emailService *services.EmailService,
+	service interfaces.SubscriptionManagementService,
+	logger *zap.Logger,
 ) *SubscriptionManagementHandler {
+	if logger == nil {
+		logger = zap.L()
+	}
 	return &SubscriptionManagementHandler{
-		service: services.NewSubscriptionManagementService(db, paymentService, emailService),
-		logger:  logger.Log,
+		service: service,
+		logger:  logger,
 	}
 }
 
@@ -76,7 +78,7 @@ type PreviewChangeRequest struct {
 // @Router /api/v1/subscriptions/{subscription_id}/upgrade [post]
 func (h *SubscriptionManagementHandler) UpgradeSubscription(c *gin.Context) {
 	ctx := c.Request.Context()
-	
+
 	subscriptionIDStr := c.Param("subscription_id")
 	subscriptionID, err := uuid.Parse(subscriptionIDStr)
 	if err != nil {
@@ -107,9 +109,9 @@ func (h *SubscriptionManagementHandler) UpgradeSubscription(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Subscription upgraded successfully",
+		"message":         "Subscription upgraded successfully",
 		"subscription_id": subscriptionID,
-		"status": "upgraded",
+		"status":          "upgraded",
 	})
 }
 
@@ -129,7 +131,7 @@ func (h *SubscriptionManagementHandler) UpgradeSubscription(c *gin.Context) {
 // @Router /api/v1/subscriptions/{subscription_id}/downgrade [post]
 func (h *SubscriptionManagementHandler) DowngradeSubscription(c *gin.Context) {
 	ctx := c.Request.Context()
-	
+
 	subscriptionIDStr := c.Param("subscription_id")
 	subscriptionID, err := uuid.Parse(subscriptionIDStr)
 	if err != nil {
@@ -153,9 +155,9 @@ func (h *SubscriptionManagementHandler) DowngradeSubscription(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Subscription downgrade scheduled",
+		"message":         "Subscription downgrade scheduled",
 		"subscription_id": subscriptionID,
-		"status": "downgrade_scheduled",
+		"status":          "downgrade_scheduled",
 	})
 }
 
@@ -175,7 +177,7 @@ func (h *SubscriptionManagementHandler) DowngradeSubscription(c *gin.Context) {
 // @Router /api/v1/subscriptions/{subscription_id}/cancel [post]
 func (h *SubscriptionManagementHandler) CancelSubscription(c *gin.Context) {
 	ctx := c.Request.Context()
-	
+
 	subscriptionIDStr := c.Param("subscription_id")
 	subscriptionID, err := uuid.Parse(subscriptionIDStr)
 	if err != nil {
@@ -199,9 +201,9 @@ func (h *SubscriptionManagementHandler) CancelSubscription(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Subscription cancellation scheduled",
+		"message":         "Subscription cancellation scheduled",
 		"subscription_id": subscriptionID,
-		"status": "cancellation_scheduled",
+		"status":          "cancellation_scheduled",
 	})
 }
 
@@ -221,7 +223,7 @@ func (h *SubscriptionManagementHandler) CancelSubscription(c *gin.Context) {
 // @Router /api/v1/subscriptions/{subscription_id}/pause [post]
 func (h *SubscriptionManagementHandler) PauseSubscription(c *gin.Context) {
 	ctx := c.Request.Context()
-	
+
 	subscriptionIDStr := c.Param("subscription_id")
 	subscriptionID, err := uuid.Parse(subscriptionIDStr)
 	if err != nil {
@@ -255,10 +257,10 @@ func (h *SubscriptionManagementHandler) PauseSubscription(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Subscription paused",
+		"message":         "Subscription paused",
 		"subscription_id": subscriptionID,
-		"status": "paused",
-		"pause_until": pauseUntil,
+		"status":          "paused",
+		"pause_until":     pauseUntil,
 	})
 }
 
@@ -277,7 +279,7 @@ func (h *SubscriptionManagementHandler) PauseSubscription(c *gin.Context) {
 // @Router /api/v1/subscriptions/{subscription_id}/resume [post]
 func (h *SubscriptionManagementHandler) ResumeSubscription(c *gin.Context) {
 	ctx := c.Request.Context()
-	
+
 	subscriptionIDStr := c.Param("subscription_id")
 	subscriptionID, err := uuid.Parse(subscriptionIDStr)
 	if err != nil {
@@ -295,9 +297,9 @@ func (h *SubscriptionManagementHandler) ResumeSubscription(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Subscription resumed",
+		"message":         "Subscription resumed",
 		"subscription_id": subscriptionID,
-		"status": "active",
+		"status":          "active",
 	})
 }
 
@@ -316,7 +318,7 @@ func (h *SubscriptionManagementHandler) ResumeSubscription(c *gin.Context) {
 // @Router /api/v1/subscriptions/{subscription_id}/reactivate [post]
 func (h *SubscriptionManagementHandler) ReactivateSubscription(c *gin.Context) {
 	ctx := c.Request.Context()
-	
+
 	subscriptionIDStr := c.Param("subscription_id")
 	subscriptionID, err := uuid.Parse(subscriptionIDStr)
 	if err != nil {
@@ -334,9 +336,9 @@ func (h *SubscriptionManagementHandler) ReactivateSubscription(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Subscription reactivated",
+		"message":         "Subscription reactivated",
 		"subscription_id": subscriptionID,
-		"status": "active",
+		"status":          "active",
 	})
 }
 
@@ -356,7 +358,7 @@ func (h *SubscriptionManagementHandler) ReactivateSubscription(c *gin.Context) {
 // @Router /api/v1/subscriptions/{subscription_id}/preview-change [post]
 func (h *SubscriptionManagementHandler) PreviewChange(c *gin.Context) {
 	ctx := c.Request.Context()
-	
+
 	subscriptionIDStr := c.Param("subscription_id")
 	subscriptionID, err := uuid.Parse(subscriptionIDStr)
 	if err != nil {
@@ -398,7 +400,7 @@ func (h *SubscriptionManagementHandler) PreviewChange(c *gin.Context) {
 // @Router /api/v1/subscriptions/{subscription_id}/history [get]
 func (h *SubscriptionManagementHandler) GetSubscriptionHistory(c *gin.Context) {
 	ctx := c.Request.Context()
-	
+
 	subscriptionIDStr := c.Param("subscription_id")
 	subscriptionID, err := uuid.Parse(subscriptionIDStr)
 	if err != nil {
@@ -424,7 +426,7 @@ func (h *SubscriptionManagementHandler) GetSubscriptionHistory(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"history": history,
-		"count": len(history),
+		"count":   len(history),
 	})
 }
 

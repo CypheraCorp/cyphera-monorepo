@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/gin-gonic/gin"
@@ -14,14 +15,17 @@ import (
 // TokenHandler handles token-related operations
 type TokenHandler struct {
 	common       *CommonServices
-	tokenService *services.TokenService
+	tokenService interfaces.TokenService
 }
 
-// NewTokenHandler creates a new TokenHandler instance
-func NewTokenHandler(common *CommonServices) *TokenHandler {
+// NewTokenHandler creates a handler with interface dependencies
+func NewTokenHandler(
+	common *CommonServices,
+	tokenService interfaces.TokenService,
+) *TokenHandler {
 	return &TokenHandler{
 		common:       common,
-		tokenService: services.NewTokenService(common.db, common.CMCClient),
+		tokenService: tokenService,
 	}
 }
 

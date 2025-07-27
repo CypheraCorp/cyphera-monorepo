@@ -4,40 +4,40 @@ import (
 	"context"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
 // CommonServicesInterface defines the interface for common services used by auth middleware
 type CommonServicesInterface interface {
-	GetDB() *db.Queries
-	GetAPIKeyService() *services.APIKeyService
+	GetDB() db.Querier
+	GetAPIKeyService() interfaces.APIKeyService
 	BeginTx(ctx context.Context) (pgx.Tx, *db.Queries, error)
 	WithTx(tx pgx.Tx) *db.Queries
 }
 
 // CommonServicesAdapter wraps handlers.CommonServices to implement our interface
 type CommonServicesAdapter struct {
-	db            *db.Queries
-	apiKeyService *services.APIKeyService
+	db            db.Querier
+	apiKeyService interfaces.APIKeyService
 }
 
 // NewCommonServicesAdapter creates a new adapter
-func NewCommonServicesAdapter(db *db.Queries) *CommonServicesAdapter {
+func NewCommonServicesAdapter(db db.Querier, apiKeyService interfaces.APIKeyService) *CommonServicesAdapter {
 	return &CommonServicesAdapter{
 		db:            db,
-		apiKeyService: services.NewAPIKeyService(db),
+		apiKeyService: apiKeyService,
 	}
 }
 
-// GetDB returns the database queries
-func (a *CommonServicesAdapter) GetDB() *db.Queries {
+// GetDB returns the database querier
+func (a *CommonServicesAdapter) GetDB() db.Querier {
 	return a.db
 }
 
-// GetAPIKeyService returns the API key service
-func (a *CommonServicesAdapter) GetAPIKeyService() *services.APIKeyService {
+// GetAPIKeyService returns the API key service interface
+func (a *CommonServicesAdapter) GetAPIKeyService() interfaces.APIKeyService {
 	return a.apiKeyService
 }
 
@@ -48,7 +48,8 @@ func (a *CommonServicesAdapter) BeginTx(ctx context.Context) (pgx.Tx, *db.Querie
 
 // WithTx returns the db queries (no-op for adapter)
 func (a *CommonServicesAdapter) WithTx(tx pgx.Tx) *db.Queries {
-	return a.db
+	// This adapter doesn't support transactions, return nil
+	return nil
 }
 
 // APIKeyInfo contains information about an API key

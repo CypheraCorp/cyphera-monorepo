@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -16,109 +17,100 @@ import (
 
 // InvoiceHandler handles invoice-related HTTP requests
 type InvoiceHandler struct {
-	common          *CommonServices
-	invoiceService  *services.InvoiceService
-	paymentLinkService *services.PaymentLinkService
+	common             *CommonServices
+	invoiceService     interfaces.InvoiceService
+	paymentLinkService interfaces.PaymentLinkService
+	logger             *zap.Logger
 }
 
-// NewInvoiceHandler creates a new invoice handler
-func NewInvoiceHandler(common *CommonServices) *InvoiceHandler {
-	// Initialize invoice service with all required dependencies
-	invoiceService := services.NewInvoiceService(
-		common.db,
-		common.logger,
-		common.TaxService,
-		common.DiscountService,
-		common.GasSponsorshipService,
-		common.CurrencyService,
-		common.ExchangeRateService,
-	)
-
-	// Initialize payment link service
-	baseURL := "https://pay.cyphera.com" // TODO: Get from environment
-	paymentLinkService := services.NewPaymentLinkService(
-		common.db,
-		common.logger,
-		baseURL,
-	)
+// NewInvoiceHandler creates a handler with interface dependencies
+func NewInvoiceHandler(
+	common *CommonServices,
+	invoiceService interfaces.InvoiceService,
+	paymentLinkService interfaces.PaymentLinkService,
+	logger *zap.Logger,
+) *InvoiceHandler {
+	if logger == nil {
+		logger = zap.L()
+	}
 
 	return &InvoiceHandler{
-		common:          common,
-		invoiceService:  invoiceService,
+		common:             common,
+		invoiceService:     invoiceService,
 		paymentLinkService: paymentLinkService,
+		logger:             logger,
 	}
 }
 
 // CreateInvoiceRequest represents the request to create an invoice
 type CreateInvoiceRequest struct {
-	CustomerID     uuid.UUID                       `json:"customer_id" binding:"required"`
-	SubscriptionID *uuid.UUID                      `json:"subscription_id,omitempty"`
-	Currency       string                          `json:"currency" binding:"required,len=3"`
-	DueDate        *time.Time                      `json:"due_date,omitempty"`
-	LineItems      []CreateInvoiceLineItemRequest  `json:"line_items" binding:"required,min=1,dive"`
-	DiscountCode   *string                         `json:"discount_code,omitempty"`
-	Metadata       map[string]interface{}          `json:"metadata,omitempty"`
+	CustomerID     uuid.UUID                      `json:"customer_id" binding:"required"`
+	SubscriptionID *uuid.UUID                     `json:"subscription_id,omitempty"`
+	Currency       string                         `json:"currency" binding:"required,len=3"`
+	DueDate        *time.Time                     `json:"due_date,omitempty"`
+	LineItems      []CreateInvoiceLineItemRequest `json:"line_items" binding:"required,min=1,dive"`
+	DiscountCode   *string                        `json:"discount_code,omitempty"`
+	Metadata       map[string]interface{}         `json:"metadata,omitempty"`
 }
 
 // CreateInvoiceLineItemRequest represents a line item in the invoice creation request
 type CreateInvoiceLineItemRequest struct {
-	Description       string                 `json:"description" binding:"required"`
-	Quantity          float64                `json:"quantity" binding:"required,gt=0"`
-	UnitAmountCents   int64                  `json:"unit_amount_cents" binding:"required,gte=0"`
-	ProductID         *uuid.UUID             `json:"product_id,omitempty"`
-	PriceID          *uuid.UUID             `json:"price_id,omitempty"`
-	SubscriptionID   *uuid.UUID             `json:"subscription_id,omitempty"`
-	PeriodStart      *time.Time             `json:"period_start,omitempty"`
-	PeriodEnd        *time.Time             `json:"period_end,omitempty"`
-	LineItemType     string                 `json:"line_item_type" binding:"required,oneof=product gas_fee"`
-	GasFeePaymentID  *uuid.UUID             `json:"gas_fee_payment_id,omitempty"`
-	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	Description     string                 `json:"description" binding:"required"`
+	Quantity        float64                `json:"quantity" binding:"required,gt=0"`
+	UnitAmountCents int64                  `json:"unit_amount_cents" binding:"required,gte=0"`
+	ProductID       *uuid.UUID             `json:"product_id,omitempty"`
+	PriceID         *uuid.UUID             `json:"price_id,omitempty"`
+	SubscriptionID  *uuid.UUID             `json:"subscription_id,omitempty"`
+	PeriodStart     *time.Time             `json:"period_start,omitempty"`
+	PeriodEnd       *time.Time             `json:"period_end,omitempty"`
+	LineItemType    string                 `json:"line_item_type" binding:"required,oneof=product gas_fee"`
+	GasFeePaymentID *uuid.UUID             `json:"gas_fee_payment_id,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // InvoiceResponse represents an invoice in API responses
 type InvoiceResponse struct {
-	ID                   uuid.UUID                    `json:"id"`
-	WorkspaceID          uuid.UUID                    `json:"workspace_id"`
-	CustomerID           uuid.UUID                    `json:"customer_id"`
-	SubscriptionID       *uuid.UUID                   `json:"subscription_id,omitempty"`
-	InvoiceNumber        string                       `json:"invoice_number"`
-	Status               string                       `json:"status"`
-	Currency             string                       `json:"currency"`
-	DueDate              *time.Time                   `json:"due_date,omitempty"`
-	ProductSubtotal      int64                        `json:"product_subtotal"`
-	GasFeesSubtotal      int64                        `json:"gas_fees_subtotal"`
-	SponsoredGasFees     int64                        `json:"sponsored_gas_fees"`
-	TaxAmount            int64                        `json:"tax_amount"`
-	DiscountAmount       int64                        `json:"discount_amount"`
-	TotalAmount          int64                        `json:"total_amount"`
-	CustomerTotal        int64                        `json:"customer_total"`
-	LineItems            []InvoiceLineItemResponse    `json:"line_items"`
-	TaxDetails           []services.TaxDetail         `json:"tax_details"`
-	PaymentLinkID        *uuid.UUID                   `json:"payment_link_id,omitempty"`
-	PaymentLinkURL       *string                      `json:"payment_link_url,omitempty"`
-	CreatedAt            time.Time                    `json:"created_at"`
-	UpdatedAt            time.Time                    `json:"updated_at"`
+	ID               uuid.UUID                 `json:"id"`
+	WorkspaceID      uuid.UUID                 `json:"workspace_id"`
+	CustomerID       uuid.UUID                 `json:"customer_id"`
+	SubscriptionID   *uuid.UUID                `json:"subscription_id,omitempty"`
+	InvoiceNumber    string                    `json:"invoice_number"`
+	Status           string                    `json:"status"`
+	Currency         string                    `json:"currency"`
+	DueDate          *time.Time                `json:"due_date,omitempty"`
+	ProductSubtotal  int64                     `json:"product_subtotal"`
+	GasFeesSubtotal  int64                     `json:"gas_fees_subtotal"`
+	SponsoredGasFees int64                     `json:"sponsored_gas_fees"`
+	TaxAmount        int64                     `json:"tax_amount"`
+	DiscountAmount   int64                     `json:"discount_amount"`
+	TotalAmount      int64                     `json:"total_amount"`
+	CustomerTotal    int64                     `json:"customer_total"`
+	LineItems        []InvoiceLineItemResponse `json:"line_items"`
+	TaxDetails       []services.TaxDetail      `json:"tax_details"`
+	PaymentLinkID    *uuid.UUID                `json:"payment_link_id,omitempty"`
+	PaymentLinkURL   *string                   `json:"payment_link_url,omitempty"`
+	CreatedAt        time.Time                 `json:"created_at"`
+	UpdatedAt        time.Time                 `json:"updated_at"`
 }
 
 // InvoiceLineItemResponse represents a line item in API responses
 type InvoiceLineItemResponse struct {
-	ID                uuid.UUID              `json:"id"`
-	Description       string                 `json:"description"`
-	Quantity          float64                `json:"quantity"`
-	UnitAmountCents   int64                  `json:"unit_amount_cents"`
-	AmountCents       int64                  `json:"amount_cents"`
-	Currency          string                 `json:"currency"`
-	LineItemType      string                 `json:"line_item_type"`
-	IsGasSponsored    bool                   `json:"is_gas_sponsored,omitempty"`
-	GasSponsorType    *string                `json:"gas_sponsor_type,omitempty"`
-	GasSponsorName    *string                `json:"gas_sponsor_name,omitempty"`
-	ProductID         *uuid.UUID             `json:"product_id,omitempty"`
-	PriceID          *uuid.UUID             `json:"price_id,omitempty"`
-	PeriodStart      *time.Time             `json:"period_start,omitempty"`
-	PeriodEnd        *time.Time             `json:"period_end,omitempty"`
-	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	ID              uuid.UUID              `json:"id"`
+	Description     string                 `json:"description"`
+	Quantity        float64                `json:"quantity"`
+	UnitAmountCents int64                  `json:"unit_amount_cents"`
+	AmountCents     int64                  `json:"amount_cents"`
+	Currency        string                 `json:"currency"`
+	LineItemType    string                 `json:"line_item_type"`
+	IsGasSponsored  bool                   `json:"is_gas_sponsored,omitempty"`
+	GasSponsorType  *string                `json:"gas_sponsor_type,omitempty"`
+	GasSponsorName  *string                `json:"gas_sponsor_name,omitempty"`
+	ProductID       *uuid.UUID             `json:"product_id,omitempty"`
+	PriceID         *uuid.UUID             `json:"price_id,omitempty"`
+	PeriodStart     *time.Time             `json:"period_start,omitempty"`
+	PeriodEnd       *time.Time             `json:"period_end,omitempty"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 }
-
 
 // CreateInvoice creates a new invoice
 // @Summary Create a new invoice
@@ -161,17 +153,17 @@ func (h *InvoiceHandler) CreateInvoice(c *gin.Context) {
 	// Convert line items
 	for _, item := range req.LineItems {
 		params.LineItems = append(params.LineItems, services.LineItemCreateParams{
-			Description:      item.Description,
-			Quantity:         item.Quantity,
-			UnitAmountCents:  item.UnitAmountCents,
-			ProductID:        item.ProductID,
-			PriceID:          item.PriceID,
-			SubscriptionID:   item.SubscriptionID,
-			PeriodStart:      item.PeriodStart,
-			PeriodEnd:        item.PeriodEnd,
-			LineItemType:     item.LineItemType,
-			GasFeePaymentID:  item.GasFeePaymentID,
-			Metadata:         item.Metadata,
+			Description:     item.Description,
+			Quantity:        item.Quantity,
+			UnitAmountCents: item.UnitAmountCents,
+			ProductID:       item.ProductID,
+			PriceID:         item.PriceID,
+			SubscriptionID:  item.SubscriptionID,
+			PeriodStart:     item.PeriodStart,
+			PeriodEnd:       item.PeriodEnd,
+			LineItemType:    item.LineItemType,
+			GasFeePaymentID: item.GasFeePaymentID,
+			Metadata:        item.Metadata,
 		})
 	}
 
@@ -453,14 +445,14 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 	var invoiceResponses []map[string]interface{}
 	for _, invoice := range invoices {
 		invoiceResponses = append(invoiceResponses, map[string]interface{}{
-			"id":              invoice.ID,
-			"invoice_number":  invoice.InvoiceNumber.String,
-			"customer_id":     invoice.CustomerID.Bytes,
-			"status":          invoice.Status,
-			"currency":        invoice.Currency,
-			"amount_due":      invoice.AmountDue,
-			"due_date":        invoice.DueDate.Time,
-			"created_at":      invoice.CreatedAt,
+			"id":             invoice.ID,
+			"invoice_number": invoice.InvoiceNumber.String,
+			"customer_id":    invoice.CustomerID.Bytes,
+			"status":         invoice.Status,
+			"currency":       invoice.Currency,
+			"amount_due":     invoice.AmountDue,
+			"due_date":       invoice.DueDate.Time,
+			"created_at":     invoice.CreatedAt,
 		})
 	}
 
@@ -478,22 +470,22 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 
 func (h *InvoiceHandler) convertToInvoiceResponse(details *services.InvoiceWithDetails) InvoiceResponse {
 	response := InvoiceResponse{
-		ID:                details.Invoice.ID,
-		WorkspaceID:       details.Invoice.WorkspaceID,
-		CustomerID:        details.Invoice.CustomerID.Bytes,
-		InvoiceNumber:     details.Invoice.InvoiceNumber.String,
-		Status:            details.Invoice.Status,
-		Currency:          details.Invoice.Currency,
-		ProductSubtotal:   details.ProductSubtotal,
-		GasFeesSubtotal:   details.GasFeesSubtotal,
-		SponsoredGasFees:  details.SponsoredGasFees,
-		TaxAmount:         details.TaxAmount,
-		DiscountAmount:    details.DiscountAmount,
-		TotalAmount:       details.TotalAmount,
-		CustomerTotal:     details.CustomerTotal,
-		TaxDetails:        details.TaxDetails,
-		CreatedAt:         details.Invoice.CreatedAt.Time,
-		UpdatedAt:         details.Invoice.UpdatedAt.Time,
+		ID:               details.Invoice.ID,
+		WorkspaceID:      details.Invoice.WorkspaceID,
+		CustomerID:       details.Invoice.CustomerID.Bytes,
+		InvoiceNumber:    details.Invoice.InvoiceNumber.String,
+		Status:           details.Invoice.Status,
+		Currency:         details.Invoice.Currency,
+		ProductSubtotal:  details.ProductSubtotal,
+		GasFeesSubtotal:  details.GasFeesSubtotal,
+		SponsoredGasFees: details.SponsoredGasFees,
+		TaxAmount:        details.TaxAmount,
+		DiscountAmount:   details.DiscountAmount,
+		TotalAmount:      details.TotalAmount,
+		CustomerTotal:    details.CustomerTotal,
+		TaxDetails:       details.TaxDetails,
+		CreatedAt:        details.Invoice.CreatedAt.Time,
+		UpdatedAt:        details.Invoice.UpdatedAt.Time,
 	}
 
 	// Set optional fields

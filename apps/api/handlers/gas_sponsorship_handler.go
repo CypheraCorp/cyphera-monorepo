@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
-	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -17,23 +17,32 @@ import (
 // GasSponsorshipHandler manages gas sponsorship configuration endpoints
 type GasSponsorshipHandler struct {
 	common  *CommonServices
-	service *services.GasSponsorshipService
+	service interfaces.GasSponsorshipService
+	logger  *zap.Logger
 }
 
-// NewGasSponsorshipHandler creates a new gas sponsorship handler
-func NewGasSponsorshipHandler(common *CommonServices) *GasSponsorshipHandler {
+// NewGasSponsorshipHandler creates a handler with interface dependency
+func NewGasSponsorshipHandler(
+	common *CommonServices,
+	service interfaces.GasSponsorshipService,
+	logger *zap.Logger,
+) *GasSponsorshipHandler {
+	if logger == nil {
+		logger = zap.L()
+	}
 	return &GasSponsorshipHandler{
 		common:  common,
-		service: services.NewGasSponsorshipService(common.db),
+		service: service,
+		logger:  logger,
 	}
 }
 
 // GasSponsorshipConfigRequest represents the request to create/update gas sponsorship config
 type GasSponsorshipConfigRequest struct {
-	SponsorshipEnabled       bool       `json:"sponsorship_enabled"`
-	SponsorCustomerGas       bool       `json:"sponsor_customer_gas"`
-	SponsorThresholdUsdCents *int64     `json:"sponsor_threshold_usd_cents,omitempty"`
-	MonthlyBudgetUsdCents    *int64     `json:"monthly_budget_usd_cents,omitempty"`
+	SponsorshipEnabled       bool        `json:"sponsorship_enabled"`
+	SponsorCustomerGas       bool        `json:"sponsor_customer_gas"`
+	SponsorThresholdUsdCents *int64      `json:"sponsor_threshold_usd_cents,omitempty"`
+	MonthlyBudgetUsdCents    *int64      `json:"monthly_budget_usd_cents,omitempty"`
 	SponsorForProducts       []uuid.UUID `json:"sponsor_for_products,omitempty"`
 	SponsorForCustomers      []uuid.UUID `json:"sponsor_for_customers,omitempty"`
 	SponsorForTiers          []string    `json:"sponsor_for_tiers,omitempty"`
@@ -81,16 +90,16 @@ func (h *GasSponsorshipHandler) GetGasSponsorshipConfig(c *gin.Context) {
 		if err == pgx.ErrNoRows {
 			// Return default config if none exists
 			c.JSON(http.StatusOK, GasSponsorshipConfigResponse{
-				WorkspaceID:        workspaceID,
-				SponsorshipEnabled: false,
-				SponsorCustomerGas: false,
-				SponsorForProducts: []uuid.UUID{},
+				WorkspaceID:         workspaceID,
+				SponsorshipEnabled:  false,
+				SponsorCustomerGas:  false,
+				SponsorForProducts:  []uuid.UUID{},
 				SponsorForCustomers: []uuid.UUID{},
-				SponsorForTiers:    []string{},
+				SponsorForTiers:     []string{},
 			})
 			return
 		}
-		logger.Log.Error("Failed to get gas sponsorship config", zap.Error(err))
+		h.logger.Error("Failed to get gas sponsorship config", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get configuration"})
 		return
 	}
@@ -209,11 +218,11 @@ func (h *GasSponsorshipHandler) UpdateGasSponsorshipConfig(c *gin.Context) {
 		SponsorForCustomers:      &req.SponsorForCustomers,
 		SponsorForTiers:          &req.SponsorForTiers,
 	}
-	
+
 	// Update configuration
 	err = h.service.UpdateSponsorshipConfig(c.Request.Context(), workspaceID, updates)
 	if err != nil {
-		logger.Log.Error("Failed to update gas sponsorship config", zap.Error(err))
+		h.logger.Error("Failed to update gas sponsorship config", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to update configuration"})
 		return
 	}
@@ -246,7 +255,7 @@ func (h *GasSponsorshipHandler) GetGasSponsorshipBudgetStatus(c *gin.Context) {
 
 	status, err := h.service.GetSponsorshipBudgetStatus(c.Request.Context(), workspaceID)
 	if err != nil {
-		logger.Log.Error("Failed to get budget status", zap.Error(err))
+		h.logger.Error("Failed to get budget status", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get budget status"})
 		return
 	}

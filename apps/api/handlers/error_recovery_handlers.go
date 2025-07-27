@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/gin-gonic/gin"
@@ -13,13 +14,13 @@ import (
 
 // ErrorRecoveryHandlers handles API endpoints for error recovery functionality
 type ErrorRecoveryHandlers struct {
-	errorRecoveryService *services.ErrorRecoveryService
+	errorRecoveryService interfaces.ErrorRecoveryService
 	logger               *zap.Logger
 }
 
-// NewErrorRecoveryHandlers creates a new error recovery handlers instance
+// NewErrorRecoveryHandlers creates a handler with interface dependencies
 func NewErrorRecoveryHandlers(
-	errorRecoveryService *services.ErrorRecoveryService,
+	errorRecoveryService interfaces.ErrorRecoveryService,
 	logger *zap.Logger,
 ) *ErrorRecoveryHandlers {
 	return &ErrorRecoveryHandlers{

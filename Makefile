@@ -16,6 +16,7 @@ help:
 	@echo ""
 	@echo "Available make targets:"
 	@echo "  make gen            - Generate SQLC database code"
+	@echo "  make generate-mocks - Generate mocks for all interfaces"
 	@echo "  make proto-gen      - Generate all protobuf code"
 	@echo "  make swagger-gen    - Generate Swagger/OpenAPI docs"
 	@echo "  make db-reset       - Reset database to clean state"
@@ -86,6 +87,26 @@ gen:
 	@echo "🔧 Generating SQLC code..."
 	@cd libs/go/db && sqlc generate
 	@echo "✅ SQLC code generated"
+
+# ==============================================================================
+# Mock Generation
+# ==============================================================================
+
+.PHONY: generate-mocks mock-gen
+
+# Generate all mocks
+generate-mocks: mock-gen
+	@echo "✅ All mocks generated"
+
+mock-gen:
+	@echo "🔧 Generating mocks..."
+	@echo "  → Generating mock for db.Querier..."
+	@mockgen -source=libs/go/db/querier.go -destination=libs/go/mocks/mock_querier.go -package=mocks
+	@echo "  → Generating mocks for service interfaces..."
+	@mockgen -source=libs/go/interfaces/services.go -destination=libs/go/mocks/mock_services.go -package=mocks
+	@echo "  → Generating mocks for client interfaces..."
+	@mockgen -source=libs/go/interfaces/clients.go -destination=libs/go/mocks/mock_clients.go -package=mocks
+	@echo "✅ Mock generation complete"
 
 # ==============================================================================
 # Docker Development Environment

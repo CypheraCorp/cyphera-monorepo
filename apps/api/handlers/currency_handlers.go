@@ -8,20 +8,24 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 )
 
 type CurrencyHandler struct {
 	common          *CommonServices
-	currencyService *services.CurrencyService
+	currencyService interfaces.CurrencyService
 }
 
-// NewCurrencyHandler creates a new currency handler
-func NewCurrencyHandler(common *CommonServices) *CurrencyHandler {
+// NewCurrencyHandler creates a handler with interface dependencies
+func NewCurrencyHandler(
+	common *CommonServices,
+	currencyService interfaces.CurrencyService,
+) *CurrencyHandler {
 	return &CurrencyHandler{
 		common:          common,
-		currencyService: services.NewCurrencyService(common.db),
+		currencyService: currencyService,
 	}
 }
 

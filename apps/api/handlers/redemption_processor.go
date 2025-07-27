@@ -4,6 +4,7 @@ import (
 	"context"
 	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 	"encoding/json"
@@ -30,9 +31,9 @@ type RedemptionTask struct {
 // RedemptionProcessor processes redemption tasks from a queue
 type RedemptionProcessor struct {
 	tasks            chan RedemptionTask
-	dbQueries        *db.Queries
+	dbQueries        db.Querier
 	delegationClient *dsClient.DelegationClient
-	paymentService   *services.PaymentService
+	paymentService   interfaces.PaymentService
 	workerCount      int
 	wg               sync.WaitGroup
 	ctx              context.Context
@@ -51,11 +52,11 @@ type RedemptionProcessor struct {
 // NewRedemptionProcessor creates a new redemption processor with the given number of workers
 // and queue buffer size
 func NewRedemptionProcessor(
-	dbQueries *db.Queries,
+	dbQueries db.Querier,
 	delegationClient *dsClient.DelegationClient,
+	paymentService interfaces.PaymentService,
 	workerCount int,
 	bufferSize int,
-	cmcAPIKey string,
 ) *RedemptionProcessor {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -63,7 +64,7 @@ func NewRedemptionProcessor(
 		tasks:            make(chan RedemptionTask, bufferSize),
 		dbQueries:        dbQueries,
 		delegationClient: delegationClient,
-		paymentService:   services.NewPaymentService(dbQueries, cmcAPIKey),
+		paymentService:   paymentService,
 		workerCount:      workerCount,
 		ctx:              ctx,
 		cancel:           cancel,

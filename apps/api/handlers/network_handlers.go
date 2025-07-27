@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/gin-gonic/gin"
@@ -14,14 +15,17 @@ import (
 // NetworkHandler handles network related operations
 type NetworkHandler struct {
 	common         *CommonServices
-	networkService *services.NetworkService
+	networkService interfaces.NetworkService
 }
 
-// NewNetworkHandler creates a new instance of NetworkHandler
-func NewNetworkHandler(common *CommonServices) *NetworkHandler {
+// NewNetworkHandler creates a handler with interface dependencies
+func NewNetworkHandler(
+	common *CommonServices,
+	networkService interfaces.NetworkService,
+) *NetworkHandler {
 	return &NetworkHandler{
 		common:         common,
-		networkService: services.NewNetworkService(common.db),
+		networkService: networkService,
 	}
 }
 

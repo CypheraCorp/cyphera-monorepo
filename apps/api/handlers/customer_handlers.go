@@ -8,6 +8,7 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/gin-gonic/gin"
@@ -17,17 +18,19 @@ import (
 // CustomerHandler handles customer related operations
 type CustomerHandler struct {
 	common          *CommonServices
-	customerService *services.CustomerService
+	customerService interfaces.CustomerService
 }
 
-// NewCustomerHandler creates a new instance of CustomerHandler
-func NewCustomerHandler(common *CommonServices) *CustomerHandler {
+// NewCustomerHandler creates a handler with interface dependencies
+func NewCustomerHandler(
+	common *CommonServices,
+	customerService interfaces.CustomerService,
+) *CustomerHandler {
 	return &CustomerHandler{
 		common:          common,
-		customerService: services.NewCustomerService(common.db),
+		customerService: customerService,
 	}
 }
-
 
 // CreateCustomerRequest represents the request body for creating a customer
 type CreateCustomerRequest struct {
@@ -51,7 +54,6 @@ type UpdateCustomerRequest struct {
 	Metadata           map[string]interface{} `json:"metadata,omitempty"`
 }
 
-
 // SignInRegisterCustomerRequest represents the request body for customer sign-in/register
 type SignInRegisterCustomerRequest struct {
 	Email    string                 `json:"email" binding:"required,email"`
@@ -72,7 +74,6 @@ type CustomerWalletRequest struct {
 	Verified      bool                   `json:"verified"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 }
-
 
 // GetCustomer godoc
 // @Summary Get customer by ID
@@ -106,7 +107,6 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 
 	sendSuccess(c, http.StatusOK, helpers.ToCustomerResponse(*customer))
 }
-
 
 // ListCustomers godoc
 // @Summary List customers
@@ -372,7 +372,6 @@ func (h *CustomerHandler) UpdateCustomerOnboardingStatus(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, helpers.ToCustomerResponse(*customer))
 }
 
-
 // SignInRegisterCustomer godoc
 // @Summary Sign in or register a customer
 // @Description Signs in to an existing customer account or creates a new customer with Web3Auth ID
@@ -509,4 +508,3 @@ func (h *CustomerHandler) createNewCustomerWithWallet(ctx *gin.Context, req Sign
 
 	return response, nil
 }
-

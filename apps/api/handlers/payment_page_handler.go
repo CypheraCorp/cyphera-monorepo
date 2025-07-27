@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -13,18 +13,14 @@ import (
 // PaymentPageHandler handles public payment page requests
 type PaymentPageHandler struct {
 	common             *CommonServices
-	paymentLinkService *services.PaymentLinkService
+	paymentLinkService interfaces.PaymentLinkService
 }
 
-// NewPaymentPageHandler creates a new payment page handler
-func NewPaymentPageHandler(common *CommonServices) *PaymentPageHandler {
-	baseURL := "https://pay.cyphera.com" // TODO: Get from environment
-	paymentLinkService := services.NewPaymentLinkService(
-		common.db,
-		common.logger,
-		baseURL,
-	)
-
+// NewPaymentPageHandler creates a handler with interface dependencies
+func NewPaymentPageHandler(
+	common *CommonServices,
+	paymentLinkService interfaces.PaymentLinkService,
+) *PaymentPageHandler {
 	return &PaymentPageHandler{
 		common:             common,
 		paymentLinkService: paymentLinkService,

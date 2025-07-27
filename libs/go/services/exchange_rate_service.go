@@ -33,19 +33,19 @@ type CachedRate struct {
 
 // ExchangeRateParams contains parameters for fetching exchange rates
 type ExchangeRateParams struct {
-	FromSymbol string // e.g., "ETH", "BTC"
-	ToSymbol   string // e.g., "USD", "EUR"
+	FromSymbol string     // e.g., "ETH", "BTC"
+	ToSymbol   string     // e.g., "USD", "EUR"
 	TokenID    *uuid.UUID // For database tracking
 	NetworkID  *uuid.UUID // For network-specific rates
 }
 
 // ExchangeRateResult contains the result of an exchange rate lookup
 type ExchangeRateResult struct {
-	Rate           float64
-	FromSymbol     string
-	ToSymbol       string
-	Source         string // "cache", "api", "database"
-	LastUpdated    time.Time
+	Rate            float64
+	FromSymbol      string
+	ToSymbol        string
+	Source          string // "cache", "api", "database"
+	LastUpdated     time.Time
 	ConfidenceLevel float64 // 0.0 to 1.0, higher is more reliable
 }
 
@@ -64,7 +64,7 @@ func NewExchangeRateService(queries db.Querier, cmcAPIKey string) *ExchangeRateS
 // GetExchangeRate fetches exchange rate with caching and fallback mechanisms
 func (s *ExchangeRateService) GetExchangeRate(ctx context.Context, params ExchangeRateParams) (*ExchangeRateResult, error) {
 	cacheKey := fmt.Sprintf("%s_%s", params.FromSymbol, params.ToSymbol)
-	
+
 	// Check cache first
 	if rate := s.getCachedRate(cacheKey); rate != nil {
 		return &ExchangeRateResult{
@@ -84,14 +84,14 @@ func (s *ExchangeRateService) GetExchangeRate(ctx context.Context, params Exchan
 			zap.String("from", params.FromSymbol),
 			zap.String("to", params.ToSymbol),
 			zap.Error(err))
-		
+
 		// Fallback to database
 		return s.getFromDatabase(ctx, params)
 	}
 
 	// Cache the successful API result
 	s.setCachedRate(cacheKey, apiRate.Rate)
-	
+
 	// Store in database for future fallback
 	if err := s.storeInDatabase(ctx, params, apiRate.Rate); err != nil {
 		s.logger.Warn("Failed to store exchange rate in database",
@@ -110,7 +110,7 @@ func (s *ExchangeRateService) GetMultipleExchangeRates(ctx context.Context, requ
 	// Check cache for all requests first
 	for _, params := range requests {
 		cacheKey := fmt.Sprintf("%s_%s", params.FromSymbol, params.ToSymbol)
-		
+
 		if rate := s.getCachedRate(cacheKey); rate != nil {
 			results[cacheKey] = &ExchangeRateResult{
 				Rate:            rate.Rate,
@@ -183,7 +183,7 @@ func (s *ExchangeRateService) fetchMultipleFromAPI(ctx context.Context, tokens [
 	for _, req := range requests {
 		targetCurrencies[req.ToSymbol] = true
 	}
-	
+
 	var targets []string
 	for currency := range targetCurrencies {
 		targets = append(targets, currency)
@@ -195,10 +195,10 @@ func (s *ExchangeRateService) fetchMultipleFromAPI(ctx context.Context, tokens [
 	}
 
 	results := make(map[string]*ExchangeRateResult)
-	
+
 	for _, req := range requests {
 		cacheKey := fmt.Sprintf("%s_%s", req.FromSymbol, req.ToSymbol)
-		
+
 		tokenData, exists := response.Data[req.FromSymbol]
 		if !exists || len(tokenData) == 0 {
 			continue
@@ -219,10 +219,10 @@ func (s *ExchangeRateService) fetchMultipleFromAPI(ctx context.Context, tokens [
 		}
 
 		results[cacheKey] = result
-		
+
 		// Cache the result
 		s.setCachedRate(cacheKey, quote.Price)
-		
+
 		// Store in database for fallback
 		if err := s.storeInDatabase(ctx, req, quote.Price); err != nil {
 			s.logger.Warn("Failed to store exchange rate in database",
@@ -241,16 +241,16 @@ func (s *ExchangeRateService) getFromDatabase(ctx context.Context, params Exchan
 	s.logger.Info("Using database fallback for exchange rate",
 		zap.String("from", params.FromSymbol),
 		zap.String("to", params.ToSymbol))
-	
+
 	// TODO: Implement actual database query
 	// For now, return a sensible fallback for common pairs
 	fallbackRates := map[string]float64{
-		"ETH_USD": 2000.0,
-		"BTC_USD": 45000.0,
+		"ETH_USD":  2000.0,
+		"BTC_USD":  45000.0,
 		"USDC_USD": 1.0,
 		"USDT_USD": 1.0,
 	}
-	
+
 	pairKey := fmt.Sprintf("%s_%s", params.FromSymbol, params.ToSymbol)
 	if rate, exists := fallbackRates[pairKey]; exists {
 		return &ExchangeRateResult{
@@ -259,7 +259,7 @@ func (s *ExchangeRateService) getFromDatabase(ctx context.Context, params Exchan
 			ToSymbol:        params.ToSymbol,
 			Source:          "database",
 			LastUpdated:     time.Now().Add(-1 * time.Hour), // Indicate it's old data
-			ConfidenceLevel: 0.5, // Lower confidence for fallback
+			ConfidenceLevel: 0.5,                            // Lower confidence for fallback
 		}, nil
 	}
 
@@ -274,7 +274,7 @@ func (s *ExchangeRateService) storeInDatabase(ctx context.Context, params Exchan
 		zap.String("from", params.FromSymbol),
 		zap.String("to", params.ToSymbol),
 		zap.Float64("rate", rate))
-	
+
 	return nil // Placeholder implementation
 }
 
@@ -282,7 +282,7 @@ func (s *ExchangeRateService) storeInDatabase(ctx context.Context, params Exchan
 func (s *ExchangeRateService) getCachedRate(key string) *CachedRate {
 	s.cacheMutex.RLock()
 	defer s.cacheMutex.RUnlock()
-	
+
 	if rate, exists := s.cache[key]; exists {
 		if time.Now().Before(rate.ExpiresAt) {
 			return rate
@@ -290,7 +290,7 @@ func (s *ExchangeRateService) getCachedRate(key string) *CachedRate {
 		// Rate expired, remove from cache
 		delete(s.cache, key)
 	}
-	
+
 	return nil
 }
 
@@ -298,7 +298,7 @@ func (s *ExchangeRateService) getCachedRate(key string) *CachedRate {
 func (s *ExchangeRateService) setCachedRate(key string, rate float64) {
 	s.cacheMutex.Lock()
 	defer s.cacheMutex.Unlock()
-	
+
 	now := time.Now()
 	s.cache[key] = &CachedRate{
 		Rate:      rate,
@@ -369,12 +369,12 @@ func (s *ExchangeRateService) ClearCache() {
 func (s *ExchangeRateService) GetCacheStats() map[string]interface{} {
 	s.cacheMutex.RLock()
 	defer s.cacheMutex.RUnlock()
-	
+
 	stats := map[string]interface{}{
-		"total_entries": len(s.cache),
+		"total_entries":     len(s.cache),
 		"cache_ttl_minutes": s.cacheTTL.Minutes(),
 	}
-	
+
 	var expired int
 	now := time.Now()
 	for _, rate := range s.cache {
@@ -383,6 +383,6 @@ func (s *ExchangeRateService) GetCacheStats() map[string]interface{} {
 		}
 	}
 	stats["expired_entries"] = expired
-	
+
 	return stats
 }

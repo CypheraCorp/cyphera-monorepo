@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,20 +16,14 @@ import (
 // PaymentLinkHandler handles payment link-related HTTP requests
 type PaymentLinkHandler struct {
 	common             *CommonServices
-	paymentLinkService *services.PaymentLinkService
+	paymentLinkService interfaces.PaymentLinkService
 }
 
-// NewPaymentLinkHandler creates a new payment link handler
-func NewPaymentLinkHandler(common *CommonServices) *PaymentLinkHandler {
-	// Get base URL from environment or use default
-	baseURL := "https://pay.cyphera.com" // TODO: Get from environment
-	
-	paymentLinkService := services.NewPaymentLinkService(
-		common.db,
-		common.logger,
-		baseURL,
-	)
-
+// NewPaymentLinkHandler creates a handler with interface dependency
+func NewPaymentLinkHandler(
+	common *CommonServices,
+	paymentLinkService interfaces.PaymentLinkService,
+) *PaymentLinkHandler {
 	return &PaymentLinkHandler{
 		common:             common,
 		paymentLinkService: paymentLinkService,
@@ -320,7 +315,7 @@ func (h *PaymentLinkHandler) ListPaymentLinks(c *gin.Context) {
 	productIDStr := c.Query("product_id")
 
 	var links []db.PaymentLink
-	
+
 	if productIDStr != "" {
 		// Filter by product
 		productID, err := uuid.Parse(productIDStr)
@@ -355,15 +350,15 @@ func (h *PaymentLinkHandler) ListPaymentLinks(c *gin.Context) {
 	var linkResponses []map[string]interface{}
 	for _, link := range links {
 		linkResponses = append(linkResponses, map[string]interface{}{
-			"id":           link.ID,
-			"slug":         link.Slug,
-			"url":          baseURL + "/pay/" + link.Slug,
-			"status":       link.Status,
-			"product_id":   link.ProductID.Bytes,
-			"used_count":   link.UsedCount,
-			"max_uses":     link.MaxUses.Int32,
-			"expires_at":   link.ExpiresAt.Time,
-			"created_at":   link.CreatedAt,
+			"id":         link.ID,
+			"slug":       link.Slug,
+			"url":        baseURL + "/pay/" + link.Slug,
+			"status":     link.Status,
+			"product_id": link.ProductID.Bytes,
+			"used_count": link.UsedCount,
+			"max_uses":   link.MaxUses.Int32,
+			"expires_at": link.ExpiresAt.Time,
+			"created_at": link.CreatedAt,
 		})
 	}
 
@@ -468,4 +463,3 @@ func (h *PaymentLinkHandler) CreateInvoicePaymentLink(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, link)
 }
-

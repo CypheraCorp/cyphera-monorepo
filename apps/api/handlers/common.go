@@ -11,6 +11,7 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/client/coinmarketcap"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 
@@ -22,17 +23,19 @@ import (
 
 // CommonServices holds common dependencies used across handlers
 type CommonServices struct {
-	db                        *db.Queries
+	db db.Querier
+	// dbPool is kept separate for transaction support - should be refactored
+	dbPool                    *pgxpool.Pool
 	cypheraSmartWalletAddress string
 	CMCClient                 *coinmarketcap.Client
 	CMCAPIKey                 string
-	APIKeyService             *services.APIKeyService
+	APIKeyService             interfaces.APIKeyService
 	logger                    *zap.Logger
-	TaxService                *services.TaxService
-	DiscountService           *services.DiscountService
-	GasSponsorshipService     *services.GasSponsorshipService
-	CurrencyService           *services.CurrencyService
-	ExchangeRateService       *services.ExchangeRateService
+	TaxService                interfaces.TaxService
+	DiscountService           interfaces.DiscountService
+	GasSponsorshipService     interfaces.GasSponsorshipService
+	CurrencyService           interfaces.CurrencyService
+	ExchangeRateService       interfaces.ExchangeRateService
 	// other shared dependencies
 }
 
@@ -46,28 +49,60 @@ type SuccessResponse struct {
 	Message string `json:"message"`
 }
 
-// NewCommonServices creates a new instance of CommonServices
-func NewCommonServices(db *db.Queries, cypheraSmartWalletAddress string, cmcClient *coinmarketcap.Client, cmcAPIKey string) *CommonServices {
+// CommonServicesConfig contains all dependencies needed to create CommonServices
+type CommonServicesConfig struct {
+	DB                        db.Querier
+	DBPool                    *pgxpool.Pool // Optional: for transaction support
+	CypheraSmartWalletAddress string
+	CMCClient                 *coinmarketcap.Client
+	CMCAPIKey                 string
+	APIKeyService             interfaces.APIKeyService
+	Logger                    *zap.Logger
+	TaxService                interfaces.TaxService
+	DiscountService           interfaces.DiscountService
+	GasSponsorshipService     interfaces.GasSponsorshipService
+	CurrencyService           interfaces.CurrencyService
+	ExchangeRateService       interfaces.ExchangeRateService
+}
+
+// NewCommonServices creates a new instance of CommonServices with interface dependencies
+func NewCommonServices(config CommonServicesConfig) *CommonServices {
+	if config.Logger == nil {
+		config.Logger = logger.Log
+	}
+
+	return &CommonServices{
+		db:                        config.DB,
+		dbPool:                    config.DBPool,
+		cypheraSmartWalletAddress: config.CypheraSmartWalletAddress,
+		CMCClient:                 config.CMCClient,
+		CMCAPIKey:                 config.CMCAPIKey,
+		APIKeyService:             config.APIKeyService,
+		logger:                    config.Logger,
+		TaxService:                config.TaxService,
+		DiscountService:           config.DiscountService,
+		GasSponsorshipService:     config.GasSponsorshipService,
+		CurrencyService:           config.CurrencyService,
+		ExchangeRateService:       config.ExchangeRateService,
+	}
+}
+
+// NewCommonServicesWithPool creates CommonServices with database pool for transaction support
+// This is the recommended constructor when you need transaction support
+func NewCommonServicesWithPool(db *db.Queries, pool *pgxpool.Pool, cypheraSmartWalletAddress string, cmcClient *coinmarketcap.Client, cmcAPIKey string) *CommonServices {
 	// Initialize logger
 	log := logger.Log
 
-	// Initialize currency service
+	// Initialize services
 	currencyService := services.NewCurrencyService(db)
-
-	// Initialize exchange rate service
 	exchangeRateService := services.NewExchangeRateService(db, cmcAPIKey)
-
-	// Initialize tax service
 	taxService := services.NewTaxService(db)
-
-	// Initialize discount service
 	discountService := services.NewDiscountService(db)
-
-	// Initialize gas sponsorship service
 	gasSponsorshipService := services.NewGasSponsorshipService(db)
 
 	return &CommonServices{
 		db:                        db,
+		dbPool:                    pool,
 		cypheraSmartWalletAddress: cypheraSmartWalletAddress,
 		CMCClient:                 cmcClient,
 		CMCAPIKey:                 cmcAPIKey,
@@ -81,40 +116,38 @@ func NewCommonServices(db *db.Queries, cypheraSmartWalletAddress string, cmcClie
 	}
 }
 
-// GetDBConn returns the underlying pgx.Conn or pgxpool.Pool from the db.Queries
-// This is used for starting transactions
-func (s *CommonServices) GetDBConn() (interface{}, error) {
-	// Get the underlying DBTX interface
-	dbtx := s.db.GetDBTX()
-
-	// Check if it's a type that can begin transactions
-	if _, ok := dbtx.(*pgxpool.Pool); ok {
-		return dbtx, nil
-	}
-
-	if _, ok := dbtx.(interface {
-		Begin(context.Context) (pgx.Tx, error)
-	}); ok {
-		return dbtx, nil
-	}
-
-	return nil, errors.New("database connection does not support transactions")
+// GetDB returns the database querier
+func (s *CommonServices) GetDB() db.Querier {
+	return s.db
 }
 
-// GetDBPool returns the underlying pgxpool.Pool from the db.Queries
-// Returns an error if the underlying connection is not a pool
+// GetDBConn returns the underlying database connection
+// This is a temporary method for compatibility - should be refactored
+func (s *CommonServices) GetDBConn() (interface{}, error) {
+	// If db is actually a *db.Queries, it should have access to the underlying connection
+	// For now, returning the db itself
+	return s.db, nil
+}
+
+// GetDBPool returns the underlying database pool
+// This is a temporary method for compatibility - should be refactored
 func (s *CommonServices) GetDBPool() (*pgxpool.Pool, error) {
-	dbtx := s.db.GetDBTX()
-	pool, ok := dbtx.(*pgxpool.Pool)
-	if !ok {
-		return nil, errors.New("database connection is not a pool")
+	if s.dbPool != nil {
+		return s.dbPool, nil
 	}
-	return pool, nil
+	// This is a limitation of using the Querier interface
+	// In production, you should pass the pool separately or refactor this
+	return nil, errors.New("pool not available - please provide DBPool in CommonServicesConfig")
 }
 
 // WithTx creates a new db.Queries instance that uses the provided transaction
 func (s *CommonServices) WithTx(tx pgx.Tx) *db.Queries {
-	return s.db.WithTx(tx)
+	// Since we're using the Querier interface, we need to type assert to *db.Queries
+	if queries, ok := s.db.(*db.Queries); ok {
+		return queries.WithTx(tx)
+	}
+	// Return nil if not a *db.Queries (shouldn't happen in production)
+	return nil
 }
 
 // BeginTx starts a transaction and returns:
@@ -122,30 +155,22 @@ func (s *CommonServices) WithTx(tx pgx.Tx) *db.Queries {
 // - A new db.Queries instance that uses the transaction
 // - Any error that occurred
 func (s *CommonServices) BeginTx(ctx context.Context) (pgx.Tx, *db.Queries, error) {
-	conn, err := s.GetDBConn()
-	if err != nil {
-		return nil, nil, err
+	if s.dbPool == nil {
+		return nil, nil, errors.New("database pool not configured - please provide DBPool in CommonServicesConfig")
 	}
 
-	var tx pgx.Tx
-
-	// Try to cast the connection to different types that can begin a transaction
-	if pool, ok := conn.(*pgxpool.Pool); ok {
-		tx, err = pool.Begin(ctx)
-	} else if pgxConn, ok := conn.(interface {
-		Begin(context.Context) (pgx.Tx, error)
-	}); ok {
-		tx, err = pgxConn.Begin(ctx)
-	} else {
-		return nil, nil, errors.New("database connection does not support transactions")
-	}
-
+	tx, err := s.dbPool.Begin(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Create a queries instance that uses this transaction
 	qtx := s.WithTx(tx)
+	if qtx == nil {
+		// Rollback if we can't create queries with transaction
+		_ = tx.Rollback(ctx)
+		return nil, nil, errors.New("failed to create queries with transaction")
+	}
 
 	return tx, qtx, nil
 }
@@ -160,7 +185,7 @@ func (s *CommonServices) RunInTransaction(ctx context.Context, fn func(qtx *db.Q
 
 	return helpers.WithTransaction(ctx, pool, func(tx pgx.Tx) error {
 		// Create queries instance that uses this transaction
-		qtx := s.db.WithTx(tx)
+		qtx := s.WithTx(tx)
 		return fn(qtx)
 	})
 }
@@ -173,7 +198,7 @@ func (s *CommonServices) RunInTransactionWithRetry(ctx context.Context, maxRetri
 	}
 
 	return helpers.WithTransactionRetry(ctx, pool, maxRetries, func(tx pgx.Tx) error {
-		qtx := s.db.WithTx(tx)
+		qtx := s.WithTx(tx)
 		return fn(qtx)
 	})
 }
@@ -183,9 +208,39 @@ func (s *CommonServices) GetCypheraSmartWalletAddress() string {
 	return s.cypheraSmartWalletAddress
 }
 
-// GetDB returns the database queries instance
-func (s *CommonServices) GetDB() *db.Queries {
-	return s.db
+// GetLogger returns the logger
+func (s *CommonServices) GetLogger() *zap.Logger {
+	return s.logger
+}
+
+// GetAPIKeyService returns the API key service interface
+func (s *CommonServices) GetAPIKeyService() interfaces.APIKeyService {
+	return s.APIKeyService
+}
+
+// GetTaxService returns the tax service interface
+func (s *CommonServices) GetTaxService() interfaces.TaxService {
+	return s.TaxService
+}
+
+// GetDiscountService returns the discount service interface
+func (s *CommonServices) GetDiscountService() interfaces.DiscountService {
+	return s.DiscountService
+}
+
+// GetGasSponsorshipService returns the gas sponsorship service interface
+func (s *CommonServices) GetGasSponsorshipService() interfaces.GasSponsorshipService {
+	return s.GasSponsorshipService
+}
+
+// GetCurrencyService returns the currency service interface
+func (s *CommonServices) GetCurrencyService() interfaces.CurrencyService {
+	return s.CurrencyService
+}
+
+// GetExchangeRateService returns the exchange rate service interface
+func (s *CommonServices) GetExchangeRateService() interfaces.ExchangeRateService {
+	return s.ExchangeRateService
 }
 
 // HandleError is a helper method to handle errors consistently
@@ -196,7 +251,7 @@ func (s *CommonServices) HandleError(c *gin.Context, err error, message string, 
 			zap.String("path", c.Request.URL.Path),
 			zap.String("method", c.Request.Method))
 	}
-	
+
 	c.JSON(statusCode, ErrorResponse{
 		Error: message,
 	})
@@ -373,4 +428,31 @@ func validatePaginationParams(c *gin.Context) (limit int32, page int32, err erro
 	}
 
 	return limit, page, nil
+}
+
+// CreateMockCommonServices creates a CommonServices instance with mock interfaces for testing
+// This is useful when you want to test handlers without actual database connections
+func CreateMockCommonServices(
+	db db.Querier,
+	apiKeyService interfaces.APIKeyService,
+	taxService interfaces.TaxService,
+	discountService interfaces.DiscountService,
+	gasSponsorshipService interfaces.GasSponsorshipService,
+	currencyService interfaces.CurrencyService,
+	exchangeRateService interfaces.ExchangeRateService,
+) *CommonServices {
+	return &CommonServices{
+		db:                        db,
+		dbPool:                    nil, // No pool for mocks
+		cypheraSmartWalletAddress: "0xMockAddress",
+		CMCClient:                 nil,
+		CMCAPIKey:                 "mock-api-key",
+		APIKeyService:             apiKeyService,
+		logger:                    zap.NewNop(), // No-op logger for tests
+		TaxService:                taxService,
+		DiscountService:           discountService,
+		GasSponsorshipService:     gasSponsorshipService,
+		CurrencyService:           currencyService,
+		ExchangeRateService:       exchangeRateService,
+	}
 }

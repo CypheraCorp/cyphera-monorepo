@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/gin-gonic/gin"
@@ -13,14 +14,17 @@ import (
 // Domain-specific handlers
 type UserHandler struct {
 	common      *CommonServices
-	userService *services.UserService
+	userService interfaces.UserService
 }
 
-// NewUserHandler creates a new UserHandler instance
-func NewUserHandler(common *CommonServices) *UserHandler {
+// NewUserHandler creates a handler with interface dependencies
+func NewUserHandler(
+	common *CommonServices,
+	userService interfaces.UserService,
+) *UserHandler {
 	return &UserHandler{
 		common:      common,
-		userService: services.NewUserService(common.db),
+		userService: userService,
 	}
 }
 

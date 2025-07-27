@@ -846,7 +846,7 @@ func (ac *AuthClient) createUserFromWeb3AuthClaims(ctx context.Context, services
 	// Create Smart Account wallets from the wallets array
 	for _, wallet := range claims.Wallets {
 		if wallet.Address != "" {
-			err = ac.createSmartAccountWallet(ctx, services.GetDB(), user, wallet.Address, workspace.ID)
+			err = ac.createSmartAccountWallet(ctx, services.GetDB().(*db.Queries), user, wallet.Address, workspace.ID)
 			if err != nil {
 				// Log error but don't fail user creation
 				logger.Log.Error("Failed to create Smart Account wallet",

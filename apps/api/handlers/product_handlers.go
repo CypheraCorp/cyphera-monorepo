@@ -14,6 +14,7 @@ import (
 	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 
@@ -30,15 +31,25 @@ type SwaggerMetadata map[string]interface{}
 type ProductHandler struct {
 	common           *CommonServices
 	delegationClient *dsClient.DelegationClient
-	productService   *services.ProductService
+	productService   interfaces.ProductService
+	logger           *zap.Logger
 }
 
-// NewProductHandler creates a new ProductHandler instance
-func NewProductHandler(common *CommonServices, delegationClient *dsClient.DelegationClient) *ProductHandler {
+// NewProductHandler creates a handler with interface dependencies
+func NewProductHandler(
+	common *CommonServices,
+	delegationClient *dsClient.DelegationClient,
+	productService interfaces.ProductService,
+	logger *zap.Logger,
+) *ProductHandler {
+	if logger == nil {
+		logger = zap.L()
+	}
 	return &ProductHandler{
 		common:           common,
 		delegationClient: delegationClient,
-		productService:   services.NewProductService(common.db),
+		productService:   productService,
+		logger:           logger,
 	}
 }
 

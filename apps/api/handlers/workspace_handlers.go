@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -17,14 +18,17 @@ import (
 // WorkspaceHandler handles workspace related operations
 type WorkspaceHandler struct {
 	common           *CommonServices
-	workspaceService *services.WorkspaceService
+	workspaceService interfaces.WorkspaceService
 }
 
-// NewWorkspaceHandler creates a new instance of WorkspaceHandler
-func NewWorkspaceHandler(common *CommonServices) *WorkspaceHandler {
+// NewWorkspaceHandler creates a handler with interface dependencies
+func NewWorkspaceHandler(
+	common *CommonServices,
+	workspaceService interfaces.WorkspaceService,
+) *WorkspaceHandler {
 	return &WorkspaceHandler{
 		common:           common,
-		workspaceService: services.NewWorkspaceService(common.db),
+		workspaceService: workspaceService,
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 
@@ -30,7 +31,9 @@ import (
 type SubscriptionHandler struct {
 	common               *CommonServices
 	delegationClient     *dsClient.DelegationClient
-	paymentService       *services.PaymentService
+	subscriptionService  interfaces.SubscriptionService
+	paymentService       interfaces.PaymentService
+	logger               *zap.Logger
 	lastRedemptionTxHash string // Stores the transaction hash from the last successful redemption
 }
 
@@ -43,12 +46,23 @@ func (e *SubscriptionExistsError) Error() string {
 	return fmt.Sprintf("subscription already exists with ID: %s", e.Subscription.ID)
 }
 
-// NewSubscriptionHandler creates a new subscription handler with the required dependencies
-func NewSubscriptionHandler(common *CommonServices, delegationClient *dsClient.DelegationClient) *SubscriptionHandler {
+// NewSubscriptionHandler creates a handler with interface dependencies
+func NewSubscriptionHandler(
+	common *CommonServices,
+	delegationClient *dsClient.DelegationClient,
+	subscriptionService interfaces.SubscriptionService,
+	paymentService interfaces.PaymentService,
+	logger *zap.Logger,
+) *SubscriptionHandler {
+	if logger == nil {
+		logger = zap.L()
+	}
 	return &SubscriptionHandler{
-		common:           common,
-		delegationClient: delegationClient,
-		paymentService:   services.NewPaymentService(common.db, common.CMCAPIKey),
+		common:              common,
+		delegationClient:    delegationClient,
+		subscriptionService: subscriptionService,
+		paymentService:      paymentService,
+		logger:              logger,
 	}
 }
 

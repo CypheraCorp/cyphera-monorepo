@@ -6,8 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/cyphera/cyphera-api/libs/go/logger"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -17,23 +16,33 @@ import (
 // AnalyticsHandler manages analytics and dashboard endpoints
 type AnalyticsHandler struct {
 	common  *CommonServices
-	service *services.AnalyticsService
+	service interfaces.AnalyticsService
+	logger  *zap.Logger
 }
 
-// NewAnalyticsHandler creates a new analytics handler
-func NewAnalyticsHandler(common *CommonServices) *AnalyticsHandler {
-	// Get the pool from common services
-	pool, err := common.GetDBPool()
-	if err != nil {
-		logger.Log.Fatal("Failed to get database pool for analytics handler", zap.Error(err))
+// NewAnalyticsHandler creates a handler with interface dependencies
+func NewAnalyticsHandler(
+	common *CommonServices,
+	service interfaces.AnalyticsService,
+	logger *zap.Logger,
+) *AnalyticsHandler {
+	if logger == nil {
+		logger = zap.L()
 	}
-
-	analyticsService := services.NewAnalyticsService(common.db, pool)
-
 	return &AnalyticsHandler{
 		common:  common,
-		service: analyticsService,
+		service: service,
+		logger:  logger,
 	}
+}
+
+// checkService ensures the analytics service is initialized
+func (h *AnalyticsHandler) checkService(c *gin.Context) bool {
+	if h.service == nil {
+		sendError(c, http.StatusInternalServerError, "Analytics service not initialized. Please use proper constructor with pgxpool.Pool", nil)
+		return false
+	}
+	return true
 }
 
 // GetDashboardSummary returns the main dashboard metrics
@@ -54,6 +63,11 @@ func (h *AnalyticsHandler) GetDashboardSummary(c *gin.Context) {
 		return
 	}
 
+	// Check if service is initialized
+	if !h.checkService(c) {
+		return
+	}
+
 	currency := c.Query("currency")
 
 	summary, err := h.service.GetDashboardSummary(c.Request.Context(), workspaceID, currency)
@@ -63,7 +77,7 @@ func (h *AnalyticsHandler) GetDashboardSummary(c *gin.Context) {
 			go func() {
 				ctx := context.Background()
 				if err := h.service.TriggerMetricsRefresh(ctx, workspaceID, time.Now()); err != nil {
-					logger.Log.Error("Failed to calculate metrics", zap.Error(err))
+					h.logger.Error("Failed to calculate metrics", zap.Error(err))
 				}
 			}()
 			sendError(c, http.StatusNotFound, "No metrics available yet. Calculation in progress.", nil)
@@ -93,6 +107,11 @@ func (h *AnalyticsHandler) GetRevenueChart(c *gin.Context) {
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)
+		return
+	}
+
+	// Check if service is initialized
+	if !h.checkService(c) {
 		return
 	}
 
@@ -134,6 +153,11 @@ func (h *AnalyticsHandler) GetCustomerChart(c *gin.Context) {
 		return
 	}
 
+	// Check if service is initialized
+	if !h.checkService(c) {
+		return
+	}
+
 	metric := c.DefaultQuery("metric", "total")
 	period := c.DefaultQuery("period", "daily")
 	daysStr := c.DefaultQuery("days", "30")
@@ -171,6 +195,11 @@ func (h *AnalyticsHandler) GetPaymentMetrics(c *gin.Context) {
 		return
 	}
 
+	// Check if service is initialized
+	if !h.checkService(c) {
+		return
+	}
+
 	daysStr := c.DefaultQuery("days", "30")
 	days, _ := strconv.Atoi(daysStr)
 	if days <= 0 {
@@ -203,6 +232,11 @@ func (h *AnalyticsHandler) GetNetworkBreakdown(c *gin.Context) {
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)
+		return
+	}
+
+	// Check if service is initialized
+	if !h.checkService(c) {
 		return
 	}
 
@@ -247,6 +281,11 @@ func (h *AnalyticsHandler) RefreshMetrics(c *gin.Context) {
 		return
 	}
 
+	// Check if service is initialized
+	if !h.checkService(c) {
+		return
+	}
+
 	dateStr := c.Query("date")
 	var date time.Time
 	if dateStr != "" {
@@ -263,7 +302,7 @@ func (h *AnalyticsHandler) RefreshMetrics(c *gin.Context) {
 	go func() {
 		ctx := context.Background()
 		if err := h.service.TriggerMetricsRefresh(ctx, workspaceID, date); err != nil {
-			logger.Log.Error("Failed to refresh metrics",
+			h.logger.Error("Failed to refresh metrics",
 				zap.String("workspace_id", workspaceID.String()),
 				zap.Time("date", date),
 				zap.Error(err),
@@ -291,6 +330,11 @@ func (h *AnalyticsHandler) GetSubscriptionChart(c *gin.Context) {
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)
+		return
+	}
+
+	// Check if service is initialized
+	if !h.checkService(c) {
 		return
 	}
 
@@ -333,6 +377,11 @@ func (h *AnalyticsHandler) GetMRRChart(c *gin.Context) {
 		return
 	}
 
+	// Check if service is initialized
+	if !h.checkService(c) {
+		return
+	}
+
 	metric := c.DefaultQuery("metric", "mrr")
 	period := c.DefaultQuery("period", "monthly")
 	monthsStr := c.DefaultQuery("months", "12")
@@ -370,6 +419,11 @@ func (h *AnalyticsHandler) GetGasFeePieChart(c *gin.Context) {
 		return
 	}
 
+	// Check if service is initialized
+	if !h.checkService(c) {
+		return
+	}
+
 	daysStr := c.DefaultQuery("days", "30")
 	days, _ := strconv.Atoi(daysStr)
 	if days <= 0 {
@@ -401,6 +455,11 @@ func (h *AnalyticsHandler) GetHourlyMetrics(c *gin.Context) {
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)
+		return
+	}
+
+	// Check if service is initialized
+	if !h.checkService(c) {
 		return
 	}
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 
@@ -16,14 +17,17 @@ import (
 // WalletHandler handles wallet-related operations
 type WalletHandler struct {
 	common        *CommonServices
-	walletService *services.WalletService
+	walletService interfaces.WalletService
 }
 
-// NewWalletHandler creates a new WalletHandler instance
-func NewWalletHandler(common *CommonServices) *WalletHandler {
+// NewWalletHandler creates a handler with interface dependencies
+func NewWalletHandler(
+	common *CommonServices,
+	walletService interfaces.WalletService,
+) *WalletHandler {
 	return &WalletHandler{
 		common:        common,
-		walletService: services.NewWalletService(common.db),
+		walletService: walletService,
 	}
 }
 

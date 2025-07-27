@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
-	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
@@ -17,24 +16,66 @@ import (
 // SubscriptionManagementService handles all subscription lifecycle operations
 type SubscriptionManagementService struct {
 	db             db.Querier
-	calculator     *ProrationCalculator
-	paymentService *PaymentService
-	emailService   *EmailService
+	calculator     ProrationCalculatorInterface
+	paymentService PaymentServiceInterface
+	emailService   EmailServiceInterface
 	logger         *zap.Logger
 }
+
+// PaymentServiceInterface defines the interface for payment operations
+type PaymentServiceInterface interface {
+	CreatePaymentFromSubscriptionEvent(ctx context.Context, params CreatePaymentFromSubscriptionEventParams) (*db.Payment, error)
+}
+
+// EmailServiceInterface defines the interface for email operations
+type EmailServiceInterface interface {
+	SendTransactionalEmail(ctx context.Context, params TransactionalEmailParams) error
+}
+
+// ProrationCalculatorInterface defines the interface for proration calculations
+type ProrationCalculatorInterface interface {
+	CalculateUpgradeProration(currentPeriodStart, currentPeriodEnd time.Time, oldAmountCents, newAmountCents int64, changeDate time.Time) *ProrationResult
+	ScheduleDowngrade(currentPeriodEnd time.Time, changeType string) *ScheduleChangeResult
+	CalculatePauseCredit(currentPeriodStart, currentPeriodEnd time.Time, amountCents int64, pauseDate time.Time) *ProrationResult
+	AddBillingPeriod(start time.Time, intervalType string, intervalCount int) time.Time
+	FormatProrationExplanation(result *ProrationResult) string
+}
+
+
+
 
 // NewSubscriptionManagementService creates a new subscription management service
 func NewSubscriptionManagementService(
 	db db.Querier,
-	paymentService *PaymentService,
-	emailService *EmailService,
+	paymentService PaymentServiceInterface,
+	emailService EmailServiceInterface,
 ) *SubscriptionManagementService {
 	return &SubscriptionManagementService{
 		db:             db,
 		calculator:     NewProrationCalculator(),
 		paymentService: paymentService,
 		emailService:   emailService,
-		logger:         logger.Log,
+		logger:         zap.L(),
+	}
+}
+
+// NewSubscriptionManagementServiceWithDependencies creates a service with custom dependencies
+func NewSubscriptionManagementServiceWithDependencies(
+	db db.Querier,
+	calculator ProrationCalculatorInterface,
+	paymentService PaymentServiceInterface,
+	emailService EmailServiceInterface,
+	logger *zap.Logger,
+) *SubscriptionManagementService {
+	if logger == nil {
+		logger = zap.L()
+	}
+	return &SubscriptionManagementService{
+		db:             db,
+		calculator:     calculator,
+		paymentService: paymentService,
+		emailService:   emailService,
+		logger:         logger,
 	}
 }
 

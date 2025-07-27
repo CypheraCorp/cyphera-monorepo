@@ -5,7 +5,7 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/client/auth"
 	"github.com/cyphera/cyphera-api/libs/go/db"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -21,13 +21,13 @@ func NewAuthServicesAdapter(common *CommonServices) auth.CommonServicesInterface
 	}
 }
 
-// GetDB returns the database queries
-func (a *AuthServicesAdapter) GetDB() *db.Queries {
+// GetDB returns the database querier
+func (a *AuthServicesAdapter) GetDB() db.Querier {
 	return a.common.db
 }
 
-// GetAPIKeyService returns the API key service
-func (a *AuthServicesAdapter) GetAPIKeyService() *services.APIKeyService {
+// GetAPIKeyService returns the API key service interface
+func (a *AuthServicesAdapter) GetAPIKeyService() interfaces.APIKeyService {
 	return a.common.APIKeyService
 }
 

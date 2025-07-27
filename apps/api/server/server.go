@@ -68,6 +68,7 @@ var (
 	commonServices     *handlers.CommonServices
 	cmcApiKey          string
 	dunningRetryEngine *services.DunningRetryEngine
+	handlerFactory     *handlers.HandlerFactory
 )
 
 func InitializeHandlers() {
@@ -305,82 +306,85 @@ func InitializeHandlers() {
 		logger.Fatal("Unable to create delegation client", zap.Error(err))
 	}
 
-	commonServices = handlers.NewCommonServices(
+	// Initialize PaymentSyncClient with encryption key
+	paymentSyncClient := payment_sync.NewPaymentSyncClient(dbQueries, logger.Log, paymentSyncEncryptionKey)
+
+	// Get additional configurations
+	fromEmail := os.Getenv("EMAIL_FROM_ADDRESS")
+	if fromEmail == "" {
+		fromEmail = "noreply@cypherapay.com"
+	}
+	fromName := os.Getenv("EMAIL_FROM_NAME")
+	if fromName == "" {
+		fromName = "Cyphera"
+	}
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://pay.cyphera.com"
+	}
+	rpcAPIKey := os.Getenv("RPC_API_KEY")
+	if rpcAPIKey == "" {
+		logger.Warn("RPC_API_KEY not set, blockchain service functionality may be limited")
+	}
+
+	// Create the handler factory with all dependencies
+	handlerFactory := handlers.CreateDefaultFactory(
 		dbQueries,
+		dbpool,
 		cypheraSmartWalletAddress,
-		cmcClient, // Pass CMC client to common services
-		cmcApiKey, // Pass CMC API key to common services
+		cmcClient,
+		cmcApiKey,
+		resendAPIKey,
+		fromEmail,
+		fromName,
+		baseURL,
+		rpcAPIKey,
+		delegationClient,
+		paymentSyncClient,
 	)
 
-	// API Handler initialization
-	accountHandler = handlers.NewAccountHandler(commonServices)
-	workspaceHandler = handlers.NewWorkspaceHandler(commonServices)
-	customerHandler = handlers.NewCustomerHandler(commonServices)
-	apiKeyHandler = handlers.NewAPIKeyHandler(commonServices)
-	userHandler = handlers.NewUserHandler(commonServices)
-	networkHandler = handlers.NewNetworkHandler(commonServices)
-	tokenHandler = handlers.NewTokenHandler(commonServices)
-	productHandler = handlers.NewProductHandler(commonServices, delegationClient)
-	walletHandler = handlers.NewWalletHandler(commonServices)
+	// Get common services from factory
+	commonServices = handlerFactory.GetCommonServices()
+
+	// API Handler initialization using factory
+	accountHandler = handlerFactory.NewAccountHandler()
+	workspaceHandler = handlerFactory.NewWorkspaceHandler()
+	customerHandler = handlerFactory.NewCustomerHandler()
+	apiKeyHandler = handlerFactory.NewAPIKeyHandler()
+	userHandler = handlerFactory.NewUserHandler()
+	networkHandler = handlerFactory.NewNetworkHandler()
+	tokenHandler = handlerFactory.NewTokenHandler()
+	productHandler = handlerFactory.NewProductHandler(delegationClient)
+	walletHandler = handlerFactory.NewWalletHandler()
 
 	// Initialize currency handler
-	currencyHandler = handlers.NewCurrencyHandler(commonServices)
+	currencyHandler = handlerFactory.NewCurrencyHandler()
 
-	// Initialize payment service
-	paymentService := services.NewPaymentService(dbQueries, cmcApiKey)
-
-	// Initialize subscription
-	subscriptionHandler = handlers.NewSubscriptionHandler(commonServices, delegationClient)
-	subscriptionEventHandler = handlers.NewSubscriptionEventHandler(commonServices)
+	// Initialize subscription handlers
+	subscriptionHandler = handlerFactory.NewSubscriptionHandler(delegationClient)
+	subscriptionEventHandler = handlerFactory.NewSubscriptionEventHandler()
 
 	// Payment Sync Service and Handlers
 	// Note: Stripe services are now configured per-workspace dynamically,
 	// no global Stripe service configuration needed
-
-	// Initialize PaymentSyncClient with encryption key
-	paymentSyncClient := payment_sync.NewPaymentSyncClient(dbQueries, logger.Log, paymentSyncEncryptionKey)
-
-	// Initialize PaymentSyncHandlers with the unified client
 	paymentSyncHandler = handlers.NewPaymentSyncHandlers(commonServices, paymentSyncClient)
 
 	// Analytics handler
-	analyticsHandler = handlers.NewAnalyticsHandler(commonServices)
+	analyticsHandler = handlerFactory.NewAnalyticsHandler()
 	// Gas sponsorship handler
-	gasSponsorshipHandler = handlers.NewGasSponsorshipHandler(commonServices)
+	gasSponsorshipHandler = handlerFactory.NewGasSponsorshipHandler()
 	// Invoice handler
-	invoiceHandler = handlers.NewInvoiceHandler(commonServices)
+	invoiceHandler = handlerFactory.NewInvoiceHandler()
 	// Payment link handler
-	paymentLinkHandler = handlers.NewPaymentLinkHandler(commonServices)
+	paymentLinkHandler = handlerFactory.NewPaymentLinkHandler()
 	// Payment page handler
-	paymentPageHandler = handlers.NewPaymentPageHandler(commonServices)
+	paymentPageHandler = handlerFactory.NewPaymentPageHandler()
 
-	// Dunning management
-	dunningService := services.NewDunningService(dbQueries, logger.Log)
+	// Dunning management handler
+	dunningHandler = handlerFactory.CreateDunningHandler()
 
-	// Initialize email service if API key is available
-	var emailService *services.EmailService
-	if resendAPIKey != "" {
-		fromEmail := os.Getenv("EMAIL_FROM_ADDRESS")
-		if fromEmail == "" {
-			fromEmail = "noreply@cypherapay.com"
-		}
-		fromName := os.Getenv("EMAIL_FROM_NAME")
-		if fromName == "" {
-			fromName = "Cyphera"
-		}
-		emailService = services.NewEmailService(resendAPIKey, fromEmail, fromName, logger.Log)
-		logger.Log.Info("Email service initialized",
-			zap.String("from_email", fromEmail),
-			zap.String("from_name", fromName))
-	}
-
-	// Initialize dunning retry engine
-	dunningRetryEngine = services.NewDunningRetryEngine(dbQueries, logger.Log, dunningService, emailService, delegationClient)
-
-	dunningHandler = handlers.NewDunningHandler(commonServices, dunningService, dunningRetryEngine)
-
-	// Initialize subscription management handler after email service is ready
-	subscriptionManagementHandler = handlers.NewSubscriptionManagementHandler(dbQueries, paymentService, emailService)
+	// Initialize subscription management handler
+	subscriptionManagementHandler = handlerFactory.NewSubscriptionManagementHandler()
 
 	// 3rd party handlers
 	circleHandler = handlers.NewCircleHandler(commonServices, circleClient)
@@ -425,7 +429,7 @@ func InitializeRoutes(router *gin.Engine) {
 	})
 
 	// Initialize and start the redemption processor with 3 workers and a buffer size of 100
-	redemptionProcessor = handlers.NewRedemptionProcessor(dbQueries, delegationClient, 3, 100, cmcApiKey)
+	redemptionProcessor = handlerFactory.CreateRedemptionProcessor(delegationClient, 3, 100)
 	redemptionProcessor.Start()
 
 	// Ensure we gracefully stop the redemption processor when the server shuts down
@@ -810,7 +814,7 @@ func InitializeRoutes(router *gin.Engine) {
 			// Webhook routes for payment failures
 			webhooks := protected.Group("/webhooks")
 			{
-				paymentFailureHandler := handlers.NewPaymentFailureWebhookHandler(commonServices)
+				paymentFailureHandler := handlerFactory.NewPaymentFailureWebhookHandler()
 				webhooks.POST("/payment-failure", paymentFailureHandler.HandlePaymentFailure)
 				webhooks.POST("/payment-failures/batch", paymentFailureHandler.HandleBatchPaymentFailures)
 			}

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -13,17 +13,14 @@ import (
 // PaymentFailureWebhookHandler handles payment failure webhooks from payment providers
 type PaymentFailureWebhookHandler struct {
 	common          *CommonServices
-	failureDetector *services.PaymentFailureDetector
+	failureDetector interfaces.PaymentFailureDetector
 }
 
-// NewPaymentFailureWebhookHandler creates a new payment failure webhook handler
-func NewPaymentFailureWebhookHandler(common *CommonServices) *PaymentFailureWebhookHandler {
-	// Create dunning service
-	dunningService := services.NewDunningService(common.db, common.logger)
-	
-	// Create failure detector
-	failureDetector := services.NewPaymentFailureDetector(common.db, common.logger, dunningService)
-	
+// NewPaymentFailureWebhookHandler creates a handler with interface dependencies
+func NewPaymentFailureWebhookHandler(
+	common *CommonServices,
+	failureDetector interfaces.PaymentFailureDetector,
+) *PaymentFailureWebhookHandler {
 	return &PaymentFailureWebhookHandler{
 		common:          common,
 		failureDetector: failureDetector,

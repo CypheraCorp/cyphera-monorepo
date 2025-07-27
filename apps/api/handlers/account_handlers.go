@@ -7,6 +7,7 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/gin-gonic/gin"
@@ -18,15 +19,20 @@ import (
 // Domain-specific handlers
 type AccountHandler struct {
 	common         *CommonServices
-	accountService *services.AccountService
-	walletService  *services.WalletService
+	accountService interfaces.AccountService
+	walletService  interfaces.WalletService
 }
 
-func NewAccountHandler(common *CommonServices) *AccountHandler {
+// NewAccountHandler creates a handler with interface dependencies
+func NewAccountHandler(
+	common *CommonServices,
+	accountService interfaces.AccountService,
+	walletService interfaces.WalletService,
+) *AccountHandler {
 	return &AccountHandler{
 		common:         common,
-		accountService: services.NewAccountService(common.db),
-		walletService:  services.NewWalletService(common.db),
+		accountService: accountService,
+		walletService:  walletService,
 	}
 }
 
