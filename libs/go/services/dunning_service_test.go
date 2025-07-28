@@ -1631,9 +1631,14 @@ func TestDunningService_ComplexScenarios(t *testing.T) {
 			ID:               configID,
 			GracePeriodHours: pgtype.Int4{Int32: 24, Valid: true},
 		}
+		subscription := db.Subscription{
+			WorkspaceID: workspaceID,
+			CustomerID:  customerID,
+		}
 		mockQuerier.EXPECT().GetActiveDunningCampaignForSubscription(ctx, gomock.Any()).Return(
 			db.DunningCampaign{ID: uuid.Nil}, nil)
 		mockQuerier.EXPECT().GetDunningConfiguration(ctx, configID).Return(config, nil)
+		mockQuerier.EXPECT().GetSubscription(ctx, subscriptionID).Return(subscription, nil)
 		mockQuerier.EXPECT().CreateDunningCampaign(ctx, gomock.Any()).Return(db.DunningCampaign{
 			ID:              campaignID,
 			WorkspaceID:     workspaceID,

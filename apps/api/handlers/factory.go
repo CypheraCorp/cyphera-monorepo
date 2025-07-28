@@ -195,8 +195,8 @@ func CreateDefaultFactory(
 	paymentLinkService := services.NewPaymentLinkService(db, logger, baseURL)
 	invoiceService := services.NewInvoiceService(db, logger, taxService, discountService, gasSponsorshipService, currencyService, exchangeRateService)
 	productService := services.NewProductService(db)
-	subscriptionService := services.NewSubscriptionService(db, delegationClient, paymentService)
 	customerService := services.NewCustomerService(db)
+	subscriptionService := services.NewSubscriptionService(db, delegationClient, paymentService, customerService)
 	workspaceService := services.NewWorkspaceService(db)
 	accountService := services.NewAccountService(db)
 	userService := services.NewUserService(db)
@@ -309,6 +309,8 @@ func (f *HandlerFactory) NewProductHandler(delegationClient *dsClient.Delegation
 		f.commonServices,
 		delegationClient,
 		f.productService,
+		f.subscriptionService,
+		f.customerService,
 		f.logger,
 	)
 }

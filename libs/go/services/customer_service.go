@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
@@ -406,4 +408,234 @@ func parseNetworkType(networkType string) (db.NetworkType, error) {
 	default:
 		return "", fmt.Errorf("unsupported network type: %s", networkType)
 	}
+}
+
+// ProcessCustomerAndWallet handles customer lookup/creation and wallet association
+func (s *CustomerService) ProcessCustomerAndWallet(
+	ctx context.Context,
+	tx pgx.Tx,
+	processParams params.ProcessCustomerWalletParams,
+) (*db.Customer, *db.CustomerWallet, error) {
+	// Create queries instance with transaction
+	qtx := db.New(tx)
+	
+	customers, err := qtx.GetCustomersByWalletAddress(ctx, processParams.WalletAddress)
+	if err != nil {
+		s.logger.Error("Failed to check for existing customers",
+			zap.Error(err),
+			zap.String("wallet_address", processParams.WalletAddress))
+		return nil, nil, err
+	}
+
+	if len(customers) == 0 {
+		return s.CreateCustomerFromWallet(ctx, tx, params.CreateCustomerFromWalletParams{
+			WalletAddress: processParams.WalletAddress,
+			WorkspaceID:   processParams.WorkspaceID,
+			ProductID:     processParams.ProductID,
+			NetworkType:   processParams.NetworkType,
+		})
+	}
+
+	customer := customers[0]
+
+	// Ensure customer is associated with the current workspace
+	isAssociated, err := qtx.IsCustomerInWorkspace(ctx, db.IsCustomerInWorkspaceParams{
+		WorkspaceID: processParams.WorkspaceID,
+		CustomerID:  customer.ID,
+	})
+	if err != nil {
+		s.logger.Error("Failed to check customer workspace association",
+			zap.Error(err),
+			zap.String("customer_id", customer.ID.String()),
+			zap.String("workspace_id", processParams.WorkspaceID.String()))
+		return nil, nil, err
+	}
+
+	// If customer is not associated with this workspace, create the association
+	if !isAssociated {
+		_, err = qtx.AddCustomerToWorkspace(ctx, db.AddCustomerToWorkspaceParams{
+			WorkspaceID: processParams.WorkspaceID,
+			CustomerID:  customer.ID,
+		})
+		if err != nil {
+			s.logger.Error("Failed to associate customer with workspace",
+				zap.Error(err),
+				zap.String("customer_id", customer.ID.String()),
+				zap.String("workspace_id", processParams.WorkspaceID.String()))
+			return nil, nil, err
+		}
+
+		s.logger.Info("Associated existing customer with workspace",
+			zap.String("customer_id", customer.ID.String()),
+			zap.String("workspace_id", processParams.WorkspaceID.String()),
+			zap.String("wallet_address", processParams.WalletAddress))
+	}
+
+	customerWallet, err := s.FindOrCreateCustomerWallet(ctx, tx, params.FindOrCreateWalletParams{
+		CustomerID:    customer.ID,
+		WalletAddress: processParams.WalletAddress,
+		NetworkType:   processParams.NetworkType,
+		ProductID:     processParams.ProductID,
+		IsPrimary:     true,
+		Verified:      true,
+	})
+
+	return &customer, customerWallet, err
+}
+
+// CreateCustomerFromWallet creates a new customer and associated wallet
+func (s *CustomerService) CreateCustomerFromWallet(
+	ctx context.Context,
+	tx pgx.Tx,
+	params params.CreateCustomerFromWalletParams,
+) (*db.Customer, *db.CustomerWallet, error) {
+	qtx := db.New(tx)
+	
+	s.logger.Info("Creating new customer for wallet address",
+		zap.String("wallet_address", params.WalletAddress),
+		zap.String("product_id", params.ProductID.String()))
+
+	metadata := map[string]interface{}{
+		"source":                  "product_subscription",
+		"created_from_product_id": params.ProductID.String(),
+		"wallet_address":          params.WalletAddress,
+	}
+	
+	// Merge with provided metadata
+	if params.Metadata != nil {
+		for k, v := range params.Metadata {
+			metadata[k] = v
+		}
+	}
+	
+	metadataBytes, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	createCustomerParams := db.CreateCustomerParams{
+		Email: pgtype.Text{
+			String: "",
+			Valid:  false,
+		},
+		Name: pgtype.Text{
+			String: "Wallet Customer: " + params.WalletAddress,
+			Valid:  true,
+		},
+		Description: pgtype.Text{
+			String: "Customer created from product subscription",
+			Valid:  true,
+		},
+		Metadata: metadataBytes,
+	}
+
+	customer, err := qtx.CreateCustomer(ctx, createCustomerParams)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Associate customer with workspace using the new association table
+	_, err = qtx.AddCustomerToWorkspace(ctx, db.AddCustomerToWorkspaceParams{
+		WorkspaceID: params.WorkspaceID,
+		CustomerID:  customer.ID,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	walletMetadata := map[string]interface{}{
+		"source":     "product_subscription",
+		"product_id": params.ProductID.String(),
+		"created_at": time.Now().Format(time.RFC3339),
+	}
+	walletMetadataBytes, err := json.Marshal(walletMetadata)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	createWalletParams := db.CreateCustomerWalletParams{
+		CustomerID:    customer.ID,
+		WalletAddress: params.WalletAddress,
+		NetworkType:   db.NetworkType(params.NetworkType),
+		Nickname: pgtype.Text{
+			String: "Subscription Wallet",
+			Valid:  true,
+		},
+		IsPrimary: pgtype.Bool{
+			Bool:  true,
+			Valid: true,
+		},
+		Verified: pgtype.Bool{
+			Bool:  true,
+			Valid: true,
+		},
+		Metadata: walletMetadataBytes,
+	}
+
+	customerWallet, err := qtx.CreateCustomerWallet(ctx, createWalletParams)
+	return &customer, &customerWallet, err
+}
+
+// FindOrCreateCustomerWallet finds an existing wallet or creates a new one
+func (s *CustomerService) FindOrCreateCustomerWallet(
+	ctx context.Context,
+	tx pgx.Tx,
+	params params.FindOrCreateWalletParams,
+) (*db.CustomerWallet, error) {
+	qtx := db.New(tx)
+	
+	wallets, err := qtx.ListCustomerWallets(ctx, params.CustomerID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, wallet := range wallets {
+		if strings.EqualFold(wallet.WalletAddress, params.WalletAddress) {
+			updatedWallet, err := qtx.UpdateCustomerWalletUsageTime(ctx, wallet.ID)
+			if err != nil {
+				s.logger.Warn("Failed to update wallet usage time",
+					zap.Error(err),
+					zap.String("wallet_id", wallet.ID.String()))
+				return &wallet, nil
+			}
+			return &updatedWallet, nil
+		}
+	}
+
+	walletMetadata := map[string]interface{}{
+		"source":     "product_subscription",
+		"product_id": params.ProductID.String(),
+		"created_at": time.Now().Format(time.RFC3339),
+	}
+	walletMetadataBytes, err := json.Marshal(walletMetadata)
+	if err != nil {
+		return nil, err
+	}
+
+	nickname := "Subscription Wallet"
+	if params.Nickname != nil {
+		nickname = *params.Nickname
+	}
+
+	createWalletParams := db.CreateCustomerWalletParams{
+		CustomerID:    params.CustomerID,
+		WalletAddress: params.WalletAddress,
+		NetworkType:   db.NetworkType(params.NetworkType),
+		Nickname: pgtype.Text{
+			String: nickname,
+			Valid:  true,
+		},
+		IsPrimary: pgtype.Bool{
+			Bool:  params.IsPrimary || len(wallets) == 0,
+			Valid: true,
+		},
+		Verified: pgtype.Bool{
+			Bool:  params.Verified,
+			Valid: true,
+		},
+		Metadata: walletMetadataBytes,
+	}
+
+	wallet, err := qtx.CreateCustomerWallet(ctx, createWalletParams)
+	return &wallet, err
 }

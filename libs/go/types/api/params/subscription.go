@@ -84,3 +84,71 @@ type CreateSubscriptionParams struct {
 	PeriodEnd      time.Time
 	NextRedemption time.Time
 }
+
+// StoreDelegationDataParams contains parameters for storing delegation data
+type StoreDelegationDataParams struct {
+	Delegate  string
+	Delegator string
+	Authority string
+	Caveats   json.RawMessage
+	Salt      string
+	Signature string
+}
+
+// InitialRedemptionParams contains parameters for performing initial redemption
+type InitialRedemptionParams struct {
+	Customer       db.Customer
+	CustomerWallet db.CustomerWallet
+	Subscription   db.Subscription
+	Product        db.Product
+	Price          db.Price
+	ProductToken   db.GetProductTokenRow
+	DelegationData StoreDelegationDataParams
+	MerchantWallet db.Wallet
+	Token          db.Token
+	Network        db.Network
+	TokenAmount    int64
+}
+
+// CreateSubscriptionWithDelegationParams contains parameters for creating subscription with delegation
+type CreateSubscriptionWithDelegationParams struct {
+	Price             db.Price
+	Product           db.Product
+	ProductToken      db.GetProductTokenRow
+	MerchantWallet    db.Wallet
+	Token             db.Token
+	Network           db.Network
+	DelegationData    StoreDelegationDataParams
+	SubscriberAddress string
+	ProductTokenID    uuid.UUID
+	TokenAmount       int64
+}
+
+// SubscriptionCreationResult represents the result of subscription creation
+type SubscriptionCreationResult struct {
+	Subscription      *db.Subscription
+	Customer          *db.Customer
+	CustomerWallet    *db.CustomerWallet
+	TransactionHash   string
+	InitialRedemption bool
+}
+
+// SubscribeToProductByPriceIDParams contains all parameters for creating a subscription by price ID
+type SubscribeToProductByPriceIDParams struct {
+	PriceID                   uuid.UUID
+	SubscriberAddress         string
+	ProductTokenID            string
+	TokenAmount               string
+	DelegationData            DelegationParams
+	CypheraSmartWalletAddress string
+}
+
+// DelegationParams contains delegation data for validation
+type DelegationParams struct {
+	Delegate  string
+	Delegator string
+	Authority string
+	Salt      string
+	Signature string
+	Caveats   json.RawMessage
+}

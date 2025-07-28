@@ -83,3 +83,14 @@ type Product struct {
 	CreatedAt   int64
 	UpdatedAt   int64
 }
+
+// ValidateSubscriptionParams contains parameters for validating a subscription request
+type ValidateSubscriptionParams struct {
+	SubscriberAddress         string
+	PriceID                   string
+	ProductTokenID            string
+	TokenAmount               string
+	ProductID                 uuid.UUID
+	Delegation                DelegationParams
+	CypheraSmartWalletAddress string // The expected delegate address
+}

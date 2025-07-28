@@ -75,3 +75,37 @@ type CreateCustomerWalletParams struct {
 	Verified      bool
 	Metadata      map[string]interface{}
 }
+
+// ProcessCustomerWalletParams contains parameters for processing customer and wallet
+type ProcessCustomerWalletParams struct {
+	WalletAddress string
+	WorkspaceID   uuid.UUID
+	ProductID     uuid.UUID
+	NetworkType   string
+}
+
+// CreateCustomerFromWalletParams contains parameters for creating a customer from wallet
+type CreateCustomerFromWalletParams struct {
+	WalletAddress string
+	WorkspaceID   uuid.UUID
+	ProductID     uuid.UUID
+	NetworkType   string
+	Metadata      map[string]interface{}
+}
+
+// FindOrCreateWalletParams contains parameters for finding or creating a customer wallet
+type FindOrCreateWalletParams struct {
+	CustomerID    uuid.UUID
+	WalletAddress string
+	NetworkType   string
+	ProductID     uuid.UUID
+	Nickname      *string
+	IsPrimary     bool
+	Verified      bool
+}
+
+// CustomerWalletResult represents the result of customer and wallet processing
+type CustomerWalletResult struct {
+	Customer       uuid.UUID
+	CustomerWallet uuid.UUID
+}

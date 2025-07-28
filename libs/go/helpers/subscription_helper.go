@@ -1,12 +1,18 @@
 package helpers
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.uber.org/zap"
 )
 
 // CalculateNextRedemption calculates the next redemption time based on the interval type.
@@ -213,4 +219,116 @@ func DetermineErrorType(err error) db.SubscriptionEventType {
 	} else {
 		return db.SubscriptionEventTypeFailed
 	}
+}
+
+// ToComprehensiveSubscriptionResponse converts a db.Subscription to a comprehensive SubscriptionResponse
+// that includes all subscription fields plus the initial transaction hash from subscription events
+func ToComprehensiveSubscriptionResponse(ctx context.Context, queries db.Querier, subscription db.Subscription) (*responses.SubscriptionResponse, error) {
+	// Get the subscription details with related data
+	subscriptionDetails, err := queries.GetSubscriptionWithDetails(ctx, db.GetSubscriptionWithDetailsParams{
+		ID:          subscription.ID,
+		WorkspaceID: subscription.WorkspaceID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription details: %w", err)
+	}
+
+	// Get the initial transaction hash from the first redemption event
+	initialTxHash := ""
+	events, err := queries.ListSubscriptionEventsBySubscription(ctx, subscription.ID)
+	if err == nil {
+		for _, event := range events {
+			if event.EventType == db.SubscriptionEventTypeRedeemed && event.TransactionHash.Valid {
+				initialTxHash = event.TransactionHash.String
+				break
+			}
+		}
+	}
+
+	// Parse metadata
+	var metadata map[string]interface{}
+	if len(subscription.Metadata) > 0 {
+		if err := json.Unmarshal(subscription.Metadata, &metadata); err != nil {
+			logger.Error("Error unmarshaling subscription metadata", zap.Error(err))
+			metadata = make(map[string]interface{})
+		}
+	}
+
+	// Convert to response
+	response := &responses.SubscriptionResponse{
+		ID:                     subscription.ID,
+		WorkspaceID:            subscription.WorkspaceID,
+		CustomerID:             subscription.CustomerID,
+		Status:                 string(subscription.Status),
+		CurrentPeriodStart:     subscription.CurrentPeriodStart.Time,
+		CurrentPeriodEnd:       subscription.CurrentPeriodEnd.Time,
+		TotalRedemptions:       subscription.TotalRedemptions,
+		TotalAmountInCents:     subscription.TotalAmountInCents,
+		TokenAmount:            subscription.TokenAmount,
+		DelegationID:           subscription.DelegationID,
+		InitialTransactionHash: initialTxHash,
+		Metadata:               metadata,
+		CreatedAt:              subscription.CreatedAt.Time,
+		UpdatedAt:              subscription.UpdatedAt.Time,
+		CustomerName:           subscriptionDetails.CustomerName.String,
+		CustomerEmail:          subscriptionDetails.CustomerEmail.String,
+		Price: responses.PriceResponse{
+			ID:                  subscriptionDetails.PriceID.String(),
+			Object:              "price",
+			ProductID:           subscriptionDetails.ProductID.String(),
+			Active:              true, // Assuming active for subscriptions
+			Type:                string(subscriptionDetails.PriceType),
+			Currency:            string(subscriptionDetails.PriceCurrency),
+			UnitAmountInPennies: int64(subscriptionDetails.PriceUnitAmountInPennies), // Convert int32 to int64
+			IntervalType:        string(subscriptionDetails.PriceIntervalType),
+			TermLength:          subscriptionDetails.PriceTermLength,
+			CreatedAt:           time.Now().Unix(), // Default timestamp
+			UpdatedAt:           time.Now().Unix(), // Default timestamp
+		},
+		Product: responses.ProductResponse{
+			ID:     subscriptionDetails.ProductID.String(),
+			Name:   subscriptionDetails.ProductName,
+			Active: true, // Assuming active for subscriptions
+			Object: "product",
+		},
+		ProductToken: responses.ProductTokenResponse{
+			ID:          subscriptionDetails.ProductTokenID.String(),
+			TokenSymbol: subscriptionDetails.TokenSymbol,
+			NetworkID:   subscriptionDetails.ProductTokenID.String(),
+			CreatedAt:   time.Now().Unix(), // Default timestamp
+			UpdatedAt:   time.Now().Unix(), // Default timestamp
+		},
+	}
+
+	// Handle nullable fields
+	if subscription.NextRedemptionDate.Valid {
+		response.NextRedemptionDate = &subscription.NextRedemptionDate.Time
+	}
+
+	if subscription.CustomerWalletID.Valid {
+		walletID := uuid.UUID(subscription.CustomerWalletID.Bytes)
+		response.CustomerWalletID = &walletID
+	}
+
+	if subscription.ExternalID.Valid {
+		response.ExternalID = subscription.ExternalID.String
+	}
+
+	if subscription.PaymentSyncStatus.Valid {
+		response.PaymentSyncStatus = subscription.PaymentSyncStatus.String
+	}
+
+	if subscription.PaymentSyncedAt.Valid {
+		response.PaymentSyncedAt = &subscription.PaymentSyncedAt.Time
+	}
+
+	if subscription.PaymentSyncVersion.Valid {
+		response.PaymentSyncVersion = subscription.PaymentSyncVersion.Int32
+	}
+
+	if subscription.PaymentProvider.Valid {
+		response.PaymentProvider = subscription.PaymentProvider.String
+	}
+
+	return response, nil
 }

@@ -3,6 +3,8 @@ package responses
 import (
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/google/uuid"
 )
 
@@ -65,4 +67,21 @@ type GetRedemptionStatusResponse struct {
 	NextRedemptionAt time.Time  `json:"next_redemption_at"`
 	TransactionHash  string     `json:"transaction_hash,omitempty"`
 	FailureReason    string     `json:"failure_reason,omitempty"`
+}
+
+// SubscribeToProductByPriceIDParams contains all parameters for creating a subscription by price ID
+type SubscribeToProductByPriceIDParams struct {
+	PriceID                   uuid.UUID
+	SubscriberAddress         string
+	ProductTokenID            string
+	TokenAmount               string
+	DelegationData            params.DelegationParams
+	CypheraSmartWalletAddress string
+}
+
+// SubscribeToProductByPriceIDResult contains the result of subscription creation
+type SubscribeToProductByPriceIDResult struct {
+	Subscription *db.Subscription
+	Success      bool
+	ErrorMessage string
 }

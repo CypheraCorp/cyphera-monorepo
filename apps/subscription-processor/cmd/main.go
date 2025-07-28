@@ -312,15 +312,21 @@ func main() {
 	cmcApiKey := os.Getenv("CMC_API_KEY")
 	paymentService := services.NewPaymentService(dbQueries, cmcApiKey)
 
+	// Initialize customer service
+	customerService := services.NewCustomerService(dbQueries)
+
+	// Initialize subscription service
+	subscriptionService := services.NewSubscriptionService(dbQueries, delegationClient, paymentService, customerService)
+
 	// Create the scheduled changes processor
 	var scheduledChangesProcessor *processor.ScheduledChangesProcessor
 	if emailService != nil {
 		scheduledChangesProcessor = processor.NewScheduledChangesProcessor(dbQueries, paymentService, emailService, 5*time.Minute)
 	}
 
-	// Create the subscription processor
+	// Create the subscription processor using the subscription service
 	app := &Application{
-		subscriptionProcessor:     processor.NewSubscriptionProcessor(dbQueries, cypheraSmartWalletAddress, delegationClient),
+		subscriptionProcessor:     processor.NewSubscriptionProcessor(subscriptionService),
 		scheduledChangesProcessor: scheduledChangesProcessor,
 		failureDetector:           failureDetector,
 		dunningService:            dunningService,

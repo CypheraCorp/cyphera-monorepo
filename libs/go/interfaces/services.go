@@ -43,6 +43,13 @@ type SubscriptionService interface {
 	ListSubscriptionsByProduct(ctx context.Context, workspaceID, productID uuid.UUID) ([]db.Subscription, error)
 	UpdateSubscription(ctx context.Context, subscriptionID uuid.UUID, req requests.UpdateSubscriptionRequest) (*db.Subscription, error)
 	DeleteSubscription(ctx context.Context, workspaceID, subscriptionID uuid.UUID) error
+	
+	// New methods for subscription creation and processing
+	StoreDelegationData(ctx context.Context, tx pgx.Tx, params params.StoreDelegationDataParams) (*db.DelegationDatum, error)
+	CreateSubscriptionWithDelegation(ctx context.Context, tx pgx.Tx, params params.CreateSubscriptionWithDelegationParams) (*params.SubscriptionCreationResult, error)
+	ProcessInitialRedemption(ctx context.Context, params params.InitialRedemptionParams) (*db.Subscription, error)
+	ProcessDueSubscriptions(ctx context.Context) (*responses.ProcessDueSubscriptionsResult, error)
+	CreateSubscription(ctx context.Context, tx pgx.Tx, params params.CreateSubscriptionParams) (*db.Subscription, error)
 }
 
 // InvoiceService handles invoice operations
@@ -165,6 +172,11 @@ type CustomerService interface {
 	CreateCustomerWallet(ctx context.Context, params params.CreateCustomerWalletParams) (*db.CustomerWallet, error)
 	ListCustomers(ctx context.Context, params params.ListCustomersParams) (*responses.ListCustomersResult, error)
 	ListWorkspaceCustomers(ctx context.Context, params params.ListWorkspaceCustomersParams) (*responses.ListWorkspaceCustomersResult, error)
+	
+	// New methods for subscription processing
+	ProcessCustomerAndWallet(ctx context.Context, tx pgx.Tx, params params.ProcessCustomerWalletParams) (*db.Customer, *db.CustomerWallet, error)
+	CreateCustomerFromWallet(ctx context.Context, tx pgx.Tx, params params.CreateCustomerFromWalletParams) (*db.Customer, *db.CustomerWallet, error)
+	FindOrCreateCustomerWallet(ctx context.Context, tx pgx.Tx, params params.FindOrCreateWalletParams) (*db.CustomerWallet, error)
 }
 
 // WorkspaceService handles workspace operations
@@ -187,6 +199,12 @@ type ProductService interface {
 	UpdateProduct(ctx context.Context, params params.UpdateProductParams) (*db.Product, error)
 	DeleteProduct(ctx context.Context, productID uuid.UUID, workspaceID uuid.UUID) error
 	GetPublicProductByPriceID(ctx context.Context, priceID uuid.UUID) (*responses.PublicProductResponse, error)
+	
+	// Subscription validation methods
+	ValidateSubscriptionRequest(ctx context.Context, params params.ValidateSubscriptionParams) error
+	ValidateProductForSubscription(ctx context.Context, productID uuid.UUID) (*db.Product, error)
+	ValidatePriceForSubscription(ctx context.Context, priceID uuid.UUID) (*db.Price, *db.Product, error)
+	GetProductTokenWithValidation(ctx context.Context, productTokenID uuid.UUID, productID uuid.UUID) (*db.GetProductTokenRow, error)
 }
 
 // WalletService handles wallet operations

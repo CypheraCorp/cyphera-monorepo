@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,8 +10,10 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ToProductDetailResponse converts database product model to detailed API response
@@ -242,4 +245,172 @@ func ToPriceResponseFromDB(p db.Price) responses.PriceResponse {
 		CreatedAt:           p.CreatedAt.Time.Unix(),
 		UpdatedAt:           p.UpdatedAt.Time.Unix(),
 	}
+}
+
+// ValidatePrice validates price parameters
+func ValidatePrice(price params.CreatePriceParams) error {
+	// Validate price type
+	priceType, err := ValidatePriceType(price.Type)
+	if err != nil {
+		return err
+	}
+
+	// Validate interval type
+	intervalType, err := ValidateIntervalType(price.IntervalType)
+	if err != nil {
+		return err
+	}
+
+	// Validate price amount
+	if err := ValidatePriceInPennies(int32(price.UnitAmountInPennies)); err != nil {
+		return err
+	}
+
+	// Validate term length based on price type
+	if err := ValidatePriceTermLength(priceType, price.TermLength, intervalType, price.IntervalCount); err != nil {
+		return err
+	}
+
+	// Validate metadata
+	if err := ValidateMetadata(price.Metadata); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateWalletOwnership validates that wallet belongs to the workspace
+func ValidateWalletOwnership(ctx context.Context, queries db.Querier, walletID, workspaceID uuid.UUID) error {
+	wallet, err := queries.GetWalletByID(ctx, db.GetWalletByIDParams{
+		ID:          walletID,
+		WorkspaceID: workspaceID,
+	})
+	if err != nil {
+		return fmt.Errorf("wallet not found or not accessible: %w", err)
+	}
+
+	if wallet.WorkspaceID != workspaceID {
+		return fmt.Errorf("wallet does not belong to workspace")
+	}
+
+	return nil
+}
+
+// CreateProductTokens creates product tokens for a product
+func CreateProductTokens(ctx context.Context, queries db.Querier, productID uuid.UUID, tokens []params.CreateProductTokenParams) error {
+	for _, pt := range tokens {
+		// NetworkID and TokenID are already UUIDs, no need to parse
+
+		_, err := queries.CreateProductToken(ctx, db.CreateProductTokenParams{
+			ProductID: productID,
+			NetworkID: pt.NetworkID,
+			TokenID:   pt.TokenID,
+			Active:    pt.Active,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create product token: %w", err)
+		}
+	}
+	return nil
+}
+
+// ValidateProductUpdate validates product update parameters
+func ValidateProductUpdate(ctx context.Context, queries db.Querier, params params.UpdateProductParams, existingProduct db.Product) error {
+	// Validate name if provided
+	if params.Name != nil {
+		if err := ValidateProductName(*params.Name); err != nil {
+			return err
+		}
+	}
+
+	// Validate description if provided
+	if params.Description != nil {
+		if err := ValidateProductDescription(*params.Description); err != nil {
+			return err
+		}
+	}
+
+	// Validate image URL if provided
+	if params.ImageURL != nil {
+		if err := ValidateImageURL(*params.ImageURL); err != nil {
+			return err
+		}
+	}
+
+	// Validate product URL if provided
+	if params.URL != nil {
+		if err := ValidateProductURL(*params.URL); err != nil {
+			return err
+		}
+	}
+
+	// Validate metadata if provided
+	if params.Metadata != nil {
+		if err := ValidateMetadata(params.Metadata); err != nil {
+			return err
+		}
+	}
+
+	// Validate wallet ownership if wallet is being changed
+	if params.WalletID != nil && *params.WalletID != existingProduct.WalletID {
+		if err := ValidateWalletOwnership(ctx, queries, *params.WalletID, existingProduct.WorkspaceID); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// BuildUpdateParams builds the database update parameters
+func BuildUpdateParams(params params.UpdateProductParams, existingProduct db.Product) db.UpdateProductParams {
+	updateParams := db.UpdateProductParams{
+		ID:          params.ProductID,
+		Name:        existingProduct.Name,
+		Description: existingProduct.Description,
+		ImageUrl:    existingProduct.ImageUrl,
+		Url:         existingProduct.Url,
+		Active:      existingProduct.Active,
+		Metadata:    existingProduct.Metadata,
+		WalletID:    existingProduct.WalletID,
+	}
+
+	// Apply updates only for provided fields
+	if params.Name != nil {
+		updateParams.Name = *params.Name
+	}
+	if params.Description != nil {
+		updateParams.Description = pgtype.Text{String: *params.Description, Valid: true}
+	}
+	if params.ImageURL != nil {
+		updateParams.ImageUrl = pgtype.Text{String: *params.ImageURL, Valid: true}
+	}
+	if params.URL != nil {
+		updateParams.Url = pgtype.Text{String: *params.URL, Valid: true}
+	}
+	if params.Active != nil {
+		updateParams.Active = *params.Active
+	}
+	if params.Metadata != nil {
+		updateParams.Metadata = params.Metadata
+	}
+	if params.WalletID != nil {
+		updateParams.WalletID = *params.WalletID
+	}
+
+	return updateParams
+}
+
+// ValidateDelegationData validates the delegation data
+func ValidateDelegationData(delegation params.DelegationParams, cypheraAddress string) error {
+	if delegation.Delegate != cypheraAddress {
+		return fmt.Errorf("delegate address does not match cyphera smart wallet address, %s != %s", delegation.Delegate, cypheraAddress)
+	}
+
+	if delegation.Delegate == "" || delegation.Delegator == "" ||
+		delegation.Authority == "" || delegation.Salt == "" ||
+		delegation.Signature == "" {
+		return fmt.Errorf("incomplete delegation data")
+	}
+
+	return nil
 }

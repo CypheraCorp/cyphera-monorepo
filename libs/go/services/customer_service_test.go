@@ -1446,3 +1446,106 @@ func TestCustomerService_BoundaryConditions(t *testing.T) {
 		assert.Equal(t, int64(0), result.Total)
 	})
 }
+
+func TestCustomerService_ParseNetworkType(t *testing.T) {
+	tests := []struct {
+		name        string
+		networkType string
+		want        db.NetworkType
+		wantErr     bool
+	}{
+		{
+			name:        "valid evm network",
+			networkType: "evm",
+			want:        db.NetworkTypeEvm,
+			wantErr:     false,
+		},
+		{
+			name:        "valid solana network",
+			networkType: "solana",
+			want:        db.NetworkTypeSolana,
+			wantErr:     false,
+		},
+		{
+			name:        "valid cosmos network",
+			networkType: "cosmos",
+			want:        db.NetworkTypeCosmos,
+			wantErr:     false,
+		},
+		{
+			name:        "valid bitcoin network",
+			networkType: "bitcoin",
+			want:        db.NetworkTypeBitcoin,
+			wantErr:     false,
+		},
+		{
+			name:        "valid polkadot network",
+			networkType: "polkadot",
+			want:        db.NetworkTypePolkadot,
+			wantErr:     false,
+		},
+		{
+			name:        "invalid network type",
+			networkType: "invalid",
+			want:        "",
+			wantErr:     true,
+		},
+		{
+			name:        "empty network type",
+			networkType: "",
+			want:        "",
+			wantErr:     true,
+		},
+		{
+			name:        "case sensitive - EVM uppercase",
+			networkType: "EVM",
+			want:        "",
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := services.NewCustomerService(&mocks.MockQuerier{})
+			
+			// Test the parseNetworkType function indirectly through CreateCustomerWallet
+			// since parseNetworkType is not exported
+			walletParams := params.CreateCustomerWalletParams{
+				CustomerID:    uuid.New(),
+				WalletAddress: "0x123",
+				NetworkType:   tt.networkType,
+				IsPrimary:     true,
+				Verified:      true,
+				Metadata:      map[string]interface{}{},
+			}
+			
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockQuerier := mocks.NewMockQuerier(ctrl)
+			service = services.NewCustomerService(mockQuerier)
+			
+			if tt.wantErr {
+				// Don't set up any mocks - should fail at parseNetworkType
+				_, err := service.CreateCustomerWallet(context.Background(), walletParams)
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "unsupported network type")
+			} else {
+				// Mock the database call since we just want to test parsing
+				mockQuerier.EXPECT().CreateCustomerWallet(gomock.Any(), gomock.Any()).Return(db.CustomerWallet{}, nil)
+				_, err := service.CreateCustomerWallet(context.Background(), walletParams)
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// NOTE: ProcessCustomerAndWallet, CreateCustomerFromWallet, and FindOrCreateCustomerWallet
+// are transaction-based methods that take pgx.Tx as parameters. These are integration methods
+// that should be tested with integration tests rather than unit tests with mocks.
+// The complexity of properly mocking transaction behavior makes unit testing these methods
+// less valuable than integration testing them with a real database.
+
+// TODO: Add integration tests for:
+// - ProcessCustomerAndWallet
+// - CreateCustomerFromWallet  
+// - FindOrCreateCustomerWallet

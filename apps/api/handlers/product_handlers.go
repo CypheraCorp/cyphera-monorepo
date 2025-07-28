@@ -19,7 +19,6 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
-	"github.com/cyphera/cyphera-api/libs/go/types/business"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -56,6 +55,7 @@ type ProductHandler struct {
 	delegationClient      *dsClient.DelegationClient
 	productService        interfaces.ProductService
 	subscriptionService   interfaces.SubscriptionService
+	customerService       interfaces.CustomerService
 	workspaceService      interfaces.WorkspaceService
 	walletService         interfaces.WalletService
 	tokenService          interfaces.TokenService
@@ -68,15 +68,19 @@ func NewProductHandler(
 	common *CommonServices,
 	delegationClient *dsClient.DelegationClient,
 	productService interfaces.ProductService,
+	subscriptionService interfaces.SubscriptionService,
+	customerService interfaces.CustomerService,
 	logger *zap.Logger,
 ) *ProductHandler {
 	if logger == nil {
 		logger = zap.L()
 	}
 	return &ProductHandler{
-		common:           common,
-		delegationClient: delegationClient,
-		productService:   productService,
+		common:              common,
+		delegationClient:    delegationClient,
+		productService:      productService,
+		subscriptionService: subscriptionService,
+		customerService:     customerService,
 	}
 }
 
@@ -171,445 +175,6 @@ func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, *response)
-}
-
-// validateSubscriptionRequest validates the basic request parameters
-func (h *ProductHandler) validateSubscriptionRequest(request requests.SubscribeRequest, productID uuid.UUID) error {
-	if request.SubscriberAddress == "" {
-		return errors.New("subscriber address is required")
-	}
-
-	if _, err := uuid.Parse(request.PriceID); err != nil {
-		return errors.New("invalid price ID format")
-	}
-
-	if _, err := uuid.Parse(request.ProductTokenID); err != nil {
-		return errors.New("invalid product token ID format")
-	}
-
-	tokenAmount, err := strconv.ParseInt(request.TokenAmount, 10, 64)
-	if err != nil {
-		return errors.New("invalid token amount format")
-	}
-
-	if tokenAmount <= 0 {
-		return errors.New("token amount must be greater than 0")
-	}
-
-	cypheraAddress := h.common.GetCypheraSmartWalletAddress()
-	if request.Delegation.Delegate != cypheraAddress {
-		return fmt.Errorf("delegate address does not match cyphera smart wallet address, %s != %s", request.Delegation.Delegate, cypheraAddress)
-	}
-
-	if request.Delegation.Delegate == "" || request.Delegation.Delegator == "" ||
-		request.Delegation.Authority == "" || request.Delegation.Salt == "" ||
-		request.Delegation.Signature == "" {
-		return errors.New("incomplete delegation data")
-	}
-
-	return nil
-}
-
-// processCustomerAndWallet handles customer lookup/creation and wallet association
-func (h *ProductHandler) processCustomerAndWallet(
-	ctx context.Context,
-	tx *db.Queries,
-	walletAddress string,
-	product db.Product,
-	productToken db.GetProductTokenRow,
-) (db.Customer, db.CustomerWallet, error) {
-	customers, err := tx.GetCustomersByWalletAddress(ctx, walletAddress)
-	if err != nil {
-		logger.Error("Failed to check for existing customers",
-			zap.Error(err),
-			zap.String("wallet_address", walletAddress))
-		return db.Customer{}, db.CustomerWallet{}, err
-	}
-
-	networkType := helpers.DetermineNetworkType(productToken.NetworkType)
-
-	if len(customers) == 0 {
-		return h.createNewCustomerWithWallet(ctx, tx, walletAddress, product, networkType)
-	}
-
-	customer := customers[0]
-
-	// Ensure customer is associated with the current workspace
-	isAssociated, err := tx.IsCustomerInWorkspace(ctx, db.IsCustomerInWorkspaceParams{
-		WorkspaceID: product.WorkspaceID,
-		CustomerID:  customer.ID,
-	})
-	if err != nil {
-		logger.Error("Failed to check customer workspace association",
-			zap.Error(err),
-			zap.String("customer_id", customer.ID.String()),
-			zap.String("workspace_id", product.WorkspaceID.String()))
-		return db.Customer{}, db.CustomerWallet{}, err
-	}
-
-	// If customer is not associated with this workspace, create the association
-	if !isAssociated {
-		_, err = tx.AddCustomerToWorkspace(ctx, db.AddCustomerToWorkspaceParams{
-			WorkspaceID: product.WorkspaceID,
-			CustomerID:  customer.ID,
-		})
-		if err != nil {
-			logger.Error("Failed to associate customer with workspace",
-				zap.Error(err),
-				zap.String("customer_id", customer.ID.String()),
-				zap.String("workspace_id", product.WorkspaceID.String()))
-			return db.Customer{}, db.CustomerWallet{}, err
-		}
-
-		logger.Info("Associated existing customer with workspace",
-			zap.String("customer_id", customer.ID.String()),
-			zap.String("workspace_id", product.WorkspaceID.String()),
-			zap.String("wallet_address", walletAddress))
-	}
-
-	customerWallet, err := h.findOrCreateCustomerWallet(ctx, tx, customer, walletAddress, networkType, product.ID.String())
-
-	return customer, customerWallet, err
-}
-
-// createNewCustomerWithWallet creates a new customer and associated wallet
-func (h *ProductHandler) createNewCustomerWithWallet(
-	ctx context.Context,
-	tx *db.Queries,
-	walletAddress string,
-	product db.Product,
-	networkType string,
-) (db.Customer, db.CustomerWallet, error) {
-	logger.Info("Creating new customer for wallet address",
-		zap.String("wallet_address", walletAddress),
-		zap.String("product_id", product.ID.String()))
-
-	metadata := map[string]interface{}{
-		"source":                  "product_subscription",
-		"created_from_product_id": product.ID.String(),
-		"wallet_address":          walletAddress,
-	}
-	metadataBytes, err := json.Marshal(metadata)
-	if err != nil {
-		return db.Customer{}, db.CustomerWallet{}, err
-	}
-
-	createCustomerParams := db.CreateCustomerParams{
-		Email: pgtype.Text{
-			String: "",
-			Valid:  false,
-		},
-		Name: pgtype.Text{
-			String: "Wallet Customer: " + walletAddress,
-			Valid:  true,
-		},
-		Description: pgtype.Text{
-			String: "Customer created from product subscription",
-			Valid:  true,
-		},
-		Metadata: metadataBytes,
-	}
-
-	customer, err := tx.CreateCustomer(ctx, createCustomerParams)
-	if err != nil {
-		return db.Customer{}, db.CustomerWallet{}, err
-	}
-
-	// Associate customer with workspace using the new association table
-	_, err = tx.AddCustomerToWorkspace(ctx, db.AddCustomerToWorkspaceParams{
-		WorkspaceID: product.WorkspaceID,
-		CustomerID:  customer.ID,
-	})
-	if err != nil {
-		return db.Customer{}, db.CustomerWallet{}, err
-	}
-
-	walletMetadata := map[string]interface{}{
-		"source":     "product_subscription",
-		"product_id": product.ID.String(),
-		"created_at": time.Now().Format(time.RFC3339),
-	}
-	walletMetadataBytes, err := json.Marshal(walletMetadata)
-	if err != nil {
-		return db.Customer{}, db.CustomerWallet{}, err
-	}
-
-	createWalletParams := db.CreateCustomerWalletParams{
-		CustomerID:    customer.ID,
-		WalletAddress: walletAddress,
-		NetworkType:   db.NetworkType(networkType),
-		Nickname: pgtype.Text{
-			String: "Subscription Wallet",
-			Valid:  true,
-		},
-		IsPrimary: pgtype.Bool{
-			Bool:  true,
-			Valid: true,
-		},
-		Verified: pgtype.Bool{
-			Bool:  true,
-			Valid: true,
-		},
-		Metadata: walletMetadataBytes,
-	}
-
-	customerWallet, err := tx.CreateCustomerWallet(ctx, createWalletParams)
-	return customer, customerWallet, err
-}
-
-// findOrCreateCustomerWallet finds an existing wallet or creates a new one
-func (h *ProductHandler) findOrCreateCustomerWallet(
-	ctx context.Context,
-	tx *db.Queries,
-	customer db.Customer,
-	walletAddress string,
-	networkType string,
-	productID string,
-) (db.CustomerWallet, error) {
-	wallets, err := tx.ListCustomerWallets(ctx, customer.ID)
-	if err != nil {
-		return db.CustomerWallet{}, err
-	}
-
-	for _, wallet := range wallets {
-		if strings.EqualFold(wallet.WalletAddress, walletAddress) {
-			updatedWallet, err := tx.UpdateCustomerWalletUsageTime(ctx, wallet.ID)
-			if err != nil {
-				logger.Warn("Failed to update wallet usage time",
-					zap.Error(err),
-					zap.String("wallet_id", wallet.ID.String()))
-				return wallet, nil
-			}
-			return updatedWallet, nil
-		}
-	}
-
-	walletMetadata := map[string]interface{}{
-		"source":     "product_subscription",
-		"product_id": productID,
-		"created_at": time.Now().Format(time.RFC3339),
-	}
-	walletMetadataBytes, err := json.Marshal(walletMetadata)
-	if err != nil {
-		return db.CustomerWallet{}, err
-	}
-
-	createWalletParams := db.CreateCustomerWalletParams{
-		CustomerID:    customer.ID,
-		WalletAddress: walletAddress,
-		NetworkType:   db.NetworkType(networkType),
-		Nickname: pgtype.Text{
-			String: "Subscription Wallet",
-			Valid:  true,
-		},
-		IsPrimary: pgtype.Bool{
-			Bool:  len(wallets) == 0,
-			Valid: true,
-		},
-		Verified: pgtype.Bool{
-			Bool:  true,
-			Valid: true,
-		},
-		Metadata: walletMetadataBytes,
-	}
-
-	return tx.CreateCustomerWallet(ctx, createWalletParams)
-}
-
-// storeDelegationData creates a record of the delegation information
-func (h *ProductHandler) storeDelegationData(
-	ctx context.Context,
-	tx *db.Queries,
-	delegation business.DelegationStruct,
-) (db.DelegationDatum, error) {
-	delegationParams := db.CreateDelegationDataParams{
-		Delegate:  delegation.Delegate,
-		Delegator: delegation.Delegator,
-		Authority: delegation.Authority,
-		Caveats:   helpers.MarshalCaveats(delegation.Caveats),
-		Salt:      delegation.Salt,
-		Signature: delegation.Signature,
-	}
-
-	return tx.CreateDelegationData(ctx, delegationParams)
-}
-
-// createSubscription creates the subscription record in the database
-func (h *ProductHandler) createSubscription(
-	ctx context.Context,
-	tx *db.Queries,
-	params params.CreateSubscriptionParams,
-) (db.Subscription, error) {
-	metadata := map[string]interface{}{
-		"created_at":     time.Now().Format(time.RFC3339),
-		"wallet_address": params.CustomerWallet.WalletAddress,
-		"network_type":   params.CustomerWallet.NetworkType,
-		"price_id":       params.Price.ID.String(),
-	}
-	subscriptionMetadataBytes, err := json.Marshal(metadata)
-	if err != nil {
-		return db.Subscription{}, err
-	}
-
-	subscriptionParams := db.CreateSubscriptionParams{
-		CustomerID:     params.Customer.ID,
-		ProductID:      params.ProductID,
-		WorkspaceID:    params.WorkspaceID,
-		PriceID:        params.Price.ID,
-		ProductTokenID: params.ProductTokenID,
-		TokenAmount:    int32(params.TokenAmount),
-		DelegationID:   params.DelegationData.ID,
-		CustomerWalletID: pgtype.UUID{
-			Bytes: params.CustomerWallet.ID,
-			Valid: true,
-		},
-		Status: db.SubscriptionStatusActive,
-		CurrentPeriodStart: pgtype.Timestamptz{
-			Time:  params.PeriodStart,
-			Valid: true,
-		},
-		CurrentPeriodEnd: pgtype.Timestamptz{
-			Time:  params.PeriodEnd,
-			Valid: true,
-		},
-		NextRedemptionDate: pgtype.Timestamptz{
-			Time:  params.NextRedemption,
-			Valid: true,
-		},
-		TotalRedemptions:   0,
-		TotalAmountInCents: 0,
-		Metadata:           subscriptionMetadataBytes,
-	}
-
-	logger.Info("Creating new subscription",
-		zap.String("product_id", params.ProductID.String()),
-		zap.String("customer_id", params.Customer.ID.String()),
-		zap.String("workspace_id", params.WorkspaceID.String()),
-		zap.String("price_id", params.Price.ID.String()),
-		zap.String("product_token_id", params.ProductTokenID.String()),
-		zap.String("delegation_id", params.DelegationData.ID.String()),
-		zap.String("customer_id", params.Customer.ID.String()),
-		zap.String("customer_wallet_id", params.CustomerWallet.ID.String()))
-
-	return tx.CreateSubscription(ctx, subscriptionParams)
-}
-
-// performInitialRedemption executes the initial token redemption for a new subscription
-func (h *ProductHandler) performInitialRedemption(
-	ctx context.Context,
-	customer db.Customer,
-	customerWallet db.CustomerWallet,
-	subscription db.Subscription,
-	product db.Product,
-	price db.Price,
-	productToken db.GetProductTokenRow,
-	delegation business.DelegationStruct,
-	executionObject dsClient.ExecutionObject,
-) (db.Subscription, error) {
-	logger.Info("Performing initial redemption",
-		zap.String("subscription_id", subscription.ID.String()),
-		zap.String("customer_id", customer.ID.String()),
-		zap.String("price_id", price.ID.String()))
-
-	rawCaveats := helpers.MarshalCaveats(delegation.Caveats)
-	delegationData := dsClient.DelegationData{
-		Delegate:  delegation.Delegate,
-		Delegator: delegation.Delegator,
-		Authority: delegation.Authority,
-		Caveats:   rawCaveats,
-		Salt:      delegation.Salt,
-		Signature: delegation.Signature,
-	}
-
-	delegationBytes, err := json.Marshal(delegationData)
-	if err != nil {
-		return subscription, fmt.Errorf("failed to marshal delegation data: %w", err)
-	}
-
-	txHash, err := h.delegationClient.RedeemDelegation(ctx, delegationBytes, executionObject)
-	if err != nil {
-		return subscription, fmt.Errorf("delegation redemption failed: %w", err)
-	}
-
-	metadata := map[string]interface{}{
-		"product_id":        product.ID.String(),
-		"product_name":      product.Name,
-		"price_id":          price.ID.String(),
-		"price_type":        price.Type,
-		"product_token_id":  productToken.ID.String(),
-		"token_symbol":      productToken.TokenSymbol,
-		"network_name":      productToken.NetworkName,
-		"wallet_address":    customerWallet.WalletAddress,
-		"customer_id":       customer.ID.String(),
-		"customer_name":     customer.Name.String,
-		"customer_email":    customer.Email.String,
-		"redemption_time":   time.Now().Unix(),
-		"subscription_type": string(price.Type),
-		"tx_hash":           txHash,
-	}
-
-	metadataBytes, err := json.Marshal(metadata)
-	if err != nil {
-		logger.Error("Failed to marshal metadata", zap.Error(err))
-		metadataBytes = []byte("{}")
-	}
-
-	successEventParams := db.CreateRedemptionEventParams{
-		SubscriptionID: subscription.ID,
-		TransactionHash: pgtype.Text{
-			String: txHash,
-			Valid:  true,
-		},
-		AmountInCents: int32(price.UnitAmountInPennies),
-		Metadata:      metadataBytes,
-	}
-
-	_, eventErr := h.common.db.CreateRedemptionEvent(ctx, successEventParams)
-	if eventErr != nil {
-		logger.Error("Failed to record successful redemption event",
-			zap.Error(eventErr),
-			zap.String("subscription_id", subscription.ID.String()))
-	}
-
-	var nextRedemptionDate pgtype.Timestamptz
-	if price.Type == db.PriceTypeRecurring {
-		nextDate := helpers.CalculateNextRedemption(string(price.IntervalType), time.Now())
-		nextRedemptionDate = pgtype.Timestamptz{
-			Time:  nextDate,
-			Valid: true,
-		}
-	} else {
-		nextRedemptionDate = pgtype.Timestamptz{
-			Valid: false,
-		}
-	}
-
-	updateParams := db.IncrementSubscriptionRedemptionParams{
-		ID:                 subscription.ID,
-		TotalAmountInCents: int32(price.UnitAmountInPennies),
-		NextRedemptionDate: nextRedemptionDate,
-	}
-
-	updatedSubscription, err := h.common.db.IncrementSubscriptionRedemption(ctx, updateParams)
-	if err != nil {
-		logger.Error("Failed to update subscription redemption details",
-			zap.Error(err),
-			zap.String("subscription_id", subscription.ID.String()))
-		return subscription, err
-	}
-
-	_, walletErr := h.common.db.UpdateCustomerWalletUsageTime(ctx, customerWallet.ID)
-	if walletErr != nil {
-		logger.Warn("Failed to update wallet last used timestamp",
-			zap.Error(walletErr),
-			zap.String("wallet_id", customerWallet.ID.String()))
-	}
-
-	logger.Info("Initial redemption successful",
-		zap.String("subscription_id", subscription.ID.String()),
-		zap.String("transaction_hash", txHash))
-
-	return updatedSubscription, nil
 }
 
 // validatePaginationParams is defined in common.go
@@ -764,32 +329,6 @@ func (h *ProductHandler) validateWallet(ctx *gin.Context, walletID uuid.UUID, wo
 		return errors.New("wallet does not belong to workspace")
 	}
 
-	return nil
-}
-
-// createProductTokens creates the associated product tokens for a product
-func (h *ProductHandler) createProductTokens(c *gin.Context, productID uuid.UUID, tokens []requests.CreateProductTokenRequest) error {
-	for _, pt := range tokens {
-		networkID, err := uuid.Parse(pt.NetworkID)
-		if err != nil {
-			return fmt.Errorf("invalid network ID format: %w", err)
-		}
-
-		tokenID, err := uuid.Parse(pt.TokenID)
-		if err != nil {
-			return fmt.Errorf("invalid token ID format: %w", err)
-		}
-
-		_, err = h.common.db.CreateProductToken(c.Request.Context(), db.CreateProductTokenParams{
-			ProductID: productID,
-			NetworkID: networkID,
-			TokenID:   tokenID,
-			Active:    pt.Active,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create product token: %w", err)
-		}
-	}
 	return nil
 }
 
@@ -1116,118 +655,6 @@ func (h *ProductHandler) logFailedSubscriptionCreation(
 	}
 }
 
-// toComprehensiveSubscriptionResponse converts a db.Subscription to a comprehensive SubscriptionResponse
-// that includes all subscription fields plus the initial transaction hash from subscription events
-func (h *ProductHandler) toComprehensiveSubscriptionResponse(ctx context.Context, subscription db.Subscription) (*responses.SubscriptionResponse, error) {
-	// Get the subscription details with related data
-	subscriptionDetails, err := h.common.db.GetSubscriptionWithDetails(ctx, db.GetSubscriptionWithDetailsParams{
-		ID:          subscription.ID,
-		WorkspaceID: subscription.WorkspaceID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get subscription details: %w", err)
-	}
-
-	// Get the initial transaction hash from the first redemption event
-	initialTxHash := ""
-	events, err := h.common.db.ListSubscriptionEventsBySubscription(ctx, subscription.ID)
-	if err == nil {
-		for _, event := range events {
-			if event.EventType == db.SubscriptionEventTypeRedeemed && event.TransactionHash.Valid {
-				initialTxHash = event.TransactionHash.String
-				break
-			}
-		}
-	}
-
-	// Parse metadata
-	var metadata map[string]interface{}
-	if len(subscription.Metadata) > 0 {
-		if err := json.Unmarshal(subscription.Metadata, &metadata); err != nil {
-			logger.Error("Error unmarshaling subscription metadata", zap.Error(err))
-			metadata = make(map[string]interface{})
-		}
-	}
-
-	// Convert to response
-	response := &responses.SubscriptionResponse{
-		ID:                     subscription.ID,
-		WorkspaceID:            subscription.WorkspaceID,
-		CustomerID:             subscription.CustomerID,
-		Status:                 string(subscription.Status),
-		CurrentPeriodStart:     subscription.CurrentPeriodStart.Time,
-		CurrentPeriodEnd:       subscription.CurrentPeriodEnd.Time,
-		TotalRedemptions:       subscription.TotalRedemptions,
-		TotalAmountInCents:     subscription.TotalAmountInCents,
-		TokenAmount:            subscription.TokenAmount,
-		DelegationID:           subscription.DelegationID,
-		InitialTransactionHash: initialTxHash,
-		Metadata:               metadata,
-		CreatedAt:              subscription.CreatedAt.Time,
-		UpdatedAt:              subscription.UpdatedAt.Time,
-		CustomerName:           subscriptionDetails.CustomerName.String,
-		CustomerEmail:          subscriptionDetails.CustomerEmail.String,
-		Price: responses.PriceResponse{
-			ID:                  subscriptionDetails.PriceID.String(),
-			Object:              "price",
-			ProductID:           subscriptionDetails.ProductID.String(),
-			Active:              true, // Assuming active for subscriptions
-			Type:                string(subscriptionDetails.PriceType),
-			Currency:            string(subscriptionDetails.PriceCurrency),
-			UnitAmountInPennies: int64(subscriptionDetails.PriceUnitAmountInPennies), // Convert int32 to int64
-			IntervalType:        string(subscriptionDetails.PriceIntervalType),
-			TermLength:          subscriptionDetails.PriceTermLength,
-			CreatedAt:           time.Now().Unix(), // Default timestamp
-			UpdatedAt:           time.Now().Unix(), // Default timestamp
-		},
-		Product: responses.ProductResponse{
-			ID:     subscriptionDetails.ProductID.String(),
-			Name:   subscriptionDetails.ProductName,
-			Active: true, // Assuming active for subscriptions
-			Object: "product",
-		},
-		ProductToken: responses.ProductTokenResponse{
-			ID:          subscriptionDetails.ProductTokenID.String(),
-			TokenSymbol: subscriptionDetails.TokenSymbol,
-			NetworkID:   subscriptionDetails.ProductTokenID.String(),
-			CreatedAt:   time.Now().Unix(), // Default timestamp
-			UpdatedAt:   time.Now().Unix(), // Default timestamp
-		},
-	}
-
-	// Handle nullable fields
-	if subscription.NextRedemptionDate.Valid {
-		response.NextRedemptionDate = &subscription.NextRedemptionDate.Time
-	}
-
-	if subscription.CustomerWalletID.Valid {
-		walletID := uuid.UUID(subscription.CustomerWalletID.Bytes)
-		response.CustomerWalletID = &walletID
-	}
-
-	if subscription.ExternalID.Valid {
-		response.ExternalID = subscription.ExternalID.String
-	}
-
-	if subscription.PaymentSyncStatus.Valid {
-		response.PaymentSyncStatus = subscription.PaymentSyncStatus.String
-	}
-
-	if subscription.PaymentSyncedAt.Valid {
-		response.PaymentSyncedAt = &subscription.PaymentSyncedAt.Time
-	}
-
-	if subscription.PaymentSyncVersion.Valid {
-		response.PaymentSyncVersion = subscription.PaymentSyncVersion.Int32
-	}
-
-	if subscription.PaymentProvider.Valid {
-		response.PaymentProvider = subscription.PaymentProvider.String
-	}
-
-	return response, nil
-}
-
 // SubscribeToProductByPriceID godoc
 // @Summary Subscribe to a product by price ID
 // @Description Subscribe to a product by specifying the price ID
@@ -1251,210 +678,138 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 	}
 	request.PriceID = priceIDStr
 
-	price, err := h.common.db.GetPrice(ctx, parsedPriceID)
+	// Convert caveats to JSON for validation
+	caveatsJSON, err := json.Marshal(request.Delegation.Caveats)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			h.common.HandleError(c, err, "Price not found", http.StatusNotFound, h.common.GetLogger())
-		} else {
-			h.common.HandleError(c, err, "Failed to get price", http.StatusInternalServerError, h.common.GetLogger())
-		}
+		h.common.HandleError(c, err, "Failed to marshal caveats", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}
 
-	if !price.Active {
-		h.common.HandleError(c, nil, "Cannot subscribe to inactive price", http.StatusBadRequest, h.common.GetLogger())
-		return
-	}
-
-	product, err := h.common.db.GetProductWithoutWorkspaceId(ctx, price.ProductID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			h.common.HandleError(c, err, "Product associated with the price not found", http.StatusNotFound, h.common.GetLogger())
-		} else {
-			h.common.HandleError(c, err, "Failed to get product", http.StatusInternalServerError, h.common.GetLogger())
-		}
-		return
-	}
-
-	if err := h.validateSubscriptionRequest(request, product.ID); err != nil {
+	// Use product service to validate subscription request
+	if err := h.productService.ValidateSubscriptionRequest(ctx, params.ValidateSubscriptionParams{
+		SubscriberAddress: request.SubscriberAddress,
+		PriceID:           request.PriceID,
+		ProductTokenID:    request.ProductTokenID,
+		TokenAmount:       request.TokenAmount,
+		ProductID:         uuid.Nil, // Will be validated by the service
+		Delegation: params.DelegationParams{
+			Delegate:  request.Delegation.Delegate,
+			Delegator: request.Delegation.Delegator,
+			Authority: request.Delegation.Authority,
+			Salt:      request.Delegation.Salt,
+			Signature: request.Delegation.Signature,
+			Caveats:   caveatsJSON,
+		},
+		CypheraSmartWalletAddress: h.common.GetCypheraSmartWalletAddress(),
+	}); err != nil {
 		h.common.HandleError(c, err, err.Error(), http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
-	if !product.Active {
-		h.common.HandleError(c, nil, "Cannot subscribe to a price of an inactive product", http.StatusBadRequest, h.common.GetLogger())
-		return
-	}
-
-	parsedProductTokenID, err := uuid.Parse(request.ProductTokenID)
-	if err != nil {
-		h.common.HandleError(c, err, errMsgInvalidTokenIDFormat, http.StatusBadRequest, h.common.GetLogger())
-		return
-	}
-
-	merchantWallet, err := h.common.db.GetWalletByID(ctx, db.GetWalletByIDParams{
-		ID:          product.WalletID,
-		WorkspaceID: product.WorkspaceID,
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			h.common.HandleError(c, err, "Merchant wallet not found", http.StatusNotFound, h.common.GetLogger())
-		} else {
-			h.common.HandleError(c, err, "Failed to get merchant wallet", http.StatusInternalServerError, h.common.GetLogger())
-		}
-		return
-	}
-
-	productToken, err := h.common.db.GetProductToken(ctx, parsedProductTokenID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			h.common.HandleError(c, err, "Product token not found", http.StatusNotFound, h.common.GetLogger())
-		} else {
-			h.common.HandleError(c, err, "Failed to get product token", http.StatusInternalServerError, h.common.GetLogger())
-		}
-		return
-	}
-
-	token, err := h.common.db.GetToken(ctx, productToken.TokenID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			h.common.HandleError(c, err, "Token not found", http.StatusNotFound, h.common.GetLogger())
-		} else {
-			h.common.HandleError(c, err, "Failed to get token", http.StatusInternalServerError, h.common.GetLogger())
-		}
-		return
-	}
-
-	network, err := h.common.db.GetNetwork(ctx, token.NetworkID)
-	if err != nil {
-		h.common.HandleError(c, err, "Failed to get network details", http.StatusInternalServerError, h.common.GetLogger())
-		return
-	}
-
-	tokenAmount, err := strconv.ParseInt(request.TokenAmount, 10, 64)
-	if err != nil {
-		h.common.HandleError(c, err, errMsgInvalidTokenAmountFormat, http.StatusBadRequest, h.common.GetLogger())
-		return
-	}
-
-	executionObject := dsClient.ExecutionObject{
-		MerchantAddress:      merchantWallet.WalletAddress,
-		TokenContractAddress: token.ContractAddress,
-		TokenDecimals:        token.Decimals,
-		TokenAmount:          tokenAmount,
-		ChainID:              uint32(network.ChainID),
-		NetworkName:          network.Name,
-	}
-
-	if productToken.ProductID != product.ID {
-		h.common.HandleError(c, nil, "Product token does not belong to the specified product", http.StatusBadRequest, h.common.GetLogger())
-		return
-	}
-
-	normalizedAddress := helpers.NormalizeWalletAddress(request.SubscriberAddress, helpers.DetermineNetworkType(productToken.NetworkType))
-
-	// Get database pool
+	// Get database pool for transaction handling
 	pool, err := h.common.GetDBPool()
 	if err != nil {
 		h.common.HandleError(c, err, "Failed to get database pool", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}
 
-	var subscription db.Subscription
-	var updatedSubscription db.Subscription
-	var customer db.Customer
-	var customerWallet db.CustomerWallet
+	var subscriptionResult *params.SubscriptionCreationResult
 
 	// Execute within transaction
 	err = helpers.WithTransaction(ctx, pool, func(tx pgx.Tx) error {
-		qtx := h.common.WithTx(tx)
-
-		var err error
-		customer, customerWallet, err = h.processCustomerAndWallet(ctx, qtx, normalizedAddress, product, productToken)
+		// Get price and validate it's active
+		price, err := h.common.db.GetPrice(ctx, parsedPriceID)
 		if err != nil {
-			return fmt.Errorf("failed to process customer or wallet: %w", err)
+			return fmt.Errorf("failed to get price: %w", err)
 		}
 
-		subscriptions, err := h.common.db.ListSubscriptionsByCustomer(ctx, db.ListSubscriptionsByCustomerParams{
-			CustomerID:  customer.ID,
+		if !price.Active {
+			return errors.New("Cannot subscribe to inactive price")
+		}
+
+		// Get product and validate it's active
+		product, err := h.common.db.GetProductWithoutWorkspaceId(ctx, price.ProductID)
+		if err != nil {
+			return fmt.Errorf("failed to get product: %w", err)
+		}
+
+		if !product.Active {
+			return errors.New("Cannot subscribe to a price of an inactive product")
+		}
+
+		// Parse and get required entities
+		parsedProductTokenID, err := uuid.Parse(request.ProductTokenID)
+		if err != nil {
+			return fmt.Errorf("invalid product token ID format: %w", err)
+		}
+
+		merchantWallet, err := h.common.db.GetWalletByID(ctx, db.GetWalletByIDParams{
+			ID:          product.WalletID,
 			WorkspaceID: product.WorkspaceID,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to check for existing subscription: %w", err)
+			return fmt.Errorf("failed to get merchant wallet: %w", err)
 		}
 
-		var existingSubscription *db.Subscription
-		for i, sub := range subscriptions {
-			if sub.PriceID == price.ID && sub.Status == db.SubscriptionStatusActive {
-				existingSubscription = &subscriptions[i]
-				break
-			}
-		}
-
-		if existingSubscription != nil {
-			logger.Info("Subscription already exists for this price",
-				zap.String("subscription_id", existingSubscription.ID.String()),
-				zap.String("customer_id", customer.ID.String()),
-				zap.String("price_id", price.ID.String()))
-
-			duplicateErr := fmt.Errorf("subscription already exists for customer %s and price %s", customer.ID, price.ID)
-			h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, duplicateErr)
-
-			// Return a custom error that we'll handle after the transaction
-			return &SubscriptionExistsError{Subscription: existingSubscription}
-		}
-
-		delegationData, err := h.storeDelegationData(ctx, qtx, request.Delegation)
+		productToken, err := h.common.db.GetProductToken(ctx, parsedProductTokenID)
 		if err != nil {
-			return fmt.Errorf("failed to store delegation data: %w", err)
+			return fmt.Errorf("failed to get product token: %w", err)
 		}
 
-		periodStart, periodEnd, nextRedemption := helpers.CalculateSubscriptionPeriods(price)
+		if productToken.ProductID != product.ID {
+			return errors.New("Product token does not belong to the specified product")
+		}
 
-		subscription, err = h.createSubscription(ctx, qtx, params.CreateSubscriptionParams{
-			Customer:       customer,
-			CustomerWallet: customerWallet,
-			WorkspaceID:    product.WorkspaceID,
-			ProductID:      product.ID,
-			Price:          price,
-			ProductTokenID: parsedProductTokenID,
-			TokenAmount:    tokenAmount,
-			DelegationData: delegationData,
-			PeriodStart:    periodStart,
-			PeriodEnd:      periodEnd,
-			NextRedemption: nextRedemption,
+		token, err := h.common.db.GetToken(ctx, productToken.TokenID)
+		if err != nil {
+			return fmt.Errorf("failed to get token: %w", err)
+		}
+
+		network, err := h.common.db.GetNetwork(ctx, token.NetworkID)
+		if err != nil {
+			return fmt.Errorf("failed to get network details: %w", err)
+		}
+
+		tokenAmount, err := strconv.ParseInt(request.TokenAmount, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid token amount format: %w", err)
+		}
+
+		normalizedAddress := helpers.NormalizeWalletAddress(request.SubscriberAddress, helpers.DetermineNetworkType(productToken.NetworkType))
+
+		// Create delegation params
+		delegationParams := params.StoreDelegationDataParams{
+			Delegate:  request.Delegation.Delegate,
+			Delegator: request.Delegation.Delegator,
+			Authority: request.Delegation.Authority,
+			Caveats:   caveatsJSON,
+			Salt:      request.Delegation.Salt,
+			Signature: request.Delegation.Signature,
+		}
+
+		// Use the service method to create subscription with delegation
+		result, err := h.subscriptionService.CreateSubscriptionWithDelegation(ctx, tx, params.CreateSubscriptionWithDelegationParams{
+			Price:             price,
+			Product:           product,
+			ProductToken:      productToken,
+			MerchantWallet:    merchantWallet,
+			Token:             token,
+			Network:           network,
+			DelegationData:    delegationParams,
+			SubscriberAddress: normalizedAddress,
+			ProductTokenID:    parsedProductTokenID,
+			TokenAmount:       tokenAmount,
 		})
 		if err != nil {
-			h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, err)
+			var subExistsErr *SubscriptionExistsError
+			if errors.As(err, &subExistsErr) {
+				return err // Pass through the subscription exists error
+			}
+			h.logFailedSubscriptionCreation(ctx, nil, product, price, productToken, normalizedAddress, request.Delegation.Signature, err)
 			return fmt.Errorf("failed to create subscription: %w", err)
 		}
 
-		eventMetadata, err := json.Marshal(map[string]interface{}{
-			"product_name":   product.Name,
-			"price_type":     price.Type,
-			"wallet_address": customerWallet.WalletAddress,
-			"network_type":   customerWallet.NetworkType,
-		})
-		if err != nil {
-			logger.Error("Failed to marshal event metadata", zap.Error(err))
-			eventMetadata = []byte("{}")
-		}
-
-		_, err = qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
-			SubscriptionID: subscription.ID,
-			EventType:      db.SubscriptionEventTypeCreated,
-			OccurredAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
-			AmountInCents:  price.UnitAmountInPennies,
-			Metadata:       eventMetadata,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create subscription creation event: %w", err)
-		}
-
-		logger.Info("Created subscription event",
-			zap.String("subscription_id", subscription.ID.String()),
-			zap.String("event_type", string(db.SubscriptionEventTypeCreated)))
-
+		subscriptionResult = result
 		return nil
 	})
 
@@ -1472,58 +827,17 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		return
 	}
 
-	updatedSubscription, err = h.performInitialRedemption(ctx, customer, customerWallet, subscription, product, price, productToken, request.Delegation, executionObject)
-	if err != nil {
-		logger.Error("Initial redemption failed, subscription marked as failed and soft-deleted",
-			zap.Error(err),
-			zap.String("subscription_id", subscription.ID.String()),
-			zap.String("customer_id", customer.ID.String()),
-			zap.String("price_id", price.ID.String()))
-
-		_, updateErr := h.common.db.UpdateSubscriptionStatus(ctx, db.UpdateSubscriptionStatusParams{
-			ID:     subscription.ID,
-			Status: db.SubscriptionStatusFailed,
-		})
-
-		if updateErr != nil {
-			logger.Error("Failed to update subscription status after redemption failure",
-				zap.Error(updateErr),
-				zap.String("subscription_id", subscription.ID.String()))
-		}
-
-		deleteErr := h.common.db.DeleteSubscription(ctx, subscription.ID)
-		if deleteErr != nil {
-			logger.Error("Failed to soft-delete subscription after redemption failure",
-				zap.Error(deleteErr),
-				zap.String("subscription_id", subscription.ID.String()))
-		}
-
-		errorMsg := fmt.Sprintf("Initial redemption failed: %v", err)
-		_, eventErr := h.common.db.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
-			SubscriptionID:  subscription.ID,
-			EventType:       db.SubscriptionEventTypeFailedRedemption,
-			TransactionHash: pgtype.Text{String: "", Valid: false},
-			AmountInCents:   price.UnitAmountInPennies,
-			ErrorMessage:    pgtype.Text{String: errorMsg, Valid: true},
-			OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
-			Metadata:        json.RawMessage(`{}`),
-		})
-
-		if eventErr != nil {
-			logger.Error("Failed to create subscription event after redemption failure",
-				zap.Error(eventErr),
-				zap.String("subscription_id", subscription.ID.String()))
-		}
-
-		h.common.HandleError(c, err, "Initial redemption failed, subscription marked as failed and soft-deleted", http.StatusInternalServerError, h.common.GetLogger())
+	if subscriptionResult == nil {
+		h.common.HandleError(c, errors.New("subscription creation failed"), "Subscription creation failed", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}
-	// Create comprehensive response with all subscription fields and initial transaction hash
-	comprehensiveResponse, err := h.toComprehensiveSubscriptionResponse(ctx, updatedSubscription)
+
+	// Create comprehensive response using the helper
+	comprehensiveResponse, err := helpers.ToComprehensiveSubscriptionResponse(ctx, h.common.db, *subscriptionResult.Subscription)
 	if err != nil {
 		logger.Error("Failed to create comprehensive subscription response",
 			zap.Error(err),
-			zap.String("subscription_id", updatedSubscription.ID.String()))
+			zap.String("subscription_id", subscriptionResult.Subscription.ID.String()))
 		h.common.HandleError(c, err, "Failed to create subscription response", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}

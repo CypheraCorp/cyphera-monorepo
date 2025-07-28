@@ -1314,3 +1314,491 @@ func TestProductService_EdgeCases(t *testing.T) {
 		assert.NotNil(t, result)
 	})
 }
+
+func TestProductService_ValidateSubscriptionRequest(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQuerier := mocks.NewMockQuerier(ctrl)
+	service := services.NewProductService(mockQuerier)
+	ctx := context.Background()
+
+	priceID := uuid.New()
+	productTokenID := uuid.New()
+
+	tests := []struct {
+		name        string
+		params      params.ValidateSubscriptionParams
+		wantErr     bool
+		errorString string
+	}{
+		{
+			name: "successfully validates subscription request",
+			params: params.ValidateSubscriptionParams{
+				SubscriberAddress:          "0x123456789abcdef",
+				PriceID:                   priceID.String(),
+				ProductTokenID:            productTokenID.String(),
+				TokenAmount:               "1000",
+				CypheraSmartWalletAddress: "0xabcdef123456789",
+				Delegation: params.DelegationParams{
+					Delegate:  "0xabcdef123456789",
+					Delegator: "0x987654321fedcba",
+					Authority: "0x111222333444555",
+					Salt:      "0x666777888999aaa",
+					Signature: "0xdeadbeefcafebabe",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "fails with empty subscriber address",
+			params: params.ValidateSubscriptionParams{
+				PriceID:                   priceID.String(),
+				ProductTokenID:            productTokenID.String(),
+				TokenAmount:               "1000",
+				CypheraSmartWalletAddress: "0xabcdef123456789",
+			},
+			wantErr:     true,
+			errorString: "subscriber address is required",
+		},
+		{
+			name: "fails with invalid price ID format",
+			params: params.ValidateSubscriptionParams{
+				SubscriberAddress:         "0x123456789abcdef",
+				PriceID:                   "invalid-uuid",
+				ProductTokenID:            productTokenID.String(),
+				TokenAmount:               "1000",
+				CypheraSmartWalletAddress: "0xabcdef123456789",
+			},
+			wantErr:     true,
+			errorString: "invalid price ID format",
+		},
+		{
+			name: "fails with invalid product token ID format",
+			params: params.ValidateSubscriptionParams{
+				SubscriberAddress:         "0x123456789abcdef",
+				PriceID:                   priceID.String(),
+				ProductTokenID:            "invalid-uuid",
+				TokenAmount:               "1000",
+				CypheraSmartWalletAddress: "0xabcdef123456789",
+			},
+			wantErr:     true,
+			errorString: "invalid product token ID format",
+		},
+		{
+			name: "fails with invalid token amount format",
+			params: params.ValidateSubscriptionParams{
+				SubscriberAddress:         "0x123456789abcdef",
+				PriceID:                   priceID.String(),
+				ProductTokenID:            productTokenID.String(),
+				TokenAmount:               "invalid-amount",
+				CypheraSmartWalletAddress: "0xabcdef123456789",
+			},
+			wantErr:     true,
+			errorString: "invalid token amount format",
+		},
+		{
+			name: "fails with zero token amount",
+			params: params.ValidateSubscriptionParams{
+				SubscriberAddress:         "0x123456789abcdef",
+				PriceID:                   priceID.String(),
+				ProductTokenID:            productTokenID.String(),
+				TokenAmount:               "0",
+				CypheraSmartWalletAddress: "0xabcdef123456789",
+			},
+			wantErr:     true,
+			errorString: "token amount must be greater than zero",
+		},
+		{
+			name: "fails with negative token amount",
+			params: params.ValidateSubscriptionParams{
+				SubscriberAddress:         "0x123456789abcdef",
+				PriceID:                   priceID.String(),
+				ProductTokenID:            productTokenID.String(),
+				TokenAmount:               "-100",
+				CypheraSmartWalletAddress: "0xabcdef123456789",
+			},
+			wantErr:     true,
+			errorString: "token amount must be greater than zero",
+		},
+		{
+			name: "fails with mismatched delegate address",
+			params: params.ValidateSubscriptionParams{
+				SubscriberAddress:          "0x123456789abcdef",
+				PriceID:                   priceID.String(),
+				ProductTokenID:            productTokenID.String(),
+				TokenAmount:               "1000",
+				CypheraSmartWalletAddress: "0xabcdef123456789",
+				Delegation: params.DelegationParams{
+					Delegate:  "0xwrongaddress123",
+					Delegator: "0x987654321fedcba",
+					Authority: "0x111222333444555",
+					Salt:      "0x666777888999aaa",
+					Signature: "0xdeadbeefcafebabe",
+				},
+			},
+			wantErr:     true,
+			errorString: "delegate address does not match cyphera smart wallet address",
+		},
+		{
+			name: "fails with incomplete delegation data",
+			params: params.ValidateSubscriptionParams{
+				SubscriberAddress:          "0x123456789abcdef",
+				PriceID:                   priceID.String(),
+				ProductTokenID:            productTokenID.String(),
+				TokenAmount:               "1000",
+				CypheraSmartWalletAddress: "0xabcdef123456789",
+				Delegation: params.DelegationParams{
+					Delegate:  "0xabcdef123456789",
+					Delegator: "", // Missing delegator
+					Authority: "0x111222333444555",
+					Salt:      "0x666777888999aaa",
+					Signature: "0xdeadbeefcafebabe",
+				},
+			},
+			wantErr:     true,
+			errorString: "incomplete delegation data",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := service.ValidateSubscriptionRequest(ctx, tt.params)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.errorString != "" {
+					assert.Contains(t, err.Error(), tt.errorString)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestProductService_ValidateProductForSubscription(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQuerier := mocks.NewMockQuerier(ctrl)
+	service := services.NewProductService(mockQuerier)
+	ctx := context.Background()
+
+	productID := uuid.New()
+	workspaceID := uuid.New()
+
+	validProduct := db.Product{
+		ID:          productID,
+		WorkspaceID: workspaceID,
+		Name:        "Test Product",
+		Active:      true,
+	}
+
+	inactiveProduct := db.Product{
+		ID:          productID,
+		WorkspaceID: workspaceID,
+		Name:        "Inactive Product",
+		Active:      false,
+	}
+
+	tests := []struct {
+		name        string
+		productID   uuid.UUID
+		setupMocks  func()
+		wantErr     bool
+		errorString string
+	}{
+		{
+			name:      "successfully validates active product",
+			productID: productID,
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(validProduct, nil)
+			},
+			wantErr: false,
+		},
+		{
+			name:      "fails with product not found",
+			productID: productID,
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(db.Product{}, pgx.ErrNoRows)
+			},
+			wantErr:     true,
+			errorString: "product not found",
+		},
+		{
+			name:      "fails with inactive product",
+			productID: productID,
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(inactiveProduct, nil)
+			},
+			wantErr:     true,
+			errorString: "product is not active",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupMocks()
+
+			product, err := service.ValidateProductForSubscription(ctx, tt.productID)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, product)
+				if tt.errorString != "" {
+					assert.Contains(t, err.Error(), tt.errorString)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, product)
+				assert.Equal(t, productID, product.ID)
+				assert.True(t, product.Active)
+			}
+		})
+	}
+}
+
+func TestProductService_ValidatePriceForSubscription(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQuerier := mocks.NewMockQuerier(ctrl)
+	service := services.NewProductService(mockQuerier)
+	ctx := context.Background()
+
+	priceID := uuid.New()
+	productID := uuid.New()
+	workspaceID := uuid.New()
+
+	validPrice := db.Price{
+		ID:        priceID,
+		ProductID: productID,
+		Active:    true,
+	}
+
+	inactivePrice := db.Price{
+		ID:        priceID,
+		ProductID: productID,
+		Active:    false,
+	}
+
+	validProduct := db.Product{
+		ID:          productID,
+		WorkspaceID: workspaceID,
+		Name:        "Test Product",
+		Active:      true,
+	}
+
+	tests := []struct {
+		name        string
+		priceID     uuid.UUID
+		setupMocks  func()
+		wantErr     bool
+		errorString string
+	}{
+		{
+			name:    "successfully validates active price and product",
+			priceID: priceID,
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(validPrice, nil)
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(validProduct, nil)
+			},
+			wantErr: false,
+		},
+		{
+			name:    "fails with price not found",
+			priceID: priceID,
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(db.Price{}, pgx.ErrNoRows)
+			},
+			wantErr:     true,
+			errorString: "price not found",
+		},
+		{
+			name:    "fails with inactive price",
+			priceID: priceID,
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(inactivePrice, nil)
+			},
+			wantErr:     true,
+			errorString: "price is not active",
+		},
+		{
+			name:    "fails when product validation fails",
+			priceID: priceID,
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(validPrice, nil)
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(db.Product{}, pgx.ErrNoRows)
+			},
+			wantErr:     true,
+			errorString: "product validation failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupMocks()
+
+			price, product, err := service.ValidatePriceForSubscription(ctx, tt.priceID)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, price)
+				assert.Nil(t, product)
+				if tt.errorString != "" {
+					assert.Contains(t, err.Error(), tt.errorString)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, price)
+				assert.NotNil(t, product)
+				assert.Equal(t, priceID, price.ID)
+				assert.Equal(t, productID, product.ID)
+				assert.True(t, price.Active)
+				assert.True(t, product.Active)
+			}
+		})
+	}
+}
+
+func TestProductService_GetProductTokenWithValidation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQuerier := mocks.NewMockQuerier(ctrl)
+	service := services.NewProductService(mockQuerier)
+	ctx := context.Background()
+
+	productTokenID := uuid.New()
+	productID := uuid.New()
+	tokenID := uuid.New()
+	otherProductID := uuid.New()
+
+	validProductToken := db.GetProductTokenRow{
+		ID:        productTokenID,
+		ProductID: productID,
+		TokenID:   tokenID,
+		Active:    true,
+	}
+
+	inactiveProductToken := db.GetProductTokenRow{
+		ID:        productTokenID,
+		ProductID: productID,
+		TokenID:   tokenID,
+		Active:    false,
+	}
+
+	wrongProductToken := db.GetProductTokenRow{
+		ID:        productTokenID,
+		ProductID: otherProductID, // Different product
+		TokenID:   tokenID,
+		Active:    true,
+	}
+
+	validToken := db.Token{
+		ID:              tokenID,
+		ContractAddress: "0xtoken123",
+		Active:          true,
+	}
+
+	inactiveToken := db.Token{
+		ID:              tokenID,
+		ContractAddress: "0xtoken123",
+		Active:          false,
+	}
+
+	tests := []struct {
+		name             string
+		productTokenID   uuid.UUID
+		productID        uuid.UUID
+		setupMocks       func()
+		wantErr          bool
+		errorString      string
+	}{
+		{
+			name:           "successfully validates product token",
+			productTokenID: productTokenID,
+			productID:      productID,
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetProductToken(ctx, productTokenID).Return(validProductToken, nil)
+				mockQuerier.EXPECT().GetToken(ctx, tokenID).Return(validToken, nil)
+			},
+			wantErr: false,
+		},
+		{
+			name:           "fails with product token not found",
+			productTokenID: productTokenID,
+			productID:      productID,
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetProductToken(ctx, productTokenID).Return(db.GetProductTokenRow{}, pgx.ErrNoRows)
+			},
+			wantErr:     true,
+			errorString: "product token not found",
+		},
+		{
+			name:           "fails when product token belongs to different product",
+			productTokenID: productTokenID,
+			productID:      productID,
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetProductToken(ctx, productTokenID).Return(wrongProductToken, nil)
+			},
+			wantErr:     true,
+			errorString: "product token does not belong to the specified product",
+		},
+		{
+			name:           "fails with inactive product token",
+			productTokenID: productTokenID,
+			productID:      productID,
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetProductToken(ctx, productTokenID).Return(inactiveProductToken, nil)
+			},
+			wantErr:     true,
+			errorString: "product token is not active",
+		},
+		{
+			name:           "fails with token not found",
+			productTokenID: productTokenID,
+			productID:      productID,
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetProductToken(ctx, productTokenID).Return(validProductToken, nil)
+				mockQuerier.EXPECT().GetToken(ctx, tokenID).Return(db.Token{}, pgx.ErrNoRows)
+			},
+			wantErr:     true,
+			errorString: "token not found",
+		},
+		{
+			name:           "fails with inactive token",
+			productTokenID: productTokenID,
+			productID:      productID,
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetProductToken(ctx, productTokenID).Return(validProductToken, nil)
+				mockQuerier.EXPECT().GetToken(ctx, tokenID).Return(inactiveToken, nil)
+			},
+			wantErr:     true,
+			errorString: "token is not active",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupMocks()
+
+			productToken, err := service.GetProductTokenWithValidation(ctx, tt.productTokenID, tt.productID)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, productToken)
+				if tt.errorString != "" {
+					assert.Contains(t, err.Error(), tt.errorString)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, productToken)
+				assert.Equal(t, productTokenID, productToken.ID)
+				assert.Equal(t, productID, productToken.ProductID)
+				assert.True(t, productToken.Active)
+			}
+		})
+	}
+}

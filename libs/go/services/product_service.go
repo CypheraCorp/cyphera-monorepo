@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
@@ -59,13 +60,13 @@ func (s *ProductService) CreateProduct(ctx context.Context, createParams params.
 	}
 
 	// Validate wallet ownership
-	if err := s.validateWalletOwnership(ctx, createParams.WalletID, createParams.WorkspaceID); err != nil {
+	if err := helpers.ValidateWalletOwnership(ctx, s.queries, createParams.WalletID, createParams.WorkspaceID); err != nil {
 		return nil, nil, err
 	}
 
 	// Validate prices
 	for i, price := range createParams.Prices {
-		if err := s.validatePrice(price); err != nil {
+		if err := helpers.ValidatePrice(price); err != nil {
 			return nil, nil, fmt.Errorf("price %d validation failed: %w", i+1, err)
 		}
 	}
@@ -115,7 +116,7 @@ func (s *ProductService) CreateProduct(ctx context.Context, createParams params.
 
 	// Create product tokens if provided
 	if len(createParams.ProductTokens) > 0 {
-		if err := s.createProductTokens(ctx, product.ID, createParams.ProductTokens); err != nil {
+		if err := helpers.CreateProductTokens(ctx, s.queries, product.ID, createParams.ProductTokens); err != nil {
 			s.logger.Error("Failed to create product tokens",
 				zap.String("product_id", product.ID.String()),
 				zap.Error(err))
@@ -251,12 +252,12 @@ func (s *ProductService) UpdateProduct(ctx context.Context, updateParams params.
 	}
 
 	// Validate updates
-	if err := s.validateProductUpdate(ctx, updateParams, existingProduct); err != nil {
+	if err := helpers.ValidateProductUpdate(ctx, s.queries, updateParams, existingProduct); err != nil {
 		return nil, err
 	}
 
 	// Build update parameters
-	dbUpdateParams := s.buildUpdateParams(updateParams, existingProduct)
+	dbUpdateParams := helpers.BuildUpdateParams(updateParams, existingProduct)
 
 	// Update the product
 	updatedProduct, err := s.queries.UpdateProduct(ctx, dbUpdateParams)
@@ -312,159 +313,6 @@ func (s *ProductService) DeleteProduct(ctx context.Context, productID uuid.UUID,
 		zap.String("product_id", productID.String()))
 
 	return nil
-}
-
-// validatePrice validates price parameters
-func (s *ProductService) validatePrice(price params.CreatePriceParams) error {
-	// Validate price type
-	priceType, err := helpers.ValidatePriceType(price.Type)
-	if err != nil {
-		return err
-	}
-
-	// Validate interval type
-	intervalType, err := helpers.ValidateIntervalType(price.IntervalType)
-	if err != nil {
-		return err
-	}
-
-	// Validate price amount
-	if err := helpers.ValidatePriceInPennies(int32(price.UnitAmountInPennies)); err != nil {
-		return err
-	}
-
-	// Validate term length based on price type
-	if err := helpers.ValidatePriceTermLength(priceType, price.TermLength, intervalType, price.IntervalCount); err != nil {
-		return err
-	}
-
-	// Validate metadata
-	if err := helpers.ValidateMetadata(price.Metadata); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// validateWalletOwnership validates that wallet belongs to the workspace
-func (s *ProductService) validateWalletOwnership(ctx context.Context, walletID, workspaceID uuid.UUID) error {
-	wallet, err := s.queries.GetWalletByID(ctx, db.GetWalletByIDParams{
-		ID:          walletID,
-		WorkspaceID: workspaceID,
-	})
-	if err != nil {
-		return fmt.Errorf("wallet not found or not accessible: %w", err)
-	}
-
-	if wallet.WorkspaceID != workspaceID {
-		return fmt.Errorf("wallet does not belong to workspace")
-	}
-
-	return nil
-}
-
-// createProductTokens creates product tokens for a product
-func (s *ProductService) createProductTokens(ctx context.Context, productID uuid.UUID, tokens []params.CreateProductTokenParams) error {
-	for _, pt := range tokens {
-		// NetworkID and TokenID are already UUIDs, no need to parse
-
-		_, err := s.queries.CreateProductToken(ctx, db.CreateProductTokenParams{
-			ProductID: productID,
-			NetworkID: pt.NetworkID,
-			TokenID:   pt.TokenID,
-			Active:    pt.Active,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create product token: %w", err)
-		}
-	}
-	return nil
-}
-
-// validateProductUpdate validates product update parameters
-func (s *ProductService) validateProductUpdate(ctx context.Context, params params.UpdateProductParams, existingProduct db.Product) error {
-	// Validate name if provided
-	if params.Name != nil {
-		if err := helpers.ValidateProductName(*params.Name); err != nil {
-			return err
-		}
-	}
-
-	// Validate description if provided
-	if params.Description != nil {
-		if err := helpers.ValidateProductDescription(*params.Description); err != nil {
-			return err
-		}
-	}
-
-	// Validate image URL if provided
-	if params.ImageURL != nil {
-		if err := helpers.ValidateImageURL(*params.ImageURL); err != nil {
-			return err
-		}
-	}
-
-	// Validate product URL if provided
-	if params.URL != nil {
-		if err := helpers.ValidateProductURL(*params.URL); err != nil {
-			return err
-		}
-	}
-
-	// Validate metadata if provided
-	if params.Metadata != nil {
-		if err := helpers.ValidateMetadata(params.Metadata); err != nil {
-			return err
-		}
-	}
-
-	// Validate wallet ownership if wallet is being changed
-	if params.WalletID != nil && *params.WalletID != existingProduct.WalletID {
-		if err := s.validateWalletOwnership(ctx, *params.WalletID, existingProduct.WorkspaceID); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// buildUpdateParams builds the database update parameters
-func (s *ProductService) buildUpdateParams(params params.UpdateProductParams, existingProduct db.Product) db.UpdateProductParams {
-	updateParams := db.UpdateProductParams{
-		ID:          params.ProductID,
-		Name:        existingProduct.Name,
-		Description: existingProduct.Description,
-		ImageUrl:    existingProduct.ImageUrl,
-		Url:         existingProduct.Url,
-		Active:      existingProduct.Active,
-		Metadata:    existingProduct.Metadata,
-		WalletID:    existingProduct.WalletID,
-	}
-
-	// Apply updates only for provided fields
-	if params.Name != nil {
-		updateParams.Name = *params.Name
-	}
-	if params.Description != nil {
-		updateParams.Description = pgtype.Text{String: *params.Description, Valid: true}
-	}
-	if params.ImageURL != nil {
-		updateParams.ImageUrl = pgtype.Text{String: *params.ImageURL, Valid: true}
-	}
-	if params.URL != nil {
-		updateParams.Url = pgtype.Text{String: *params.URL, Valid: true}
-	}
-	if params.Active != nil {
-		updateParams.Active = *params.Active
-	}
-	if params.Metadata != nil {
-		updateParams.Metadata = params.Metadata
-	}
-	if params.WalletID != nil {
-		updateParams.WalletID = *params.WalletID
-	}
-
-	return updateParams
 }
 
 // GetPublicProductByPriceID retrieves a product and its details for public access via price ID
@@ -541,4 +389,99 @@ func (s *ProductService) GetPublicProductByPriceID(ctx context.Context, priceID 
 	}
 
 	return &response, nil
+}
+
+// ValidateSubscriptionRequest validates the subscription request parameters
+func (s *ProductService) ValidateSubscriptionRequest(ctx context.Context, params params.ValidateSubscriptionParams) error {
+	// Validate basic fields
+	if params.SubscriberAddress == "" {
+		return fmt.Errorf("subscriber address is required")
+	}
+
+	if _, err := uuid.Parse(params.PriceID); err != nil {
+		return fmt.Errorf("invalid price ID format")
+	}
+
+	if _, err := uuid.Parse(params.ProductTokenID); err != nil {
+		return fmt.Errorf("invalid product token ID format")
+	}
+
+	tokenAmount, err := strconv.ParseInt(params.TokenAmount, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid token amount format")
+	}
+
+	if tokenAmount <= 0 {
+		return fmt.Errorf("token amount must be greater than zero")
+	}
+
+	// Validate delegation data
+	if err := helpers.ValidateDelegationData(params.Delegation, params.CypheraSmartWalletAddress); err != nil {
+		return fmt.Errorf("delegation validation failed: %w", err)
+	}
+
+	return nil
+}
+
+// ValidateProductForSubscription validates that a product is valid for subscription
+func (s *ProductService) ValidateProductForSubscription(ctx context.Context, productID uuid.UUID) (*db.Product, error) {
+	product, err := s.queries.GetProductWithoutWorkspaceId(ctx, productID)
+	if err != nil {
+		return nil, fmt.Errorf("product not found: %w", err)
+	}
+
+	if !product.Active {
+		return nil, fmt.Errorf("product is not active")
+	}
+
+	return &product, nil
+}
+
+// ValidatePriceForSubscription validates that a price is valid for subscription
+func (s *ProductService) ValidatePriceForSubscription(ctx context.Context, priceID uuid.UUID) (*db.Price, *db.Product, error) {
+	// Get the price
+	price, err := s.queries.GetPrice(ctx, priceID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("price not found: %w", err)
+	}
+
+	if !price.Active {
+		return nil, nil, fmt.Errorf("price is not active")
+	}
+
+	// Get and validate the associated product
+	product, err := s.ValidateProductForSubscription(ctx, price.ProductID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("product validation failed: %w", err)
+	}
+
+	return &price, product, nil
+}
+
+// GetProductTokenWithValidation retrieves and validates a product token
+func (s *ProductService) GetProductTokenWithValidation(ctx context.Context, productTokenID uuid.UUID, productID uuid.UUID) (*db.GetProductTokenRow, error) {
+	productToken, err := s.queries.GetProductToken(ctx, productTokenID)
+	if err != nil {
+		return nil, fmt.Errorf("product token not found: %w", err)
+	}
+
+	if productToken.ProductID != productID {
+		return nil, fmt.Errorf("product token does not belong to the specified product")
+	}
+
+	if !productToken.Active {
+		return nil, fmt.Errorf("product token is not active")
+	}
+
+	// Verify the token exists and is active
+	token, err := s.queries.GetToken(ctx, productToken.TokenID)
+	if err != nil {
+		return nil, fmt.Errorf("token not found: %w", err)
+	}
+
+	if !token.Active {
+		return nil, fmt.Errorf("token is not active")
+	}
+
+	return &productToken, nil
 }
