@@ -8,6 +8,7 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
@@ -37,21 +38,14 @@ func NewPaymentFailureDetector(queries *db.Queries, logger *zap.Logger, dunningS
 	}
 }
 
-// DetectionResult holds the result of failure detection
-type DetectionResult struct {
-	FailedEvents      []db.SubscriptionEvent
-	CampaignsCreated  int
-	CampaignsSkipped  int
-	Errors            []error
-}
-
 // DetectAndCreateCampaigns detects failed payments and creates dunning campaigns
-func (d *PaymentFailureDetector) DetectAndCreateCampaigns(ctx context.Context, lookbackMinutes int) (*DetectionResult, error) {
-	result := &DetectionResult{
-		FailedEvents:     []db.SubscriptionEvent{},
-		CampaignsCreated: 0,
-		CampaignsSkipped: 0,
-		Errors:           []error{},
+func (d *PaymentFailureDetector) DetectAndCreateCampaigns(ctx context.Context, lookbackMinutes int) (*responses.DetectionResult, error) {
+	result := &responses.DetectionResult{
+		NewCampaigns:     0,
+		UpdatedCampaigns: 0,
+		FailedDetections: 0,
+		CampaignIDs:      []uuid.UUID{},
+		Errors:           []string{},
 	}
 
 	// Get failed subscription events from the last N minutes
@@ -68,7 +62,6 @@ func (d *PaymentFailureDetector) DetectAndCreateCampaigns(ctx context.Context, l
 		return result, fmt.Errorf("failed to get recent failed events: %w", err)
 	}
 
-	result.FailedEvents = failedEvents
 	d.logger.Info("Found failed subscription events",
 		zap.Int("count", len(failedEvents)),
 		zap.Time("since", since),
@@ -78,7 +71,8 @@ func (d *PaymentFailureDetector) DetectAndCreateCampaigns(ctx context.Context, l
 	for _, event := range failedEvents {
 		err := d.processFailedEvent(ctx, event, result)
 		if err != nil {
-			result.Errors = append(result.Errors, err)
+			result.FailedDetections++
+			result.Errors = append(result.Errors, err.Error())
 			d.logger.Error("Failed to process failed event",
 				zap.String("event_id", event.ID.String()),
 				zap.Error(err),
@@ -87,9 +81,10 @@ func (d *PaymentFailureDetector) DetectAndCreateCampaigns(ctx context.Context, l
 	}
 
 	d.logger.Info("Payment failure detection completed",
-		zap.Int("failed_events", len(result.FailedEvents)),
-		zap.Int("campaigns_created", result.CampaignsCreated),
-		zap.Int("campaigns_skipped", result.CampaignsSkipped),
+		zap.Int("failed_events", len(failedEvents)),
+		zap.Int("new_campaigns", result.NewCampaigns),
+		zap.Int("updated_campaigns", result.UpdatedCampaigns),
+		zap.Int("failed_detections", result.FailedDetections),
 		zap.Int("errors", len(result.Errors)),
 	)
 
@@ -97,7 +92,7 @@ func (d *PaymentFailureDetector) DetectAndCreateCampaigns(ctx context.Context, l
 }
 
 // processFailedEvent processes a single failed payment event
-func (d *PaymentFailureDetector) processFailedEvent(ctx context.Context, event db.SubscriptionEvent, result *DetectionResult) error {
+func (d *PaymentFailureDetector) processFailedEvent(ctx context.Context, event db.SubscriptionEvent, result *responses.DetectionResult) error {
 	// Get subscription details
 	subscription, err := d.queries.GetSubscription(ctx, event.SubscriptionID)
 	if err != nil {
@@ -128,7 +123,7 @@ func (d *PaymentFailureDetector) processFailedEvent(ctx context.Context, event d
 				zap.String("subscription_id", subscription.ID.String()),
 				zap.String("existing_campaign_id", campaign.ID.String()),
 			)
-			result.CampaignsSkipped++
+			// Campaign skipped - no field in new structure, just log it
 			return nil
 		}
 	}
@@ -184,7 +179,8 @@ func (d *PaymentFailureDetector) processFailedEvent(ctx context.Context, event d
 		zap.Int64("amount_cents", int64(price.UnitAmountInPennies)*100),
 	)
 
-	result.CampaignsCreated++
+	result.NewCampaigns++
+	result.CampaignIDs = append(result.CampaignIDs, campaign.ID)
 	return nil
 }
 
@@ -301,11 +297,12 @@ func (d *PaymentFailureDetector) ProcessFailedPaymentWebhook(ctx context.Context
 	}
 
 	// Process the failed event to create campaign
-	result := &DetectionResult{
-		FailedEvents:     []db.SubscriptionEvent{},
-		CampaignsCreated: 0,
-		CampaignsSkipped: 0,
-		Errors:           []error{},
+	result := &responses.DetectionResult{
+		NewCampaigns:     0,
+		UpdatedCampaigns: 0,
+		FailedDetections: 0,
+		CampaignIDs:      []uuid.UUID{},
+		Errors:           []string{},
 	}
 
 	err = d.processFailedEvent(ctx, event, result)

@@ -328,7 +328,7 @@ func InitializeHandlers() {
 	}
 
 	// Create the handler factory with all dependencies
-	handlerFactory := handlers.CreateDefaultFactory(
+	handlerFactory = handlers.CreateDefaultFactory(
 		dbQueries,
 		dbpool,
 		cypheraSmartWalletAddress,

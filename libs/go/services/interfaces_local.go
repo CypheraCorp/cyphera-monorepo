@@ -43,5 +43,5 @@ type IPaymentService interface {
 type IEmailService interface {
 	SendTransactionalEmail(ctx context.Context, params params.TransactionalEmailParams) error
 	SendBatchEmails(ctx context.Context, requests []requests.BatchEmailRequest) ([]responses.BatchEmailResult, error)
-	SendDunningEmail(ctx context.Context, template *db.DunningEmailTemplate, data business.EmailData, toEmail string) error
+	SendDunningEmail(ctx context.Context, template *db.DunningEmailTemplate, data map[string]business.EmailData, toEmail string) error
 }

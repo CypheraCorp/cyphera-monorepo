@@ -188,12 +188,9 @@ func CreateDefaultFactory(
 	gasSponsorshipService := services.NewGasSponsorshipService(db)
 
 	// Create services that depend on other services
-	// TODO: Fix interface mismatch - subscription management service expects different email service interface
-	var subscriptionManagementService interfaces.SubscriptionManagementService
+	subscriptionManagementService := services.NewSubscriptionManagementService(db, paymentService, emailService)
 	dunningService := services.NewDunningService(db, logger)
-	// TODO: Fix interface mismatch - dunning retry engine expects DelegationClientInterface but receives *DelegationClient
-	// dunningRetryEngine := services.NewDunningRetryEngine(db, logger, dunningService, emailService, delegationClient)
-	var dunningRetryEngine interfaces.DunningRetryEngine = nil // Temporary nil assignment
+	dunningRetryEngine := services.NewDunningRetryEngine(db, logger, dunningService, emailService, delegationClient)
 
 	paymentLinkService := services.NewPaymentLinkService(db, logger, baseURL)
 	invoiceService := services.NewInvoiceService(db, logger, taxService, discountService, gasSponsorshipService, currencyService, exchangeRateService)
@@ -211,6 +208,7 @@ func CreateDefaultFactory(
 	errorRecoveryService := services.NewErrorRecoveryService(db, logger, paymentSyncClient)
 	subscriptionEventService := services.NewSubscriptionEventService(db)
 	paymentFailureMonitor := services.NewPaymentFailureMonitor(db, logger, dunningService)
+	paymentFailureDetector := services.NewPaymentFailureDetector(db, logger, dunningService)
 	apiKeyService := services.NewAPIKeyService(db)
 
 	return NewHandlerFactory(HandlerFactoryConfig{
@@ -237,6 +235,7 @@ func CreateDefaultFactory(
 		ErrorRecoveryService:          errorRecoveryService,
 		SubscriptionEventService:      subscriptionEventService,
 		PaymentFailureMonitor:         paymentFailureMonitor,
+		PaymentFailureDetector:        paymentFailureDetector,
 		APIKeyService:                 apiKeyService,
 		TaxService:                    taxService,
 		DiscountService:               discountService,

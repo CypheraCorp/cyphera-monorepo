@@ -10,11 +10,3 @@ type LocalProcessPaymentParams struct {
 	TokenAddress     string
 	NetworkID        uuid.UUID
 }
-
-// LocalProcessPaymentResponse contains the response from processing a payment
-type LocalProcessPaymentResponse struct {
-	TransactionHash string
-	Status          string
-	GasUsed         string
-	BlockNumber     uint64
-}

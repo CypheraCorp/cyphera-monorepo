@@ -48,7 +48,6 @@ type LocalProcessPaymentParams struct {
 	TokenAddress     string
 	NetworkID        uuid.UUID
 }
-
 type DunningConfigParams struct {
 	WorkspaceID            uuid.UUID       `json:"workspace_id"`
 	Name                   string          `json:"name"`

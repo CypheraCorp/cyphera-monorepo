@@ -188,7 +188,7 @@ func (m *mockEmailService) SendBatchEmails(ctx context.Context, requests []reque
 	return results, nil
 }
 
-func (m *mockEmailService) SendDunningEmail(ctx context.Context, template *db.DunningEmailTemplate, data business.EmailData, toEmail string) error {
+func (m *mockEmailService) SendDunningEmail(ctx context.Context, template *db.DunningEmailTemplate, data map[string]business.EmailData, toEmail string) error {
 	return nil
 }
 

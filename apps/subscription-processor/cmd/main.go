@@ -63,9 +63,10 @@ func (app *Application) HandleRequest(ctx context.Context /*, event MyEvent - if
 			// Don't fail the entire Lambda execution, just log the error
 		} else {
 			logger.Info("Failed payment detection results",
-				zap.Int("failed_events_found", len(detectionResult.FailedEvents)),
-				zap.Int("campaigns_created", detectionResult.CampaignsCreated),
-				zap.Int("campaigns_skipped", detectionResult.CampaignsSkipped),
+				zap.Int("new_campaigns", detectionResult.NewCampaigns),
+				zap.Int("updated_campaigns", detectionResult.UpdatedCampaigns),
+				zap.Int("failed_detections", detectionResult.FailedDetections),
+				zap.Int("campaign_ids", len(detectionResult.CampaignIDs)),
 				zap.Int("errors", len(detectionResult.Errors)),
 			)
 		}
@@ -109,9 +110,10 @@ func (a *Application) LocalHandleRequest(ctx context.Context) error {
 			// Don't fail the entire execution, just log the error
 		} else {
 			logger.Info("Failed payment detection results",
-				zap.Int("failed_events_found", len(detectionResult.FailedEvents)),
-				zap.Int("campaigns_created", detectionResult.CampaignsCreated),
-				zap.Int("campaigns_skipped", detectionResult.CampaignsSkipped),
+				zap.Int("new_campaigns", detectionResult.NewCampaigns),
+				zap.Int("updated_campaigns", detectionResult.UpdatedCampaigns),
+				zap.Int("failed_detections", detectionResult.FailedDetections),
+				zap.Int("campaign_ids", len(detectionResult.CampaignIDs)),
 				zap.Int("errors", len(detectionResult.Errors)),
 			)
 		}

@@ -44,10 +44,8 @@ func (a *emailServiceAdapter) SendBatchEmails(ctx context.Context, requests []re
 	return a.service.SendBatchEmails(ctx, requests)
 }
 
-func (a *emailServiceAdapter) SendDunningEmail(ctx context.Context, template *db.DunningEmailTemplate, data business.EmailData, toEmail string) error {
-	// Adapt the single EmailData to map format expected by the main interface
-	dataMap := map[string]business.EmailData{"default": data}
-	return a.service.SendDunningEmail(ctx, template, dataMap, toEmail)
+func (a *emailServiceAdapter) SendDunningEmail(ctx context.Context, template *db.DunningEmailTemplate, data map[string]business.EmailData, toEmail string) error {
+	return a.service.SendDunningEmail(ctx, template, data, toEmail)
 }
 
 // paymentServiceAdapter adapts interfaces.PaymentService to services.IPaymentService

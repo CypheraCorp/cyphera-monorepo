@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/proto"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 
 	"github.com/davecgh/go-spew/spew"
 	"google.golang.org/grpc"
@@ -345,6 +347,17 @@ func (c *DelegationClient) HealthCheck(ctx context.Context) error {
 	// If we somehow got a successful response for our empty request,
 	// the server is definitely available
 	return nil
+}
+
+// ProcessPayment processes a payment using delegation - adapter method for dunning retry engine
+func (c *DelegationClient) ProcessPayment(ctx context.Context, paymentParams params.LocalProcessPaymentParams) (*responses.LocalProcessPaymentResponse, error) {
+	// This is a placeholder implementation to satisfy the interface
+	// The actual implementation would need to map the params to the appropriate delegation redemption
+	// For now, return an error indicating this method needs proper implementation
+	return &responses.LocalProcessPaymentResponse{
+		Success:      false,
+		ErrorMessage: "ProcessPayment method not yet implemented - needs delegation redemption logic",
+	}, fmt.Errorf("ProcessPayment method not yet implemented - needs delegation redemption logic")
 }
 
 // Close closes the gRPC connection. This should be called when the client

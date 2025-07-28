@@ -60,8 +60,10 @@ type CampaignStatsResponse struct {
 
 // LocalProcessPaymentResponse contains the response from processing a payment
 type LocalProcessPaymentResponse struct {
-	TransactionHash string
-	Status          string
-	GasUsed         string
-	BlockNumber     uint64
+	TransactionHash string `json:"transaction_hash"`
+	Status          string `json:"status"`
+	GasUsed         string `json:"gas_used"`
+	BlockNumber     uint64 `json:"block_number"`
+	ErrorMessage    string `json:"error_message,omitempty"`
+	Success         bool   `json:"success"`
 }
