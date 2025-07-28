@@ -547,6 +547,9 @@ func TestProductService_ListProducts(t *testing.T) {
 					Offset:      0,
 				}).Return(products, nil)
 				mockQuerier.EXPECT().CountProducts(ctx, workspaceID).Return(int64(25), nil)
+				
+				// Mock ListPricesByProduct for any product ID
+				mockQuerier.EXPECT().ListPricesByProduct(ctx, gomock.Any()).Return([]db.Price{}, nil).AnyTimes()
 			},
 			wantErr:     false,
 			wantCount:   2,
@@ -566,6 +569,9 @@ func TestProductService_ListProducts(t *testing.T) {
 					Offset:      10,
 				}).Return(products, nil)
 				mockQuerier.EXPECT().CountProducts(ctx, workspaceID).Return(int64(12), nil)
+				
+				// Mock ListPricesByProduct for any product ID
+				mockQuerier.EXPECT().ListPricesByProduct(ctx, gomock.Any()).Return([]db.Price{}, nil).AnyTimes()
 			},
 			wantErr:     false,
 			wantCount:   2,

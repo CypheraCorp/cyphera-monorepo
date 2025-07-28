@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/mocks"
 	"github.com/cyphera/cyphera-api/libs/go/services"
@@ -454,18 +455,26 @@ func TestCustomerService_DeleteCustomer(t *testing.T) {
 
 func TestCustomerService_ListCustomers(t *testing.T) {
 	dbCustomers := []db.Customer{
-		{ID: uuid.New(), Email: pgtype.Text{String: "user1@example.com", Valid: true}},
-		{ID: uuid.New(), Email: pgtype.Text{String: "user2@example.com", Valid: true}},
+		{
+			ID: uuid.New(), 
+			Email: pgtype.Text{String: "user1@example.com", Valid: true},
+			Metadata: []byte("{}"),
+			CreatedAt: pgtype.Timestamptz{},
+			UpdatedAt: pgtype.Timestamptz{},
+		},
+		{
+			ID: uuid.New(), 
+			Email: pgtype.Text{String: "user2@example.com", Valid: true},
+			Metadata: []byte("{}"),
+			CreatedAt: pgtype.Timestamptz{},
+			UpdatedAt: pgtype.Timestamptz{},
+		},
 	}
 	
-	// Convert to response format for expected result
+	// Convert to response format for expected result using the actual helper function
 	customerResponses := make([]responses.CustomerResponse, len(dbCustomers))
 	for i, c := range dbCustomers {
-		customerResponses[i] = responses.CustomerResponse{
-			ID:     c.ID.String(),
-			Object: "customer",
-			Email:  c.Email.String,
-		}
+		customerResponses[i] = helpers.ToCustomerResponse(c)
 	}
 
 	tests := []struct {
@@ -553,18 +562,26 @@ func TestCustomerService_ListCustomers(t *testing.T) {
 func TestCustomerService_ListWorkspaceCustomers(t *testing.T) {
 	workspaceID := uuid.New()
 	dbCustomers := []db.Customer{
-		{ID: uuid.New(), Email: pgtype.Text{String: "user1@example.com", Valid: true}},
-		{ID: uuid.New(), Email: pgtype.Text{String: "user2@example.com", Valid: true}},
+		{
+			ID: uuid.New(), 
+			Email: pgtype.Text{String: "user1@example.com", Valid: true},
+			Metadata: []byte("{}"),
+			CreatedAt: pgtype.Timestamptz{},
+			UpdatedAt: pgtype.Timestamptz{},
+		},
+		{
+			ID: uuid.New(), 
+			Email: pgtype.Text{String: "user2@example.com", Valid: true},
+			Metadata: []byte("{}"),
+			CreatedAt: pgtype.Timestamptz{},
+			UpdatedAt: pgtype.Timestamptz{},
+		},
 	}
 	
-	// Convert to response format for expected result
+	// Convert to response format for expected result using the actual helper function
 	customerResponses := make([]responses.CustomerResponse, len(dbCustomers))
 	for i, c := range dbCustomers {
-		customerResponses[i] = responses.CustomerResponse{
-			ID:     c.ID.String(),
-			Object: "customer",
-			Email:  c.Email.String,
-		}
+		customerResponses[i] = helpers.ToCustomerResponse(c)
 	}
 
 	tests := []struct {

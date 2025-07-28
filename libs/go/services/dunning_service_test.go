@@ -1165,14 +1165,20 @@ func TestDunningService_BoundaryConditions(t *testing.T) {
 				config := db.DunningConfiguration{
 					GracePeriodHours: pgtype.Int4{Int32: 1, Valid: true},
 				}
+				subscription := db.Subscription{
+					WorkspaceID: uuid.New(),
+					CustomerID:  uuid.New(),
+				}
+				mockQuerier.EXPECT().GetActiveDunningCampaignForSubscription(ctx, gomock.Any()).Return(db.DunningCampaign{ID: uuid.Nil}, nil)
 				mockQuerier.EXPECT().GetDunningConfiguration(ctx, gomock.Any()).Return(config, nil)
+				mockQuerier.EXPECT().GetSubscription(ctx, gomock.Any()).Return(subscription, nil)
 				mockQuerier.EXPECT().CreateDunningCampaign(ctx, gomock.Any()).Return(db.DunningCampaign{}, nil)
 				mockQuerier.EXPECT().UpdateDunningCampaign(ctx, gomock.Any()).Return(db.DunningCampaign{}, nil)
 			},
 			operation: func() error {
 				_, err := service.CreateCampaign(ctx, params.DunningCampaignParams{
 					ConfigurationID:   uuid.New(),
-					SubscriptionID:    uuid.Nil,
+					SubscriptionID:    uuid.New(),
 					TriggerReason:     "test",
 					OutstandingAmount: 9223372036854775807, // Max int64
 					Currency:          "USD",
@@ -1420,23 +1426,17 @@ func TestDunningService_HelperFunctions(t *testing.T) {
 		}
 		mockQuerier.EXPECT().GetDunningConfiguration(ctx, gomock.Any()).Return(config, nil)
 
-		mockQuerier.EXPECT().CreateDunningCampaign(ctx, gomock.Any()).DoAndReturn(
-			func(ctx context.Context, params db.CreateDunningCampaignParams) (db.DunningCampaign, error) {
-				// Verify that nil UUID becomes invalid pgtype.UUID
-				assert.False(t, params.SubscriptionID.Valid)
-				assert.False(t, params.PaymentID.Valid)
-				return db.DunningCampaign{}, nil
-			},
-		)
-		mockQuerier.EXPECT().UpdateDunningCampaign(ctx, gomock.Any()).Return(db.DunningCampaign{}, nil)
-
-		_, _ = service.CreateCampaign(ctx, params.DunningCampaignParams{
+		_, err := service.CreateCampaign(ctx, params.DunningCampaignParams{
 			ConfigurationID:   uuid.New(),
-			SubscriptionID:    uuid.Nil, // This should result in invalid pgtype.UUID
+			SubscriptionID:    uuid.Nil, // This should trigger the workspace/customer validation error
 			TriggerReason:     "test",
 			OutstandingAmount: 1000,
 			Currency:          "USD",
 		})
+		
+		// Should fail because workspace and customer ID are required when subscription ID is nil
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "workspace and customer ID required")
 	})
 
 	t.Run("dunningUuidToPgtype with valid UUID", func(t *testing.T) {
@@ -1452,10 +1452,16 @@ func TestDunningService_HelperFunctions(t *testing.T) {
 			GracePeriodHours: pgtype.Int4{Int32: 24, Valid: true},
 		}
 
+		subscription := db.Subscription{
+			WorkspaceID: uuid.New(),
+			CustomerID:  uuid.New(),
+		}
+		
 		// Check for existing campaigns
 		mockQuerier.EXPECT().GetActiveDunningCampaignForSubscription(ctx, gomock.Any()).Return(
 			db.DunningCampaign{ID: uuid.Nil}, nil)
 		mockQuerier.EXPECT().GetDunningConfiguration(ctx, gomock.Any()).Return(config, nil)
+		mockQuerier.EXPECT().GetSubscription(ctx, subscriptionID).Return(subscription, nil)
 
 		mockQuerier.EXPECT().CreateDunningCampaign(ctx, gomock.Any()).DoAndReturn(
 			func(ctx context.Context, params db.CreateDunningCampaignParams) (db.DunningCampaign, error) {
@@ -1542,9 +1548,14 @@ func TestDunningService_ComplexScenarios(t *testing.T) {
 			ID:               configID,
 			GracePeriodHours: pgtype.Int4{Int32: 24, Valid: true},
 		}
+		subscription := db.Subscription{
+			WorkspaceID: workspaceID,
+			CustomerID:  customerID,
+		}
 		mockQuerier.EXPECT().GetActiveDunningCampaignForSubscription(ctx, gomock.Any()).Return(
 			db.DunningCampaign{ID: uuid.Nil}, nil)
 		mockQuerier.EXPECT().GetDunningConfiguration(ctx, configID).Return(config, nil)
+		mockQuerier.EXPECT().GetSubscription(ctx, subscriptionID).Return(subscription, nil)
 		mockQuerier.EXPECT().CreateDunningCampaign(ctx, gomock.Any()).Return(db.DunningCampaign{
 			ID:              campaignID,
 			WorkspaceID:     workspaceID,
@@ -1732,7 +1743,13 @@ func TestDunningService_DataValidation(t *testing.T) {
 		config := db.DunningConfiguration{
 			GracePeriodHours: pgtype.Int4{Int32: 24, Valid: true},
 		}
+		subscription := db.Subscription{
+			WorkspaceID: uuid.New(),
+			CustomerID:  uuid.New(),
+		}
+		mockQuerier.EXPECT().GetActiveDunningCampaignForSubscription(ctx, gomock.Any()).Return(db.DunningCampaign{ID: uuid.Nil}, nil)
 		mockQuerier.EXPECT().GetDunningConfiguration(ctx, gomock.Any()).Return(config, nil)
+		mockQuerier.EXPECT().GetSubscription(ctx, gomock.Any()).Return(subscription, nil)
 		mockQuerier.EXPECT().CreateDunningCampaign(ctx, gomock.Any()).DoAndReturn(
 			func(ctx context.Context, params db.CreateDunningCampaignParams) (db.DunningCampaign, error) {
 				// Verify that negative amount is passed through
@@ -1744,7 +1761,7 @@ func TestDunningService_DataValidation(t *testing.T) {
 
 		_, err := service.CreateCampaign(ctx, params.DunningCampaignParams{
 			ConfigurationID:   uuid.New(),
-			SubscriptionID:    uuid.Nil,
+			SubscriptionID:    uuid.New(),
 			TriggerReason:     "test",
 			OutstandingAmount: -1000, // Negative amount
 			Currency:          "USD",
@@ -1758,7 +1775,13 @@ func TestDunningService_DataValidation(t *testing.T) {
 		config := db.DunningConfiguration{
 			GracePeriodHours: pgtype.Int4{Int32: 24, Valid: true},
 		}
+		subscription := db.Subscription{
+			WorkspaceID: uuid.New(),
+			CustomerID:  uuid.New(),
+		}
+		mockQuerier.EXPECT().GetActiveDunningCampaignForSubscription(ctx, gomock.Any()).Return(db.DunningCampaign{ID: uuid.Nil}, nil)
 		mockQuerier.EXPECT().GetDunningConfiguration(ctx, gomock.Any()).Return(config, nil)
+		mockQuerier.EXPECT().GetSubscription(ctx, gomock.Any()).Return(subscription, nil)
 		mockQuerier.EXPECT().CreateDunningCampaign(ctx, gomock.Any()).DoAndReturn(
 			func(ctx context.Context, params db.CreateDunningCampaignParams) (db.DunningCampaign, error) {
 				// Verify that empty currency is passed through
@@ -1770,7 +1793,7 @@ func TestDunningService_DataValidation(t *testing.T) {
 
 		_, err := service.CreateCampaign(ctx, params.DunningCampaignParams{
 			ConfigurationID:   uuid.New(),
-			SubscriptionID:    uuid.Nil,
+			SubscriptionID:    uuid.New(),
 			TriggerReason:     "test",
 			OutstandingAmount: 1000,
 			Currency:          "", // Empty currency
