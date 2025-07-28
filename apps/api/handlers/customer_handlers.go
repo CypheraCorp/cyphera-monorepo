@@ -9,17 +9,30 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
-// CustomerHandler handles customer related operations
+// CustomerHandler handles customer-related operations
 type CustomerHandler struct {
 	common          *CommonServices
 	customerService interfaces.CustomerService
 }
+
+// Use types from the centralized packages
+type CreateCustomerRequest = requests.CreateCustomerRequest
+type UpdateCustomerRequest = requests.UpdateCustomerRequest
+type SignInRegisterCustomerRequest = requests.SignInRegisterCustomerRequest
+type CustomerWalletRequest = requests.CustomerWalletRequest
+type UpdateCustomerOnboardingStatusRequest = requests.UpdateCustomerOnboardingStatusRequest
+
+type CustomerResponse = responses.CustomerResponse
+type CustomerWalletResponse = responses.CustomerWalletResponse
+type CustomerDetailsResponse = responses.CustomerDetailsResponse
 
 // NewCustomerHandler creates a handler with interface dependencies
 func NewCustomerHandler(
@@ -30,49 +43,6 @@ func NewCustomerHandler(
 		common:          common,
 		customerService: customerService,
 	}
-}
-
-// CreateCustomerRequest represents the request body for creating a customer
-type CreateCustomerRequest struct {
-	ExternalID         string                 `json:"external_id,omitempty"`
-	Email              string                 `json:"email" binding:"required,email"`
-	Name               string                 `json:"name,omitempty"`
-	Phone              string                 `json:"phone,omitempty"`
-	Description        string                 `json:"description,omitempty"`
-	FinishedOnboarding *bool                  `json:"finished_onboarding,omitempty"`
-	Metadata           map[string]interface{} `json:"metadata,omitempty"`
-}
-
-// UpdateCustomerRequest represents the request body for updating a customer
-type UpdateCustomerRequest struct {
-	ExternalID         *string                `json:"external_id,omitempty"`
-	Email              *string                `json:"email,omitempty" binding:"omitempty,email"`
-	Name               *string                `json:"name,omitempty"`
-	Phone              *string                `json:"phone,omitempty"`
-	Description        *string                `json:"description,omitempty"`
-	FinishedOnboarding *bool                  `json:"finished_onboarding,omitempty"`
-	Metadata           map[string]interface{} `json:"metadata,omitempty"`
-}
-
-// SignInRegisterCustomerRequest represents the request body for customer sign-in/register
-type SignInRegisterCustomerRequest struct {
-	Email    string                 `json:"email" binding:"required,email"`
-	Name     string                 `json:"name,omitempty"`
-	Phone    string                 `json:"phone,omitempty"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
-	// Web3Auth wallet data to be created during registration
-	WalletData *CustomerWalletRequest `json:"wallet_data,omitempty"`
-}
-
-// CustomerWalletRequest represents wallet data for customer registration
-type CustomerWalletRequest struct {
-	WalletAddress string                 `json:"wallet_address" binding:"required"`
-	NetworkType   string                 `json:"network_type" binding:"required"`
-	Nickname      string                 `json:"nickname,omitempty"`
-	ENS           string                 `json:"ens,omitempty"`
-	IsPrimary     bool                   `json:"is_primary"`
-	Verified      bool                   `json:"verified"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // GetCustomer godoc
@@ -131,11 +101,12 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	}
 
 	// Otherwise, list all customers (global)
-	limit, page, err := validatePaginationParams(c)
+	pageParams, err := helpers.ParsePaginationParams(c)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid pagination parameters", err)
 		return
 	}
+	limit, page := pageParams.Limit, pageParams.Page
 
 	if page < 1 {
 		page = 1
@@ -146,21 +117,19 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 
 	offset := (page - 1) * limit
 
-	result, err := h.customerService.ListCustomers(c.Request.Context(), services.ListCustomersParams{
-		Limit:  int(limit),
-		Offset: int(offset),
+	result, err := h.customerService.ListCustomers(c.Request.Context(), params.ListCustomersParams{
+		Limit:  limit,
+		Offset: offset,
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
-	customerResponses := make([]helpers.CustomerResponse, len(result.Customers))
-	for i, customer := range result.Customers {
-		customerResponses[i] = helpers.ToCustomerResponse(customer)
-	}
+	// No conversion needed - result.Customers is already []responses.CustomerResponse
+	customerResponses := result.Customers
 
-	response := sendPaginatedSuccess(c, http.StatusOK, customerResponses, int(page), int(limit), int(result.TotalCount))
+	response := sendPaginatedSuccess(c, http.StatusOK, customerResponses, int(page), int(limit), int(result.Total))
 	c.JSON(http.StatusOK, response)
 }
 
@@ -171,11 +140,12 @@ func (h *CustomerHandler) listWorkspaceCustomers(c *gin.Context, workspaceID str
 		return
 	}
 
-	limit, page, err := validatePaginationParams(c)
+	pageParams, err := helpers.ParsePaginationParams(c)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid pagination parameters", err)
 		return
 	}
+	limit, page := pageParams.Limit, pageParams.Page
 
 	if page < 1 {
 		page = 1
@@ -186,22 +156,20 @@ func (h *CustomerHandler) listWorkspaceCustomers(c *gin.Context, workspaceID str
 
 	offset := (page - 1) * limit
 
-	result, err := h.customerService.ListWorkspaceCustomers(c.Request.Context(), services.ListWorkspaceCustomersParams{
+	result, err := h.customerService.ListWorkspaceCustomers(c.Request.Context(), params.ListWorkspaceCustomersParams{
 		WorkspaceID: parsedWorkspaceID,
-		Limit:       int(limit),
-		Offset:      int(offset),
+		Limit:       limit,
+		Offset:      offset,
 	})
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
-	customerResponses := make([]helpers.CustomerResponse, len(result.Customers))
-	for i, customer := range result.Customers {
-		customerResponses[i] = helpers.ToCustomerResponse(customer)
-	}
+	// No conversion needed - result.Customers is already []responses.CustomerResponse
+	customerResponses := result.Customers
 
-	response := sendPaginatedSuccess(c, http.StatusOK, customerResponses, int(page), int(limit), int(result.TotalCount))
+	response := sendPaginatedSuccess(c, http.StatusOK, customerResponses, int(page), int(limit), int(result.Total))
 	c.JSON(http.StatusOK, response)
 }
 
@@ -224,12 +192,11 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 		finishedOnboarding = *req.FinishedOnboarding
 	}
 
-	customer, err := h.customerService.CreateCustomer(c.Request.Context(), services.CreateCustomerParams{
-		ExternalID:         req.ExternalID,
+	customer, err := h.customerService.CreateCustomer(c.Request.Context(), params.CreateCustomerParams{
 		Email:              req.Email,
-		Name:               req.Name,
-		Phone:              req.Phone,
-		Description:        req.Description,
+		Name:               &req.Name,
+		Phone:              &req.Phone,
+		Description:        &req.Description,
 		FinishedOnboarding: finishedOnboarding,
 		Metadata:           req.Metadata,
 	})
@@ -275,9 +242,8 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 		return
 	}
 
-	customer, err := h.customerService.UpdateCustomer(c.Request.Context(), services.UpdateCustomerParams{
+	customer, err := h.customerService.UpdateCustomer(c.Request.Context(), params.UpdateCustomerParams{
 		ID:                 parsedUUID,
-		ExternalID:         req.ExternalID,
 		Email:              req.Email,
 		Name:               req.Name,
 		Phone:              req.Phone,
@@ -325,11 +291,6 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// UpdateCustomerOnboardingStatusRequest represents the request body for updating customer onboarding status
-type UpdateCustomerOnboardingStatusRequest struct {
-	FinishedOnboarding bool `json:"finished_onboarding" binding:"required"`
-}
-
 // UpdateCustomerOnboardingStatus godoc
 // @Summary Update customer onboarding status
 // @Description Updates the finished_onboarding status for a customer
@@ -351,9 +312,7 @@ func (h *CustomerHandler) UpdateCustomerOnboardingStatus(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		FinishedOnboarding bool `json:"finished_onboarding" binding:"required"`
-	}
+	var req UpdateCustomerOnboardingStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid request body", err)
 		return
@@ -401,7 +360,7 @@ func (h *CustomerHandler) SignInRegisterCustomer(c *gin.Context) {
 		}
 	}
 
-	var response *helpers.CustomerDetailsResponse
+	var response *CustomerDetailsResponse
 	if err != nil && err.Error() == "customer not found" {
 		// Customer doesn't exist, create new customer and wallet
 		response, err = h.createNewCustomerWithWallet(c, req, web3authId, email, metadata)
@@ -432,11 +391,11 @@ func (h *CustomerHandler) SignInRegisterCustomer(c *gin.Context) {
 			}
 		}
 
-		response = &helpers.CustomerDetailsResponse{
-			Customer: helpers.ToCustomerResponse(*customer),
+		response = &CustomerDetailsResponse{
+			Customer: helpers.ToResponsesCustomerResponse(helpers.ToCustomerResponse(*customer)),
 		}
 		if primaryWallet != nil {
-			response.Wallet = helpers.ToCustomerWalletResponse(*primaryWallet)
+			response.Wallet = helpers.ToResponsesCustomerWalletResponse(helpers.ToCustomerWalletResponse(*primaryWallet))
 		}
 		sendSuccess(c, http.StatusOK, response)
 	}
@@ -463,38 +422,33 @@ func (h *CustomerHandler) validateCustomerSignInRequest(req SignInRegisterCustom
 }
 
 // createNewCustomerWithWallet creates a new customer and associated wallet
-func (h *CustomerHandler) createNewCustomerWithWallet(ctx *gin.Context, req SignInRegisterCustomerRequest, web3authId string, email string, metadata []byte) (*helpers.CustomerDetailsResponse, error) {
+func (h *CustomerHandler) createNewCustomerWithWallet(ctx *gin.Context, req SignInRegisterCustomerRequest, web3authId string, email string, metadata []byte) (*CustomerDetailsResponse, error) {
 	var metadataMap map[string]interface{}
 	if err := json.Unmarshal(metadata, &metadataMap); err != nil {
 		return nil, fmt.Errorf("invalid metadata format: %w", err)
 	}
 
 	// Create the customer (now workspace-independent)
-	customer, err := h.customerService.CreateCustomerWithWeb3Auth(ctx.Request.Context(), services.CreateCustomerWithWeb3AuthParams{
-		Web3AuthID:         web3authId,
-		Email:              email,
-		Name:               req.Name,
-		Phone:              req.Phone,
-		Description:        "",
-		Metadata:           metadataMap,
-		FinishedOnboarding: false,
+	customer, err := h.customerService.CreateCustomerWithWeb3Auth(ctx.Request.Context(), params.CreateCustomerWithWeb3AuthParams{
+		Web3AuthID: web3authId,
+		Email:      email,
+		Name:       &req.Name,
+		Metadata:   metadataMap,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create customer: %w", err)
 	}
 
-	response := &helpers.CustomerDetailsResponse{
-		Customer: helpers.ToCustomerResponse(*customer),
+	response := &CustomerDetailsResponse{
+		Customer: helpers.ToResponsesCustomerResponse(helpers.ToCustomerResponse(*customer)),
 	}
 
 	// Create wallet if wallet data is provided
 	if req.WalletData != nil {
-		wallet, err := h.customerService.CreateCustomerWallet(ctx.Request.Context(), services.CreateCustomerWalletParams{
+		wallet, err := h.customerService.CreateCustomerWallet(ctx.Request.Context(), params.CreateCustomerWalletParams{
 			CustomerID:    customer.ID,
 			WalletAddress: req.WalletData.WalletAddress,
 			NetworkType:   req.WalletData.NetworkType,
-			Nickname:      req.WalletData.Nickname,
-			ENS:           req.WalletData.ENS,
 			IsPrimary:     req.WalletData.IsPrimary,
 			Verified:      req.WalletData.Verified,
 			Metadata:      req.WalletData.Metadata,
@@ -503,7 +457,7 @@ func (h *CustomerHandler) createNewCustomerWithWallet(ctx *gin.Context, req Sign
 			return nil, fmt.Errorf("failed to create customer wallet: %w", err)
 		}
 
-		response.Wallet = helpers.ToCustomerWalletResponse(*wallet)
+		response.Wallet = helpers.ToResponsesCustomerWalletResponse(helpers.ToCustomerWalletResponse(*wallet))
 	}
 
 	return response, nil

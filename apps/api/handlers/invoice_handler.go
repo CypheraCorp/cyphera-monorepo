@@ -1,14 +1,16 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -42,75 +44,13 @@ func NewInvoiceHandler(
 	}
 }
 
-// CreateInvoiceRequest represents the request to create an invoice
-type CreateInvoiceRequest struct {
-	CustomerID     uuid.UUID                      `json:"customer_id" binding:"required"`
-	SubscriptionID *uuid.UUID                     `json:"subscription_id,omitempty"`
-	Currency       string                         `json:"currency" binding:"required,len=3"`
-	DueDate        *time.Time                     `json:"due_date,omitempty"`
-	LineItems      []CreateInvoiceLineItemRequest `json:"line_items" binding:"required,min=1,dive"`
-	DiscountCode   *string                        `json:"discount_code,omitempty"`
-	Metadata       map[string]interface{}         `json:"metadata,omitempty"`
-}
-
-// CreateInvoiceLineItemRequest represents a line item in the invoice creation request
-type CreateInvoiceLineItemRequest struct {
-	Description     string                 `json:"description" binding:"required"`
-	Quantity        float64                `json:"quantity" binding:"required,gt=0"`
-	UnitAmountCents int64                  `json:"unit_amount_cents" binding:"required,gte=0"`
-	ProductID       *uuid.UUID             `json:"product_id,omitempty"`
-	PriceID         *uuid.UUID             `json:"price_id,omitempty"`
-	SubscriptionID  *uuid.UUID             `json:"subscription_id,omitempty"`
-	PeriodStart     *time.Time             `json:"period_start,omitempty"`
-	PeriodEnd       *time.Time             `json:"period_end,omitempty"`
-	LineItemType    string                 `json:"line_item_type" binding:"required,oneof=product gas_fee"`
-	GasFeePaymentID *uuid.UUID             `json:"gas_fee_payment_id,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-}
-
-// InvoiceResponse represents an invoice in API responses
-type InvoiceResponse struct {
-	ID               uuid.UUID                 `json:"id"`
-	WorkspaceID      uuid.UUID                 `json:"workspace_id"`
-	CustomerID       uuid.UUID                 `json:"customer_id"`
-	SubscriptionID   *uuid.UUID                `json:"subscription_id,omitempty"`
-	InvoiceNumber    string                    `json:"invoice_number"`
-	Status           string                    `json:"status"`
-	Currency         string                    `json:"currency"`
-	DueDate          *time.Time                `json:"due_date,omitempty"`
-	ProductSubtotal  int64                     `json:"product_subtotal"`
-	GasFeesSubtotal  int64                     `json:"gas_fees_subtotal"`
-	SponsoredGasFees int64                     `json:"sponsored_gas_fees"`
-	TaxAmount        int64                     `json:"tax_amount"`
-	DiscountAmount   int64                     `json:"discount_amount"`
-	TotalAmount      int64                     `json:"total_amount"`
-	CustomerTotal    int64                     `json:"customer_total"`
-	LineItems        []InvoiceLineItemResponse `json:"line_items"`
-	TaxDetails       []services.TaxDetail      `json:"tax_details"`
-	PaymentLinkID    *uuid.UUID                `json:"payment_link_id,omitempty"`
-	PaymentLinkURL   *string                   `json:"payment_link_url,omitempty"`
-	CreatedAt        time.Time                 `json:"created_at"`
-	UpdatedAt        time.Time                 `json:"updated_at"`
-}
-
-// InvoiceLineItemResponse represents a line item in API responses
-type InvoiceLineItemResponse struct {
-	ID              uuid.UUID              `json:"id"`
-	Description     string                 `json:"description"`
-	Quantity        float64                `json:"quantity"`
-	UnitAmountCents int64                  `json:"unit_amount_cents"`
-	AmountCents     int64                  `json:"amount_cents"`
-	Currency        string                 `json:"currency"`
-	LineItemType    string                 `json:"line_item_type"`
-	IsGasSponsored  bool                   `json:"is_gas_sponsored,omitempty"`
-	GasSponsorType  *string                `json:"gas_sponsor_type,omitempty"`
-	GasSponsorName  *string                `json:"gas_sponsor_name,omitempty"`
-	ProductID       *uuid.UUID             `json:"product_id,omitempty"`
-	PriceID         *uuid.UUID             `json:"price_id,omitempty"`
-	PeriodStart     *time.Time             `json:"period_start,omitempty"`
-	PeriodEnd       *time.Time             `json:"period_end,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-}
+// Type aliases for centralized types
+type (
+	CreateInvoiceRequest         = requests.CreateInvoiceRequest
+	CreateInvoiceLineItemRequest = requests.CreateInvoiceLineItemRequest
+	InvoiceResponse              = responses.InvoiceResponse
+	InvoiceLineItemResponse      = responses.InvoiceLineItemResponse
+)
 
 // CreateInvoice creates a new invoice
 // @Summary Create a new invoice
@@ -140,7 +80,7 @@ func (h *InvoiceHandler) CreateInvoice(c *gin.Context) {
 	}
 
 	// Convert request to service params
-	params := services.InvoiceCreateParams{
+	invoiceCreateParams := params.InvoiceCreateParams{
 		WorkspaceID:    workspaceID,
 		CustomerID:     req.CustomerID,
 		SubscriptionID: req.SubscriptionID,
@@ -152,7 +92,7 @@ func (h *InvoiceHandler) CreateInvoice(c *gin.Context) {
 
 	// Convert line items
 	for _, item := range req.LineItems {
-		params.LineItems = append(params.LineItems, services.LineItemCreateParams{
+		invoiceCreateParams.LineItems = append(invoiceCreateParams.LineItems, params.LineItemCreateParams{
 			Description:     item.Description,
 			Quantity:        item.Quantity,
 			UnitAmountCents: item.UnitAmountCents,
@@ -168,16 +108,13 @@ func (h *InvoiceHandler) CreateInvoice(c *gin.Context) {
 	}
 
 	// Create invoice
-	invoiceDetails, err := h.invoiceService.CreateInvoice(ctx, params)
+	invoiceDetails, err := h.invoiceService.CreateInvoice(ctx, invoiceCreateParams)
 	if err != nil {
 		h.common.HandleError(c, err, "Failed to create invoice", http.StatusInternalServerError, h.common.logger)
 		return
 	}
 
-	// Convert to response
-	response := h.convertToInvoiceResponse(invoiceDetails)
-
-	c.JSON(http.StatusCreated, response)
+	c.JSON(http.StatusCreated, invoiceDetails)
 }
 
 // GetInvoice retrieves an invoice by ID
@@ -214,10 +151,7 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 		return
 	}
 
-	// Convert to response
-	response := h.convertToInvoiceResponse(invoiceDetails)
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, invoiceDetails)
 }
 
 // PreviewInvoice previews an invoice with all calculations
@@ -279,10 +213,7 @@ func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 		return
 	}
 
-	// Convert to response
-	response := h.convertToInvoiceResponse(invoiceDetails)
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, invoiceDetails)
 }
 
 // SendInvoice sends an invoice via email
@@ -382,7 +313,11 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 	}
 
 	// Parse query parameters
-	limit, offset := GetPaginationParams(c)
+	limit, offset, err := helpers.ParsePaginationParamsAsInt(c)
+	if err != nil {
+		h.common.HandleError(c, err, "Invalid pagination parameters", http.StatusBadRequest, h.common.logger)
+		return
+	}
 	status := c.Query("status")
 	customerIDStr := c.Query("customer_id")
 
@@ -431,23 +366,27 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 			WorkspaceID: workspaceID,
 			Status:      status,
 		})
-		if err == nil {
+		if err != nil {
+			h.common.logger.Error("Failed to count invoices by status", zap.Error(err))
+		} else {
 			count = countResult
 		}
 	} else {
 		countResult, err := h.common.db.CountInvoicesByWorkspace(ctx, workspaceID)
-		if err == nil {
+		if err != nil {
+			h.common.logger.Error("Failed to count invoices", zap.Error(err))
+		} else {
 			count = countResult
 		}
 	}
 
 	// Convert invoices to response format
-	var invoiceResponses []map[string]interface{}
+	invoiceResponses := make([]map[string]interface{}, 0, len(invoices))
 	for _, invoice := range invoices {
 		invoiceResponses = append(invoiceResponses, map[string]interface{}{
 			"id":             invoice.ID,
 			"invoice_number": invoice.InvoiceNumber.String,
-			"customer_id":    invoice.CustomerID.Bytes,
+			"customer_id":    uuid.UUID(invoice.CustomerID.Bytes),
 			"status":         invoice.Status,
 			"currency":       invoice.Currency,
 			"amount_due":     invoice.AmountDue,
@@ -464,99 +403,4 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 			"total":  count,
 		},
 	})
-}
-
-// Helper functions
-
-func (h *InvoiceHandler) convertToInvoiceResponse(details *services.InvoiceWithDetails) InvoiceResponse {
-	response := InvoiceResponse{
-		ID:               details.Invoice.ID,
-		WorkspaceID:      details.Invoice.WorkspaceID,
-		CustomerID:       details.Invoice.CustomerID.Bytes,
-		InvoiceNumber:    details.Invoice.InvoiceNumber.String,
-		Status:           details.Invoice.Status,
-		Currency:         details.Invoice.Currency,
-		ProductSubtotal:  details.ProductSubtotal,
-		GasFeesSubtotal:  details.GasFeesSubtotal,
-		SponsoredGasFees: details.SponsoredGasFees,
-		TaxAmount:        details.TaxAmount,
-		DiscountAmount:   details.DiscountAmount,
-		TotalAmount:      details.TotalAmount,
-		CustomerTotal:    details.CustomerTotal,
-		TaxDetails:       details.TaxDetails,
-		CreatedAt:        details.Invoice.CreatedAt.Time,
-		UpdatedAt:        details.Invoice.UpdatedAt.Time,
-	}
-
-	// Set optional fields
-	if details.Invoice.SubscriptionID.Valid {
-		id := uuid.UUID(details.Invoice.SubscriptionID.Bytes)
-		response.SubscriptionID = &id
-	}
-	if details.Invoice.DueDate.Valid {
-		response.DueDate = &details.Invoice.DueDate.Time
-	}
-	if details.Invoice.PaymentLinkID.Valid {
-		id := uuid.UUID(details.Invoice.PaymentLinkID.Bytes)
-		response.PaymentLinkID = &id
-	}
-
-	// Convert line items
-	for _, item := range details.LineItems {
-		lineItemResp := InvoiceLineItemResponse{
-			ID:              item.ID,
-			Description:     item.Description,
-			Quantity:        h.convertNumericToFloat64(item.Quantity),
-			UnitAmountCents: item.UnitAmountInCents,
-			AmountCents:     item.AmountInCents,
-			Currency:        item.FiatCurrency,
-			LineItemType:    item.LineItemType.String,
-		}
-
-		// Set optional fields
-		if item.IsGasSponsored.Valid {
-			lineItemResp.IsGasSponsored = item.IsGasSponsored.Bool
-		}
-		if item.GasSponsorType.Valid {
-			lineItemResp.GasSponsorType = &item.GasSponsorType.String
-		}
-		if item.GasSponsorName.Valid {
-			lineItemResp.GasSponsorName = &item.GasSponsorName.String
-		}
-		if item.ProductID.Valid {
-			id := uuid.UUID(item.ProductID.Bytes)
-			lineItemResp.ProductID = &id
-		}
-		if item.PriceID.Valid {
-			id := uuid.UUID(item.PriceID.Bytes)
-			lineItemResp.PriceID = &id
-		}
-		if item.PeriodStart.Valid {
-			lineItemResp.PeriodStart = &item.PeriodStart.Time
-		}
-		if item.PeriodEnd.Valid {
-			lineItemResp.PeriodEnd = &item.PeriodEnd.Time
-		}
-
-		// Parse metadata
-		if len(item.Metadata) > 0 {
-			var metadata map[string]interface{}
-			if err := json.Unmarshal(item.Metadata, &metadata); err == nil {
-				lineItemResp.Metadata = metadata
-			}
-		}
-
-		response.LineItems = append(response.LineItems, lineItemResp)
-	}
-
-	return response
-}
-
-func (h *InvoiceHandler) convertNumericToFloat64(n pgtype.Numeric) float64 {
-	if !n.Valid {
-		return 0
-	}
-	// This is a simplified conversion - in production you'd want proper decimal handling
-	// For now, we'll use a basic approach
-	return 1.0 // Default to 1 for quantity
 }

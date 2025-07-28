@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -27,17 +29,8 @@ func NewPaymentFailureWebhookHandler(
 	}
 }
 
-// PaymentFailureWebhookRequest represents a payment failure webhook
-type PaymentFailureWebhookRequest struct {
-	Provider       string                 `json:"provider" binding:"required,oneof=stripe chargebee circle blockchain"`
-	SubscriptionID string                 `json:"subscription_id" binding:"required,uuid"`
-	CustomerID     string                 `json:"customer_id" binding:"required,uuid"`
-	AmountCents    int64                  `json:"amount_cents" binding:"required,min=0"`
-	Currency       string                 `json:"currency" binding:"required,len=3"`
-	FailureReason  string                 `json:"failure_reason" binding:"required"`
-	FailedAt       time.Time              `json:"failed_at" binding:"required"`
-	Metadata       map[string]interface{} `json:"metadata"`
-}
+// Use types from the centralized packages
+type PaymentFailureWebhookRequest = requests.PaymentFailureWebhookRequest
 
 // HandlePaymentFailure processes a payment failure webhook
 // @Summary Process payment failure webhook
@@ -101,12 +94,12 @@ func (h *PaymentFailureWebhookHandler) HandlePaymentFailure(c *gin.Context) {
 
 	// Build failure data
 	failureData := map[string]interface{}{
-		"provider":       req.Provider,
-		"amount_cents":   req.AmountCents,
-		"currency":       req.Currency,
-		"failure_reason": req.FailureReason,
-		"failed_at":      req.FailedAt.Format(time.RFC3339),
-		"metadata":       req.Metadata,
+		"provider":            req.Provider,
+		"amount_cents":        req.AmountCents,
+		"currency":            req.Currency,
+		"failure_reason":      req.FailureReason,
+		"failed_at":           req.FailedAt.Format(time.RFC3339),
+		"metadata":            req.Metadata,
 		"webhook_received_at": time.Now().Format(time.RFC3339),
 	}
 
@@ -118,7 +111,7 @@ func (h *PaymentFailureWebhookHandler) HandlePaymentFailure(c *gin.Context) {
 		failureData,
 	)
 	if err != nil {
-		h.common.logger.Error("failed to process payment failure webhook", 
+		h.common.logger.Error("failed to process payment failure webhook",
 			zap.Error(err),
 			zap.String("subscription_id", subscriptionID.String()),
 		)
@@ -134,8 +127,8 @@ func (h *PaymentFailureWebhookHandler) HandlePaymentFailure(c *gin.Context) {
 	)
 
 	c.JSON(http.StatusOK, gin.H{
-		"status": "processed",
-		"message": "Payment failure recorded and dunning campaign created if applicable",
+		"status":          "processed",
+		"message":         "Payment failure recorded and dunning campaign created if applicable",
 		"subscription_id": subscriptionID.String(),
 	})
 }
@@ -183,7 +176,7 @@ func (h *PaymentFailureWebhookHandler) HandleBatchPaymentFailures(c *gin.Context
 	for _, req := range requests {
 		result := map[string]interface{}{
 			"subscription_id": req.SubscriptionID,
-			"status":         "pending",
+			"status":          "pending",
 		}
 
 		// Parse subscription ID
@@ -198,12 +191,12 @@ func (h *PaymentFailureWebhookHandler) HandleBatchPaymentFailures(c *gin.Context
 
 		// Build failure data
 		failureData := map[string]interface{}{
-			"provider":       req.Provider,
-			"amount_cents":   req.AmountCents,
-			"currency":       req.Currency,
-			"failure_reason": req.FailureReason,
-			"failed_at":      req.FailedAt.Format(time.RFC3339),
-			"metadata":       req.Metadata,
+			"provider":            req.Provider,
+			"amount_cents":        req.AmountCents,
+			"currency":            req.Currency,
+			"failure_reason":      req.FailureReason,
+			"failed_at":           req.FailedAt.Format(time.RFC3339),
+			"metadata":            req.Metadata,
 			"webhook_received_at": time.Now().Format(time.RFC3339),
 		}
 
@@ -234,10 +227,10 @@ func (h *PaymentFailureWebhookHandler) HandleBatchPaymentFailures(c *gin.Context
 	)
 
 	c.JSON(http.StatusOK, gin.H{
-		"status": "completed",
-		"total": len(requests),
+		"status":  "completed",
+		"total":   len(requests),
 		"success": successCount,
-		"failed": failureCount,
+		"failed":  failureCount,
 		"results": results,
 	})
 }

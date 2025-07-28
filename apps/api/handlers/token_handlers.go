@@ -6,7 +6,9 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -18,6 +20,15 @@ type TokenHandler struct {
 	tokenService interfaces.TokenService
 }
 
+// Use types from the centralized packages
+type CreateTokenRequest = requests.CreateTokenRequest
+type UpdateTokenRequest = requests.UpdateTokenRequest
+type GetTokenQuoteRequest = requests.GetTokenQuoteRequest
+
+type TokenResponse = responses.TokenResponse
+type ListTokensResponse = responses.ListTokensResponse
+type GetTokenQuoteResponse = responses.GetTokenQuoteResponse
+
 // NewTokenHandler creates a handler with interface dependencies
 func NewTokenHandler(
 	common *CommonServices,
@@ -27,46 +38,6 @@ func NewTokenHandler(
 		common:       common,
 		tokenService: tokenService,
 	}
-}
-
-// CreateTokenRequest represents the request body for creating a token
-type CreateTokenRequest struct {
-	NetworkID       string `json:"network_id" binding:"required"`
-	GasToken        bool   `json:"gas_token"`
-	Name            string `json:"name" binding:"required"`
-	Symbol          string `json:"symbol" binding:"required"`
-	ContractAddress string `json:"contract_address" binding:"required"`
-	Decimals        int32  `json:"decimals" binding:"required,gte=0"`
-	Active          bool   `json:"active"`
-}
-
-// UpdateTokenRequest represents the request body for updating a token
-type UpdateTokenRequest struct {
-	Name            string `json:"name,omitempty"`
-	Symbol          string `json:"symbol,omitempty"`
-	ContractAddress string `json:"contract_address,omitempty"`
-	Decimals        *int32 `json:"decimals,omitempty,gte=0"`
-	GasToken        *bool  `json:"gas_token,omitempty"`
-	Active          *bool  `json:"active,omitempty"`
-}
-
-// ListTokensResponse represents the paginated response for token list operations
-type ListTokensResponse struct {
-	Object string                  `json:"object"`
-	Data   []helpers.TokenResponse `json:"data"`
-}
-
-// GetTokenQuoteRequest mirrors TokenAmountPayload
-type GetTokenQuoteRequest struct {
-	FiatSymbol  string `json:"fiat_symbol" binding:"required"`
-	TokenSymbol string `json:"token_symbol" binding:"required"`
-}
-
-// GetTokenQuoteResponse mirrors TokenAmountResponse
-type GetTokenQuoteResponse struct {
-	FiatSymbol        string  `json:"fiat_symbol"`
-	TokenSymbol       string  `json:"token_symbol"`
-	TokenAmountInFiat float64 `json:"token_amount_in_fiat"`
 }
 
 // GetToken godoc
@@ -154,7 +125,7 @@ func (h *TokenHandler) ListTokens(c *gin.Context) {
 		return
 	}
 
-	response := make([]helpers.TokenResponse, len(tokens))
+	response := make([]responses.TokenResponse, len(tokens))
 	for i, token := range tokens {
 		response[i] = helpers.ToTokenResponse(token)
 	}
@@ -188,7 +159,7 @@ func (h *TokenHandler) ListTokensByNetwork(c *gin.Context) {
 		return
 	}
 
-	response := make([]helpers.TokenResponse, len(tokens))
+	response := make([]responses.TokenResponse, len(tokens))
 	for i, token := range tokens {
 		response[i] = helpers.ToTokenResponse(token)
 	}
@@ -215,10 +186,25 @@ func (h *TokenHandler) GetTokenQuote(c *gin.Context) {
 		return
 	}
 
+	// Parse UUIDs
+	tokenID, err := uuid.Parse(req.TokenID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid token ID format", err)
+		return
+	}
+
+	networkID, err := uuid.Parse(req.NetworkID)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid network ID format", err)
+		return
+	}
+
 	// Get token quote using the service
-	result, err := h.tokenService.GetTokenQuote(c.Request.Context(), services.TokenQuoteParams{
-		TokenSymbol: req.TokenSymbol,
-		FiatSymbol:  req.FiatSymbol,
+	result, err := h.tokenService.GetTokenQuote(c.Request.Context(), params.TokenQuoteParams{
+		TokenID:    tokenID,
+		NetworkID:  networkID,
+		AmountWei:  req.AmountWei,
+		ToCurrency: req.ToCurrency,
 	})
 	if err != nil {
 		if err.Error() == "price service is unavailable" {
@@ -226,7 +212,7 @@ func (h *TokenHandler) GetTokenQuote(c *gin.Context) {
 			return
 		}
 		// Check if it's a not found error
-		if strings.Contains(err.Error(), "price data not found") {
+		if strings.Contains(err.Error(), "price data not found") || strings.Contains(err.Error(), "token not found") {
 			sendError(c, http.StatusNotFound, err.Error(), nil)
 			return
 		}
@@ -234,12 +220,6 @@ func (h *TokenHandler) GetTokenQuote(c *gin.Context) {
 		return
 	}
 
-	// Prepare and send success response
-	response := GetTokenQuoteResponse{
-		FiatSymbol:        result.FiatSymbol,
-		TokenSymbol:       result.TokenSymbol,
-		TokenAmountInFiat: result.TokenAmountInFiat,
-	}
-
-	sendSuccess(c, http.StatusOK, response)
+	// Return the result directly - it's already in the correct format
+	sendSuccess(c, http.StatusOK, result)
 }

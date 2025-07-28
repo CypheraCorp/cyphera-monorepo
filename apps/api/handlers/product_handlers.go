@@ -3,8 +3,8 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,23 +16,51 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
+)
+
+const (
+	// Error messages for product handlers
+	errMsgInvalidProductIDFormat   = "Invalid product ID format"
+	errMsgInvalidPriceIDFormat     = "Invalid price ID format"
+	errMsgInvalidTokenIDFormat     = "Invalid product token ID format"
+	errMsgInvalidTokenAmountFormat = "Invalid token amount format"
+	errMsgInvalidRequestFormat     = "Invalid request format"
+	errMsgInvalidWalletIDFormat    = "Invalid wallet ID format"
 )
 
 // SwaggerMetadata is used to represent JSON metadata in Swagger docs
 type SwaggerMetadata map[string]interface{}
 
+// SubscriptionExistsError represents an error when a subscription already exists
+type SubscriptionExistsError struct {
+	Subscription *db.Subscription
+}
+
+func (e *SubscriptionExistsError) Error() string {
+	return "subscription already exists"
+}
+
 // ProductHandler handles product-related operations
 type ProductHandler struct {
-	common           *CommonServices
-	delegationClient *dsClient.DelegationClient
-	productService   interfaces.ProductService
-	logger           *zap.Logger
+	common                *CommonServices
+	delegationClient      *dsClient.DelegationClient
+	productService        interfaces.ProductService
+	subscriptionService   interfaces.SubscriptionService
+	workspaceService      interfaces.WorkspaceService
+	walletService         interfaces.WalletService
+	tokenService          interfaces.TokenService
+	networkService        interfaces.NetworkService
+	gasSponsorshipService interfaces.GasSponsorshipService
 }
 
 // NewProductHandler creates a handler with interface dependencies
@@ -49,133 +77,19 @@ func NewProductHandler(
 		common:           common,
 		delegationClient: delegationClient,
 		productService:   productService,
-		logger:           logger,
 	}
 }
 
-// PriceResponse represents a price object in API responses
-type PriceResponse struct {
-	ID                  string          `json:"id"`
-	Object              string          `json:"object"`
-	ProductID           string          `json:"product_id"`
-	Active              bool            `json:"active"`
-	Type                string          `json:"type"`
-	Nickname            string          `json:"nickname,omitempty"`
-	Currency            string          `json:"currency"`
-	UnitAmountInPennies int32           `json:"unit_amount_in_pennies"`
-	IntervalType        string          `json:"interval_type,omitempty"`
-	IntervalCount       int32           `json:"interval_count,omitempty"`
-	TermLength          int32           `json:"term_length,omitempty"`
-	Metadata            json.RawMessage `json:"metadata,omitempty" swaggertype:"object"`
-	CreatedAt           int64           `json:"created_at"`
-	UpdatedAt           int64           `json:"updated_at"`
-}
+// Use types from the centralized packages
+type (
+	PublicProductResponse = responses.PublicProductResponse
+	ProductTokenResponse  = responses.ProductTokenResponse
+	ListProductsResponse  = responses.ListProductsResponse
 
-// CreatePriceRequest represents the request body for creating a new price
-type CreatePriceRequest struct {
-	Active              bool            `json:"active"`
-	Type                string          `json:"type" binding:"required"`
-	Nickname            string          `json:"nickname"`
-	Currency            string          `json:"currency" binding:"required"`
-	UnitAmountInPennies int32           `json:"unit_amount_in_pennies" binding:"required"`
-	IntervalType        string          `json:"interval_type"`
-	IntervalCount       int32           `json:"interval_count"`
-	TermLength          int32           `json:"term_length"`
-	Metadata            json.RawMessage `json:"metadata" swaggertype:"object"`
-}
-
-// ProductResponse represents the standardized API response for product operations
-type ProductResponse struct {
-	ID            string                         `json:"id"`
-	Object        string                         `json:"object"`
-	WorkspaceID   string                         `json:"workspace_id"`
-	WalletID      string                         `json:"wallet_id"`
-	Name          string                         `json:"name"`
-	Description   string                         `json:"description,omitempty"`
-	ImageURL      string                         `json:"image_url,omitempty"`
-	URL           string                         `json:"url,omitempty"`
-	Active        bool                           `json:"active"`
-	Metadata      json.RawMessage                `json:"metadata,omitempty" swaggertype:"object"`
-	CreatedAt     int64                          `json:"created_at"`
-	UpdatedAt     int64                          `json:"updated_at"`
-	Prices        []PriceResponse                `json:"prices,omitempty"`
-	ProductTokens []helpers.ProductTokenResponse `json:"product_tokens,omitempty"`
-}
-
-// CreateProductRequest represents the request body for creating a product
-type CreateProductRequest struct {
-	Name          string                              `json:"name" binding:"required"`
-	WalletID      string                              `json:"wallet_id" binding:"required"`
-	Description   string                              `json:"description"`
-	ImageURL      string                              `json:"image_url"`
-	URL           string                              `json:"url"`
-	Active        bool                                `json:"active"`
-	Metadata      json.RawMessage                     `json:"metadata" swaggertype:"object"`
-	Prices        []CreatePriceRequest                `json:"prices" binding:"required,dive"`
-	ProductTokens []helpers.CreateProductTokenRequest `json:"product_tokens,omitempty"`
-}
-
-// UpdateProductRequest represents the request body for updating a product
-type UpdateProductRequest struct {
-	Name          string                              `json:"name,omitempty"`
-	WalletID      string                              `json:"wallet_id,omitempty"`
-	Description   string                              `json:"description,omitempty"`
-	ImageURL      string                              `json:"image_url,omitempty"`
-	URL           string                              `json:"url,omitempty"`
-	Active        *bool                               `json:"active,omitempty"`
-	Metadata      json.RawMessage                     `json:"metadata,omitempty" swaggertype:"object"`
-	ProductTokens []helpers.CreateProductTokenRequest `json:"product_tokens,omitempty"`
-}
-
-type PublicProductResponse struct {
-	ID            string                       `json:"id"`
-	AccountID     string                       `json:"account_id"`
-	WorkspaceID   string                       `json:"workspace_id"`
-	WalletAddress string                       `json:"wallet_address"`
-	Name          string                       `json:"name"`
-	Description   string                       `json:"description"`
-	ImageURL      string                       `json:"image_url,omitempty"`
-	URL           string                       `json:"url,omitempty"`
-	ProductTokens []PublicProductTokenResponse `json:"product_tokens,omitempty"`
-	Price         PriceResponse                `json:"price"`
-}
-
-type PublicProductTokenResponse struct {
-	ProductTokenID string `json:"product_token_id"`
-	NetworkID      string `json:"network_id"`
-	NetworkName    string `json:"network_name"`
-	NetworkChainID string `json:"network_chain_id"`
-	TokenID        string `json:"token_id"`
-	TokenAddress   string `json:"token_address"`
-	TokenName      string `json:"token_name"`
-	TokenSymbol    string `json:"token_symbol"`
-	TokenImageURL  string `json:"token_image_url"`
-	TokenDecimals  int32  `json:"token_decimals"`
-}
-
-// ListProductsResponse represents the paginated response for product list operations
-type ListProductsResponse struct {
-	Object  string            `json:"object"`
-	Data    []ProductResponse `json:"data"`
-	HasMore bool              `json:"has_more"`
-	Total   int64             `json:"total"`
-}
-
-// CaveatStruct represents a single caveat in a delegation
-type CaveatStruct struct {
-	// TODO: add caveat fields
-	// Define the fields for CaveatStruct based on your needs
-}
-
-// DelegationStruct represents the delegation data structure
-type DelegationStruct struct {
-	Delegate  string         `json:"delegate"`
-	Delegator string         `json:"delegator"`
-	Authority string         `json:"authority"`
-	Caveats   []CaveatStruct `json:"caveats"`
-	Salt      string         `json:"salt"`
-	Signature string         `json:"signature"`
-}
+	CreatePriceRequest   = requests.CreatePriceRequest
+	CreateProductRequest = requests.CreateProductRequest
+	UpdateProductRequest = requests.UpdateProductRequest
+)
 
 // GetProduct godoc
 // @Summary Get product by ID
@@ -194,7 +108,7 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		h.common.HandleError(c, err, errMsgInvalidWorkspaceIDFormat, http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
@@ -202,27 +116,27 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 	productId := c.Param("product_id")
 	parsedProductID, err := uuid.Parse(productId)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
+		h.common.HandleError(c, err, errMsgInvalidProductIDFormat, http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	// Get product using service
-	product, prices, err := h.productService.GetProduct(c.Request.Context(), services.GetProductParams{
+	product, prices, err := h.productService.GetProduct(c.Request.Context(), params.GetProductParams{
 		ProductID:   parsedProductID,
 		WorkspaceID: parsedWorkspaceID,
 	})
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			sendError(c, http.StatusNotFound, "Product not found", err)
+			h.common.HandleError(c, err, "Product not found", http.StatusNotFound, h.common.GetLogger())
 		} else {
-			sendError(c, http.StatusInternalServerError, "Failed to retrieve product", err)
+			h.common.HandleError(c, err, "Failed to retrieve product", http.StatusInternalServerError, h.common.GetLogger())
 		}
 		return
 	}
 
 	// Convert to response format
 	response := helpers.ToProductDetailResponse(*product, prices)
-	sendSuccess(c, http.StatusOK, response)
+	c.JSON(http.StatusOK, response)
 }
 
 // GetPublicProductByPriceID godoc
@@ -241,7 +155,7 @@ func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
 	priceIDStr := c.Param("price_id")
 	parsedPriceID, err := uuid.Parse(priceIDStr)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid price ID format", err)
+		h.common.HandleError(c, err, errMsgInvalidPriceIDFormat, http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
@@ -249,58 +163,51 @@ func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
 	response, err := h.productService.GetPublicProductByPriceID(c.Request.Context(), parsedPriceID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not active") {
-			sendError(c, http.StatusNotFound, err.Error(), err)
+			h.common.HandleError(c, err, err.Error(), http.StatusNotFound, h.common.GetLogger())
 		} else {
-			sendError(c, http.StatusInternalServerError, "Failed to retrieve product", err)
+			h.common.HandleError(c, err, "Failed to retrieve product", http.StatusInternalServerError, h.common.GetLogger())
 		}
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, *response)
+	c.JSON(http.StatusOK, *response)
 }
 
 // validateSubscriptionRequest validates the basic request parameters
-func (h *ProductHandler) validateSubscriptionRequest(request SubscribeRequest, productID uuid.UUID) error {
+func (h *ProductHandler) validateSubscriptionRequest(request requests.SubscribeRequest, productID uuid.UUID) error {
 	if request.SubscriberAddress == "" {
-		return fmt.Errorf("subscriber address is required")
+		return errors.New("subscriber address is required")
 	}
 
 	if _, err := uuid.Parse(request.PriceID); err != nil {
-		return fmt.Errorf("invalid price ID format")
+		return errors.New("invalid price ID format")
 	}
 
 	if _, err := uuid.Parse(request.ProductTokenID); err != nil {
-		return fmt.Errorf("invalid product token ID format")
+		return errors.New("invalid product token ID format")
 	}
 
 	tokenAmount, err := strconv.ParseInt(request.TokenAmount, 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid token amount format")
+		return errors.New("invalid token amount format")
 	}
 
 	if tokenAmount <= 0 {
-		return fmt.Errorf("token amount must be greater than 0")
+		return errors.New("token amount must be greater than 0")
 	}
 
-	if request.Delegation.Delegate != h.common.GetCypheraSmartWalletAddress() {
-		return fmt.Errorf("delegate address does not match cyphera smart wallet address, %s != %s", request.Delegation.Delegate, h.common.GetCypheraSmartWalletAddress())
+	cypheraAddress := h.common.GetCypheraSmartWalletAddress()
+	if request.Delegation.Delegate != cypheraAddress {
+		return fmt.Errorf("delegate address does not match cyphera smart wallet address, %s != %s", request.Delegation.Delegate, cypheraAddress)
 	}
 
 	if request.Delegation.Delegate == "" || request.Delegation.Delegator == "" ||
 		request.Delegation.Authority == "" || request.Delegation.Salt == "" ||
 		request.Delegation.Signature == "" {
-		return fmt.Errorf("incomplete delegation data")
+		return errors.New("incomplete delegation data")
 	}
 
 	return nil
-}
-
-// normalizeWalletAddress ensures consistent wallet address format based on network type
-func normalizeWalletAddress(address, networkType string) string {
-	if networkType == string(db.NetworkTypeEvm) {
-		return strings.ToLower(address)
-	}
-	return address
 }
 
 // processCustomerAndWallet handles customer lookup/creation and wallet association
@@ -319,7 +226,7 @@ func (h *ProductHandler) processCustomerAndWallet(
 		return db.Customer{}, db.CustomerWallet{}, err
 	}
 
-	networkType := determineNetworkType(productToken.NetworkType)
+	networkType := helpers.DetermineNetworkType(productToken.NetworkType)
 
 	if len(customers) == 0 {
 		return h.createNewCustomerWithWallet(ctx, tx, walletAddress, product, networkType)
@@ -513,13 +420,13 @@ func (h *ProductHandler) findOrCreateCustomerWallet(
 func (h *ProductHandler) storeDelegationData(
 	ctx context.Context,
 	tx *db.Queries,
-	delegation DelegationStruct,
+	delegation business.DelegationStruct,
 ) (db.DelegationDatum, error) {
 	delegationParams := db.CreateDelegationDataParams{
 		Delegate:  delegation.Delegate,
 		Delegator: delegation.Delegator,
 		Authority: delegation.Authority,
-		Caveats:   marshalCaveats(delegation.Caveats),
+		Caveats:   helpers.MarshalCaveats(delegation.Caveats),
 		Salt:      delegation.Salt,
 		Signature: delegation.Signature,
 	}
@@ -527,34 +434,11 @@ func (h *ProductHandler) storeDelegationData(
 	return tx.CreateDelegationData(ctx, delegationParams)
 }
 
-// calculateSubscriptionPeriods determines the start, end, and next redemption dates based on a price
-func (h *ProductHandler) calculateSubscriptionPeriods(price db.Price) (time.Time, time.Time, time.Time) {
-	now := time.Now()
-	periodStart := now
-	var periodEnd time.Time
-	var nextRedemption time.Time
-
-	termLength := 1
-	if price.TermLength != 0 {
-		termLength = int(price.TermLength)
-	}
-
-	if price.Type == db.PriceTypeRecurring {
-		periodEnd = CalculatePeriodEnd(now, string(price.IntervalType), int32(termLength))
-		nextRedemption = CalculateNextRedemption(string(price.IntervalType), now)
-	} else {
-		periodEnd = now
-		nextRedemption = now
-	}
-
-	return periodStart, periodEnd, nextRedemption
-}
-
 // createSubscription creates the subscription record in the database
 func (h *ProductHandler) createSubscription(
 	ctx context.Context,
 	tx *db.Queries,
-	params CreateSubscriptionParams,
+	params params.CreateSubscriptionParams,
 ) (db.Subscription, error) {
 	metadata := map[string]interface{}{
 		"created_at":     time.Now().Format(time.RFC3339),
@@ -619,7 +503,7 @@ func (h *ProductHandler) performInitialRedemption(
 	product db.Product,
 	price db.Price,
 	productToken db.GetProductTokenRow,
-	delegation DelegationStruct,
+	delegation business.DelegationStruct,
 	executionObject dsClient.ExecutionObject,
 ) (db.Subscription, error) {
 	logger.Info("Performing initial redemption",
@@ -627,7 +511,7 @@ func (h *ProductHandler) performInitialRedemption(
 		zap.String("customer_id", customer.ID.String()),
 		zap.String("price_id", price.ID.String()))
 
-	rawCaveats := marshalCaveats(delegation.Caveats)
+	rawCaveats := helpers.MarshalCaveats(delegation.Caveats)
 	delegationData := dsClient.DelegationData{
 		Delegate:  delegation.Delegate,
 		Delegator: delegation.Delegator,
@@ -664,7 +548,11 @@ func (h *ProductHandler) performInitialRedemption(
 		"tx_hash":           txHash,
 	}
 
-	metadataBytes, _ := json.Marshal(metadata)
+	metadataBytes, err := json.Marshal(metadata)
+	if err != nil {
+		logger.Error("Failed to marshal metadata", zap.Error(err))
+		metadataBytes = []byte("{}")
+	}
 
 	successEventParams := db.CreateRedemptionEventParams{
 		SubscriptionID: subscription.ID,
@@ -672,7 +560,7 @@ func (h *ProductHandler) performInitialRedemption(
 			String: txHash,
 			Valid:  true,
 		},
-		AmountInCents: price.UnitAmountInPennies,
+		AmountInCents: int32(price.UnitAmountInPennies),
 		Metadata:      metadataBytes,
 	}
 
@@ -685,7 +573,7 @@ func (h *ProductHandler) performInitialRedemption(
 
 	var nextRedemptionDate pgtype.Timestamptz
 	if price.Type == db.PriceTypeRecurring {
-		nextDate := CalculateNextRedemption(string(price.IntervalType), time.Now())
+		nextDate := helpers.CalculateNextRedemption(string(price.IntervalType), time.Now())
 		nextRedemptionDate = pgtype.Timestamptz{
 			Time:  nextDate,
 			Valid: true,
@@ -698,7 +586,7 @@ func (h *ProductHandler) performInitialRedemption(
 
 	updateParams := db.IncrementSubscriptionRedemptionParams{
 		ID:                 subscription.ID,
-		TotalAmountInCents: price.UnitAmountInPennies,
+		TotalAmountInCents: int32(price.UnitAmountInPennies),
 		NextRedemptionDate: nextRedemptionDate,
 	}
 
@@ -724,42 +612,13 @@ func (h *ProductHandler) performInitialRedemption(
 	return updatedSubscription, nil
 }
 
-func toPublicProductResponse(workspace db.Workspace, product db.Product, price db.Price, productTokens []db.GetActiveProductTokensByProductRow, wallet db.Wallet) PublicProductResponse {
-	publicProductTokens := make([]PublicProductTokenResponse, len(productTokens))
-	for i, pt := range productTokens {
-		publicProductTokens[i] = PublicProductTokenResponse{
-			ProductTokenID: pt.ID.String(),
-			NetworkID:      pt.NetworkID.String(),
-			NetworkName:    pt.NetworkName,
-			NetworkChainID: strconv.Itoa(int(pt.ChainID)),
-			TokenID:        pt.TokenID.String(),
-			TokenName:      pt.TokenName,
-			TokenSymbol:    pt.TokenSymbol,
-			TokenDecimals:  int32(pt.Decimals),
-		}
-	}
-
-	return PublicProductResponse{
-		ID:            product.ID.String(),
-		AccountID:     workspace.AccountID.String(),
-		WorkspaceID:   workspace.ID.String(),
-		WalletAddress: wallet.WalletAddress,
-		Name:          product.Name,
-		Description:   product.Description.String,
-		ImageURL:      product.ImageUrl.String,
-		URL:           product.Url.String,
-		ProductTokens: publicProductTokens,
-		Price:         toPriceResponse(price),
-	}
-}
-
 // validatePaginationParams is defined in common.go
 
 // validateProductUpdate validates core product update parameters
 func (h *ProductHandler) validateProductUpdate(c *gin.Context, req UpdateProductRequest, existingProduct db.Product) error {
 	if req.Name != "" {
 		if len(req.Name) > 255 {
-			return fmt.Errorf("name must be less than 255 characters")
+			return errors.New("name must be less than 255 characters")
 		}
 	}
 	if req.WalletID != "" {
@@ -773,7 +632,7 @@ func (h *ProductHandler) validateProductUpdate(c *gin.Context, req UpdateProduct
 	}
 	if req.Description != "" {
 		if len(req.Description) > 1000 {
-			return fmt.Errorf("description must be less than 1000 characters")
+			return errors.New("description must be less than 1000 characters")
 		}
 	}
 	if req.ImageURL != "" {
@@ -788,7 +647,7 @@ func (h *ProductHandler) validateProductUpdate(c *gin.Context, req UpdateProduct
 	}
 	if req.Metadata != nil {
 		if !json.Valid(req.Metadata) {
-			return fmt.Errorf("invalid metadata JSON format")
+			return errors.New("invalid metadata JSON format")
 		}
 	}
 	return nil
@@ -811,15 +670,16 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		h.common.HandleError(c, err, errMsgInvalidWorkspaceIDFormat, http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
-	limit, page, err := validatePaginationParams(c)
+	pageParams, err := helpers.ParsePaginationParams(c)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), err)
+		h.common.HandleError(c, err, err.Error(), http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
+	limit, page := pageParams.Limit, pageParams.Page
 
 	if page < 1 {
 		page = 1
@@ -831,31 +691,43 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 	offset := (page - 1) * limit
 
 	// Use service to list products
-	result, err := h.productService.ListProducts(c.Request.Context(), services.ListProductsParams{
+	result, err := h.productService.ListProducts(c.Request.Context(), params.ListProductsParams{
 		WorkspaceID: parsedWorkspaceID,
 		Limit:       int32(limit),
 		Offset:      int32(offset),
 	})
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve products", err)
+		h.common.HandleError(c, err, "Failed to retrieve products", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}
 
-	responseList := make([]ProductResponse, len(result.Products))
-	for i, product := range result.Products {
+	responseList := make([]responses.ProductResponse, 0, len(result.Products))
+	for i, productDetail := range result.Products {
+		// Convert product detail to db.Product for compatibility
+		product := db.Product{
+			ID:          uuid.MustParse(productDetail.ID),
+			WorkspaceID: uuid.MustParse(productDetail.WorkspaceID),
+			WalletID:    uuid.MustParse(productDetail.WalletID),
+			Name:        productDetail.Name,
+			Active:      productDetail.Active,
+			CreatedAt:   pgtype.Timestamptz{Time: time.Unix(productDetail.CreatedAt, 0), Valid: true},
+			UpdatedAt:   pgtype.Timestamptz{Time: time.Unix(productDetail.UpdatedAt, 0), Valid: true},
+		}
+
 		dbPrices, err := h.common.db.ListPricesByProduct(c.Request.Context(), product.ID)
 		if err != nil {
-			sendError(c, http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve prices for product %s", product.ID), err)
+			h.common.HandleError(c, err, fmt.Sprintf("Failed to retrieve prices for product %s", product.ID), http.StatusInternalServerError, h.common.GetLogger())
 			return
 		}
 		productResponse := toProductResponse(product, dbPrices)
 
 		productTokenList, err := h.common.db.GetActiveProductTokensByProduct(c.Request.Context(), product.ID)
 		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to retrieve product tokens", err)
+			h.common.HandleError(c, err, "Failed to retrieve product tokens", http.StatusInternalServerError, h.common.GetLogger())
 			return
 		}
-		productTokenListResponse := make([]helpers.ProductTokenResponse, len(productTokenList))
+		// TODO: Fix type conversion from helpers.ProductTokenResponse to responses.ProductTokenResponse
+		productTokenListResponse := make([]responses.ProductTokenResponse, 0, len(productTokenList))
 		for j, productToken := range productTokenList {
 			productTokenListResponse[j] = helpers.ToActiveProductTokenByProductResponse(productToken)
 		}
@@ -870,24 +742,7 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		Total:   result.Total,
 	}
 
-	sendSuccess(c, http.StatusOK, listProductsResponse)
-}
-
-// validatePriceTermLength validates the term length for recurring prices
-func validatePriceTermLength(priceType db.PriceType, termLength int32, intervalType db.IntervalType, intervalCount int32) error {
-	if priceType == db.PriceTypeRecurring {
-		if intervalType == "" || intervalCount <= 0 {
-			return fmt.Errorf("interval_type and interval_count are required for recurring prices")
-		}
-		if termLength <= 0 {
-			return fmt.Errorf("term length must be greater than 0 for recurring prices")
-		}
-	} else if priceType == db.PriceTypeOneOff {
-		if intervalType != "" || intervalCount != 0 || termLength != 0 {
-			return fmt.Errorf("interval_type, interval_count, and term_length must not be set for one_off prices")
-		}
-	}
-	return nil
+	c.JSON(http.StatusOK, listProductsResponse)
 }
 
 // validateWallet validates the wallet exists and belongs to the workspace's account
@@ -906,14 +761,14 @@ func (h *ProductHandler) validateWallet(ctx *gin.Context, walletID uuid.UUID, wo
 	}
 
 	if wallet.WorkspaceID != workspace.ID {
-		return fmt.Errorf("wallet does not belong to workspace")
+		return errors.New("wallet does not belong to workspace")
 	}
 
 	return nil
 }
 
 // createProductTokens creates the associated product tokens for a product
-func (h *ProductHandler) createProductTokens(c *gin.Context, productID uuid.UUID, tokens []helpers.CreateProductTokenRequest) error {
+func (h *ProductHandler) createProductTokens(c *gin.Context, productID uuid.UUID, tokens []requests.CreateProductTokenRequest) error {
 	for _, pt := range tokens {
 		networkID, err := uuid.Parse(pt.NetworkID)
 		if err != nil {
@@ -938,14 +793,6 @@ func (h *ProductHandler) createProductTokens(c *gin.Context, productID uuid.UUID
 	return nil
 }
 
-// validatePriceInPennies validates that the price value is non-negative
-func validatePriceInPennies(price int32) error {
-	if price < 0 {
-		return fmt.Errorf("unit_amount_in_pennies cannot be negative")
-	}
-	return nil
-}
-
 // CreateProduct godoc
 // @Summary Create product
 // @Description Creates a new product with associated prices
@@ -961,27 +808,27 @@ func validatePriceInPennies(price int32) error {
 func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	var req CreateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid request body", err)
+		h.common.HandleError(c, err, "Invalid request body", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		h.common.HandleError(c, err, errMsgInvalidWorkspaceIDFormat, http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	parsedWalletID, err := helpers.ValidateWalletID(req.WalletID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), nil)
+		h.common.HandleError(c, nil, err.Error(), http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	// Convert request prices to service params
-	servicePrices := make([]services.CreatePriceParams, len(req.Prices))
+	servicePrices := make([]params.CreatePriceParams, 0, len(req.Prices))
 	for i, price := range req.Prices {
-		servicePrices[i] = services.CreatePriceParams{
+		servicePrices[i] = params.CreatePriceParams{
 			Active:              price.Active,
 			Type:                price.Type,
 			Nickname:            price.Nickname,
@@ -994,8 +841,27 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		}
 	}
 
-	// Use service to create product
-	product, prices, err := h.productService.CreateProduct(c.Request.Context(), services.CreateProductParams{
+	// Convert request product tokens to service params
+	serviceTokens := make([]params.CreateProductTokenParams, 0, len(req.ProductTokens))
+	for i, token := range req.ProductTokens {
+		networkID, err := uuid.Parse(token.NetworkID)
+		if err != nil {
+			h.common.HandleError(c, err, "Invalid network ID format", http.StatusBadRequest, h.common.GetLogger())
+			return
+		}
+		tokenID, err := uuid.Parse(token.TokenID)
+		if err != nil {
+			h.common.HandleError(c, err, "Invalid token ID format", http.StatusBadRequest, h.common.GetLogger())
+			return
+		}
+		serviceTokens[i] = params.CreateProductTokenParams{
+			NetworkID: networkID,
+			TokenID:   tokenID,
+			Active:    token.Active,
+		}
+	}
+
+	serviceParams := params.CreateProductParams{
 		WorkspaceID:   parsedWorkspaceID,
 		WalletID:      parsedWalletID,
 		Name:          req.Name,
@@ -1005,14 +871,17 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		Active:        req.Active,
 		Metadata:      req.Metadata,
 		Prices:        servicePrices,
-		ProductTokens: req.ProductTokens,
-	})
+		ProductTokens: serviceTokens,
+	}
+
+	// Use service to create product
+	product, prices, err := h.productService.CreateProduct(c.Request.Context(), serviceParams)
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to create product", err)
+		h.common.HandleError(c, err, "Failed to create product", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}
 
-	sendSuccess(c, http.StatusCreated, toProductResponse(*product, prices))
+	c.JSON(http.StatusCreated, toProductResponse(*product, prices))
 }
 
 // UpdateProduct godoc
@@ -1033,24 +902,24 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		h.common.HandleError(c, err, errMsgInvalidWorkspaceIDFormat, http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 	productId := c.Param("product_id")
 	parsedUUID, err := uuid.Parse(productId)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
+		h.common.HandleError(c, err, errMsgInvalidProductIDFormat, http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	var req UpdateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid request body", err)
+		h.common.HandleError(c, err, "Invalid request body", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	// Convert request to service params
-	updateParams := services.UpdateProductParams{
+	updateParams := params.UpdateProductParams{
 		ProductID:   parsedUUID,
 		WorkspaceID: parsedWorkspaceID,
 	}
@@ -1076,7 +945,7 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	if req.WalletID != "" {
 		parsedWalletID, err := uuid.Parse(req.WalletID)
 		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid wallet ID format", err)
+			h.common.HandleError(c, err, errMsgInvalidWalletIDFormat, http.StatusBadRequest, h.common.GetLogger())
 			return
 		}
 		updateParams.WalletID = &parsedWalletID
@@ -1086,14 +955,14 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 	product, err := h.productService.UpdateProduct(c.Request.Context(), updateParams)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			sendError(c, http.StatusNotFound, "Product not found", err)
+			h.common.HandleError(c, err, "Product not found", http.StatusNotFound, h.common.GetLogger())
 		} else {
-			sendError(c, http.StatusInternalServerError, "Failed to update product", err)
+			h.common.HandleError(c, err, "Failed to update product", http.StatusInternalServerError, h.common.GetLogger())
 		}
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, toProductResponse(*product, []db.Price{}))
+	c.JSON(http.StatusOK, toProductResponse(*product, []db.Price{}))
 }
 
 // DeleteProduct godoc
@@ -1112,13 +981,13 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		h.common.HandleError(c, err, errMsgInvalidWorkspaceIDFormat, http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 	productId := c.Param("product_id")
 	parsedUUID, err := uuid.Parse(productId)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
+		h.common.HandleError(c, err, errMsgInvalidProductIDFormat, http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
@@ -1126,26 +995,26 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 	err = h.productService.DeleteProduct(c.Request.Context(), parsedUUID, parsedWorkspaceID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			sendError(c, http.StatusNotFound, "Product not found", err)
+			h.common.HandleError(c, err, "Product not found", http.StatusNotFound, h.common.GetLogger())
 		} else if strings.Contains(err.Error(), "active subscriptions") {
-			sendError(c, http.StatusConflict, "Cannot delete product with active subscriptions", err)
+			h.common.HandleError(c, err, "Cannot delete product with active subscriptions", http.StatusConflict, h.common.GetLogger())
 		} else {
-			sendError(c, http.StatusInternalServerError, "Failed to delete product", err)
+			h.common.HandleError(c, err, "Failed to delete product", http.StatusInternalServerError, h.common.GetLogger())
 		}
 		return
 	}
 
-	sendSuccess(c, http.StatusNoContent, nil)
+	c.JSON(http.StatusNoContent, nil)
 }
 
 // Helper function to convert db.Price to PriceResponse
-func toPriceResponse(p db.Price) PriceResponse {
+func toPriceResponse(p db.Price) responses.PriceResponse {
 	var metadata map[string]interface{}
 	if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
-		log.Printf("Error unmarshaling price metadata: %v", err)
+		logger.Error("Error unmarshaling price metadata", zap.Error(err))
 	}
 
-	return PriceResponse{
+	return responses.PriceResponse{
 		ID:                  p.ID.String(),
 		Object:              "price",
 		ProductID:           p.ProductID.String(),
@@ -1153,7 +1022,7 @@ func toPriceResponse(p db.Price) PriceResponse {
 		Type:                string(p.Type),
 		Nickname:            p.Nickname.String,
 		Currency:            string(p.Currency),
-		UnitAmountInPennies: p.UnitAmountInPennies,
+		UnitAmountInPennies: int64(p.UnitAmountInPennies), // Convert int32 to int64
 		IntervalType:        string(p.IntervalType),
 		TermLength:          p.TermLength,
 		Metadata:            p.Metadata,
@@ -1163,18 +1032,18 @@ func toPriceResponse(p db.Price) PriceResponse {
 }
 
 // Helper function to convert database model to API response
-func toProductResponse(p db.Product, dbPrices []db.Price) ProductResponse {
+func toProductResponse(p db.Product, dbPrices []db.Price) responses.ProductResponse {
 	var metadata map[string]interface{}
 	if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
-		log.Printf("Error unmarshaling product metadata: %v", err)
+		logger.Error("Error unmarshaling product metadata", zap.Error(err))
 	}
 
-	apiPrices := make([]PriceResponse, len(dbPrices))
+	apiPrices := make([]responses.PriceResponse, 0, len(dbPrices))
 	for i, dbPrice := range dbPrices {
 		apiPrices[i] = toPriceResponse(dbPrice)
 	}
 
-	return ProductResponse{
+	return responses.ProductResponse{
 		ID:          p.ID.String(),
 		Object:      "product",
 		WorkspaceID: p.WorkspaceID.String(),
@@ -1188,34 +1057,6 @@ func toProductResponse(p db.Product, dbPrices []db.Price) ProductResponse {
 		Prices:      apiPrices,
 		CreatedAt:   p.CreatedAt.Time.Unix(),
 		UpdatedAt:   p.UpdatedAt.Time.Unix(),
-	}
-}
-
-// marshalCaveats converts the caveats array to JSON for storage
-func marshalCaveats(caveats []CaveatStruct) json.RawMessage {
-	bytes, err := json.Marshal(caveats)
-	if err != nil {
-		return json.RawMessage("{}")
-	}
-	return bytes
-}
-
-// determineNetworkType maps network names to their network types
-func determineNetworkType(networkTypeStr string) string {
-	networkType := strings.ToLower(networkTypeStr)
-	switch networkType {
-	case "ethereum", "sepolia", "goerli", "arbitrum", "optimism", "polygon", "base", "linea":
-		return string(db.NetworkTypeEvm)
-	case "solana":
-		return string(db.NetworkTypeSolana)
-	case "cosmos":
-		return string(db.NetworkTypeCosmos)
-	case "bitcoin":
-		return string(db.NetworkTypeBitcoin)
-	case "polkadot":
-		return string(db.NetworkTypePolkadot)
-	default:
-		return string(db.NetworkTypeEvm)
 	}
 }
 
@@ -1241,7 +1082,7 @@ func (h *ProductHandler) logFailedSubscriptionCreation(
 		zap.Error(err),
 	)
 
-	errorType := h.determineErrorType(err)
+	errorType := helpers.DetermineErrorType(err)
 	var customerIDPgType pgtype.UUID
 	if customerId != nil {
 		customerIDPgType = pgtype.UUID{Bytes: *customerId, Valid: true}
@@ -1275,29 +1116,9 @@ func (h *ProductHandler) logFailedSubscriptionCreation(
 	}
 }
 
-// determineErrorType determines the error type based on the error message
-func (h *ProductHandler) determineErrorType(err error) db.SubscriptionEventType {
-	errorMsg := err.Error()
-	if strings.Contains(errorMsg, "validation") {
-		return db.SubscriptionEventTypeFailedValidation
-	} else if strings.Contains(errorMsg, "customer") && strings.Contains(errorMsg, "create") {
-		return db.SubscriptionEventTypeFailedCustomerCreation
-	} else if strings.Contains(errorMsg, "wallet") && strings.Contains(errorMsg, "create") {
-		return db.SubscriptionEventTypeFailedWalletCreation
-	} else if strings.Contains(errorMsg, "delegation") {
-		return db.SubscriptionEventTypeFailedDelegationStorage
-	} else if strings.Contains(errorMsg, "subscription already exists") {
-		return db.SubscriptionEventTypeFailedDuplicate
-	} else if strings.Contains(errorMsg, "database") || strings.Contains(errorMsg, "db") {
-		return db.SubscriptionEventTypeFailedSubscriptionDb
-	} else {
-		return db.SubscriptionEventTypeFailed
-	}
-}
-
 // toComprehensiveSubscriptionResponse converts a db.Subscription to a comprehensive SubscriptionResponse
 // that includes all subscription fields plus the initial transaction hash from subscription events
-func (h *ProductHandler) toComprehensiveSubscriptionResponse(ctx context.Context, subscription db.Subscription) (*SubscriptionResponse, error) {
+func (h *ProductHandler) toComprehensiveSubscriptionResponse(ctx context.Context, subscription db.Subscription) (*responses.SubscriptionResponse, error) {
 	// Get the subscription details with related data
 	subscriptionDetails, err := h.common.db.GetSubscriptionWithDetails(ctx, db.GetSubscriptionWithDetailsParams{
 		ID:          subscription.ID,
@@ -1323,13 +1144,13 @@ func (h *ProductHandler) toComprehensiveSubscriptionResponse(ctx context.Context
 	var metadata map[string]interface{}
 	if len(subscription.Metadata) > 0 {
 		if err := json.Unmarshal(subscription.Metadata, &metadata); err != nil {
-			log.Printf("Error unmarshaling subscription metadata: %v", err)
+			logger.Error("Error unmarshaling subscription metadata", zap.Error(err))
 			metadata = make(map[string]interface{})
 		}
 	}
 
 	// Convert to response
-	response := &SubscriptionResponse{
+	response := &responses.SubscriptionResponse{
 		ID:                     subscription.ID,
 		WorkspaceID:            subscription.WorkspaceID,
 		CustomerID:             subscription.CustomerID,
@@ -1346,26 +1167,26 @@ func (h *ProductHandler) toComprehensiveSubscriptionResponse(ctx context.Context
 		UpdatedAt:              subscription.UpdatedAt.Time,
 		CustomerName:           subscriptionDetails.CustomerName.String,
 		CustomerEmail:          subscriptionDetails.CustomerEmail.String,
-		Price: PriceResponse{
+		Price: responses.PriceResponse{
 			ID:                  subscriptionDetails.PriceID.String(),
 			Object:              "price",
 			ProductID:           subscriptionDetails.ProductID.String(),
 			Active:              true, // Assuming active for subscriptions
 			Type:                string(subscriptionDetails.PriceType),
 			Currency:            string(subscriptionDetails.PriceCurrency),
-			UnitAmountInPennies: subscriptionDetails.PriceUnitAmountInPennies,
+			UnitAmountInPennies: int64(subscriptionDetails.PriceUnitAmountInPennies), // Convert int32 to int64
 			IntervalType:        string(subscriptionDetails.PriceIntervalType),
 			TermLength:          subscriptionDetails.PriceTermLength,
 			CreatedAt:           time.Now().Unix(), // Default timestamp
 			UpdatedAt:           time.Now().Unix(), // Default timestamp
 		},
-		Product: ProductResponse{
+		Product: responses.ProductResponse{
 			ID:     subscriptionDetails.ProductID.String(),
 			Name:   subscriptionDetails.ProductName,
 			Active: true, // Assuming active for subscriptions
 			Object: "product",
 		},
-		ProductToken: helpers.ProductTokenResponse{
+		ProductToken: responses.ProductTokenResponse{
 			ID:          subscriptionDetails.ProductTokenID.String(),
 			TokenSymbol: subscriptionDetails.TokenSymbol,
 			NetworkID:   subscriptionDetails.ProductTokenID.String(),
@@ -1405,4 +1226,307 @@ func (h *ProductHandler) toComprehensiveSubscriptionResponse(ctx context.Context
 	}
 
 	return response, nil
+}
+
+// SubscribeToProductByPriceID godoc
+// @Summary Subscribe to a product by price ID
+// @Description Subscribe to a product by specifying the price ID
+// @Tags subscriptions
+// @Accept json
+// @Produce json
+// @Tags exclude
+func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
+	ctx := c.Request.Context()
+	priceIDStr := c.Param("price_id")
+	parsedPriceID, err := uuid.Parse(priceIDStr)
+	if err != nil {
+		h.common.HandleError(c, err, errMsgInvalidPriceIDFormat, http.StatusBadRequest, h.common.GetLogger())
+		return
+	}
+
+	var request requests.SubscribeRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		h.common.HandleError(c, err, errMsgInvalidRequestFormat, http.StatusBadRequest, h.common.GetLogger())
+		return
+	}
+	request.PriceID = priceIDStr
+
+	price, err := h.common.db.GetPrice(ctx, parsedPriceID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			h.common.HandleError(c, err, "Price not found", http.StatusNotFound, h.common.GetLogger())
+		} else {
+			h.common.HandleError(c, err, "Failed to get price", http.StatusInternalServerError, h.common.GetLogger())
+		}
+		return
+	}
+
+	if !price.Active {
+		h.common.HandleError(c, nil, "Cannot subscribe to inactive price", http.StatusBadRequest, h.common.GetLogger())
+		return
+	}
+
+	product, err := h.common.db.GetProductWithoutWorkspaceId(ctx, price.ProductID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			h.common.HandleError(c, err, "Product associated with the price not found", http.StatusNotFound, h.common.GetLogger())
+		} else {
+			h.common.HandleError(c, err, "Failed to get product", http.StatusInternalServerError, h.common.GetLogger())
+		}
+		return
+	}
+
+	if err := h.validateSubscriptionRequest(request, product.ID); err != nil {
+		h.common.HandleError(c, err, err.Error(), http.StatusBadRequest, h.common.GetLogger())
+		return
+	}
+
+	if !product.Active {
+		h.common.HandleError(c, nil, "Cannot subscribe to a price of an inactive product", http.StatusBadRequest, h.common.GetLogger())
+		return
+	}
+
+	parsedProductTokenID, err := uuid.Parse(request.ProductTokenID)
+	if err != nil {
+		h.common.HandleError(c, err, errMsgInvalidTokenIDFormat, http.StatusBadRequest, h.common.GetLogger())
+		return
+	}
+
+	merchantWallet, err := h.common.db.GetWalletByID(ctx, db.GetWalletByIDParams{
+		ID:          product.WalletID,
+		WorkspaceID: product.WorkspaceID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			h.common.HandleError(c, err, "Merchant wallet not found", http.StatusNotFound, h.common.GetLogger())
+		} else {
+			h.common.HandleError(c, err, "Failed to get merchant wallet", http.StatusInternalServerError, h.common.GetLogger())
+		}
+		return
+	}
+
+	productToken, err := h.common.db.GetProductToken(ctx, parsedProductTokenID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			h.common.HandleError(c, err, "Product token not found", http.StatusNotFound, h.common.GetLogger())
+		} else {
+			h.common.HandleError(c, err, "Failed to get product token", http.StatusInternalServerError, h.common.GetLogger())
+		}
+		return
+	}
+
+	token, err := h.common.db.GetToken(ctx, productToken.TokenID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			h.common.HandleError(c, err, "Token not found", http.StatusNotFound, h.common.GetLogger())
+		} else {
+			h.common.HandleError(c, err, "Failed to get token", http.StatusInternalServerError, h.common.GetLogger())
+		}
+		return
+	}
+
+	network, err := h.common.db.GetNetwork(ctx, token.NetworkID)
+	if err != nil {
+		h.common.HandleError(c, err, "Failed to get network details", http.StatusInternalServerError, h.common.GetLogger())
+		return
+	}
+
+	tokenAmount, err := strconv.ParseInt(request.TokenAmount, 10, 64)
+	if err != nil {
+		h.common.HandleError(c, err, errMsgInvalidTokenAmountFormat, http.StatusBadRequest, h.common.GetLogger())
+		return
+	}
+
+	executionObject := dsClient.ExecutionObject{
+		MerchantAddress:      merchantWallet.WalletAddress,
+		TokenContractAddress: token.ContractAddress,
+		TokenDecimals:        token.Decimals,
+		TokenAmount:          tokenAmount,
+		ChainID:              uint32(network.ChainID),
+		NetworkName:          network.Name,
+	}
+
+	if productToken.ProductID != product.ID {
+		h.common.HandleError(c, nil, "Product token does not belong to the specified product", http.StatusBadRequest, h.common.GetLogger())
+		return
+	}
+
+	normalizedAddress := helpers.NormalizeWalletAddress(request.SubscriberAddress, helpers.DetermineNetworkType(productToken.NetworkType))
+
+	// Get database pool
+	pool, err := h.common.GetDBPool()
+	if err != nil {
+		h.common.HandleError(c, err, "Failed to get database pool", http.StatusInternalServerError, h.common.GetLogger())
+		return
+	}
+
+	var subscription db.Subscription
+	var updatedSubscription db.Subscription
+	var customer db.Customer
+	var customerWallet db.CustomerWallet
+
+	// Execute within transaction
+	err = helpers.WithTransaction(ctx, pool, func(tx pgx.Tx) error {
+		qtx := h.common.WithTx(tx)
+
+		var err error
+		customer, customerWallet, err = h.processCustomerAndWallet(ctx, qtx, normalizedAddress, product, productToken)
+		if err != nil {
+			return fmt.Errorf("failed to process customer or wallet: %w", err)
+		}
+
+		subscriptions, err := h.common.db.ListSubscriptionsByCustomer(ctx, db.ListSubscriptionsByCustomerParams{
+			CustomerID:  customer.ID,
+			WorkspaceID: product.WorkspaceID,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to check for existing subscription: %w", err)
+		}
+
+		var existingSubscription *db.Subscription
+		for i, sub := range subscriptions {
+			if sub.PriceID == price.ID && sub.Status == db.SubscriptionStatusActive {
+				existingSubscription = &subscriptions[i]
+				break
+			}
+		}
+
+		if existingSubscription != nil {
+			logger.Info("Subscription already exists for this price",
+				zap.String("subscription_id", existingSubscription.ID.String()),
+				zap.String("customer_id", customer.ID.String()),
+				zap.String("price_id", price.ID.String()))
+
+			duplicateErr := fmt.Errorf("subscription already exists for customer %s and price %s", customer.ID, price.ID)
+			h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, duplicateErr)
+
+			// Return a custom error that we'll handle after the transaction
+			return &SubscriptionExistsError{Subscription: existingSubscription}
+		}
+
+		delegationData, err := h.storeDelegationData(ctx, qtx, request.Delegation)
+		if err != nil {
+			return fmt.Errorf("failed to store delegation data: %w", err)
+		}
+
+		periodStart, periodEnd, nextRedemption := helpers.CalculateSubscriptionPeriods(price)
+
+		subscription, err = h.createSubscription(ctx, qtx, params.CreateSubscriptionParams{
+			Customer:       customer,
+			CustomerWallet: customerWallet,
+			WorkspaceID:    product.WorkspaceID,
+			ProductID:      product.ID,
+			Price:          price,
+			ProductTokenID: parsedProductTokenID,
+			TokenAmount:    tokenAmount,
+			DelegationData: delegationData,
+			PeriodStart:    periodStart,
+			PeriodEnd:      periodEnd,
+			NextRedemption: nextRedemption,
+		})
+		if err != nil {
+			h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, err)
+			return fmt.Errorf("failed to create subscription: %w", err)
+		}
+
+		eventMetadata, err := json.Marshal(map[string]interface{}{
+			"product_name":   product.Name,
+			"price_type":     price.Type,
+			"wallet_address": customerWallet.WalletAddress,
+			"network_type":   customerWallet.NetworkType,
+		})
+		if err != nil {
+			logger.Error("Failed to marshal event metadata", zap.Error(err))
+			eventMetadata = []byte("{}")
+		}
+
+		_, err = qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+			SubscriptionID: subscription.ID,
+			EventType:      db.SubscriptionEventTypeCreated,
+			OccurredAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
+			AmountInCents:  price.UnitAmountInPennies,
+			Metadata:       eventMetadata,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create subscription creation event: %w", err)
+		}
+
+		logger.Info("Created subscription event",
+			zap.String("subscription_id", subscription.ID.String()),
+			zap.String("event_type", string(db.SubscriptionEventTypeCreated)))
+
+		return nil
+	})
+
+	// Handle transaction errors
+	if err != nil {
+		var subExistsErr *SubscriptionExistsError
+		if errors.As(err, &subExistsErr) {
+			c.JSON(http.StatusConflict, gin.H{
+				"message":      "Subscription already exists for this price",
+				"subscription": subExistsErr.Subscription,
+			})
+			return
+		}
+		h.common.HandleError(c, err, "Transaction failed", http.StatusInternalServerError, h.common.GetLogger())
+		return
+	}
+
+	updatedSubscription, err = h.performInitialRedemption(ctx, customer, customerWallet, subscription, product, price, productToken, request.Delegation, executionObject)
+	if err != nil {
+		logger.Error("Initial redemption failed, subscription marked as failed and soft-deleted",
+			zap.Error(err),
+			zap.String("subscription_id", subscription.ID.String()),
+			zap.String("customer_id", customer.ID.String()),
+			zap.String("price_id", price.ID.String()))
+
+		_, updateErr := h.common.db.UpdateSubscriptionStatus(ctx, db.UpdateSubscriptionStatusParams{
+			ID:     subscription.ID,
+			Status: db.SubscriptionStatusFailed,
+		})
+
+		if updateErr != nil {
+			logger.Error("Failed to update subscription status after redemption failure",
+				zap.Error(updateErr),
+				zap.String("subscription_id", subscription.ID.String()))
+		}
+
+		deleteErr := h.common.db.DeleteSubscription(ctx, subscription.ID)
+		if deleteErr != nil {
+			logger.Error("Failed to soft-delete subscription after redemption failure",
+				zap.Error(deleteErr),
+				zap.String("subscription_id", subscription.ID.String()))
+		}
+
+		errorMsg := fmt.Sprintf("Initial redemption failed: %v", err)
+		_, eventErr := h.common.db.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+			SubscriptionID:  subscription.ID,
+			EventType:       db.SubscriptionEventTypeFailedRedemption,
+			TransactionHash: pgtype.Text{String: "", Valid: false},
+			AmountInCents:   price.UnitAmountInPennies,
+			ErrorMessage:    pgtype.Text{String: errorMsg, Valid: true},
+			OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
+			Metadata:        json.RawMessage(`{}`),
+		})
+
+		if eventErr != nil {
+			logger.Error("Failed to create subscription event after redemption failure",
+				zap.Error(eventErr),
+				zap.String("subscription_id", subscription.ID.String()))
+		}
+
+		h.common.HandleError(c, err, "Initial redemption failed, subscription marked as failed and soft-deleted", http.StatusInternalServerError, h.common.GetLogger())
+		return
+	}
+	// Create comprehensive response with all subscription fields and initial transaction hash
+	comprehensiveResponse, err := h.toComprehensiveSubscriptionResponse(ctx, updatedSubscription)
+	if err != nil {
+		logger.Error("Failed to create comprehensive subscription response",
+			zap.Error(err),
+			zap.String("subscription_id", updatedSubscription.ID.String()))
+		h.common.HandleError(c, err, "Failed to create subscription response", http.StatusInternalServerError, h.common.GetLogger())
+		return
+	}
+
+	c.JSON(http.StatusCreated, comprehensiveResponse)
 }

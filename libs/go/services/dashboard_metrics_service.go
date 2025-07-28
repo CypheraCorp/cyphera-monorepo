@@ -8,6 +8,7 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -452,7 +453,7 @@ func (s *DashboardMetricsService) calculateNetworkTokenMetrics(ctx context.Conte
 	}
 	defer rows.Close()
 
-	networkMetrics := make(map[string]NetworkMetrics)
+	networkMetrics := make(map[string]business.NetworkMetrics)
 	for rows.Next() {
 		var networkName string
 		var paymentCount pgtype.Int8
@@ -462,7 +463,7 @@ func (s *DashboardMetricsService) calculateNetworkTokenMetrics(ctx context.Conte
 			return fmt.Errorf("failed to scan network metrics: %w", err)
 		}
 
-		nm := NetworkMetrics{}
+		nm := business.NetworkMetrics{}
 		if paymentCount.Valid {
 			nm.Payments = int(paymentCount.Int64)
 		}
@@ -497,7 +498,7 @@ func (s *DashboardMetricsService) calculateNetworkTokenMetrics(ctx context.Conte
 	}
 	defer rows.Close()
 
-	tokenMetrics := make(map[string]TokenMetrics)
+	tokenMetrics := make(map[string]business.TokenMetrics)
 	for rows.Next() {
 		var tokenSymbol string
 		var paymentCount pgtype.Int8
@@ -507,7 +508,7 @@ func (s *DashboardMetricsService) calculateNetworkTokenMetrics(ctx context.Conte
 			return fmt.Errorf("failed to scan token metrics: %w", err)
 		}
 
-		tm := TokenMetrics{}
+		tm := business.TokenMetrics{}
 		if paymentCount.Valid {
 			tm.Payments = int(paymentCount.Int64)
 		}

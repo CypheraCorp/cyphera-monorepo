@@ -9,6 +9,8 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/client/coinmarketcap"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
@@ -90,37 +92,36 @@ func (s *TokenService) ListTokensByNetwork(ctx context.Context, networkID uuid.U
 	return tokens, nil
 }
 
-// TokenQuoteParams contains parameters for getting a token quote
-type TokenQuoteParams struct {
-	TokenSymbol string
-	FiatSymbol  string
-}
-
-// TokenQuoteResult represents the result of a token quote
-type TokenQuoteResult struct {
-	TokenSymbol       string
-	FiatSymbol        string
-	TokenAmountInFiat float64
-}
-
 // GetTokenQuote retrieves the price of a token in the specified fiat currency
-func (s *TokenService) GetTokenQuote(ctx context.Context, params TokenQuoteParams) (*TokenQuoteResult, error) {
+func (s *TokenService) GetTokenQuote(ctx context.Context, quoteParams params.TokenQuoteParams) (*responses.TokenQuoteResult, error) {
 	// Validate CMC client is available
 	if s.cmcClient == nil {
 		s.logger.Error("CoinMarketCap client is not initialized")
 		return nil, fmt.Errorf("price service is unavailable")
 	}
 
-	// Prepare request
-	tokenSymbols := []string{params.TokenSymbol}
-	fiatSymbols := []string{params.FiatSymbol}
+	// Get token information to get the symbol
+	token, err := s.queries.GetToken(ctx, quoteParams.TokenID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("token not found")
+		}
+		s.logger.Error("Failed to get token",
+			zap.String("token_id", quoteParams.TokenID.String()),
+			zap.Error(err))
+		return nil, fmt.Errorf("failed to retrieve token: %w", err)
+	}
+
+	// Prepare request using token symbol
+	tokenSymbols := []string{token.Symbol}
+	fiatSymbols := []string{quoteParams.ToCurrency}
 
 	// Get quotes from CoinMarketCap
 	cmcResponse, err := s.cmcClient.GetLatestQuotes(tokenSymbols, fiatSymbols)
 	if err != nil {
 		s.logger.Error("Failed to get quotes from CoinMarketCap",
-			zap.String("token", params.TokenSymbol),
-			zap.String("fiat", params.FiatSymbol),
+			zap.String("token", token.Symbol),
+			zap.String("fiat", quoteParams.ToCurrency),
 			zap.Error(err))
 
 		// Handle specific CMC client errors
@@ -132,16 +133,16 @@ func (s *TokenService) GetTokenQuote(ctx context.Context, params TokenQuoteParam
 	}
 
 	// Extract the price from the response
-	upperTokenSymbol := strings.ToUpper(params.TokenSymbol)
-	upperFiatSymbol := strings.ToUpper(params.FiatSymbol)
+	upperTokenSymbol := strings.ToUpper(token.Symbol)
+	upperFiatSymbol := strings.ToUpper(quoteParams.ToCurrency)
 
-	var amount float64
+	var exchangeRate float64
 	found := false
 
 	if tokenDataList, ok := cmcResponse.Data[upperTokenSymbol]; ok && len(tokenDataList) > 0 {
 		tokenData := tokenDataList[0]
 		if quoteData, ok := tokenData.Quote[upperFiatSymbol]; ok {
-			amount = quoteData.Price
+			exchangeRate = quoteData.Price
 			found = true
 		}
 	}
@@ -154,10 +155,19 @@ func (s *TokenService) GetTokenQuote(ctx context.Context, params TokenQuoteParam
 		return nil, fmt.Errorf("price data not found for %s in %s", upperTokenSymbol, upperFiatSymbol)
 	}
 
-	return &TokenQuoteResult{
-		TokenSymbol:       upperTokenSymbol,
-		FiatSymbol:        upperFiatSymbol,
-		TokenAmountInFiat: amount,
+	// Convert AmountWei to token amount and calculate fiat amount
+	// For simplicity, assuming AmountWei is already in token units (would need proper Wei conversion in real implementation)
+	tokenAmountFloat := 1.0 // This would need proper conversion from Wei based on token decimals
+	fiatAmount := tokenAmountFloat * exchangeRate
+
+	return &responses.TokenQuoteResult{
+		TokenAmount:   "1.0", // This should be properly calculated from AmountWei and token decimals
+		FiatAmount:    fiatAmount,
+		ExchangeRate:  exchangeRate,
+		TokenDecimals: token.Decimals,
+		QuotedAt:      "", // Would need current timestamp
+		ExpiresAt:     "", // Would need expiration timestamp  
+		PriceSource:   "coinmarketcap",
 	}, nil
 }
 

@@ -5,54 +5,18 @@ import (
 	"log"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 )
 
-// CustomerResponse represents the standardized API response for customer operations
-type CustomerResponse struct {
-	ID                 string                 `json:"id"`
-	Object             string                 `json:"object"`
-	ExternalID         string                 `json:"external_id,omitempty"`
-	Email              string                 `json:"email"`
-	Name               string                 `json:"name,omitempty"`
-	Phone              string                 `json:"phone,omitempty"`
-	Description        string                 `json:"description,omitempty"`
-	FinishedOnboarding bool                   `json:"finished_onboarding"`
-	Metadata           map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt          int64                  `json:"created_at"`
-	UpdatedAt          int64                  `json:"updated_at"`
-}
-
-// CustomerWalletResponse represents the customer wallet response for the sign-in/register API
-type CustomerWalletResponse struct {
-	ID            string                 `json:"id"`
-	Object        string                 `json:"object"`
-	CustomerID    string                 `json:"customer_id"`
-	WalletAddress string                 `json:"wallet_address"`
-	NetworkType   string                 `json:"network_type"`
-	Nickname      string                 `json:"nickname,omitempty"`
-	ENS           string                 `json:"ens,omitempty"`
-	IsPrimary     bool                   `json:"is_primary"`
-	Verified      bool                   `json:"verified"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt     int64                  `json:"created_at"`
-	UpdatedAt     int64                  `json:"updated_at"`
-}
-
-// CustomerDetailsResponse represents the response for customer sign-in/register
-type CustomerDetailsResponse struct {
-	Customer CustomerResponse       `json:"customer"`
-	Wallet   CustomerWalletResponse `json:"wallet,omitempty"`
-}
-
 // ToCustomerResponse converts database model to API response
-func ToCustomerResponse(c db.Customer) CustomerResponse {
+func ToCustomerResponse(c db.Customer) responses.CustomerResponse {
 	var metadata map[string]interface{}
 	if err := json.Unmarshal(c.Metadata, &metadata); err != nil {
 		log.Printf("Error unmarshaling customer metadata: %v", err)
 		metadata = make(map[string]interface{}) // Use empty map if unmarshal fails
 	}
 
-	return CustomerResponse{
+	return responses.CustomerResponse{
 		ID:                 c.ID.String(),
 		Object:             "customer",
 		ExternalID:         c.ExternalID.String,
@@ -68,14 +32,14 @@ func ToCustomerResponse(c db.Customer) CustomerResponse {
 }
 
 // ToCustomerWalletResponse converts database CustomerWallet to API response
-func ToCustomerWalletResponse(w db.CustomerWallet) CustomerWalletResponse {
+func ToCustomerWalletResponse(w db.CustomerWallet) responses.CustomerWalletResponse {
 	var metadata map[string]interface{}
 	if err := json.Unmarshal(w.Metadata, &metadata); err != nil {
 		log.Printf("Error unmarshaling wallet metadata: %v", err)
 		metadata = make(map[string]interface{})
 	}
 
-	return CustomerWalletResponse{
+	return responses.CustomerWalletResponse{
 		ID:            w.ID.String(),
 		Object:        "customer_wallet",
 		CustomerID:    w.CustomerID.String(),
@@ -92,8 +56,8 @@ func ToCustomerWalletResponse(w db.CustomerWallet) CustomerWalletResponse {
 }
 
 // ToCustomerDetailsResponse creates a customer details response
-func ToCustomerDetailsResponse(customer db.Customer, wallet *db.CustomerWallet) CustomerDetailsResponse {
-	response := CustomerDetailsResponse{
+func ToCustomerDetailsResponse(customer db.Customer, wallet *db.CustomerWallet) responses.CustomerDetailsResponse {
+	response := responses.CustomerDetailsResponse{
 		Customer: ToCustomerResponse(customer),
 	}
 
@@ -102,4 +66,47 @@ func ToCustomerDetailsResponse(customer db.Customer, wallet *db.CustomerWallet) 
 	}
 
 	return response
+}
+
+// ToResponsesCustomerResponse converts helpers.CustomerResponse to responses.CustomerResponse
+func ToResponsesCustomerResponse(helperResponse responses.CustomerResponse) responses.CustomerResponse {
+	return responses.CustomerResponse{
+		ID:                 helperResponse.ID,
+		Object:             helperResponse.Object,
+		ExternalID:         helperResponse.ExternalID,
+		Email:              helperResponse.Email,
+		Name:               helperResponse.Name,
+		Phone:              helperResponse.Phone,
+		Description:        helperResponse.Description,
+		FinishedOnboarding: helperResponse.FinishedOnboarding,
+		Metadata:           helperResponse.Metadata,
+		CreatedAt:          helperResponse.CreatedAt,
+		UpdatedAt:          helperResponse.UpdatedAt,
+	}
+}
+
+// ToResponsesCustomerWalletResponse converts helpers.CustomerWalletResponse to responses.CustomerWalletResponse
+func ToResponsesCustomerWalletResponse(helperResponse responses.CustomerWalletResponse) responses.CustomerWalletResponse {
+	return responses.CustomerWalletResponse{
+		ID:            helperResponse.ID,
+		Object:        helperResponse.Object,
+		CustomerID:    helperResponse.CustomerID,
+		WalletAddress: helperResponse.WalletAddress,
+		NetworkType:   helperResponse.NetworkType,
+		Nickname:      helperResponse.Nickname,
+		ENS:           helperResponse.ENS,
+		IsPrimary:     helperResponse.IsPrimary,
+		Verified:      helperResponse.Verified,
+		Metadata:      helperResponse.Metadata,
+		CreatedAt:     helperResponse.CreatedAt,
+		UpdatedAt:     helperResponse.UpdatedAt,
+	}
+}
+
+// ToResponsesCustomerDetailsResponse converts helpers.CustomerDetailsResponse to responses.CustomerDetailsResponse
+func ToResponsesCustomerDetailsResponse(helperResponse responses.CustomerDetailsResponse) responses.CustomerDetailsResponse {
+	return responses.CustomerDetailsResponse{
+		Customer: ToResponsesCustomerResponse(helperResponse.Customer),
+		Wallet:   ToResponsesCustomerWalletResponse(helperResponse.Wallet),
+	}
 }

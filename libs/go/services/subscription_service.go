@@ -2,13 +2,14 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -37,20 +38,6 @@ type SubscriptionExistsError struct {
 
 func (e *SubscriptionExistsError) Error() string {
 	return "subscription already exists for this customer and product"
-}
-
-// UpdateSubscriptionRequest represents the request structure for updating a subscription
-type UpdateSubscriptionRequest struct {
-	CustomerID       string          `json:"customer_id"`
-	ProductID        string          `json:"product_id"`
-	ProductTokenID   string          `json:"product_token_id"`
-	DelegationID     string          `json:"delegation_id"`
-	CustomerWalletID string          `json:"customer_wallet_id"`
-	Status           string          `json:"status"`
-	StartDate        int64           `json:"start_date"`
-	EndDate          int64           `json:"end_date"`
-	NextRedemption   int64           `json:"next_redemption"`
-	Metadata         json.RawMessage `json:"metadata"`
 }
 
 // ProcessSubscriptionParams represents parameters for processing a subscription
@@ -104,7 +91,7 @@ func (s *SubscriptionService) GetSubscription(ctx context.Context, workspaceID, 
 }
 
 // ListSubscriptions retrieves subscriptions with pagination
-func (s *SubscriptionService) ListSubscriptions(ctx context.Context, workspaceID uuid.UUID, limit, offset int32) ([]helpers.SubscriptionResponse, int64, error) {
+func (s *SubscriptionService) ListSubscriptions(ctx context.Context, workspaceID uuid.UUID, limit, offset int32) ([]responses.SubscriptionResponse, int64, error) {
 	params := db.ListSubscriptionDetailsWithPaginationParams{
 		WorkspaceID: workspaceID,
 		Limit:       limit,
@@ -122,7 +109,7 @@ func (s *SubscriptionService) ListSubscriptions(ctx context.Context, workspaceID
 		return nil, 0, fmt.Errorf("failed to count subscriptions: %w", err)
 	}
 
-	subscriptionResponses := make([]helpers.SubscriptionResponse, len(subscriptions))
+	subscriptionResponses := make([]responses.SubscriptionResponse, len(subscriptions))
 	for i, sub := range subscriptions {
 		subscription, err := helpers.ToSubscriptionResponse(sub)
 		if err != nil {
@@ -135,7 +122,7 @@ func (s *SubscriptionService) ListSubscriptions(ctx context.Context, workspaceID
 }
 
 // ListSubscriptionsByCustomer retrieves subscriptions for a specific customer
-func (s *SubscriptionService) ListSubscriptionsByCustomer(ctx context.Context, workspaceID, customerID uuid.UUID) ([]helpers.SubscriptionResponse, error) {
+func (s *SubscriptionService) ListSubscriptionsByCustomer(ctx context.Context, workspaceID, customerID uuid.UUID) ([]responses.SubscriptionResponse, error) {
 	subscriptions, err := s.queries.ListSubscriptionsByCustomer(ctx, db.ListSubscriptionsByCustomerParams{
 		CustomerID:  customerID,
 		WorkspaceID: workspaceID,
@@ -144,7 +131,7 @@ func (s *SubscriptionService) ListSubscriptionsByCustomer(ctx context.Context, w
 		return nil, fmt.Errorf("failed to retrieve customer subscriptions: %w", err)
 	}
 
-	subscriptionResponses := make([]helpers.SubscriptionResponse, len(subscriptions))
+	subscriptionResponses := make([]responses.SubscriptionResponse, len(subscriptions))
 	for i, sub := range subscriptions {
 		subscription, err := helpers.ToSubscriptionResponseFromDBSubscription(sub)
 		if err != nil {
@@ -170,7 +157,7 @@ func (s *SubscriptionService) ListSubscriptionsByProduct(ctx context.Context, wo
 }
 
 // UpdateSubscription updates a subscription
-func (s *SubscriptionService) UpdateSubscription(ctx context.Context, subscriptionID uuid.UUID, req UpdateSubscriptionRequest) (*db.Subscription, error) {
+func (s *SubscriptionService) UpdateSubscription(ctx context.Context, subscriptionID uuid.UUID, req requests.UpdateSubscriptionRequest) (*db.Subscription, error) {
 	// Check if subscription exists
 	existingSubscription, err := s.queries.GetSubscription(ctx, subscriptionID)
 	if err != nil {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/apps/api/server"
+	"github.com/cyphera/cyphera-api/libs/go/logger"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"

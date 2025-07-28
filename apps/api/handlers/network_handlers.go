@@ -6,17 +6,29 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
-// NetworkHandler handles network related operations
+// NetworkHandler handles network-related operations
 type NetworkHandler struct {
 	common         *CommonServices
 	networkService interfaces.NetworkService
 }
+
+// Use types from the centralized packages
+type CreateNetworkRequest = requests.CreateNetworkRequest
+type CreateGasConfigRequest = requests.CreateGasConfigRequest
+type UpdateNetworkRequest = requests.UpdateNetworkRequest
+type UpdateGasConfigRequest = requests.UpdateGasConfigRequest
+
+type NetworkResponse = responses.NetworkResponse
+type GasConfigResponse = responses.GasConfigResponse
+type NetworkWithTokensResponse = responses.NetworkWithTokensResponse
 
 // NewNetworkHandler creates a handler with interface dependencies
 func NewNetworkHandler(
@@ -29,69 +41,9 @@ func NewNetworkHandler(
 	}
 }
 
-// CreateNetworkRequest represents the request body for creating a network
-type CreateNetworkRequest struct {
-	Name              string                  `json:"name" binding:"required"`
-	Type              string                  `json:"type" binding:"required"`
-	NetworkType       string                  `json:"network_type" binding:"required"`
-	CircleNetworkType string                  `json:"circle_network_type" binding:"required"`
-	BlockExplorerURL  string                  `json:"block_explorer_url,omitempty"`
-	ChainID           int32                   `json:"chain_id" binding:"required"`
-	IsTestnet         bool                    `json:"is_testnet"`
-	Active            bool                    `json:"active"`
-	LogoURL           string                  `json:"logo_url,omitempty"`
-	DisplayName       string                  `json:"display_name,omitempty"`
-	ChainNamespace    string                  `json:"chain_namespace,omitempty"`
-	GasConfig         *CreateGasConfigRequest `json:"gas_config,omitempty"`
-}
-
-// CreateGasConfigRequest represents gas configuration for creating a network
-type CreateGasConfigRequest struct {
-	BaseFeeMultiplier     float64                `json:"base_fee_multiplier,omitempty"`
-	PriorityFeeMultiplier float64                `json:"priority_fee_multiplier,omitempty"`
-	DeploymentGasLimit    string                 `json:"deployment_gas_limit,omitempty"`
-	TokenTransferGasLimit string                 `json:"token_transfer_gas_limit,omitempty"`
-	SupportsEIP1559       bool                   `json:"supports_eip1559"`
-	GasOracleURL          string                 `json:"gas_oracle_url,omitempty"`
-	GasRefreshIntervalMs  int32                  `json:"gas_refresh_interval_ms,omitempty"`
-	GasPriorityLevels     map[string]interface{} `json:"gas_priority_levels,omitempty"`
-	AverageBlockTimeMs    int32                  `json:"average_block_time_ms,omitempty"`
-	PeakHoursMultiplier   float64                `json:"peak_hours_multiplier,omitempty"`
-}
-
-// UpdateNetworkRequest represents the request body for updating a network
-type UpdateNetworkRequest struct {
-	Name              string                  `json:"name,omitempty"`
-	Type              string                  `json:"type,omitempty"`
-	NetworkType       string                  `json:"network_type,omitempty"`
-	CircleNetworkType string                  `json:"circle_network_type,omitempty"`
-	BlockExplorerURL  string                  `json:"block_explorer_url,omitempty"`
-	ChainID           int32                   `json:"chain_id,omitempty"`
-	IsTestnet         *bool                   `json:"is_testnet,omitempty"`
-	Active            *bool                   `json:"active,omitempty"`
-	LogoURL           string                  `json:"logo_url,omitempty"`
-	DisplayName       string                  `json:"display_name,omitempty"`
-	ChainNamespace    string                  `json:"chain_namespace,omitempty"`
-	GasConfig         *UpdateGasConfigRequest `json:"gas_config,omitempty"`
-}
-
-// UpdateGasConfigRequest represents gas configuration for updating a network
-type UpdateGasConfigRequest struct {
-	BaseFeeMultiplier     *float64               `json:"base_fee_multiplier,omitempty"`
-	PriorityFeeMultiplier *float64               `json:"priority_fee_multiplier,omitempty"`
-	DeploymentGasLimit    *string                `json:"deployment_gas_limit,omitempty"`
-	TokenTransferGasLimit *string                `json:"token_transfer_gas_limit,omitempty"`
-	SupportsEIP1559       *bool                  `json:"supports_eip1559,omitempty"`
-	GasOracleURL          *string                `json:"gas_oracle_url,omitempty"`
-	GasRefreshIntervalMs  *int32                 `json:"gas_refresh_interval_ms,omitempty"`
-	GasPriorityLevels     map[string]interface{} `json:"gas_priority_levels,omitempty"`
-	AverageBlockTimeMs    *int32                 `json:"average_block_time_ms,omitempty"`
-	PeakHoursMultiplier   *float64               `json:"peak_hours_multiplier,omitempty"`
-}
-
 // GetNetwork godoc
-// @Summary Get network by ID
-// @Description Get network details by network ID
+// @Summary Get a network by ID
+// @Description Retrieves a network by its ID
 // @Tags networks
 // @Accept json
 // @Produce json
@@ -99,6 +51,7 @@ type UpdateGasConfigRequest struct {
 // @Success 200 {object} NetworkResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
 // @Security ApiKeyAuth
 // @Router /networks/{network_id} [get]
 func (h *NetworkHandler) GetNetwork(c *gin.Context) {
@@ -110,40 +63,6 @@ func (h *NetworkHandler) GetNetwork(c *gin.Context) {
 	}
 
 	network, err := h.networkService.GetNetwork(c.Request.Context(), parsedUUID)
-	if err != nil {
-		if err.Error() == "network not found" {
-			sendError(c, http.StatusNotFound, "Network not found", nil)
-			return
-		}
-		sendError(c, http.StatusInternalServerError, err.Error(), err)
-		return
-	}
-
-	sendSuccess(c, http.StatusOK, helpers.ToNetworkResponse(*network))
-}
-
-// GetNetworkByChainID godoc
-// @Summary Get network by chain ID
-// @Description Get network details by chain ID
-// @Tags networks
-// @Accept json
-// @Produce json
-// @Param chain_id path string true "Chain ID"
-// @Success 200 {object} NetworkResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Security ApiKeyAuth
-// @Router /networks/chain/{chain_id} [get]
-func (h *NetworkHandler) GetNetworkByChainID(c *gin.Context) {
-	chainIDStr := c.Param("chain_id")
-	chainID64, err := strconv.ParseInt(chainIDStr, 10, 32)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid chain ID format", err)
-		return
-	}
-	chainID := int32(chainID64)
-
-	network, err := h.networkService.GetNetworkByChainID(c.Request.Context(), chainID)
 	if err != nil {
 		if err.Error() == "network not found" {
 			sendError(c, http.StatusNotFound, "Network not found", nil)
@@ -170,7 +89,7 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 		return
 	}
 
-	params := services.CreateNetworkParams{
+	networkCreateParams := params.CreateNetworkParams{
 		Name:              req.Name,
 		Type:              req.Type,
 		NetworkType:       req.NetworkType,
@@ -185,7 +104,7 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 	}
 
 	if req.GasConfig != nil {
-		params.GasConfig = &services.CreateGasConfigParams{
+		networkCreateParams.GasConfig = &params.CreateGasConfigParams{
 			BaseFeeMultiplier:     req.GasConfig.BaseFeeMultiplier,
 			PriorityFeeMultiplier: req.GasConfig.PriorityFeeMultiplier,
 			DeploymentGasLimit:    req.GasConfig.DeploymentGasLimit,
@@ -199,7 +118,7 @@ func (h *NetworkHandler) CreateNetwork(c *gin.Context) {
 		}
 	}
 
-	network, err := h.networkService.CreateNetwork(c.Request.Context(), params)
+	network, err := h.networkService.CreateNetwork(c.Request.Context(), networkCreateParams)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, err.Error(), err)
 		return
@@ -229,7 +148,7 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 		return
 	}
 
-	params := services.UpdateNetworkParams{
+	networkUpdateParams := params.UpdateNetworkParams{
 		ID:                parsedUUID,
 		Name:              req.Name,
 		Type:              req.Type,
@@ -245,7 +164,7 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 	}
 
 	if req.GasConfig != nil {
-		params.GasConfig = &services.UpdateGasConfigParams{
+		networkUpdateParams.GasConfig = &params.UpdateGasConfigParams{
 			BaseFeeMultiplier:     req.GasConfig.BaseFeeMultiplier,
 			PriorityFeeMultiplier: req.GasConfig.PriorityFeeMultiplier,
 			DeploymentGasLimit:    req.GasConfig.DeploymentGasLimit,
@@ -259,7 +178,7 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 		}
 	}
 
-	network, err := h.networkService.UpdateNetwork(c.Request.Context(), params)
+	network, err := h.networkService.UpdateNetwork(c.Request.Context(), networkUpdateParams)
 	if err != nil {
 		if err.Error() == "network not found" {
 			sendError(c, http.StatusNotFound, "Network not found", nil)
@@ -318,24 +237,24 @@ func (h *NetworkHandler) ListNetworks(c *gin.Context) {
 	testnetStr := c.Query("testnet")
 	activeStr := c.Query("active")
 
-	params := services.ListNetworksParams{}
+	listNetworkParams := params.ListNetworksParams{}
 
 	if testnetStr != "" {
 		testnet := testnetStr == "true"
-		params.IsTestnet = &testnet
+		listNetworkParams.IsTestnet = &testnet
 	}
 	if activeStr != "" {
 		active := activeStr == "true"
-		params.IsActive = &active
+		listNetworkParams.IsActive = &active
 	}
 
-	networks, err := h.networkService.ListNetworks(c.Request.Context(), params)
+	networks, err := h.networkService.ListNetworks(c.Request.Context(), listNetworkParams)
 	if err != nil {
 		sendError(c, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
-	response := make([]helpers.NetworkWithTokensResponse, len(networks))
+	response := make([]responses.NetworkWithTokensResponse, len(networks))
 	for i, network := range networks {
 		tokens, err := h.networkService.ListActiveTokensByNetwork(c.Request.Context(), network.ID)
 		if err != nil {
@@ -347,4 +266,50 @@ func (h *NetworkHandler) ListNetworks(c *gin.Context) {
 	}
 
 	sendList(c, response)
+}
+
+// GetNetworkByChainID godoc
+// @Summary Get a network by chain ID
+// @Description Retrieves a network by its chain ID (supports both decimal and hex formats)
+// @Tags networks
+// @Accept json
+// @Produce json
+// @Param chain_id path string true "Chain ID (decimal or hex with 0x prefix)"
+// @Success 200 {object} NetworkResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /networks/chain/{chain_id} [get]
+func (h *NetworkHandler) GetNetworkByChainID(c *gin.Context) {
+	chainIdStr := c.Param("chain_id")
+	
+	var chainId int64
+	var err error
+	
+	// Check if it's a hex string (starts with 0x or 0X)
+	if len(chainIdStr) > 2 && (chainIdStr[:2] == "0x" || chainIdStr[:2] == "0X") {
+		// Parse as hex
+		chainId, err = strconv.ParseInt(chainIdStr[2:], 16, 32)
+	} else {
+		// Parse as decimal
+		chainId, err = strconv.ParseInt(chainIdStr, 10, 32)
+	}
+	
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid chain ID format", err)
+		return
+	}
+
+	network, err := h.networkService.GetNetworkByChainID(c.Request.Context(), int32(chainId))
+	if err != nil {
+		if err.Error() == "network not found" {
+			sendError(c, http.StatusNotFound, "Network not found", nil)
+			return
+		}
+		sendError(c, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	sendSuccess(c, http.StatusOK, helpers.ToNetworkResponse(*network))
 }

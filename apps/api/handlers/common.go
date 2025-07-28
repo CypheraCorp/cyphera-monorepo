@@ -3,10 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
 
 	"github.com/cyphera/cyphera-api/libs/go/client/coinmarketcap"
 	"github.com/cyphera/cyphera-api/libs/go/db"
@@ -14,6 +11,7 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -21,11 +19,15 @@ import (
 	"go.uber.org/zap"
 )
 
-// CommonServices holds common dependencies used across handlers
+// Common error messages used across handlers
+const (
+	errMsgInvalidWorkspaceIDFormat = "Invalid workspace ID format"
+)
+
+// CommonServices holds all the common services and dependencies used by handlers
 type CommonServices struct {
-	db db.Querier
-	// dbPool is kept separate for transaction support - should be refactored
-	dbPool                    *pgxpool.Pool
+	db                        db.Querier
+	dbPool                    *pgxpool.Pool // Optional: for transaction support
 	cypheraSmartWalletAddress string
 	CMCClient                 *coinmarketcap.Client
 	CMCAPIKey                 string
@@ -39,15 +41,11 @@ type CommonServices struct {
 	// other shared dependencies
 }
 
-// ErrorResponse represents a standard error response
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
-
-// SuccessResponse represents a standard success response
-type SuccessResponse struct {
-	Message string `json:"message"`
-}
+// Use types from the centralized responses package
+type ErrorResponse = responses.ErrorResponse
+type SuccessResponse = responses.SuccessResponse
+type PaginatedResponse = responses.PaginatedResponse
+type Pagination = responses.Pagination
 
 // CommonServicesConfig contains all dependencies needed to create CommonServices
 type CommonServicesConfig struct {
@@ -257,58 +255,6 @@ func (s *CommonServices) HandleError(c *gin.Context, err error, message string, 
 	})
 }
 
-// IsAddressValid checks if the provided string is a valid Ethereum address
-// It verifies:
-// 1. The address is exactly 42 characters long
-// 2. The address starts with "0x"
-// 3. The remaining 40 characters are valid hexadecimal
-func IsAddressValid(address string) bool {
-	// Check length
-	if len(address) != 42 {
-		return false
-	}
-
-	// Check "0x" prefix
-	if !strings.HasPrefix(address, "0x") {
-		return false
-	}
-
-	// Check if the address contains only hex characters after the 0x prefix
-	for _, c := range address[2:] {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-
-	return true
-}
-
-// IsPrivateKeyValid checks if the provided string is a valid Ethereum private key
-// It verifies:
-// 1. The key is exactly 66 characters long (including 0x prefix)
-// 2. The key starts with "0x"
-// 3. The remaining 64 characters are valid hexadecimal
-func IsPrivateKeyValid(key string) bool {
-	// Check length (32 bytes = 64 hex chars + 2 chars for "0x")
-	if len(key) != 66 {
-		return false
-	}
-
-	// Check "0x" prefix
-	if !strings.HasPrefix(key, "0x") {
-		return false
-	}
-
-	// Check if the key contains only hex characters after the 0x prefix
-	for _, c := range key[2:] {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-
-	return true
-}
-
 // sendError is a helper function that combines logging and error response
 // It logs the error with the given message and sends a JSON error response
 func sendError(c *gin.Context, statusCode int, message string, err error) {
@@ -356,20 +302,6 @@ func sendSuccess(c *gin.Context, statusCode int, data interface{}) {
 	c.JSON(statusCode, data)
 }
 
-type PaginatedResponse struct {
-	Data       interface{} `json:"data"`
-	Object     string      `json:"object"`
-	HasMore    bool        `json:"has_more"`
-	Pagination Pagination  `json:"pagination"`
-}
-
-type Pagination struct {
-	CurrentPage int `json:"current_page"`
-	PerPage     int `json:"per_page"`
-	TotalItems  int `json:"total_items"`
-	TotalPages  int `json:"total_pages"`
-}
-
 // sendPaginatedSuccess sends a successful paginated response
 func sendPaginatedSuccess(c *gin.Context, statusCode int, data interface{}, page, limit, total int) PaginatedResponse {
 	hasMore := (total+limit-1)/limit > page
@@ -398,36 +330,6 @@ func sendList(c *gin.Context, items interface{}) {
 		"object": "list",
 		"data":   items,
 	})
-}
-
-// validatePaginationParams validates and returns limit and page parameters
-func validatePaginationParams(c *gin.Context) (limit int32, page int32, err error) {
-	const maxLimit int32 = 100
-	limit = 10
-
-	if limitStr := c.Query("limit"); limitStr != "" {
-		parsedLimit, err := strconv.ParseInt(limitStr, 10, 32)
-		if err != nil {
-			return 0, 0, fmt.Errorf("invalid limit parameter")
-		}
-		if parsedLimit > int64(maxLimit) {
-			limit = maxLimit
-		} else if parsedLimit > 0 {
-			limit = int32(parsedLimit)
-		}
-	}
-
-	if pageStr := c.Query("page"); pageStr != "" {
-		parsedPage, err := strconv.ParseInt(pageStr, 10, 32)
-		if err != nil {
-			return 0, 0, fmt.Errorf("invalid page parameter")
-		}
-		if parsedPage > 0 {
-			page = int32(parsedPage)
-		}
-	}
-
-	return limit, page, nil
 }
 
 // CreateMockCommonServices creates a CommonServices instance with mock interfaces for testing

@@ -2,7 +2,6 @@ package processor
 
 import (
 	"context"
-	"strings"
 
 	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
 	"github.com/cyphera/cyphera-api/libs/go/db"
@@ -39,24 +38,4 @@ type ProcessingResults struct {
 	Total     int
 	Succeeded int
 	Failed    int
-}
-
-// IsAddressValid checks if an Ethereum address is valid
-func IsAddressValid(address string) bool {
-	// Check length
-	if len(address) != 42 {
-		return false
-	}
-	// Check prefix
-	if !strings.HasPrefix(address, "0x") {
-		return false
-	}
-	// Check hex characters
-	for i := 2; i < len(address); i++ {
-		c := address[i]
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
 }

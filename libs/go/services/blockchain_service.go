@@ -7,6 +7,7 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -23,33 +24,6 @@ type BlockchainService struct {
 	rpcAPIKey string
 }
 
-// TransactionData contains all relevant transaction information
-type TransactionData struct {
-	// Basic transaction info
-	Hash           string
-	BlockNumber    uint64
-	BlockTimestamp uint64
-	Status         uint64 // 1 = success, 0 = failed
-	From           string
-	To             string
-	Value          *big.Int
-	Input          []byte
-
-	// Gas information
-	GasPrice          *big.Int // Wei per gas unit
-	GasUsed           uint64   // Actual gas units used
-	GasLimit          uint64   // Max gas units allowed
-	EffectiveGasPrice *big.Int // For EIP-1559 transactions
-
-	// EIP-1559 fields (if applicable)
-	MaxFeePerGas         *big.Int
-	MaxPriorityFeePerGas *big.Int
-	BaseFeePerGas        *big.Int // From block
-
-	// Calculated values
-	TotalGasCostWei *big.Int // gasUsed * effectiveGasPrice
-	NetworkID       uuid.UUID
-}
 
 // NewBlockchainService creates a new blockchain service
 func NewBlockchainService(queries db.Querier, rpcAPIKey string) *BlockchainService {
@@ -116,7 +90,7 @@ func (s *BlockchainService) Initialize(ctx context.Context) error {
 }
 
 // GetTransactionData fetches complete transaction data from the blockchain
-func (s *BlockchainService) GetTransactionData(ctx context.Context, txHash string, networkID uuid.UUID) (*TransactionData, error) {
+func (s *BlockchainService) GetTransactionData(ctx context.Context, txHash string, networkID uuid.UUID) (*business.TransactionData, error) {
 	client, ok := s.clients[networkID]
 	if !ok {
 		return nil, fmt.Errorf("no RPC client for network %s", networkID)
@@ -160,7 +134,7 @@ func (s *BlockchainService) GetTransactionData(ctx context.Context, txHash strin
 	}
 
 	// Build transaction data
-	txData := &TransactionData{
+	txData := &business.TransactionData{
 		Hash:           txHash,
 		BlockNumber:    receipt.BlockNumber.Uint64(),
 		BlockTimestamp: block.Time(),
@@ -202,7 +176,7 @@ func (s *BlockchainService) GetTransactionData(ctx context.Context, txHash strin
 }
 
 // GetTransactionDataFromEvent fetches transaction data for a subscription event
-func (s *BlockchainService) GetTransactionDataFromEvent(ctx context.Context, event *db.SubscriptionEvent) (*TransactionData, error) {
+func (s *BlockchainService) GetTransactionDataFromEvent(ctx context.Context, event *db.SubscriptionEvent) (*business.TransactionData, error) {
 	if !event.TransactionHash.Valid || event.TransactionHash.String == "" {
 		return nil, fmt.Errorf("subscription event has no transaction hash")
 	}

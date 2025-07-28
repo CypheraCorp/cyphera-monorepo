@@ -2,10 +2,14 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -89,36 +93,22 @@ func (s *SubscriptionEventService) GetSubscriptionEventByTxHash(ctx context.Cont
 	return &event, nil
 }
 
-// ListSubscriptionEventsParams contains parameters for listing subscription events
-type ListSubscriptionEventsParams struct {
-	WorkspaceID uuid.UUID
-	Limit       int
-	Page        int
-}
-
-// ListSubscriptionEventsResult contains the result of listing subscription events
-type ListSubscriptionEventsResult struct {
-	Events     []db.ListSubscriptionEventDetailsWithPaginationRow
-	TotalCount int64
-}
 
 // ListSubscriptionEvents retrieves a paginated list of subscription events for a workspace
-func (s *SubscriptionEventService) ListSubscriptionEvents(ctx context.Context, params ListSubscriptionEventsParams) (*ListSubscriptionEventsResult, error) {
+func (s *SubscriptionEventService) ListSubscriptionEvents(ctx context.Context, params params.ListSubscriptionEventsParams) (*responses.ListSubscriptionEventsResult, error) {
 	// Validate pagination parameters
-	if params.Page < 1 {
-		params.Page = 1
-	}
 	if params.Limit < 1 || params.Limit > 100 {
 		params.Limit = 20
 	}
-
-	offset := (params.Page - 1) * params.Limit
+	if params.Offset < 0 {
+		params.Offset = 0
+	}
 
 	// Get events
 	events, err := s.queries.ListSubscriptionEventDetailsWithPagination(ctx, db.ListSubscriptionEventDetailsWithPaginationParams{
 		WorkspaceID: params.WorkspaceID,
-		Limit:       int32(params.Limit),
-		Offset:      int32(offset),
+		Limit:       params.Limit,
+		Offset:      params.Offset,
 	})
 	if err != nil {
 		s.logger.Error("Failed to list subscription events",
@@ -136,9 +126,39 @@ func (s *SubscriptionEventService) ListSubscriptionEvents(ctx context.Context, p
 		return nil, fmt.Errorf("failed to count subscription events: %w", err)
 	}
 
-	return &ListSubscriptionEventsResult{
-		Events:     events,
-		TotalCount: totalCount,
+	// Convert events to response format
+	responseEvents := make([]responses.SubscriptionEventResponse, len(events))
+	for i, event := range events {
+		responseEvents[i] = responses.SubscriptionEventResponse{
+			ID:                 event.SubscriptionEventID,
+			SubscriptionID:     event.SubscriptionID,
+			EventType:          string(event.EventType),
+			TransactionHash:    event.TransactionHash.String,
+			EventAmountInCents: event.EventAmountInCents,
+			EventOccurredAt:    event.EventOccurredAt.Time,
+			ErrorMessage:       event.ErrorMessage.String,
+			EventMetadata:      event.EventMetadata,
+			EventCreatedAt:     event.EventCreatedAt.Time,
+			CustomerID:         event.CustomerID,
+			SubscriptionStatus: string(event.SubscriptionStatus),
+			ProductID:          event.ProductID,
+			ProductName:        event.ProductName,
+			PriceInfo: responses.SubscriptionEventPriceInfo{
+				ID:                  event.PriceID,
+				Type:                string(event.PriceType),
+				Currency:            event.PriceCurrency,
+				UnitAmountInPennies: int64(event.PriceUnitAmountInPennies),
+				IntervalType:        string(event.PriceIntervalType),
+				TermLength:          event.PriceTermLength,
+				CreatedAt:           event.EventCreatedAt.Time.Unix(),
+				UpdatedAt:           event.EventCreatedAt.Time.Unix(),
+			},
+		}
+	}
+	
+	return &responses.ListSubscriptionEventsResult{
+		Events: responseEvents,
+		Total:  totalCount,
 	}, nil
 }
 
@@ -172,19 +192,8 @@ func (s *SubscriptionEventService) ListSubscriptionEventsBySubscription(ctx cont
 	return events, nil
 }
 
-// CreateSubscriptionEventParams contains parameters for creating a subscription event
-type CreateSubscriptionEventParams struct {
-	SubscriptionID  uuid.UUID
-	EventType       string
-	TransactionHash string
-	AmountInCents   int32
-	OccurredAt      pgtype.Timestamptz
-	ErrorMessage    string
-	Metadata        []byte
-}
-
 // CreateSubscriptionEvent creates a new subscription event
-func (s *SubscriptionEventService) CreateSubscriptionEvent(ctx context.Context, params CreateSubscriptionEventParams) (*db.SubscriptionEvent, error) {
+func (s *SubscriptionEventService) CreateSubscriptionEvent(ctx context.Context, params params.CreateSubscriptionEventParams) (*db.SubscriptionEvent, error) {
 	// Validate subscription exists
 	_, err := s.queries.GetSubscription(ctx, params.SubscriptionID)
 	if err != nil {
@@ -194,33 +203,39 @@ func (s *SubscriptionEventService) CreateSubscriptionEvent(ctx context.Context, 
 		return nil, fmt.Errorf("failed to retrieve subscription: %w", err)
 	}
 
+	// Convert metadata to JSON
+	metadataJSON, err := json.Marshal(params.Metadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+	
 	// Create the event
 	event, err := s.queries.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
 		SubscriptionID: params.SubscriptionID,
-		EventType:      db.SubscriptionEventType(params.EventType),
+		EventType:      params.EventType,
 		TransactionHash: pgtype.Text{
-			String: params.TransactionHash,
-			Valid:  params.TransactionHash != "",
+			String: func() string { if params.TransactionHash != nil { return *params.TransactionHash } else { return "" } }(),
+			Valid:  params.TransactionHash != nil && *params.TransactionHash != "",
 		},
 		AmountInCents: params.AmountInCents,
-		OccurredAt:    params.OccurredAt,
+		OccurredAt:    pgtype.Timestamptz{Time: time.Now(), Valid: true}, // Use current time
 		ErrorMessage: pgtype.Text{
-			String: params.ErrorMessage,
-			Valid:  params.ErrorMessage != "",
+			String: func() string { if params.FailureReason != nil { return *params.FailureReason } else { return "" } }(),
+			Valid:  params.FailureReason != nil,
 		},
-		Metadata: params.Metadata,
+		Metadata: metadataJSON,
 	})
 	if err != nil {
 		s.logger.Error("Failed to create subscription event",
 			zap.String("subscription_id", params.SubscriptionID.String()),
-			zap.String("event_type", params.EventType),
+			zap.String("event_type", string(params.EventType)),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to create subscription event: %w", err)
 	}
 
 	s.logger.Info("Subscription event created successfully",
 		zap.String("event_id", event.ID.String()),
-		zap.String("event_type", params.EventType))
+		zap.String("event_type", string(params.EventType)))
 
 	return &event, nil
 }

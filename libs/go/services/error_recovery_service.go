@@ -8,6 +8,8 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/client/payment_sync"
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -16,76 +18,30 @@ import (
 
 // ErrorRecoveryService handles webhook replay, DLQ processing, and sync recovery
 type ErrorRecoveryService struct {
-	db                *db.Queries
+	db                db.Querier
 	logger            *zap.Logger
 	paymentSyncClient *payment_sync.PaymentSyncClient
 }
 
 // NewErrorRecoveryService creates a new error recovery service
 func NewErrorRecoveryService(
-	dbQueries *db.Queries,
+	dbQuerier db.Querier,
 	logger *zap.Logger,
 	paymentSyncClient *payment_sync.PaymentSyncClient,
 ) *ErrorRecoveryService {
 	return &ErrorRecoveryService{
-		db:                dbQueries,
+		db:                dbQuerier,
 		logger:            logger,
 		paymentSyncClient: paymentSyncClient,
 	}
 }
 
-// WebhookReplayRequest represents a webhook replay request
-type WebhookReplayRequest struct {
-	WorkspaceID    string `json:"workspace_id" binding:"required"`
-	ProviderName   string `json:"provider_name" binding:"required"`
-	WebhookEventID string `json:"webhook_event_id" binding:"required"`
-	ForceReplay    bool   `json:"force_replay"`
-	ReplayReason   string `json:"replay_reason,omitempty"`
-}
-
-// WebhookReplayResponse represents the result of webhook replay
-type WebhookReplayResponse struct {
-	Success         bool      `json:"success"`
-	ReplayEventID   string    `json:"replay_event_id,omitempty"`
-	OriginalEventID string    `json:"original_event_id"`
-	ReplayedAt      time.Time `json:"replayed_at"`
-	Message         string    `json:"message"`
-	Error           string    `json:"error,omitempty"`
-}
-
-// SyncRecoveryRequest represents a sync session recovery request
-type SyncRecoveryRequest struct {
-	WorkspaceID  string   `json:"workspace_id" binding:"required"`
-	SessionID    string   `json:"session_id" binding:"required"`
-	RecoveryMode string   `json:"recovery_mode"` // "resume", "restart"
-	EntityTypes  []string `json:"entity_types,omitempty"`
-}
-
-// SyncRecoveryResponse represents the result of sync recovery
-type SyncRecoveryResponse struct {
-	Success     bool                   `json:"success"`
-	SessionID   string                 `json:"session_id"`
-	RecoveredAt time.Time              `json:"recovered_at"`
-	Progress    map[string]interface{} `json:"progress,omitempty"`
-	Message     string                 `json:"message"`
-	Error       string                 `json:"error,omitempty"`
-}
-
-// DLQProcessingStats represents DLQ processing statistics
-type DLQProcessingStats struct {
-	TotalMessages         int64     `json:"total_messages"`
-	SuccessfullyProcessed int64     `json:"successfully_processed"`
-	ProcessingFailed      int64     `json:"processing_failed"`
-	MaxRetriesExceeded    int64     `json:"max_retries_exceeded"`
-	LastProcessedAt       time.Time `json:"last_processed_at"`
-	SuccessRate           float64   `json:"success_rate"`
-}
 
 // ReplayWebhookEvent replays a failed webhook event
-func (ers *ErrorRecoveryService) ReplayWebhookEvent(ctx context.Context, req WebhookReplayRequest) (*WebhookReplayResponse, error) {
+func (ers *ErrorRecoveryService) ReplayWebhookEvent(ctx context.Context, req requests.WebhookReplayRequest) (*responses.WebhookReplayResponse, error) {
 	workspaceUUID, err := uuid.Parse(req.WorkspaceID)
 	if err != nil {
-		return &WebhookReplayResponse{
+		return &responses.WebhookReplayResponse{
 			Success:         false,
 			OriginalEventID: req.WebhookEventID,
 			Error:           "invalid workspace ID format",
@@ -106,7 +62,7 @@ func (ers *ErrorRecoveryService) ReplayWebhookEvent(ctx context.Context, req Web
 	})
 	if err != nil {
 		ers.logger.Error("Failed to find original webhook event", zap.Error(err))
-		return &WebhookReplayResponse{
+		return &responses.WebhookReplayResponse{
 			Success:         false,
 			OriginalEventID: req.WebhookEventID,
 			Error:           "original webhook event not found",
@@ -115,7 +71,7 @@ func (ers *ErrorRecoveryService) ReplayWebhookEvent(ctx context.Context, req Web
 
 	// Check if we should proceed with replay
 	if !req.ForceReplay && originalEvent.ProcessingAttempts.Int32 >= 3 {
-		return &WebhookReplayResponse{
+		return &responses.WebhookReplayResponse{
 			Success:         false,
 			OriginalEventID: req.WebhookEventID,
 			Error:           "webhook has already been retried multiple times, use force_replay=true to override",
@@ -138,7 +94,7 @@ func (ers *ErrorRecoveryService) ReplayWebhookEvent(ctx context.Context, req Web
 	})
 	if err != nil {
 		ers.logger.Error("Failed to create replay event record", zap.Error(err))
-		return &WebhookReplayResponse{
+		return &responses.WebhookReplayResponse{
 			Success:         false,
 			OriginalEventID: req.WebhookEventID,
 			Error:           "failed to create replay record",
@@ -149,7 +105,7 @@ func (ers *ErrorRecoveryService) ReplayWebhookEvent(ctx context.Context, req Web
 	var eventData map[string]interface{}
 	if err := json.Unmarshal(originalEvent.EventDetails, &eventData); err != nil {
 		ers.logger.Error("Failed to parse event details", zap.Error(err))
-		return &WebhookReplayResponse{
+		return &responses.WebhookReplayResponse{
 			Success:         false,
 			OriginalEventID: req.WebhookEventID,
 			ReplayEventID:   replayEvent.ID.String(),
@@ -171,7 +127,7 @@ func (ers *ErrorRecoveryService) ReplayWebhookEvent(ctx context.Context, req Web
 	providerService, err := ers.paymentSyncClient.GetProviderService(ctx, req.WorkspaceID, req.ProviderName)
 	if err != nil {
 		ers.logger.Error("Failed to get provider service", zap.Error(err))
-		return &WebhookReplayResponse{
+		return &responses.WebhookReplayResponse{
 			Success:         false,
 			OriginalEventID: req.WebhookEventID,
 			ReplayEventID:   replayEvent.ID.String(),
@@ -193,11 +149,11 @@ func (ers *ErrorRecoveryService) ReplayWebhookEvent(ctx context.Context, req Web
 			EventDetails: []byte(fmt.Sprintf(`{"error": "%s", "retry_attempt": true}`, err.Error())),
 		})
 
-		return &WebhookReplayResponse{
+		return &responses.WebhookReplayResponse{
 			Success:         false,
 			OriginalEventID: req.WebhookEventID,
 			ReplayEventID:   replayEvent.ID.String(),
-			ReplayedAt:      time.Now(),
+			ReplayedAt:      time.Now().Format(time.RFC3339),
 			Error:           fmt.Sprintf("processing failed: %v", err),
 		}, nil
 	}
@@ -215,20 +171,20 @@ func (ers *ErrorRecoveryService) ReplayWebhookEvent(ctx context.Context, req Web
 		zap.String("original_event_id", req.WebhookEventID),
 		zap.String("replay_event_id", replayEvent.ID.String()))
 
-	return &WebhookReplayResponse{
+	return &responses.WebhookReplayResponse{
 		Success:         true,
 		OriginalEventID: req.WebhookEventID,
 		ReplayEventID:   replayEvent.ID.String(),
-		ReplayedAt:      time.Now(),
+		ReplayedAt:      time.Now().Format(time.RFC3339),
 		Message:         "Webhook replayed and processed successfully",
 	}, nil
 }
 
 // RecoverSyncSession recovers a failed or incomplete sync session
-func (ers *ErrorRecoveryService) RecoverSyncSession(ctx context.Context, req SyncRecoveryRequest) (*SyncRecoveryResponse, error) {
+func (ers *ErrorRecoveryService) RecoverSyncSession(ctx context.Context, req requests.SyncRecoveryRequest) (*responses.SyncRecoveryResponse, error) {
 	workspaceUUID, err := uuid.Parse(req.WorkspaceID)
 	if err != nil {
-		return &SyncRecoveryResponse{
+		return &responses.SyncRecoveryResponse{
 			Success:   false,
 			SessionID: req.SessionID,
 			Error:     "invalid workspace ID format",
@@ -237,7 +193,7 @@ func (ers *ErrorRecoveryService) RecoverSyncSession(ctx context.Context, req Syn
 
 	sessionUUID, err := uuid.Parse(req.SessionID)
 	if err != nil {
-		return &SyncRecoveryResponse{
+		return &responses.SyncRecoveryResponse{
 			Success:   false,
 			SessionID: req.SessionID,
 			Error:     "invalid session ID format",
@@ -256,7 +212,7 @@ func (ers *ErrorRecoveryService) RecoverSyncSession(ctx context.Context, req Syn
 	})
 	if err != nil {
 		ers.logger.Error("Failed to find sync session", zap.Error(err))
-		return &SyncRecoveryResponse{
+		return &responses.SyncRecoveryResponse{
 			Success:   false,
 			SessionID: req.SessionID,
 			Error:     "sync session not found",
@@ -265,7 +221,7 @@ func (ers *ErrorRecoveryService) RecoverSyncSession(ctx context.Context, req Syn
 
 	// Check if session is recoverable
 	if session.Status != "failed" && session.Status != "running" {
-		return &SyncRecoveryResponse{
+		return &responses.SyncRecoveryResponse{
 			Success:   false,
 			SessionID: req.SessionID,
 			Error:     fmt.Sprintf("session status '%s' is not recoverable", session.Status),
@@ -278,7 +234,7 @@ func (ers *ErrorRecoveryService) RecoverSyncSession(ctx context.Context, req Syn
 	case "restart":
 		return ers.restartSyncSession(ctx, session, req)
 	default:
-		return &SyncRecoveryResponse{
+		return &responses.SyncRecoveryResponse{
 			Success:   false,
 			SessionID: req.SessionID,
 			Error:     "invalid recovery mode, use 'resume' or 'restart'",
@@ -287,7 +243,7 @@ func (ers *ErrorRecoveryService) RecoverSyncSession(ctx context.Context, req Syn
 }
 
 // GetDLQStats returns DLQ processing statistics
-func (ers *ErrorRecoveryService) GetDLQStats(ctx context.Context, workspaceID, providerName string, since time.Time) (*DLQProcessingStats, error) {
+func (ers *ErrorRecoveryService) GetDLQStats(ctx context.Context, workspaceID, providerName string, since time.Time) (*responses.DLQProcessingStats, error) {
 	workspaceUUID, err := uuid.Parse(workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid workspace ID format: %w", err)
@@ -312,12 +268,12 @@ func (ers *ErrorRecoveryService) GetDLQStats(ctx context.Context, workspaceID, p
 		lastProcessedAt = lastProcessedTime
 	}
 
-	return &DLQProcessingStats{
+	return &responses.DLQProcessingStats{
 		TotalMessages:         stats.TotalDlqMessages,
 		SuccessfullyProcessed: stats.SuccessfullyProcessed,
 		ProcessingFailed:      stats.ProcessingFailed,
 		MaxRetriesExceeded:    stats.MaxRetriesExceeded,
-		LastProcessedAt:       lastProcessedAt,
+		LastProcessedAt:       lastProcessedAt.Format(time.RFC3339),
 		SuccessRate:           successRate,
 	}, nil
 }
@@ -343,7 +299,7 @@ func (ers *ErrorRecoveryService) processReplayedWebhook(ctx context.Context, wor
 	return nil
 }
 
-func (ers *ErrorRecoveryService) resumeSyncSession(ctx context.Context, session db.PaymentSyncSession, req SyncRecoveryRequest) (*SyncRecoveryResponse, error) {
+func (ers *ErrorRecoveryService) resumeSyncSession(ctx context.Context, session db.PaymentSyncSession, req requests.SyncRecoveryRequest) (*responses.SyncRecoveryResponse, error) {
 	// Resume the session from where it left off
 	resumedSession, err := ers.db.ResumeSyncSession(ctx, db.ResumeSyncSessionParams{
 		ID:          session.ID,
@@ -351,7 +307,7 @@ func (ers *ErrorRecoveryService) resumeSyncSession(ctx context.Context, session 
 	})
 	if err != nil {
 		ers.logger.Error("Failed to resume sync session", zap.Error(err))
-		return &SyncRecoveryResponse{
+		return &responses.SyncRecoveryResponse{
 			Success:   false,
 			SessionID: req.SessionID,
 			Error:     "failed to resume session",
@@ -368,16 +324,16 @@ func (ers *ErrorRecoveryService) resumeSyncSession(ctx context.Context, session 
 		zap.String("workspace_id", req.WorkspaceID),
 		zap.String("session_id", req.SessionID))
 
-	return &SyncRecoveryResponse{
+	return &responses.SyncRecoveryResponse{
 		Success:     true,
 		SessionID:   req.SessionID,
-		RecoveredAt: time.Now(),
+		RecoveredAt: time.Now().Format(time.RFC3339),
 		Progress:    progress,
 		Message:     "Sync session resumed successfully",
 	}, nil
 }
 
-func (ers *ErrorRecoveryService) restartSyncSession(ctx context.Context, session db.PaymentSyncSession, req SyncRecoveryRequest) (*SyncRecoveryResponse, error) {
+func (ers *ErrorRecoveryService) restartSyncSession(ctx context.Context, session db.PaymentSyncSession, req requests.SyncRecoveryRequest) (*responses.SyncRecoveryResponse, error) {
 	// Create a new sync session based on the failed one
 	entityTypes := req.EntityTypes
 	if len(entityTypes) == 0 {
@@ -402,7 +358,7 @@ func (ers *ErrorRecoveryService) restartSyncSession(ctx context.Context, session
 	})
 	if err != nil {
 		ers.logger.Error("Failed to create recovery sync session", zap.Error(err))
-		return &SyncRecoveryResponse{
+		return &responses.SyncRecoveryResponse{
 			Success:   false,
 			SessionID: req.SessionID,
 			Error:     "failed to create recovery session",
@@ -420,10 +376,10 @@ func (ers *ErrorRecoveryService) restartSyncSession(ctx context.Context, session
 		zap.String("original_session_id", req.SessionID),
 		zap.String("new_session_id", newSession.ID.String()))
 
-	return &SyncRecoveryResponse{
+	return &responses.SyncRecoveryResponse{
 		Success:     true,
 		SessionID:   newSession.ID.String(),
-		RecoveredAt: time.Now(),
+		RecoveredAt: time.Now().Format(time.RFC3339),
 		Message:     fmt.Sprintf("New recovery sync session created: %s", newSession.ID.String()),
 	}, nil
 }

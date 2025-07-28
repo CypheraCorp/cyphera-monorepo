@@ -10,7 +10,8 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/client/coinmarketcap"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
-	"github.com/google/uuid"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"go.uber.org/zap"
 )
 
@@ -31,24 +32,6 @@ type CachedRate struct {
 	ExpiresAt time.Time
 }
 
-// ExchangeRateParams contains parameters for fetching exchange rates
-type ExchangeRateParams struct {
-	FromSymbol string     // e.g., "ETH", "BTC"
-	ToSymbol   string     // e.g., "USD", "EUR"
-	TokenID    *uuid.UUID // For database tracking
-	NetworkID  *uuid.UUID // For network-specific rates
-}
-
-// ExchangeRateResult contains the result of an exchange rate lookup
-type ExchangeRateResult struct {
-	Rate            float64
-	FromSymbol      string
-	ToSymbol        string
-	Source          string // "cache", "api", "database"
-	LastUpdated     time.Time
-	ConfidenceLevel float64 // 0.0 to 1.0, higher is more reliable
-}
-
 // NewExchangeRateService creates a new exchange rate service
 func NewExchangeRateService(queries db.Querier, cmcAPIKey string) *ExchangeRateService {
 	return &ExchangeRateService{
@@ -62,18 +45,20 @@ func NewExchangeRateService(queries db.Querier, cmcAPIKey string) *ExchangeRateS
 }
 
 // GetExchangeRate fetches exchange rate with caching and fallback mechanisms
-func (s *ExchangeRateService) GetExchangeRate(ctx context.Context, params ExchangeRateParams) (*ExchangeRateResult, error) {
+func (s *ExchangeRateService) GetExchangeRate(ctx context.Context, params params.ExchangeRateParams) (*responses.ExchangeRateResult, error) {
 	cacheKey := fmt.Sprintf("%s_%s", params.FromSymbol, params.ToSymbol)
 
 	// Check cache first
 	if rate := s.getCachedRate(cacheKey); rate != nil {
-		return &ExchangeRateResult{
-			Rate:            rate.Rate,
-			FromSymbol:      params.FromSymbol,
-			ToSymbol:        params.ToSymbol,
-			Source:          "cache",
-			LastUpdated:     rate.UpdatedAt,
-			ConfidenceLevel: 1.0,
+		return &responses.ExchangeRateResult{
+			Rate:       rate.Rate,
+			FromSymbol: params.FromSymbol,
+			ToSymbol:   params.ToSymbol,
+			Source:     "cache",
+			UpdatedAt:  rate.UpdatedAt,
+			Confidence: 1.0,
+			TokenID:    params.TokenID,
+			NetworkID:  params.NetworkID,
 		}, nil
 	}
 
@@ -102,23 +87,25 @@ func (s *ExchangeRateService) GetExchangeRate(ctx context.Context, params Exchan
 }
 
 // GetMultipleExchangeRates fetches multiple exchange rates efficiently
-func (s *ExchangeRateService) GetMultipleExchangeRates(ctx context.Context, requests []ExchangeRateParams) (map[string]*ExchangeRateResult, error) {
-	results := make(map[string]*ExchangeRateResult)
+func (s *ExchangeRateService) GetMultipleExchangeRates(ctx context.Context, requests []params.ExchangeRateParams) (map[string]*responses.ExchangeRateResult, error) {
+	results := make(map[string]*responses.ExchangeRateResult)
 	var uncachedTokens []string
-	var uncachedRequests []ExchangeRateParams
+	var uncachedRequests []params.ExchangeRateParams
 
 	// Check cache for all requests first
 	for _, params := range requests {
 		cacheKey := fmt.Sprintf("%s_%s", params.FromSymbol, params.ToSymbol)
 
 		if rate := s.getCachedRate(cacheKey); rate != nil {
-			results[cacheKey] = &ExchangeRateResult{
-				Rate:            rate.Rate,
-				FromSymbol:      params.FromSymbol,
-				ToSymbol:        params.ToSymbol,
-				Source:          "cache",
-				LastUpdated:     rate.UpdatedAt,
-				ConfidenceLevel: 1.0,
+			results[cacheKey] = &responses.ExchangeRateResult{
+				Rate:       rate.Rate,
+				FromSymbol: params.FromSymbol,
+				ToSymbol:   params.ToSymbol,
+				Source:     "cache",
+				UpdatedAt:  rate.UpdatedAt,
+				Confidence: 1.0,
+				TokenID:    params.TokenID,
+				NetworkID:  params.NetworkID,
 			}
 		} else {
 			uncachedTokens = append(uncachedTokens, params.FromSymbol)
@@ -149,7 +136,7 @@ func (s *ExchangeRateService) GetMultipleExchangeRates(ctx context.Context, requ
 }
 
 // fetchFromAPI fetches a single exchange rate from CoinMarketCap API
-func (s *ExchangeRateService) fetchFromAPI(ctx context.Context, params ExchangeRateParams) (*ExchangeRateResult, error) {
+func (s *ExchangeRateService) fetchFromAPI(ctx context.Context, params params.ExchangeRateParams) (*responses.ExchangeRateResult, error) {
 	response, err := s.cmcClient.GetLatestQuotes([]string{params.FromSymbol}, []string{params.ToSymbol})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch from CoinMarketCap: %w", err)
@@ -166,18 +153,20 @@ func (s *ExchangeRateService) fetchFromAPI(ctx context.Context, params ExchangeR
 		return nil, fmt.Errorf("no quote found for %s to %s", params.FromSymbol, params.ToSymbol)
 	}
 
-	return &ExchangeRateResult{
-		Rate:            quote.Price,
-		FromSymbol:      params.FromSymbol,
-		ToSymbol:        params.ToSymbol,
-		Source:          "api",
-		LastUpdated:     time.Now(),
-		ConfidenceLevel: 1.0,
+	return &responses.ExchangeRateResult{
+		Rate:       quote.Price,
+		FromSymbol: params.FromSymbol,
+		ToSymbol:   params.ToSymbol,
+		Source:     "api",
+		UpdatedAt:  time.Now(),
+		Confidence: 1.0,
+		TokenID:    params.TokenID,
+		NetworkID:  params.NetworkID,
 	}, nil
 }
 
 // fetchMultipleFromAPI fetches multiple exchange rates in a single API call
-func (s *ExchangeRateService) fetchMultipleFromAPI(ctx context.Context, tokens []string, requests []ExchangeRateParams) (map[string]*ExchangeRateResult, error) {
+func (s *ExchangeRateService) fetchMultipleFromAPI(ctx context.Context, tokens []string, requests []params.ExchangeRateParams) (map[string]*responses.ExchangeRateResult, error) {
 	// Get unique target currencies
 	targetCurrencies := make(map[string]bool)
 	for _, req := range requests {
@@ -194,7 +183,7 @@ func (s *ExchangeRateService) fetchMultipleFromAPI(ctx context.Context, tokens [
 		return nil, fmt.Errorf("failed to fetch multiple rates from CoinMarketCap: %w", err)
 	}
 
-	results := make(map[string]*ExchangeRateResult)
+	results := make(map[string]*responses.ExchangeRateResult)
 
 	for _, req := range requests {
 		cacheKey := fmt.Sprintf("%s_%s", req.FromSymbol, req.ToSymbol)
@@ -209,13 +198,15 @@ func (s *ExchangeRateService) fetchMultipleFromAPI(ctx context.Context, tokens [
 			continue
 		}
 
-		result := &ExchangeRateResult{
-			Rate:            quote.Price,
-			FromSymbol:      req.FromSymbol,
-			ToSymbol:        req.ToSymbol,
-			Source:          "api",
-			LastUpdated:     time.Now(),
-			ConfidenceLevel: 1.0,
+		result := &responses.ExchangeRateResult{
+			Rate:       quote.Price,
+			FromSymbol: req.FromSymbol,
+			ToSymbol:   req.ToSymbol,
+			Source:     "api",
+			UpdatedAt:  time.Now(),
+			Confidence: 1.0,
+			TokenID:    req.TokenID,
+			NetworkID:  req.NetworkID,
 		}
 
 		results[cacheKey] = result
@@ -235,7 +226,7 @@ func (s *ExchangeRateService) fetchMultipleFromAPI(ctx context.Context, tokens [
 }
 
 // getFromDatabase retrieves exchange rate from database as fallback
-func (s *ExchangeRateService) getFromDatabase(ctx context.Context, params ExchangeRateParams) (*ExchangeRateResult, error) {
+func (s *ExchangeRateService) getFromDatabase(ctx context.Context, params params.ExchangeRateParams) (*responses.ExchangeRateResult, error) {
 	// Try to get the most recent rate from database
 	// This would require a new SQLC query - for now return a basic fallback
 	s.logger.Info("Using database fallback for exchange rate",
@@ -253,13 +244,15 @@ func (s *ExchangeRateService) getFromDatabase(ctx context.Context, params Exchan
 
 	pairKey := fmt.Sprintf("%s_%s", params.FromSymbol, params.ToSymbol)
 	if rate, exists := fallbackRates[pairKey]; exists {
-		return &ExchangeRateResult{
-			Rate:            rate,
-			FromSymbol:      params.FromSymbol,
-			ToSymbol:        params.ToSymbol,
-			Source:          "database",
-			LastUpdated:     time.Now().Add(-1 * time.Hour), // Indicate it's old data
-			ConfidenceLevel: 0.5,                            // Lower confidence for fallback
+		return &responses.ExchangeRateResult{
+			Rate:       rate,
+			FromSymbol: params.FromSymbol,
+			ToSymbol:   params.ToSymbol,
+			Source:     "database",
+			UpdatedAt:  time.Now().Add(-1 * time.Hour), // Indicate it's old data
+			Confidence: 0.5,                            // Lower confidence for fallback
+			TokenID:    params.TokenID,
+			NetworkID:  params.NetworkID,
 		}, nil
 	}
 
@@ -267,7 +260,7 @@ func (s *ExchangeRateService) getFromDatabase(ctx context.Context, params Exchan
 }
 
 // storeInDatabase stores exchange rate in database for future fallback
-func (s *ExchangeRateService) storeInDatabase(ctx context.Context, params ExchangeRateParams, rate float64) error {
+func (s *ExchangeRateService) storeInDatabase(ctx context.Context, params params.ExchangeRateParams, rate float64) error {
 	// TODO: Implement database storage
 	// This would require creating a new table and SQLC queries for exchange_rates
 	s.logger.Debug("Storing exchange rate in database",
@@ -308,20 +301,20 @@ func (s *ExchangeRateService) setCachedRate(key string, rate float64) {
 }
 
 // ConvertAmount converts an amount from one currency to another
-func (s *ExchangeRateService) ConvertAmount(ctx context.Context, amount float64, from, to string) (float64, *ExchangeRateResult, error) {
+func (s *ExchangeRateService) ConvertAmount(ctx context.Context, amount float64, from, to string) (float64, *responses.ExchangeRateResult, error) {
 	if from == to {
 		// Same currency, no conversion needed
-		return amount, &ExchangeRateResult{
-			Rate:            1.0,
-			FromSymbol:      from,
-			ToSymbol:        to,
-			Source:          "direct",
-			LastUpdated:     time.Now(),
-			ConfidenceLevel: 1.0,
+		return amount, &responses.ExchangeRateResult{
+			Rate:       1.0,
+			FromSymbol: from,
+			ToSymbol:   to,
+			Source:     "direct",
+			UpdatedAt:  time.Now(),
+			Confidence: 1.0,
 		}, nil
 	}
 
-	rateResult, err := s.GetExchangeRate(ctx, ExchangeRateParams{
+	rateResult, err := s.GetExchangeRate(ctx, params.ExchangeRateParams{
 		FromSymbol: from,
 		ToSymbol:   to,
 	})

@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cyphera/cyphera-api/apps/subscription-processor/internal/processor"
 	awsclient "github.com/cyphera/cyphera-api/libs/go/client/aws"
 	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
-	"github.com/cyphera/cyphera-api/apps/subscription-processor/internal/processor"
 	"github.com/cyphera/cyphera-api/libs/go/services"
 
 	"github.com/aws/aws-lambda-go/lambda"
@@ -25,8 +25,8 @@ import (
 
 // Application holds all dependencies for the Lambda handler
 type Application struct {
-	subscriptionProcessor      *processor.SubscriptionProcessor
-	scheduledChangesProcessor  *processor.ScheduledChangesProcessor
+	subscriptionProcessor     *processor.SubscriptionProcessor
+	scheduledChangesProcessor *processor.ScheduledChangesProcessor
 	// Add other dependencies here if HandleRequest needs them directly
 	// e.g., dbPool *pgxpool.Pool, delegationClient *dsClient.DelegationClient
 	failureDetector *services.PaymentFailureDetector
@@ -55,7 +55,7 @@ func (app *Application) HandleRequest(ctx context.Context /*, event MyEvent - if
 	// --- Detect Failed Payments and Create Dunning Campaigns ---
 	if results.Failed > 0 {
 		logger.Info("Detecting failed payments and creating dunning campaigns...")
-		
+
 		// Look back 10 minutes for failed payments (adjust based on Lambda schedule)
 		detectionResult, err := app.failureDetector.DetectAndCreateCampaigns(ctx, 10)
 		if err != nil {
@@ -101,7 +101,7 @@ func (a *Application) LocalHandleRequest(ctx context.Context) error {
 	// --- Detect Failed Payments and Create Dunning Campaigns ---
 	if results.Failed > 0 {
 		logger.Info("Detecting failed payments and creating dunning campaigns...")
-		
+
 		// Look back 10 minutes for failed payments (adjust based on Lambda schedule)
 		detectionResult, err := a.failureDetector.DetectAndCreateCampaigns(ctx, 10)
 		if err != nil {
@@ -209,7 +209,7 @@ func main() {
 	if cypheraSmartWalletAddress == "" {
 		logger.Fatal("CYPHERA_SMART_WALLET_ADDRESS environment variable is required and not set")
 	}
-	if !processor.IsAddressValid(cypheraSmartWalletAddress) {
+	if !helpers.IsAddressValid(cypheraSmartWalletAddress) {
 		logger.Fatal("CYPHERA_SMART_WALLET_ADDRESS is not a valid address", zap.String("address", cypheraSmartWalletAddress))
 	}
 
@@ -302,26 +302,26 @@ func main() {
 
 	// Create the dunning service
 	dunningService := services.NewDunningService(dbQueries, logger.Log)
-	
+
 	// Create the payment failure detector
 	failureDetector := services.NewPaymentFailureDetector(dbQueries, logger.Log, dunningService)
-	
+
 	// Initialize payment service for subscription management
 	cmcApiKey := os.Getenv("CMC_API_KEY")
 	paymentService := services.NewPaymentService(dbQueries, cmcApiKey)
-	
+
 	// Create the scheduled changes processor
 	var scheduledChangesProcessor *processor.ScheduledChangesProcessor
 	if emailService != nil {
 		scheduledChangesProcessor = processor.NewScheduledChangesProcessor(dbQueries, paymentService, emailService, 5*time.Minute)
 	}
-	
+
 	// Create the subscription processor
 	app := &Application{
 		subscriptionProcessor:     processor.NewSubscriptionProcessor(dbQueries, cypheraSmartWalletAddress, delegationClient),
 		scheduledChangesProcessor: scheduledChangesProcessor,
-		failureDetector:          failureDetector,
-		dunningService:           dunningService,
+		failureDetector:           failureDetector,
+		dunningService:            dunningService,
 		// Store connPool and delegationClient in App struct if HandleRequest needs to close them,
 		// though typically you don't close them between warm invocations.
 	}

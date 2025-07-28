@@ -6,7 +6,8 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -29,66 +30,14 @@ func NewErrorRecoveryHandlers(
 	}
 }
 
-// DetailedErrorResponse represents an error response with additional details
-type DetailedErrorResponse struct {
-	Error   string `json:"error"`
-	Code    string `json:"code,omitempty"`
-	Details string `json:"details,omitempty"`
-}
-
-// DetailedSuccessResponse represents a success response with additional data
-type DetailedSuccessResponse struct {
-	Success bool        `json:"success"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
-}
-
-// WebhookReplayRequest represents a webhook replay request for swagger documentation
-type WebhookReplayRequest struct {
-	WorkspaceID    string `json:"workspace_id" binding:"required"`
-	ProviderName   string `json:"provider_name" binding:"required"`
-	WebhookEventID string `json:"webhook_event_id" binding:"required"`
-	ForceReplay    bool   `json:"force_replay"`
-	ReplayReason   string `json:"replay_reason,omitempty"`
-}
-
-// WebhookReplayResponse represents the result of webhook replay for swagger documentation
-type WebhookReplayResponse struct {
-	Success         bool   `json:"success"`
-	ReplayEventID   string `json:"replay_event_id,omitempty"`
-	OriginalEventID string `json:"original_event_id"`
-	ReplayedAt      string `json:"replayed_at"`
-	Message         string `json:"message"`
-	Error           string `json:"error,omitempty"`
-}
-
-// SyncRecoveryRequest represents a sync session recovery request for swagger documentation
-type SyncRecoveryRequest struct {
-	WorkspaceID  string   `json:"workspace_id" binding:"required"`
-	SessionID    string   `json:"session_id" binding:"required"`
-	RecoveryMode string   `json:"recovery_mode"` // "resume", "restart"
-	EntityTypes  []string `json:"entity_types,omitempty"`
-}
-
-// SyncRecoveryResponse represents the result of sync recovery for swagger documentation
-type SyncRecoveryResponse struct {
-	Success     bool                   `json:"success"`
-	SessionID   string                 `json:"session_id"`
-	RecoveredAt string                 `json:"recovered_at"`
-	Progress    map[string]interface{} `json:"progress,omitempty"`
-	Message     string                 `json:"message"`
-	Error       string                 `json:"error,omitempty"`
-}
-
-// DLQProcessingStats represents DLQ processing statistics for swagger documentation
-type DLQProcessingStats struct {
-	TotalMessages         int64   `json:"total_messages"`
-	SuccessfullyProcessed int64   `json:"successfully_processed"`
-	ProcessingFailed      int64   `json:"processing_failed"`
-	MaxRetriesExceeded    int64   `json:"max_retries_exceeded"`
-	LastProcessedAt       string  `json:"last_processed_at"`
-	SuccessRate           float64 `json:"success_rate"`
-}
+// Use types from the centralized packages
+type DetailedErrorResponse = responses.DetailedErrorResponse
+type DetailedSuccessResponse = responses.DetailedSuccessResponse
+type WebhookReplayRequest = requests.WebhookReplayRequest
+type WebhookReplayResponse = responses.WebhookReplayResponse
+type SyncRecoveryRequest = requests.SyncRecoveryRequest
+type SyncRecoveryResponse = responses.SyncRecoveryResponse
+type DLQProcessingStats = responses.DLQProcessingStats
 
 // ReplayWebhook godoc
 // @Summary Replay a failed webhook event
@@ -133,7 +82,7 @@ func (h *ErrorRecoveryHandlers) ReplayWebhook(c *gin.Context) {
 		zap.Bool("force_replay", req.ForceReplay))
 
 	// Convert to services type
-	serviceReq := services.WebhookReplayRequest{
+	serviceReq := requests.WebhookReplayRequest{
 		WorkspaceID:    req.WorkspaceID,
 		ProviderName:   req.ProviderName,
 		WebhookEventID: req.WebhookEventID,
@@ -206,7 +155,7 @@ func (h *ErrorRecoveryHandlers) RecoverSyncSession(c *gin.Context) {
 		zap.String("recovery_mode", req.RecoveryMode))
 
 	// Convert to services type
-	serviceReq := services.SyncRecoveryRequest{
+	serviceReq := requests.SyncRecoveryRequest{
 		WorkspaceID:  req.WorkspaceID,
 		SessionID:    req.SessionID,
 		RecoveryMode: req.RecoveryMode,

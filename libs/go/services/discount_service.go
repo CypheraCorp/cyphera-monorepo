@@ -6,7 +6,9 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
-	"github.com/google/uuid"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"go.uber.org/zap"
 )
 
@@ -25,61 +27,23 @@ func NewDiscountService(queries db.Querier) *DiscountService {
 	}
 }
 
-// DiscountApplicationParams contains parameters for applying a discount
-type DiscountApplicationParams struct {
-	WorkspaceID    uuid.UUID
-	CustomerID     uuid.UUID
-	ProductID      *uuid.UUID
-	SubscriptionID *uuid.UUID
-	DiscountCode   string
-	AmountCents    int64
-	Currency       string
-	IsNewCustomer  bool
-	CustomerEmail  string
-}
-
-// DiscountApplicationResult contains the result of applying a discount
-type DiscountApplicationResult struct {
-	IsValid              bool            `json:"is_valid"`
-	DiscountID           *uuid.UUID      `json:"discount_id,omitempty"`
-	DiscountCode         string          `json:"discount_code"`
-	DiscountType         string          `json:"discount_type"` // "percentage", "fixed_amount", "free_trial"
-	DiscountValue        float64         `json:"discount_value"`
-	DiscountAmountCents  int64           `json:"discount_amount_cents"`
-	MaxDiscountCents     *int64          `json:"max_discount_cents,omitempty"`
-	OriginalAmountCents  int64           `json:"original_amount_cents"`
-	FinalAmountCents     int64           `json:"final_amount_cents"`
-	TrialDays            *int32          `json:"trial_days,omitempty"`
-	RemainingUses        *int32          `json:"remaining_uses,omitempty"`
-	ExpiresAt            *time.Time      `json:"expires_at,omitempty"`
-	ReasonForInvalidity  *string         `json:"reason_for_invalidity,omitempty"`
-	ApplicationDetails   DiscountDetails `json:"application_details"`
-}
-
-// DiscountDetails contains detailed information about the discount application
-type DiscountDetails struct {
-	AppliedAt           time.Time `json:"applied_at"`
-	ApplicationMethod   string    `json:"application_method"` // "code", "automatic", "admin"
-	DurationMonths      *int32    `json:"duration_months,omitempty"`
-	RecurringDiscount   bool      `json:"recurring_discount"`
-	FirstTimeCustDiscount bool    `json:"first_time_customer_discount"`
-}
-
 // ApplyDiscount validates and applies a discount code
-func (s *DiscountService) ApplyDiscount(ctx context.Context, params DiscountApplicationParams) (*DiscountApplicationResult, error) {
-	s.logger.Info("Discount service not yet implemented",
-		zap.String("workspace_id", params.WorkspaceID.String()),
-		zap.String("discount_code", params.DiscountCode))
+func (s *DiscountService) ApplyDiscount(ctx context.Context, params params.DiscountApplicationParams) (*responses.DiscountApplicationResult, error) {
+	if s.logger != nil {
+		s.logger.Info("Discount service not yet implemented",
+			zap.String("workspace_id", params.WorkspaceID.String()),
+			zap.String("discount_code", params.DiscountCode))
+	}
 
 	// Return no discount applied
 	reason := "Discount functionality not yet implemented"
-	return &DiscountApplicationResult{
+	return &responses.DiscountApplicationResult{
 		DiscountCode:        params.DiscountCode,
 		OriginalAmountCents: params.AmountCents,
 		FinalAmountCents:    params.AmountCents,
 		IsValid:             false,
 		ReasonForInvalidity: &reason,
-		ApplicationDetails: DiscountDetails{
+		ApplicationDetails: business.DiscountDetails{
 			AppliedAt:         time.Now(),
 			ApplicationMethod: "code",
 		},

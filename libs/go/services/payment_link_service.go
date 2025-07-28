@@ -10,6 +10,8 @@ import (
 	"time"
 	
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/skip2/go-qrcode"
@@ -40,51 +42,10 @@ func (s *PaymentLinkService) GetBaseURL() string {
 	return s.baseURL
 }
 
-// PaymentLinkCreateParams contains parameters for creating a payment link
-type PaymentLinkCreateParams struct {
-	WorkspaceID      uuid.UUID
-	ProductID        *uuid.UUID
-	PriceID          *uuid.UUID
-	AmountCents      *int64      // For one-time custom amounts
-	Currency         string
-	PaymentType      string      // "one_time" or "recurring"
-	CollectEmail     bool
-	CollectShipping  bool
-	CollectName      bool
-	ExpiresAt        *time.Time
-	MaxUses          *int32
-	RedirectURL      *string
-	Metadata         map[string]interface{}
-}
 
-// PaymentLinkResponse represents a payment link with full details
-type PaymentLinkResponse struct {
-	ID              uuid.UUID              `json:"id"`
-	WorkspaceID     uuid.UUID              `json:"workspace_id"`
-	Slug            string                 `json:"slug"`
-	URL             string                 `json:"url"`
-	Status          string                 `json:"status"`
-	ProductID       *uuid.UUID             `json:"product_id,omitempty"`
-	PriceID         *uuid.UUID             `json:"price_id,omitempty"`
-	AmountCents     *int64                 `json:"amount_cents,omitempty"`
-	Currency        string                 `json:"currency"`
-	PaymentType     string                 `json:"payment_type"`
-	CollectEmail    bool                   `json:"collect_email"`
-	CollectShipping bool                   `json:"collect_shipping"`
-	CollectName     bool                   `json:"collect_name"`
-	ExpiresAt       *time.Time             `json:"expires_at,omitempty"`
-	MaxUses         *int32                 `json:"max_uses,omitempty"`
-	UsedCount       int32                  `json:"used_count"`
-	RedirectURL     *string                `json:"redirect_url,omitempty"`
-	QRCodeURL       *string                `json:"qr_code_url,omitempty"`
-	QRCodeData      *string                `json:"qr_code_data,omitempty"`
-	CreatedAt       time.Time              `json:"created_at"`
-	UpdatedAt       time.Time              `json:"updated_at"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-}
 
 // CreatePaymentLink creates a new payment link
-func (s *PaymentLinkService) CreatePaymentLink(ctx context.Context, params PaymentLinkCreateParams) (*PaymentLinkResponse, error) {
+func (s *PaymentLinkService) CreatePaymentLink(ctx context.Context, params params.PaymentLinkCreateParams) (*responses.PaymentLinkResponse, error) {
 	// Generate unique slug
 	slug, err := s.generateUniqueSlug(ctx)
 	if err != nil {
@@ -104,14 +65,14 @@ func (s *PaymentLinkService) CreatePaymentLink(ctx context.Context, params Payme
 		Status:           "active",
 		ProductID:        uuidToPgtypePaymentLink(params.ProductID),
 		PriceID:          uuidToPgtypePaymentLink(params.PriceID),
-		AmountInCents:    int64ToPgtype(params.AmountCents),
+		AmountInCents:    int64ToPgtype(&params.AmountCents),
 		Currency:         pgtype.Text{String: params.Currency, Valid: params.Currency != ""},
-		PaymentType:      pgtype.Text{String: params.PaymentType, Valid: true},
-		CollectEmail:     pgtype.Bool{Bool: params.CollectEmail, Valid: true},
-		CollectShipping:  pgtype.Bool{Bool: params.CollectShipping, Valid: true},
-		CollectName:      pgtype.Bool{Bool: params.CollectName, Valid: true},
-		ExpiresAt:        timeToPgtypePaymentLink(params.ExpiresAt),
-		MaxUses:          int32ToPgtype(params.MaxUses),
+		PaymentType:      pgtype.Text{String: "one_time", Valid: true}, // Default payment type
+		CollectEmail:     pgtype.Bool{Bool: params.RequireCustomerInfo, Valid: true},
+		CollectShipping:  pgtype.Bool{Bool: false, Valid: true},
+		CollectName:      pgtype.Bool{Bool: params.RequireCustomerInfo, Valid: true},
+		ExpiresAt:        stringToPgtypeTimestamp(params.ExpiresAt),
+		MaxUses:          int32ToPgtype(params.MaxRedemptions),
 		RedirectUrl:      stringToPgtype(params.RedirectURL),
 		QrCodeUrl:        pgtype.Text{Valid: false}, // Will be set after QR code generation
 		Metadata:         metadataJSON,
@@ -144,7 +105,7 @@ func (s *PaymentLinkService) CreatePaymentLink(ctx context.Context, params Payme
 }
 
 // GetPaymentLink retrieves a payment link by ID
-func (s *PaymentLinkService) GetPaymentLink(ctx context.Context, workspaceID, linkID uuid.UUID) (*PaymentLinkResponse, error) {
+func (s *PaymentLinkService) GetPaymentLink(ctx context.Context, workspaceID, linkID uuid.UUID) (*responses.PaymentLinkResponse, error) {
 	link, err := s.queries.GetPaymentLink(ctx, db.GetPaymentLinkParams{
 		ID:          linkID,
 		WorkspaceID: workspaceID,
@@ -158,7 +119,7 @@ func (s *PaymentLinkService) GetPaymentLink(ctx context.Context, workspaceID, li
 }
 
 // GetPaymentLinkBySlug retrieves a payment link by slug (for payment processing)
-func (s *PaymentLinkService) GetPaymentLinkBySlug(ctx context.Context, slug string) (*PaymentLinkResponse, error) {
+func (s *PaymentLinkService) GetPaymentLinkBySlug(ctx context.Context, slug string) (*responses.PaymentLinkResponse, error) {
 	link, err := s.queries.GetActivePaymentLinkBySlug(ctx, slug)
 	if err != nil {
 		return nil, fmt.Errorf("payment link not found or inactive: %w", err)
@@ -169,7 +130,7 @@ func (s *PaymentLinkService) GetPaymentLinkBySlug(ctx context.Context, slug stri
 }
 
 // UpdatePaymentLink updates a payment link
-func (s *PaymentLinkService) UpdatePaymentLink(ctx context.Context, workspaceID, linkID uuid.UUID, updates PaymentLinkUpdateParams) (*PaymentLinkResponse, error) {
+func (s *PaymentLinkService) UpdatePaymentLink(ctx context.Context, workspaceID, linkID uuid.UUID, updates params.PaymentLinkUpdateParams) (*responses.PaymentLinkResponse, error) {
 	// Convert metadata to JSON if provided
 	var metadataJSON []byte
 	if updates.Metadata != nil {
@@ -181,17 +142,17 @@ func (s *PaymentLinkService) UpdatePaymentLink(ctx context.Context, workspaceID,
 	}
 
 	// Set status with default
-	status := ""
-	if updates.Status != nil {
-		status = *updates.Status
+	status := "active"
+	if updates.IsActive != nil && !*updates.IsActive {
+		status = "inactive"
 	}
 
 	link, err := s.queries.UpdatePaymentLink(ctx, db.UpdatePaymentLinkParams{
 		ID:          linkID,
 		WorkspaceID: workspaceID,
 		Status:      status,
-		ExpiresAt:   timeToPgtypePaymentLink(updates.ExpiresAt),
-		MaxUses:     int32ToPgtype(updates.MaxUses),
+		ExpiresAt:   stringToPgtypeTimestamp(updates.ExpiresAt),
+		MaxUses:     int32ToPgtype(updates.MaxRedemptions),
 		RedirectUrl: stringToPgtype(updates.RedirectURL),
 		Metadata:    metadataJSON,
 	})
@@ -266,18 +227,17 @@ func (s *PaymentLinkService) GenerateQRCode(ctx context.Context, paymentURL stri
 }
 
 // CreatePaymentLinkForInvoice creates a payment link specifically for an invoice
-func (s *PaymentLinkService) CreatePaymentLinkForInvoice(ctx context.Context, invoice db.Invoice) (*PaymentLinkResponse, error) {
+func (s *PaymentLinkService) CreatePaymentLinkForInvoice(ctx context.Context, invoice db.Invoice) (*responses.PaymentLinkResponse, error) {
 	// Extract amount and currency from invoice
 	amountCents := int64(invoice.AmountDue)
 	
 	// Create payment link with invoice metadata
-	return s.CreatePaymentLink(ctx, PaymentLinkCreateParams{
-		WorkspaceID:  invoice.WorkspaceID,
-		AmountCents:  &amountCents,
-		Currency:     invoice.Currency,
-		PaymentType:  "one_time",
-		CollectEmail: true,
-		CollectName:  true,
+	return s.CreatePaymentLink(ctx, params.PaymentLinkCreateParams{
+		WorkspaceID:         invoice.WorkspaceID,
+		AmountCents:         amountCents,
+		Currency:            invoice.Currency,
+		RequireCustomerInfo: true,
+		InvoiceID:           &invoice.ID,
 		Metadata: map[string]interface{}{
 			"invoice_id": invoice.ID.String(),
 			"type":       "invoice_payment",
@@ -316,8 +276,8 @@ func (s *PaymentLinkService) generateUniqueSlug(ctx context.Context) (string, er
 	return "", fmt.Errorf("failed to generate unique slug after %d attempts", maxAttempts)
 }
 
-func (s *PaymentLinkService) convertToResponse(link db.PaymentLink, paymentURL string, qrCodeData string) *PaymentLinkResponse {
-	response := &PaymentLinkResponse{
+func (s *PaymentLinkService) convertToResponse(link db.PaymentLink, paymentURL string, qrCodeData string) *responses.PaymentLinkResponse {
+	response := &responses.PaymentLinkResponse{
 		ID:              link.ID,
 		WorkspaceID:     link.WorkspaceID,
 		Slug:            link.Slug,
@@ -405,4 +365,15 @@ func timeToPgtypePaymentLink(t *time.Time) pgtype.Timestamptz {
 		return pgtype.Timestamptz{Valid: false}
 	}
 	return pgtype.Timestamptz{Time: *t, Valid: true}
+}
+
+func stringToPgtypeTimestamp(s *string) pgtype.Timestamptz {
+	if s == nil || *s == "" {
+		return pgtype.Timestamptz{Valid: false}
+	}
+	t, err := time.Parse(time.RFC3339, *s)
+	if err != nil {
+		return pgtype.Timestamptz{Valid: false}
+	}
+	return pgtype.Timestamptz{Time: t, Valid: true}
 }

@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	dsClient "cyphera-api/libs/go/client/delegation_server"
+	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
 )
 
 // Sample delegation JSON structure based on the expected format by the Node.js server

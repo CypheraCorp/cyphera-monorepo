@@ -2,24 +2,30 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
-	"math"
 	"net/http"
-	"strconv"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
-// WorkspaceHandler handles workspace related operations
+// WorkspaceHandler handles workspace-related operations
 type WorkspaceHandler struct {
 	common           *CommonServices
 	workspaceService interfaces.WorkspaceService
 }
+
+// Use types from the centralized packages
+type CreateWorkspaceRequest = requests.CreateWorkspaceRequest
+type UpdateWorkspaceRequest = requests.UpdateWorkspaceRequest
+type WorkspaceResponse = responses.WorkspaceResponse
+type ListWorkspacesResponse = responses.ListWorkspacesResponse
 
 // NewWorkspaceHandler creates a handler with interface dependencies
 func NewWorkspaceHandler(
@@ -125,58 +131,6 @@ func (h *WorkspaceHandler) GetAllWorkspaces(c *gin.Context) {
 	sendList(c, response)
 }
 
-type CreateWorkspaceRequest struct {
-	Name         string                 `json:"name" binding:"required"`
-	Description  string                 `json:"description,omitempty"`
-	BusinessName string                 `json:"business_name" binding:"required"`
-	BusinessType string                 `json:"business_type,omitempty"`
-	WebsiteURL   string                 `json:"website_url,omitempty"`
-	SupportEmail string                 `json:"support_email,omitempty"`
-	SupportPhone string                 `json:"support_phone,omitempty"`
-	AccountID    string                 `json:"account_id,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	Livemode     bool                   `json:"livemode,omitempty"`
-}
-
-type UpdateWorkspaceRequest struct {
-	Name         string                 `json:"name,omitempty"`
-	Description  string                 `json:"description,omitempty"`
-	BusinessName string                 `json:"business_name,omitempty"`
-	BusinessType string                 `json:"business_type,omitempty"`
-	WebsiteURL   string                 `json:"website_url,omitempty"`
-	SupportEmail string                 `json:"support_email,omitempty"`
-	SupportPhone string                 `json:"support_phone,omitempty"`
-	AccountID    string                 `json:"account_id,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	Livemode     bool                   `json:"livemode,omitempty"`
-}
-
-// WorkspaceResponse represents the standardized API response for workspace operations
-// @Summary Workspace response
-// @Description Workspace response
-type WorkspaceResponse struct {
-	ID           string                 `json:"id"`
-	Object       string                 `json:"object"`
-	Name         string                 `json:"name"`
-	Description  string                 `json:"description,omitempty"`
-	BusinessName string                 `json:"business_name"`
-	BusinessType string                 `json:"business_type,omitempty"`
-	WebsiteURL   string                 `json:"website_url,omitempty"`
-	SupportEmail string                 `json:"support_email,omitempty"`
-	SupportPhone string                 `json:"support_phone,omitempty"`
-	AccountID    string                 `json:"account_id"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	Livemode     bool                   `json:"livemode"`
-	CreatedAt    int64                  `json:"created_at"`
-	UpdatedAt    int64                  `json:"updated_at"`
-}
-
-// ListWorkspacesResponse represents the response for listing workspaces
-type ListWorkspacesResponse struct {
-	Object string              `json:"object"`
-	Data   []WorkspaceResponse `json:"data"`
-}
-
 // CreateWorkspace godoc
 // @Summary Create a new workspace
 // @Description Creates a new workspace with the specified details
@@ -200,7 +154,7 @@ func (h *WorkspaceHandler) CreateWorkspace(c *gin.Context) {
 	}
 
 	// Create workspace using service
-	workspace, err := h.workspaceService.CreateWorkspace(c.Request.Context(), services.CreateWorkspaceParams{
+	workspace, err := h.workspaceService.CreateWorkspace(c.Request.Context(), params.CreateWorkspaceParams{
 		Name:         req.Name,
 		Description:  req.Description,
 		BusinessName: req.BusinessName,
@@ -242,7 +196,7 @@ func (h *WorkspaceHandler) UpdateWorkspace(c *gin.Context) {
 	}
 
 	// Build update params
-	updateParams := services.UpdateWorkspaceParams{
+	updateParams := params.UpdateWorkspaceParams{
 		ID:       parsedUUID,
 		Metadata: req.Metadata,
 	}
@@ -317,56 +271,7 @@ func (h *WorkspaceHandler) DeleteWorkspace(c *gin.Context) {
 	sendSuccess(c, http.StatusNoContent, nil)
 }
 
-// safeParseInt32 safely parses a string to int32, checking for overflow
-func safeParseInt32(s string) (int32, error) {
-	// Parse as int64 first to check for overflow
-	val, err := strconv.ParseInt(s, 10, 64)
-	if err != nil {
-		return 0, err
-	}
-
-	// Check if value fits in int32
-	if val > math.MaxInt32 || val < math.MinInt32 {
-		return 0, fmt.Errorf("value %d overflows int32", val)
-	}
-
-	return int32(val), nil
-}
-
-// parsePaginationParams parses and validates pagination parameters
-func parsePaginationParams(c *gin.Context) (limit int32, offset int32, err error) {
-	const maxLimit int32 = 100
-	const defaultLimit int32 = 10
-	const defaultOffset int32 = 0
-
-	limitStr := c.DefaultQuery("limit", strconv.Itoa(int(defaultLimit)))
-	offsetStr := c.DefaultQuery("offset", strconv.Itoa(int(defaultOffset)))
-
-	// Parse limit
-	limit, err = safeParseInt32(limitStr)
-	if err != nil {
-		return 0, 0, fmt.Errorf("invalid limit: %w", err)
-	}
-	if limit <= 0 {
-		limit = defaultLimit
-	}
-	if limit > maxLimit {
-		limit = maxLimit
-	}
-
-	// Parse offset
-	offset, err = safeParseInt32(offsetStr)
-	if err != nil {
-		return 0, 0, fmt.Errorf("invalid offset: %w", err)
-	}
-	if offset < 0 {
-		offset = defaultOffset
-	}
-
-	return limit, offset, nil
-}
-
-// Helper function to convert database model to API response
+// toWorkspaceResponse converts db.Workspace to WorkspaceResponse
 func toWorkspaceResponse(w db.Workspace) WorkspaceResponse {
 	var metadata map[string]interface{}
 	if err := json.Unmarshal(w.Metadata, &metadata); err != nil {

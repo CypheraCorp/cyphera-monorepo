@@ -6,7 +6,10 @@ import (
 	"fmt"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -43,88 +46,79 @@ func (s *CustomerService) GetCustomer(ctx context.Context, customerID uuid.UUID)
 	return &customer, nil
 }
 
-// CreateCustomerParams contains parameters for creating a customer
-type CreateCustomerParams struct {
-	ExternalID         string
-	Email              string
-	Name               string
-	Phone              string
-	Description        string
-	FinishedOnboarding bool
-	Metadata           map[string]interface{}
-}
 
 // CreateCustomer creates a new customer
-func (s *CustomerService) CreateCustomer(ctx context.Context, params CreateCustomerParams) (*db.Customer, error) {
-	metadataBytes, err := json.Marshal(params.Metadata)
+func (s *CustomerService) CreateCustomer(ctx context.Context, createParams params.CreateCustomerParams) (*db.Customer, error) {
+	metadataBytes, err := json.Marshal(createParams.Metadata)
 	if err != nil {
 		s.logger.Error("Failed to marshal customer metadata", zap.Error(err))
 		return nil, fmt.Errorf("invalid metadata format: %w", err)
 	}
 
+	// Handle optional fields
+	var name, description, phone string
+	if createParams.Name != nil {
+		name = *createParams.Name
+	}
+	if createParams.Description != nil {
+		description = *createParams.Description
+	}
+	if createParams.Phone != nil {
+		phone = *createParams.Phone
+	}
+
 	customer, err := s.queries.CreateCustomer(ctx, db.CreateCustomerParams{
-		ExternalID:         pgtype.Text{String: params.ExternalID, Valid: params.ExternalID != ""},
-		Email:              pgtype.Text{String: params.Email, Valid: params.Email != ""},
-		Name:               pgtype.Text{String: params.Name, Valid: params.Name != ""},
-		Description:        pgtype.Text{String: params.Description, Valid: params.Description != ""},
-		Phone:              pgtype.Text{String: params.Phone, Valid: params.Phone != ""},
+		ExternalID:         pgtype.Text{String: createParams.Email, Valid: createParams.Email != ""}, // Using email as external ID
+		Email:              pgtype.Text{String: createParams.Email, Valid: createParams.Email != ""},
+		Name:               pgtype.Text{String: name, Valid: name != ""},
+		Description:        pgtype.Text{String: description, Valid: description != ""},
+		Phone:              pgtype.Text{String: phone, Valid: phone != ""},
 		Metadata:           metadataBytes,
-		FinishedOnboarding: params.FinishedOnboarding,
+		FinishedOnboarding: createParams.FinishedOnboarding,
 		PaymentSyncStatus:  "pending",
 		PaymentProvider:    pgtype.Text{},
 	})
 	if err != nil {
 		s.logger.Error("Failed to create customer",
-			zap.String("email", params.Email),
+			zap.String("email", createParams.Email),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to create customer: %w", err)
 	}
 
 	s.logger.Info("Customer created successfully",
 		zap.String("customer_id", customer.ID.String()),
-		zap.String("email", params.Email))
+		zap.String("email", createParams.Email))
 
 	return &customer, nil
 }
 
-// UpdateCustomerParams contains parameters for updating a customer
-type UpdateCustomerParams struct {
-	ID                 uuid.UUID
-	ExternalID         *string
-	Email              *string
-	Name               *string
-	Phone              *string
-	Description        *string
-	FinishedOnboarding *bool
-	Metadata           map[string]interface{}
-}
 
 // UpdateCustomer updates an existing customer
-func (s *CustomerService) UpdateCustomer(ctx context.Context, params UpdateCustomerParams) (*db.Customer, error) {
+func (s *CustomerService) UpdateCustomer(ctx context.Context, updateParams params.UpdateCustomerParams) (*db.Customer, error) {
 	dbParams := db.UpdateCustomerParams{
-		ID: params.ID,
+		ID: updateParams.ID,
 	}
 
 	// Update basic text fields
-	if params.Email != nil {
-		dbParams.Email = pgtype.Text{String: *params.Email, Valid: true}
+	if updateParams.Email != nil {
+		dbParams.Email = pgtype.Text{String: *updateParams.Email, Valid: true}
 	}
-	if params.Name != nil {
-		dbParams.Name = pgtype.Text{String: *params.Name, Valid: true}
+	if updateParams.Name != nil {
+		dbParams.Name = pgtype.Text{String: *updateParams.Name, Valid: true}
 	}
-	if params.Phone != nil {
-		dbParams.Phone = pgtype.Text{String: *params.Phone, Valid: true}
+	if updateParams.Phone != nil {
+		dbParams.Phone = pgtype.Text{String: *updateParams.Phone, Valid: true}
 	}
-	if params.Description != nil {
-		dbParams.Description = pgtype.Text{String: *params.Description, Valid: true}
+	if updateParams.Description != nil {
+		dbParams.Description = pgtype.Text{String: *updateParams.Description, Valid: true}
 	}
-	if params.FinishedOnboarding != nil {
-		dbParams.FinishedOnboarding = pgtype.Bool{Bool: *params.FinishedOnboarding, Valid: true}
+	if updateParams.FinishedOnboarding != nil {
+		dbParams.FinishedOnboarding = pgtype.Bool{Bool: *updateParams.FinishedOnboarding, Valid: true}
 	}
 
 	// Update JSON fields
-	if params.Metadata != nil {
-		metadata, err := json.Marshal(params.Metadata)
+	if updateParams.Metadata != nil {
+		metadata, err := json.Marshal(updateParams.Metadata)
 		if err != nil {
 			s.logger.Error("Failed to marshal customer metadata", zap.Error(err))
 			return nil, fmt.Errorf("invalid metadata format: %w", err)
@@ -138,7 +132,7 @@ func (s *CustomerService) UpdateCustomer(ctx context.Context, params UpdateCusto
 			return nil, fmt.Errorf("customer not found")
 		}
 		s.logger.Error("Failed to update customer",
-			zap.String("customer_id", params.ID.String()),
+			zap.String("customer_id", updateParams.ID.String()),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to update customer: %w", err)
 	}
@@ -168,23 +162,13 @@ func (s *CustomerService) DeleteCustomer(ctx context.Context, customerID uuid.UU
 	return nil
 }
 
-// ListCustomersParams contains parameters for listing customers
-type ListCustomersParams struct {
-	Limit  int
-	Offset int
-}
 
-// ListCustomersResult contains the result of listing customers
-type ListCustomersResult struct {
-	Customers  []db.Customer
-	TotalCount int64
-}
 
 // ListCustomers retrieves a paginated list of customers
-func (s *CustomerService) ListCustomers(ctx context.Context, params ListCustomersParams) (*ListCustomersResult, error) {
+func (s *CustomerService) ListCustomers(ctx context.Context, listParams params.ListCustomersParams) (*responses.ListCustomersResult, error) {
 	customers, err := s.queries.ListCustomersWithPagination(ctx, db.ListCustomersWithPaginationParams{
-		Limit:  int32(params.Limit),
-		Offset: int32(params.Offset),
+		Limit:  listParams.Limit,
+		Offset: listParams.Offset,
 	})
 	if err != nil {
 		s.logger.Error("Failed to list customers", zap.Error(err))
@@ -197,50 +181,51 @@ func (s *CustomerService) ListCustomers(ctx context.Context, params ListCustomer
 		return nil, fmt.Errorf("failed to count customers: %w", err)
 	}
 
-	return &ListCustomersResult{
-		Customers:  customers,
-		TotalCount: totalCount,
+	// Convert customers to response format
+	customerResponses := make([]responses.CustomerResponse, len(customers))
+	for i, customer := range customers {
+		customerResponses[i] = helpers.ToCustomerResponse(customer)
+	}
+
+	return &responses.ListCustomersResult{
+		Customers: customerResponses,
+		Total:     totalCount,
 	}, nil
 }
 
-// ListWorkspaceCustomersParams contains parameters for listing workspace customers
-type ListWorkspaceCustomersParams struct {
-	WorkspaceID uuid.UUID
-	Limit       int
-	Offset      int
-}
 
-// ListWorkspaceCustomersResult contains the result of listing workspace customers
-type ListWorkspaceCustomersResult struct {
-	Customers  []db.Customer
-	TotalCount int64
-}
 
 // ListWorkspaceCustomers retrieves a paginated list of customers for a workspace
-func (s *CustomerService) ListWorkspaceCustomers(ctx context.Context, params ListWorkspaceCustomersParams) (*ListWorkspaceCustomersResult, error) {
+func (s *CustomerService) ListWorkspaceCustomers(ctx context.Context, listParams params.ListWorkspaceCustomersParams) (*responses.ListWorkspaceCustomersResult, error) {
 	customers, err := s.queries.ListWorkspaceCustomersWithPagination(ctx, db.ListWorkspaceCustomersWithPaginationParams{
-		WorkspaceID: params.WorkspaceID,
-		Limit:       int32(params.Limit),
-		Offset:      int32(params.Offset),
+		WorkspaceID: listParams.WorkspaceID,
+		Limit:       listParams.Limit,
+		Offset:      listParams.Offset,
 	})
 	if err != nil {
 		s.logger.Error("Failed to list workspace customers",
-			zap.String("workspace_id", params.WorkspaceID.String()),
+			zap.String("workspace_id", listParams.WorkspaceID.String()),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to retrieve workspace customers: %w", err)
 	}
 
-	totalCount, err := s.queries.CountWorkspaceCustomers(ctx, params.WorkspaceID)
+	totalCount, err := s.queries.CountWorkspaceCustomers(ctx, listParams.WorkspaceID)
 	if err != nil {
 		s.logger.Error("Failed to count workspace customers",
-			zap.String("workspace_id", params.WorkspaceID.String()),
+			zap.String("workspace_id", listParams.WorkspaceID.String()),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to count workspace customers: %w", err)
 	}
 
-	return &ListWorkspaceCustomersResult{
-		Customers:  customers,
-		TotalCount: totalCount,
+	// Convert customers to response format
+	customerResponses := make([]responses.CustomerResponse, len(customers))
+	for i, customer := range customers {
+		customerResponses[i] = helpers.ToCustomerResponse(customer)
+	}
+
+	return &responses.ListWorkspaceCustomersResult{
+		Customers: customerResponses,
+		Total:     totalCount,
 	}, nil
 }
 
@@ -304,45 +289,41 @@ func (s *CustomerService) GetCustomerByWeb3AuthID(ctx context.Context, web3authI
 	return &customer, nil
 }
 
-// CreateCustomerWithWeb3AuthParams contains parameters for creating a customer with Web3Auth
-type CreateCustomerWithWeb3AuthParams struct {
-	Web3AuthID         string
-	Email              string
-	Name               string
-	Phone              string
-	Description        string
-	Metadata           map[string]interface{}
-	FinishedOnboarding bool
-}
 
 // CreateCustomerWithWeb3Auth creates a new customer with Web3Auth ID
-func (s *CustomerService) CreateCustomerWithWeb3Auth(ctx context.Context, params CreateCustomerWithWeb3AuthParams) (*db.Customer, error) {
-	metadataBytes, err := json.Marshal(params.Metadata)
+func (s *CustomerService) CreateCustomerWithWeb3Auth(ctx context.Context, createParams params.CreateCustomerWithWeb3AuthParams) (*db.Customer, error) {
+	metadataBytes, err := json.Marshal(createParams.Metadata)
 	if err != nil {
 		s.logger.Error("Failed to marshal customer metadata", zap.Error(err))
 		return nil, fmt.Errorf("invalid metadata format: %w", err)
 	}
 
+	// Handle optional fields
+	var name string
+	if createParams.Name != nil {
+		name = *createParams.Name
+	}
+
 	customer, err := s.queries.CreateCustomerWithWeb3Auth(ctx, db.CreateCustomerWithWeb3AuthParams{
-		Web3authID:         pgtype.Text{String: params.Web3AuthID, Valid: params.Web3AuthID != ""},
-		Email:              pgtype.Text{String: params.Email, Valid: params.Email != ""},
-		Name:               pgtype.Text{String: params.Name, Valid: params.Name != ""},
-		Phone:              pgtype.Text{String: params.Phone, Valid: params.Phone != ""},
+		Web3authID:         pgtype.Text{String: createParams.Web3AuthID, Valid: createParams.Web3AuthID != ""},
+		Email:              pgtype.Text{String: createParams.Email, Valid: createParams.Email != ""},
+		Name:               pgtype.Text{String: name, Valid: name != ""},
+		Phone:              pgtype.Text{}, // Phone not in params type
 		Description:        pgtype.Text{},
 		Metadata:           metadataBytes,
-		FinishedOnboarding: params.FinishedOnboarding,
+		FinishedOnboarding: false, // Not in params type
 	})
 	if err != nil {
 		s.logger.Error("Failed to create customer with Web3Auth",
-			zap.String("email", params.Email),
-			zap.String("web3auth_id", params.Web3AuthID),
+			zap.String("email", createParams.Email),
+			zap.String("web3auth_id", createParams.Web3AuthID),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to create customer: %w", err)
 	}
 
 	s.logger.Info("Customer created with Web3Auth successfully",
 		zap.String("customer_id", customer.ID.String()),
-		zap.String("email", params.Email))
+		zap.String("email", createParams.Email))
 
 	return &customer, nil
 }
@@ -360,53 +341,51 @@ func (s *CustomerService) ListCustomerWallets(ctx context.Context, customerID uu
 	return wallets, nil
 }
 
-// CreateCustomerWalletParams contains parameters for creating a customer wallet
-type CreateCustomerWalletParams struct {
-	CustomerID    uuid.UUID
-	WalletAddress string
-	NetworkType   string
-	Nickname      string
-	ENS           string
-	IsPrimary     bool
-	Verified      bool
-	Metadata      map[string]interface{}
-}
 
 // CreateCustomerWallet creates a new customer wallet
-func (s *CustomerService) CreateCustomerWallet(ctx context.Context, params CreateCustomerWalletParams) (*db.CustomerWallet, error) {
-	walletMetadata, err := json.Marshal(params.Metadata)
+func (s *CustomerService) CreateCustomerWallet(ctx context.Context, createParams params.CreateCustomerWalletParams) (*db.CustomerWallet, error) {
+	walletMetadata, err := json.Marshal(createParams.Metadata)
 	if err != nil {
 		s.logger.Error("Failed to marshal wallet metadata", zap.Error(err))
 		return nil, fmt.Errorf("invalid wallet metadata format: %w", err)
 	}
 
 	// Parse network type
-	networkType, err := parseNetworkType(params.NetworkType)
+	networkType, err := parseNetworkType(createParams.NetworkType)
 	if err != nil {
 		return nil, fmt.Errorf("invalid network type: %w", err)
 	}
 
+	// Handle optional fields
+	var nickname, ens string
+	if createParams.Nickname != nil {
+		nickname = *createParams.Nickname
+	}
+	if createParams.ENS != nil {
+		ens = *createParams.ENS
+	}
+
 	wallet, err := s.queries.CreateCustomerWallet(ctx, db.CreateCustomerWalletParams{
-		CustomerID:    params.CustomerID,
-		WalletAddress: params.WalletAddress,
+		CustomerID:    createParams.CustomerID,
+		WalletAddress: createParams.WalletAddress,
 		NetworkType:   networkType,
-		Nickname:      pgtype.Text{String: params.Nickname, Valid: params.Nickname != ""},
-		Ens:           pgtype.Text{String: params.ENS, Valid: params.ENS != ""},
-		IsPrimary:     pgtype.Bool{Bool: params.IsPrimary, Valid: true},
-		Verified:      pgtype.Bool{Bool: params.Verified, Valid: true},
+		Nickname:      pgtype.Text{String: nickname, Valid: nickname != ""},
+		Ens:           pgtype.Text{String: ens, Valid: ens != ""},
+		IsPrimary:     pgtype.Bool{Bool: createParams.IsPrimary, Valid: true},
+		Verified:      pgtype.Bool{Bool: createParams.Verified, Valid: true},
 		Metadata:      walletMetadata,
 	})
 	if err != nil {
 		s.logger.Error("Failed to create customer wallet",
-			zap.String("customer_id", params.CustomerID.String()),
-			zap.String("wallet_address", params.WalletAddress),
+			zap.String("customer_id", createParams.CustomerID.String()),
+			zap.String("wallet_address", createParams.WalletAddress),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to create customer wallet: %w", err)
 	}
 
 	s.logger.Info("Customer wallet created successfully",
 		zap.String("wallet_id", wallet.ID.String()),
-		zap.String("customer_id", params.CustomerID.String()))
+		zap.String("customer_id", createParams.CustomerID.String()))
 
 	return &wallet, nil
 }

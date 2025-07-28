@@ -7,11 +7,13 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+	"go.uber.org/zap"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"go.uber.org/zap"
 )
 
 // WalletHandler handles wallet-related operations
@@ -19,6 +21,13 @@ type WalletHandler struct {
 	common        *CommonServices
 	walletService interfaces.WalletService
 }
+
+// Use types from the centralized packages
+type CreateWalletRequest = requests.CreateWalletRequest
+type UpdateWalletRequest = requests.UpdateWalletRequest
+
+type WalletResponse = responses.WalletResponse
+type WalletListResponse = responses.WalletListResponse
 
 // NewWalletHandler creates a handler with interface dependencies
 func NewWalletHandler(
@@ -29,68 +38,6 @@ func NewWalletHandler(
 		common:        common,
 		walletService: walletService,
 	}
-}
-
-// WalletResponse represents the standardized API response for wallet operations
-type WalletResponse struct {
-	ID            string                 `json:"id"`
-	Object        string                 `json:"object"`
-	WorkspaceID   string                 `json:"workspace_id"`
-	WalletType    string                 `json:"wallet_type"` // 'wallet' or 'circle_wallet'
-	WalletAddress string                 `json:"wallet_address"`
-	NetworkType   string                 `json:"network_type"`
-	NetworkID     string                 `json:"network_id,omitempty"`
-	Nickname      string                 `json:"nickname,omitempty"`
-	ENS           string                 `json:"ens,omitempty"`
-	IsPrimary     bool                   `json:"is_primary"`
-	Verified      bool                   `json:"verified"`
-	LastUsedAt    *int64                 `json:"last_used_at,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
-	CircleData    *CircleWalletData      `json:"circle_data,omitempty"` // Only present for circle wallets
-	CreatedAt     int64                  `json:"created_at"`
-	UpdatedAt     int64                  `json:"updated_at"`
-}
-
-// CircleWalletData represents Circle-specific wallet data
-type CircleWalletData struct {
-	CircleWalletID string `json:"circle_wallet_id"`
-	CircleUserID   string `json:"circle_user_id"`
-	ChainID        int32  `json:"chain_id"`
-	State          string `json:"state"`
-}
-
-// WalletListResponse represents the paginated response for wallet list operations
-type WalletListResponse struct {
-	Object string           `json:"object"`
-	Data   []WalletResponse `json:"data"`
-}
-
-// CreateWalletRequest represents the request body for creating a wallet
-type CreateWalletRequest struct {
-	WalletType    string                 `json:"wallet_type" binding:"required"` // 'wallet' or 'circle_wallet'
-	WalletAddress string                 `json:"wallet_address" binding:"required"`
-	NetworkType   string                 `json:"network_type" binding:"required"` // 'evm' or 'solana'
-	Nickname      string                 `json:"nickname,omitempty"`
-	ENS           string                 `json:"ens,omitempty"`
-	IsPrimary     bool                   `json:"is_primary"`
-	Verified      bool                   `json:"verified"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
-	// Circle wallet specific fields
-	CircleUserID   string `json:"circle_user_id,omitempty"`   // Only for circle wallets
-	CircleWalletID string `json:"circle_wallet_id,omitempty"` // Only for circle wallets
-	ChainID        int32  `json:"chain_id,omitempty"`         // Only for circle wallets
-	State          string `json:"state,omitempty"`            // Only for circle wallets
-}
-
-// UpdateWalletRequest represents the request body for updating a wallet
-type UpdateWalletRequest struct {
-	Nickname  string                 `json:"nickname,omitempty"`
-	ENS       string                 `json:"ens,omitempty"`
-	IsPrimary bool                   `json:"is_primary,omitempty"`
-	Verified  bool                   `json:"verified,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-	// Circle wallet specific fields
-	State string `json:"state,omitempty"` // Only for circle wallets
 }
 
 // Helper function to convert database model to API response
@@ -189,7 +136,7 @@ func toWalletWithCircleDataByIDResponse(w db.GetWalletWithCircleDataByIDRow) Wal
 
 	// Add Circle data if it exists
 	if w.CircleWalletID.Valid && w.CircleUserID.Valid {
-		response.CircleData = &CircleWalletData{
+		response.CircleData = &responses.CircleWalletData{
 			CircleWalletID: w.CircleWalletID.String(),
 			CircleUserID:   w.CircleUserID.String(),
 			ChainID:        w.ChainID.Int32,
@@ -221,7 +168,7 @@ func toListWalletsWithCircleDataResponse(w db.ListWalletsWithCircleDataByWorkspa
 
 	// Add Circle data if it exists
 	if w.CircleWalletID.Valid && w.CircleUserID.Valid {
-		response.CircleData = &CircleWalletData{
+		response.CircleData = &responses.CircleWalletData{
 			CircleWalletID: w.CircleWalletID.String(),
 			CircleUserID:   w.CircleUserID.String(),
 			ChainID:        w.ChainID.Int32,
@@ -252,7 +199,7 @@ func toListCircleWalletsResponse(w db.ListCircleWalletsByWorkspaceIDRow) WalletR
 	})
 
 	// Add Circle data
-	response.CircleData = &CircleWalletData{
+	response.CircleData = &responses.CircleWalletData{
 		CircleWalletID: w.CircleID,
 		CircleUserID:   w.CircleUserID.String(),
 		ChainID:        w.ChainID,
@@ -296,7 +243,7 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 	}
 
 	// Create wallets for all active networks using the service
-	wallets, err := h.walletService.CreateWalletsForAllNetworks(c.Request.Context(), services.CreateWalletParams{
+	wallets, err := h.walletService.CreateWalletsForAllNetworks(c.Request.Context(), params.CreateWalletParams{
 		WorkspaceID:   workspaceID,
 		WalletType:    req.WalletType,
 		WalletAddress: req.WalletAddress,
@@ -372,7 +319,7 @@ func (h *WalletHandler) GetWallet(c *gin.Context) {
 		// Convert to response format
 		response := toWalletResponse(walletData.Wallet)
 		if walletData.CircleData != nil {
-			response.CircleData = &CircleWalletData{
+			response.CircleData = &responses.CircleWalletData{
 				CircleWalletID: walletData.CircleData.CircleWalletID,
 				CircleUserID:   walletData.CircleData.CircleUserID,
 				ChainID:        walletData.CircleData.ChainID,
@@ -542,7 +489,7 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 	}
 
 	// Update wallet using the service
-	updateParams := services.UpdateWalletParams{
+	updateParams := params.UpdateWalletParams{
 		ID:       parsedUUID,
 		Metadata: req.Metadata,
 	}

@@ -1,12 +1,11 @@
 package helpers
 
 import (
-	"encoding/json"
 	"strings"
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
-	"github.com/google/uuid"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -78,53 +77,8 @@ func IsPermanentRedemptionError(err error) bool {
 	return false
 }
 
-// SubscriptionResponse represents the response structure for subscription data
-type SubscriptionResponse struct {
-	ID                 uuid.UUID            `json:"id"`
-	WorkspaceID        uuid.UUID            `json:"workspace_id"`
-	Status             string               `json:"status"`
-	CurrentPeriodStart time.Time            `json:"current_period_start"`
-	CurrentPeriodEnd   time.Time            `json:"current_period_end"`
-	CreatedAt          time.Time            `json:"created_at"`
-	UpdatedAt          time.Time            `json:"updated_at"`
-	CustomerID         uuid.UUID            `json:"customer_id"`
-	TokenAmount        int64                `json:"token_amount"`
-	CustomerName       string               `json:"customer_name"`
-	CustomerEmail      string               `json:"customer_email"`
-	Price              PriceResponse        `json:"price"`
-	Product            ProductResponse      `json:"product"`
-	ProductToken       ProductTokenResponse `json:"product_token"`
-}
-
-// PriceResponse represents the response structure for price data
-type PriceResponse struct {
-	ID                  string          `json:"id"`
-	Object              string          `json:"object"`
-	ProductID           string          `json:"product_id"`
-	Active              bool            `json:"active"`
-	Type                string          `json:"type"`
-	Nickname            string          `json:"nickname"`
-	Currency            string          `json:"currency"`
-	UnitAmountInPennies int64           `json:"unit_amount_in_pennies"`
-	IntervalType        string          `json:"interval_type"`
-	TermLength          int32           `json:"term_length"`
-	Metadata            json.RawMessage `json:"metadata"`
-	CreatedAt           int64           `json:"created_at"`
-	UpdatedAt           int64           `json:"updated_at"`
-}
-
-// ProductResponse represents the response structure for product data
-type ProductResponse struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	ImageURL    string          `json:"image_url"`
-	Active      bool            `json:"active"`
-	Metadata    json.RawMessage `json:"metadata"`
-}
-
 // ToSubscriptionResponse converts a db.ListSubscriptionDetailsWithPaginationRow to a SubscriptionResponse.
-func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationRow) (SubscriptionResponse, error) {
+func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationRow) (responses.SubscriptionResponse, error) {
 	// Helper to convert pgtype.Text to string for enums
 	helperPgEnumTextToString := func(pgText pgtype.Text) string {
 		if pgText.Valid {
@@ -149,7 +103,7 @@ func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 		intervalTypeStr = string(subDetails.PriceIntervalType)
 	}
 
-	resp := SubscriptionResponse{
+	resp := responses.SubscriptionResponse{
 		ID:                 subDetails.SubscriptionID,
 		WorkspaceID:        subDetails.ProductWorkspaceID,
 		Status:             string(subDetails.SubscriptionStatus),
@@ -158,10 +112,10 @@ func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 		CreatedAt:          subDetails.SubscriptionCreatedAt.Time,
 		UpdatedAt:          subDetails.SubscriptionUpdatedAt.Time,
 		CustomerID:         subDetails.CustomerID,
-		TokenAmount:        int64(subDetails.SubscriptionTokenAmount),
+		TokenAmount:        int32(subDetails.SubscriptionTokenAmount),
 		CustomerName:       subDetails.CustomerName.String,
 		CustomerEmail:      subDetails.CustomerEmail.String,
-		Price: PriceResponse{
+		Price: responses.PriceResponse{
 			ID:                  subDetails.PriceID.String(),
 			Object:              "price", // Typically static for PriceResponse
 			ProductID:           subDetails.PriceProductID.String(),
@@ -176,7 +130,7 @@ func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 			CreatedAt:           priceCreatedAtUnix,
 			UpdatedAt:           priceUpdatedAtUnix,
 		},
-		Product: ProductResponse{
+		Product: responses.ProductResponse{
 			ID:          subDetails.ProductID.String(),
 			Name:        subDetails.ProductName,
 			Description: subDetails.ProductDescription.String,
@@ -184,7 +138,7 @@ func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 			Active:      subDetails.ProductActive,
 			Metadata:    subDetails.ProductMetadata, // Expecting json.RawMessage
 		},
-		ProductToken: ProductTokenResponse{
+		ProductToken: responses.ProductTokenResponse{
 			ID:          subDetails.ProductTokenID.String(),
 			TokenID:     subDetails.ProductTokenTokenID.String(),
 			TokenSymbol: subDetails.TokenSymbol,
@@ -197,13 +151,13 @@ func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 }
 
 // ToSubscriptionResponseFromDBSubscription converts a db.Subscription to a SubscriptionResponse.
-func ToSubscriptionResponseFromDBSubscription(sub db.Subscription) (SubscriptionResponse, error) {
-	resp := SubscriptionResponse{
+func ToSubscriptionResponseFromDBSubscription(sub db.Subscription) (responses.SubscriptionResponse, error) {
+	resp := responses.SubscriptionResponse{
 		ID:          sub.ID,
 		CustomerID:  sub.CustomerID,
 		WorkspaceID: sub.WorkspaceID,
 		Status:      string(sub.Status),
-		TokenAmount: int64(sub.TokenAmount),
+		TokenAmount: int32(sub.TokenAmount),
 		CreatedAt:   sub.CreatedAt.Time,
 		UpdatedAt:   sub.UpdatedAt.Time,
 	}
@@ -216,4 +170,47 @@ func ToSubscriptionResponseFromDBSubscription(sub db.Subscription) (Subscription
 	}
 
 	return resp, nil
+}
+
+// CalculateSubscriptionPeriods determines the start, end, and next redemption dates based on a price
+func CalculateSubscriptionPeriods(price db.Price) (time.Time, time.Time, time.Time) {
+	now := time.Now()
+	periodStart := now
+	var periodEnd time.Time
+	var nextRedemption time.Time
+
+	termLength := 1
+	if price.TermLength != 0 {
+		termLength = int(price.TermLength)
+	}
+
+	if price.Type == db.PriceTypeRecurring {
+		periodEnd = CalculatePeriodEnd(now, string(price.IntervalType), int32(termLength))
+		nextRedemption = CalculateNextRedemption(string(price.IntervalType), now)
+	} else {
+		periodEnd = now
+		nextRedemption = now
+	}
+
+	return periodStart, periodEnd, nextRedemption
+}
+
+// DetermineErrorType determines the error type based on the error message
+func DetermineErrorType(err error) db.SubscriptionEventType {
+	errorMsg := err.Error()
+	if strings.Contains(errorMsg, "validation") {
+		return db.SubscriptionEventTypeFailedValidation
+	} else if strings.Contains(errorMsg, "customer") && strings.Contains(errorMsg, "create") {
+		return db.SubscriptionEventTypeFailedCustomerCreation
+	} else if strings.Contains(errorMsg, "wallet") && strings.Contains(errorMsg, "create") {
+		return db.SubscriptionEventTypeFailedWalletCreation
+	} else if strings.Contains(errorMsg, "delegation") {
+		return db.SubscriptionEventTypeFailedDelegationStorage
+	} else if strings.Contains(errorMsg, "subscription already exists") {
+		return db.SubscriptionEventTypeFailedDuplicate
+	} else if strings.Contains(errorMsg, "database") || strings.Contains(errorMsg, "db") {
+		return db.SubscriptionEventTypeFailedSubscriptionDb
+	} else {
+		return db.SubscriptionEventTypeFailed
+	}
 }

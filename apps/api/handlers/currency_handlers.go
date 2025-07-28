@@ -3,14 +3,15 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"go.uber.org/zap"
-
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type CurrencyHandler struct {
@@ -29,23 +30,10 @@ func NewCurrencyHandler(
 	}
 }
 
-// ListCurrenciesResponse represents the response for listing currencies
-type ListCurrenciesResponse struct {
-	Currencies []helpers.CurrencyResponse `json:"currencies"`
-}
-
-// FormatAmountRequest represents a request to format an amount
-type FormatAmountRequest struct {
-	AmountCents  int64  `json:"amount_cents" binding:"required"`
-	CurrencyCode string `json:"currency_code" binding:"required,len=3"`
-	UseSymbol    bool   `json:"use_symbol"`
-}
-
-// FormatAmountResponse represents the response for amount formatting
-type FormatAmountResponse struct {
-	Formatted string `json:"formatted"`
-	Currency  string `json:"currency"`
-}
+// Use types from the centralized packages
+type ListCurrenciesResponse = responses.ListCurrenciesResponse
+type FormatAmountRequest = requests.FormatAmountRequest
+type FormatAmountResponse = responses.FormatAmountResponse
 
 // ListActiveCurrencies returns all active currencies
 // @Summary List active currencies
@@ -65,7 +53,7 @@ func (h *CurrencyHandler) ListActiveCurrencies(c *gin.Context) {
 	}
 
 	response := ListCurrenciesResponse{
-		Currencies: currencies,
+		Currencies: helpers.ToResponsesCurrencyResponseList(currencies),
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -131,7 +119,7 @@ func (h *CurrencyHandler) UpdateWorkspaceCurrencySettings(c *gin.Context) {
 	workspaceIDStr := c.MustGet("workspaceID").(string)
 	workspaceID, _ := uuid.Parse(workspaceIDStr)
 
-	var req services.UpdateWorkspaceCurrencyRequest
+	var req requests.UpdateWorkspaceCurrencyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -208,7 +196,7 @@ func (h *CurrencyHandler) ListWorkspaceSupportedCurrencies(c *gin.Context) {
 	}
 
 	response := ListCurrenciesResponse{
-		Currencies: currencies,
+		Currencies: helpers.ToResponsesCurrencyResponseList(currencies),
 	}
 
 	c.JSON(http.StatusOK, response)

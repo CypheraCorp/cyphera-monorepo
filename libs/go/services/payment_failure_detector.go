@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
@@ -144,62 +145,24 @@ func (d *PaymentFailureDetector) processFailedEvent(ctx context.Context, event d
 		return fmt.Errorf("failed to get customer: %w", err)
 	}
 
-	// Get product details for the amount
-	product, err := d.queries.GetProduct(ctx, db.GetProductParams{
-		ID:          subscription.ProductID,
-		WorkspaceID: subscription.WorkspaceID,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to get product: %w", err)
-	}
-
 	// Get price details for the amount
 	price, err := d.queries.GetPrice(ctx, subscription.PriceID)
 	if err != nil {
 		return fmt.Errorf("failed to get price: %w", err)
 	}
 
-	// Create campaign parameters with metadata
-	metadata := map[string]interface{}{
-		"customer_email":     customer.Email,
-		"product_name":       product.Name,
-		"failed_payment_id":  event.ID.String(),
-		"max_attempts":       config.MaxRetryAttempts,
-		"retry_schedule":     config.RetryIntervalDays,
-		"grace_period_hours": config.GracePeriodHours,
-	}
-	
-	metadataJSON, _ := json.Marshal(metadata)
-
 	// Create campaign parameters
-	campaignParams := DunningCampaignParams{
-		WorkspaceID:           subscription.WorkspaceID,
-		ConfigurationID:       config.ID,
-		SubscriptionID:        &subscription.ID,
-		CustomerID:            subscription.CustomerID,
-		OriginalFailureReason: "Payment failed - subscription event",
-		OriginalAmountCents:   int64(price.UnitAmountInPennies) * 100, // Convert pennies to cents
-		Currency:              price.Currency,
-		Metadata:              metadataJSON,
+	campaignParams := params.DunningCampaignParams{
+		SubscriptionID:    subscription.ID,
+		ConfigurationID:   config.ID,
+		TriggerReason:     "Payment failed - subscription event",
+		OutstandingAmount: int64(price.UnitAmountInPennies) * 100, // Convert pennies to cents
+		Currency:          price.Currency,
+		InitialPaymentID:  nil,
 	}
 
 	// Determine campaign strategy based on customer history
 	strategy := d.determineCampaignStrategy(ctx, &customer, &subscription, int64(price.UnitAmountInPennies)*100)
-	
-	// Update metadata with strategy and additional info
-	var metadataMap map[string]interface{}
-	json.Unmarshal(metadataJSON, &metadataMap)
-	metadataMap["strategy"] = strategy
-	metadataMap["failed_event_id"] = event.ID.String()
-	metadataMap["transaction_hash"] = event.TransactionHash
-	if event.Metadata != nil {
-		metadataMap["event_metadata"] = event.Metadata
-	}
-	metadataMap["auto_created"] = true
-	metadataMap["created_at"] = time.Now().Format(time.RFC3339)
-	
-	// Re-marshal the updated metadata
-	campaignParams.Metadata, _ = json.Marshal(metadataMap)
 
 	// Create the campaign
 	campaign, err := d.dunningService.CreateCampaign(ctx, campaignParams)
@@ -242,7 +205,7 @@ func (d *PaymentFailureDetector) getOrCreateDefaultConfiguration(ctx context.Con
 
 	// Create default configuration if none exists
 	desc := "Automatically created configuration for failed payment recovery"
-	config, err := d.dunningService.CreateConfiguration(ctx, DunningConfigParams{
+	config, err := d.dunningService.CreateConfiguration(ctx, params.DunningConfigParams{
 		WorkspaceID:        workspaceID,
 		Name:              "Default Auto-Created Configuration",
 		Description:       &desc,

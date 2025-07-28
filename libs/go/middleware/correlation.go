@@ -20,22 +20,22 @@ func CorrelationIDMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check if correlation ID already exists in request header
 		correlationID := c.GetHeader(CorrelationIDHeader)
-		
+
 		// Generate new ID if not provided
 		if correlationID == "" {
 			correlationID = uuid.New().String()
 		}
-		
+
 		// Store in context for use in handlers
 		c.Set(correlationIDKey, correlationID)
-		
+
 		// Add to response headers
 		c.Header(CorrelationIDHeader, correlationID)
-		
+
 		// Add to logger context
 		ctx := WithCorrelationID(c.Request.Context(), correlationID)
 		c.Request = c.Request.WithContext(ctx)
-		
+
 		// Log request with correlation ID (only if logger is initialized)
 		if logger.Log != nil {
 			logger.Log.Info("Request received",
@@ -45,7 +45,7 @@ func CorrelationIDMiddleware() gin.HandlerFunc {
 				zap.String("client_ip", c.ClientIP()),
 			)
 		}
-		
+
 		c.Next()
 	}
 }
@@ -85,7 +85,7 @@ func LogWithCorrelationID(ctx context.Context) *zap.Logger {
 	if logger.Log == nil {
 		return nil
 	}
-	
+
 	correlationID := CorrelationIDFromContext(ctx)
 	if correlationID != "" {
 		return logger.Log.With(zap.String("correlation_id", correlationID))

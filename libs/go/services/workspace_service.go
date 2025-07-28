@@ -7,6 +7,8 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -34,7 +36,7 @@ func (s *WorkspaceService) GetWorkspace(ctx context.Context, workspaceID uuid.UU
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("workspace not found")
 		}
-		s.logger.Error("Failed to get workspace", 
+		s.logger.Error("Failed to get workspace",
 			zap.String("workspace_id", workspaceID.String()),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to retrieve workspace: %w", err)
@@ -47,7 +49,7 @@ func (s *WorkspaceService) GetWorkspace(ctx context.Context, workspaceID uuid.UU
 func (s *WorkspaceService) ListWorkspacesByAccount(ctx context.Context, accountID uuid.UUID) ([]db.Workspace, error) {
 	workspaces, err := s.queries.ListWorkspacesByAccountID(ctx, accountID)
 	if err != nil {
-		s.logger.Error("Failed to list workspaces by account", 
+		s.logger.Error("Failed to list workspaces by account",
 			zap.String("account_id", accountID.String()),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to list workspaces: %w", err)
@@ -63,7 +65,7 @@ func (s *WorkspaceService) GetAccountByWorkspace(ctx context.Context, workspaceI
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("account not found for workspace")
 		}
-		s.logger.Error("Failed to get account for workspace", 
+		s.logger.Error("Failed to get account for workspace",
 			zap.String("workspace_id", workspaceID.String()),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to retrieve account: %w", err)
@@ -83,35 +85,21 @@ func (s *WorkspaceService) ListAllWorkspaces(ctx context.Context) ([]db.Workspac
 	return workspaces, nil
 }
 
-// CreateWorkspaceParams contains parameters for creating a workspace
-type CreateWorkspaceParams struct {
-	Name         string
-	Description  string
-	BusinessName string
-	BusinessType string
-	WebsiteURL   string
-	SupportEmail string
-	SupportPhone string
-	AccountID    uuid.UUID
-	Metadata     map[string]interface{}
-	Livemode     bool
-}
-
 // CreateWorkspace creates a new workspace
-func (s *WorkspaceService) CreateWorkspace(ctx context.Context, params CreateWorkspaceParams) (*db.Workspace, error) {
+func (s *WorkspaceService) CreateWorkspace(ctx context.Context, createParams params.CreateWorkspaceParams) (*db.Workspace, error) {
 	// Validate required fields
-	if params.Name == "" {
+	if createParams.Name == "" {
 		return nil, fmt.Errorf("workspace name is required")
 	}
-	if params.AccountID == uuid.Nil {
+	if createParams.AccountID == uuid.Nil {
 		return nil, fmt.Errorf("account ID is required")
 	}
 
 	// Convert metadata to JSON
 	metadataJSON := []byte("{}")
-	if params.Metadata != nil {
+	if createParams.Metadata != nil {
 		var err error
-		metadataJSON, err = json.Marshal(params.Metadata)
+		metadataJSON, err = json.Marshal(createParams.Metadata)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal metadata: %w", err)
 		}
@@ -119,21 +107,21 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, params CreateWor
 
 	// Create workspace
 	workspace, err := s.queries.CreateWorkspace(ctx, db.CreateWorkspaceParams{
-		Name:         params.Name,
-		AccountID:    params.AccountID,
-		Description:  pgtype.Text{String: params.Description, Valid: params.Description != ""},
-		BusinessName: pgtype.Text{String: params.BusinessName, Valid: params.BusinessName != ""},
-		BusinessType: pgtype.Text{String: params.BusinessType, Valid: params.BusinessType != ""},
-		WebsiteUrl:   pgtype.Text{String: params.WebsiteURL, Valid: params.WebsiteURL != ""},
-		SupportEmail: pgtype.Text{String: params.SupportEmail, Valid: params.SupportEmail != ""},
-		SupportPhone: pgtype.Text{String: params.SupportPhone, Valid: params.SupportPhone != ""},
+		Name:         createParams.Name,
+		AccountID:    createParams.AccountID,
+		Description:  pgtype.Text{String: createParams.Description, Valid: createParams.Description != ""},
+		BusinessName: pgtype.Text{String: createParams.BusinessName, Valid: createParams.BusinessName != ""},
+		BusinessType: pgtype.Text{String: createParams.BusinessType, Valid: createParams.BusinessType != ""},
+		WebsiteUrl:   pgtype.Text{String: createParams.WebsiteURL, Valid: createParams.WebsiteURL != ""},
+		SupportEmail: pgtype.Text{String: createParams.SupportEmail, Valid: createParams.SupportEmail != ""},
+		SupportPhone: pgtype.Text{String: createParams.SupportPhone, Valid: createParams.SupportPhone != ""},
 		Metadata:     metadataJSON,
-		Livemode:     pgtype.Bool{Bool: params.Livemode, Valid: true},
+		Livemode:     pgtype.Bool{Bool: createParams.Livemode, Valid: true},
 	})
 	if err != nil {
-		s.logger.Error("Failed to create workspace", 
-			zap.String("name", params.Name),
-			zap.String("account_id", params.AccountID.String()),
+		s.logger.Error("Failed to create workspace",
+			zap.String("name", createParams.Name),
+			zap.String("account_id", createParams.AccountID.String()),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to create workspace: %w", err)
 	}
@@ -145,24 +133,10 @@ func (s *WorkspaceService) CreateWorkspace(ctx context.Context, params CreateWor
 	return &workspace, nil
 }
 
-// UpdateWorkspaceParams contains parameters for updating a workspace
-type UpdateWorkspaceParams struct {
-	ID           uuid.UUID
-	Name         *string
-	Description  *string
-	BusinessName *string
-	BusinessType *string
-	WebsiteURL   *string
-	SupportEmail *string
-	SupportPhone *string
-	Metadata     map[string]interface{}
-	Livemode     *bool
-}
-
 // UpdateWorkspace updates an existing workspace
-func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, params UpdateWorkspaceParams) (*db.Workspace, error) {
+func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, updateParams params.UpdateWorkspaceParams) (*db.Workspace, error) {
 	// First check if workspace exists
-	_, err := s.queries.GetWorkspace(ctx, params.ID)
+	_, err := s.queries.GetWorkspace(ctx, updateParams.ID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("workspace not found")
@@ -171,50 +145,50 @@ func (s *WorkspaceService) UpdateWorkspace(ctx context.Context, params UpdateWor
 	}
 
 	// Prepare update params
-	updateParams := db.UpdateWorkspaceParams{
-		ID: params.ID,
+	dbUpdateParams := db.UpdateWorkspaceParams{
+		ID: updateParams.ID,
 	}
 
 	// Set optional fields
-	if params.Name != nil {
-		updateParams.Name = *params.Name
+	if updateParams.Name != nil {
+		dbUpdateParams.Name = *updateParams.Name
 	}
-	if params.Description != nil {
-		updateParams.Description = pgtype.Text{String: *params.Description, Valid: true}
+	if updateParams.Description != nil {
+		dbUpdateParams.Description = pgtype.Text{String: *updateParams.Description, Valid: true}
 	}
-	if params.BusinessName != nil {
-		updateParams.BusinessName = pgtype.Text{String: *params.BusinessName, Valid: true}
+	if updateParams.BusinessName != nil {
+		dbUpdateParams.BusinessName = pgtype.Text{String: *updateParams.BusinessName, Valid: true}
 	}
-	if params.BusinessType != nil {
-		updateParams.BusinessType = pgtype.Text{String: *params.BusinessType, Valid: true}
+	if updateParams.BusinessType != nil {
+		dbUpdateParams.BusinessType = pgtype.Text{String: *updateParams.BusinessType, Valid: true}
 	}
-	if params.WebsiteURL != nil {
-		updateParams.WebsiteUrl = pgtype.Text{String: *params.WebsiteURL, Valid: true}
+	if updateParams.WebsiteURL != nil {
+		dbUpdateParams.WebsiteUrl = pgtype.Text{String: *updateParams.WebsiteURL, Valid: true}
 	}
-	if params.SupportEmail != nil {
-		updateParams.SupportEmail = pgtype.Text{String: *params.SupportEmail, Valid: true}
+	if updateParams.SupportEmail != nil {
+		dbUpdateParams.SupportEmail = pgtype.Text{String: *updateParams.SupportEmail, Valid: true}
 	}
-	if params.SupportPhone != nil {
-		updateParams.SupportPhone = pgtype.Text{String: *params.SupportPhone, Valid: true}
+	if updateParams.SupportPhone != nil {
+		dbUpdateParams.SupportPhone = pgtype.Text{String: *updateParams.SupportPhone, Valid: true}
 	}
-	if params.Livemode != nil {
-		updateParams.Livemode = pgtype.Bool{Bool: *params.Livemode, Valid: true}
+	if updateParams.Livemode != nil {
+		dbUpdateParams.Livemode = pgtype.Bool{Bool: *updateParams.Livemode, Valid: true}
 	}
 
 	// Convert metadata to JSON if provided
-	if params.Metadata != nil {
-		metadataJSON, err := json.Marshal(params.Metadata)
+	if updateParams.Metadata != nil {
+		metadataJSON, err := json.Marshal(updateParams.Metadata)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal metadata: %w", err)
 		}
-		updateParams.Metadata = metadataJSON
+		dbUpdateParams.Metadata = metadataJSON
 	}
 
 	// Update workspace
-	workspace, err := s.queries.UpdateWorkspace(ctx, updateParams)
+	workspace, err := s.queries.UpdateWorkspace(ctx, dbUpdateParams)
 	if err != nil {
-		s.logger.Error("Failed to update workspace", 
-			zap.String("workspace_id", params.ID.String()),
+		s.logger.Error("Failed to update workspace",
+			zap.String("workspace_id", updateParams.ID.String()),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to update workspace: %w", err)
 	}
@@ -239,7 +213,7 @@ func (s *WorkspaceService) DeleteWorkspace(ctx context.Context, workspaceID uuid
 	// Delete workspace (soft delete)
 	err = s.queries.DeleteWorkspace(ctx, workspaceID)
 	if err != nil {
-		s.logger.Error("Failed to delete workspace", 
+		s.logger.Error("Failed to delete workspace",
 			zap.String("workspace_id", workspaceID.String()),
 			zap.Error(err))
 		return fmt.Errorf("failed to delete workspace: %w", err)
@@ -269,21 +243,13 @@ func (s *WorkspaceService) ValidateWorkspaceAccess(ctx context.Context, workspac
 }
 
 // GetWorkspaceStats retrieves statistics for a workspace
-type WorkspaceStats struct {
-	TotalCustomers     int64
-	TotalProducts      int64
-	TotalSubscriptions int64
-	ActiveSubscriptions int64
-}
-
-// GetWorkspaceStats retrieves statistics for a workspace
-func (s *WorkspaceService) GetWorkspaceStats(ctx context.Context, workspaceID uuid.UUID) (*WorkspaceStats, error) {
+func (s *WorkspaceService) GetWorkspaceStats(ctx context.Context, workspaceID uuid.UUID) (*business.WorkspaceStats, error) {
 	// This is a placeholder - you would implement actual queries here
 	// For now, returning empty stats
-	stats := &WorkspaceStats{
-		TotalCustomers:     0,
-		TotalProducts:      0,
-		TotalSubscriptions: 0,
+	stats := &business.WorkspaceStats{
+		TotalCustomers:      0,
+		TotalProducts:       0,
+		TotalSubscriptions:  0,
 		ActiveSubscriptions: 0,
 	}
 

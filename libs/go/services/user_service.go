@@ -7,6 +7,7 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -27,34 +28,8 @@ func NewUserService(queries db.Querier) *UserService {
 	}
 }
 
-// CreateUserParams contains parameters for creating a user
-type CreateUserParams struct {
-	Web3AuthID     string
-	Verifier       string
-	VerifierID     string
-	Email          string
-	AccountID      uuid.UUID
-	Role           string
-	IsAccountOwner bool
-	FirstName      string
-	LastName       string
-	AddressLine1   string
-	AddressLine2   string
-	City           string
-	StateRegion    string
-	PostalCode     string
-	Country        string
-	DisplayName    string
-	PictureURL     string
-	Phone          string
-	Timezone       string
-	Locale         string
-	EmailVerified  bool
-	Metadata       map[string]interface{}
-}
-
 // CreateUser creates a new user
-func (s *UserService) CreateUser(ctx context.Context, params CreateUserParams) (*db.User, error) {
+func (s *UserService) CreateUser(ctx context.Context, params params.CreateUserParams) (*db.User, error) {
 	// Validate required fields
 	if params.Email == "" {
 		return nil, fmt.Errorf("email is required")
@@ -162,31 +137,8 @@ func (s *UserService) GetUserWithWorkspaceAccess(ctx context.Context, userID, wo
 	return user, nil
 }
 
-// UpdateUserParams contains parameters for updating a user
-type UpdateUserParams struct {
-	ID               uuid.UUID
-	Email            string
-	FirstName        string
-	LastName         string
-	AddressLine1     string
-	AddressLine2     string
-	City             string
-	StateRegion      string
-	PostalCode       string
-	Country          string
-	DisplayName      string
-	PictureURL       string
-	Phone            string
-	Timezone         string
-	Locale           string
-	EmailVerified    *bool
-	TwoFactorEnabled *bool
-	Status           string
-	Metadata         map[string]interface{}
-}
-
 // UpdateUser updates an existing user
-func (s *UserService) UpdateUser(ctx context.Context, params UpdateUserParams) (*db.User, error) {
+func (s *UserService) UpdateUser(ctx context.Context, params params.UpdateUserParams) (*db.User, error) {
 	// Verify user exists
 	_, err := s.GetUser(ctx, params.ID)
 	if err != nil {

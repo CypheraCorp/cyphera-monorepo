@@ -6,7 +6,10 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -37,30 +40,9 @@ func NewGasSponsorshipHandler(
 	}
 }
 
-// GasSponsorshipConfigRequest represents the request to create/update gas sponsorship config
-type GasSponsorshipConfigRequest struct {
-	SponsorshipEnabled       bool        `json:"sponsorship_enabled"`
-	SponsorCustomerGas       bool        `json:"sponsor_customer_gas"`
-	SponsorThresholdUsdCents *int64      `json:"sponsor_threshold_usd_cents,omitempty"`
-	MonthlyBudgetUsdCents    *int64      `json:"monthly_budget_usd_cents,omitempty"`
-	SponsorForProducts       []uuid.UUID `json:"sponsor_for_products,omitempty"`
-	SponsorForCustomers      []uuid.UUID `json:"sponsor_for_customers,omitempty"`
-	SponsorForTiers          []string    `json:"sponsor_for_tiers,omitempty"`
-}
-
-// GasSponsorshipConfigResponse represents a gas sponsorship configuration
-type GasSponsorshipConfigResponse struct {
-	WorkspaceID              uuid.UUID   `json:"workspace_id"`
-	SponsorshipEnabled       bool        `json:"sponsorship_enabled"`
-	SponsorCustomerGas       bool        `json:"sponsor_customer_gas"`
-	SponsorThresholdUsdCents *int64      `json:"sponsor_threshold_usd_cents,omitempty"`
-	MonthlyBudgetUsdCents    *int64      `json:"monthly_budget_usd_cents,omitempty"`
-	SponsorForProducts       []uuid.UUID `json:"sponsor_for_products"`
-	SponsorForCustomers      []uuid.UUID `json:"sponsor_for_customers"`
-	SponsorForTiers          []string    `json:"sponsor_for_tiers"`
-	CurrentMonthSpentCents   int64       `json:"current_month_spent_cents"`
-	RemainingBudgetCents     *int64      `json:"remaining_budget_cents,omitempty"`
-}
+// Use types from the centralized packages
+type GasSponsorshipConfigRequest = requests.GasSponsorshipConfigRequest
+type GasSponsorshipConfigResponse = responses.GasSponsorshipConfigResponse
 
 // GetGasSponsorshipConfig retrieves gas sponsorship configuration
 // @Summary Get gas sponsorship configuration
@@ -209,7 +191,7 @@ func (h *GasSponsorshipHandler) UpdateGasSponsorshipConfig(c *gin.Context) {
 	}
 
 	// Convert to service update type
-	updates := services.SponsorshipConfigUpdates{
+	updates := business.SponsorshipConfigUpdates{
 		SponsorshipEnabled:       &req.SponsorshipEnabled,
 		SponsorCustomerGas:       &req.SponsorCustomerGas,
 		MonthlyBudgetUSDCents:    req.MonthlyBudgetUsdCents,

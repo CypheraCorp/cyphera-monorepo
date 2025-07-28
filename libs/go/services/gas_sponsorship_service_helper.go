@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/google/uuid"
 )
 
@@ -27,7 +29,7 @@ func (h *GasSponsorshipHelper) QuickSponsorshipCheck(
 	productID uuid.UUID,
 	gasCostCents int64,
 ) (shouldSponsor bool, sponsorType string, err error) {
-	params := SponsorshipCheckParams{
+	params := params.SponsorshipCheckParams{
 		WorkspaceID:     workspaceID,
 		CustomerID:      customerID,
 		ProductID:       productID,
@@ -78,7 +80,7 @@ func (h *GasSponsorshipHelper) RecordSponsorship(
 	paymentID uuid.UUID,
 	gasCostCents int64,
 ) error {
-	record := SponsorshipRecord{
+	record := business.SponsorshipRecord{
 		WorkspaceID:     workspaceID,
 		PaymentID:       paymentID,
 		GasCostUSDCents: gasCostCents,

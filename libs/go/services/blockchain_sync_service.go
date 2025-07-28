@@ -9,6 +9,7 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/client/coinmarketcap"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
@@ -78,7 +79,7 @@ func (h *BlockchainSyncHelper) SyncSubscriptionEventWithBlockchain(ctx context.C
 }
 
 // updatePaymentWithBlockchainData updates a payment record with blockchain data
-func (h *BlockchainSyncHelper) updatePaymentWithBlockchainData(ctx context.Context, payment *db.Payment, txData *TransactionData) error {
+func (h *BlockchainSyncHelper) updatePaymentWithBlockchainData(ctx context.Context, payment *db.Payment, txData *business.TransactionData) error {
 	// Get ETH price at transaction time
 	ethUsdPrice, err := h.getETHPriceUSD(ctx, txData.BlockTimestamp)
 	if err != nil {
@@ -110,7 +111,7 @@ func (h *BlockchainSyncHelper) updatePaymentWithBlockchainData(ctx context.Conte
 }
 
 // createGasFeePaymentRecord creates a detailed gas fee payment record
-func (h *BlockchainSyncHelper) createGasFeePaymentRecord(ctx context.Context, paymentID uuid.UUID, txData *TransactionData, workspaceID uuid.UUID) error {
+func (h *BlockchainSyncHelper) createGasFeePaymentRecord(ctx context.Context, paymentID uuid.UUID, txData *business.TransactionData, workspaceID uuid.UUID) error {
 	// Convert Wei values to strings for storage
 	gasFeeWei := txData.TotalGasCostWei.String()
 	gasPriceGwei := new(big.Int).Div(txData.GasPrice, big.NewInt(1e9)).String()

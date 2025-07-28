@@ -5,12 +5,23 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
+)
+
+const (
+	// Error messages
+	errMsgWorkspaceIDRequired = "Workspace ID required"
+	errMsgInvalidLinkID       = "Invalid link ID"
+	errMsgInvalidProductID    = "Invalid product ID"
+	errMsgInvalidInvoiceID    = "Invalid invoice ID"
 )
 
 // PaymentLinkHandler handles payment link-related HTTP requests
@@ -30,30 +41,9 @@ func NewPaymentLinkHandler(
 	}
 }
 
-// CreatePaymentLinkRequest represents the request to create a payment link
-type CreatePaymentLinkRequest struct {
-	ProductID       *uuid.UUID             `json:"product_id,omitempty"`
-	PriceID         *uuid.UUID             `json:"price_id,omitempty"`
-	AmountCents     *int64                 `json:"amount_cents,omitempty"`
-	Currency        string                 `json:"currency" binding:"required_without=PriceID"`
-	PaymentType     string                 `json:"payment_type,omitempty"` // defaults to "one_time"
-	CollectEmail    *bool                  `json:"collect_email,omitempty"`
-	CollectShipping *bool                  `json:"collect_shipping,omitempty"`
-	CollectName     *bool                  `json:"collect_name,omitempty"`
-	ExpiresIn       *int                   `json:"expires_in_hours,omitempty"` // Hours until expiration
-	MaxUses         *int32                 `json:"max_uses,omitempty"`
-	RedirectURL     *string                `json:"redirect_url,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-}
-
-// UpdatePaymentLinkRequest represents the request to update a payment link
-type UpdatePaymentLinkRequest struct {
-	Status      *string                `json:"status,omitempty" binding:"omitempty,oneof=active inactive"`
-	ExpiresIn   *int                   `json:"expires_in_hours,omitempty"`
-	MaxUses     *int32                 `json:"max_uses,omitempty"`
-	RedirectURL *string                `json:"redirect_url,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-}
+// Use types from the centralized packages
+type CreatePaymentLinkRequest = requests.CreatePaymentLinkRequest
+type UpdatePaymentLinkRequest = requests.UpdatePaymentLinkRequest
 
 // CreatePaymentLink creates a new payment link
 // @Summary Create a payment link
@@ -63,7 +53,7 @@ type UpdatePaymentLinkRequest struct {
 // @Produce json
 // @Param X-Workspace-ID header string true "Workspace ID"
 // @Param request body CreatePaymentLinkRequest true "Payment link creation request"
-// @Success 201 {object} services.PaymentLinkResponse
+// @Success 201 {object} responses.PaymentLinkResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 401 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -72,7 +62,7 @@ func (h *PaymentLinkHandler) CreatePaymentLink(c *gin.Context) {
 	ctx := c.Request.Context()
 	workspaceID, err := GetWorkspaceID(c)
 	if err != nil {
-		h.common.HandleError(c, err, "Workspace ID required", http.StatusBadRequest, h.common.logger)
+		h.common.HandleError(c, err, errMsgWorkspaceIDRequired, http.StatusBadRequest, h.common.logger)
 		return
 	}
 
@@ -104,27 +94,40 @@ func (h *PaymentLinkHandler) CreatePaymentLink(c *gin.Context) {
 	}
 
 	// Calculate expiration time if provided
-	var expiresAt *time.Time
+	var expiresAtStr *string
 	if req.ExpiresIn != nil && *req.ExpiresIn > 0 {
-		exp := time.Now().Add(time.Duration(*req.ExpiresIn) * time.Hour)
-		expiresAt = &exp
+		exp := time.Now().Add(time.Duration(*req.ExpiresIn) * time.Hour).Format(time.RFC3339)
+		expiresAtStr = &exp
 	}
 
+	// Convert AmountCents to non-pointer if provided
+	var amountCents int64
+	if req.AmountCents != nil {
+		amountCents = *req.AmountCents
+	}
+
+	// Build metadata with additional fields for backward compatibility
+	metadata := req.Metadata
+	if metadata == nil {
+		metadata = make(map[string]interface{})
+	}
+	metadata["payment_type"] = paymentType
+	metadata["collect_email"] = collectEmail
+	metadata["collect_shipping"] = collectShipping
+	metadata["collect_name"] = collectName
+
 	// Create payment link
-	link, err := h.paymentLinkService.CreatePaymentLink(ctx, services.PaymentLinkCreateParams{
-		WorkspaceID:     workspaceID,
-		ProductID:       req.ProductID,
-		PriceID:         req.PriceID,
-		AmountCents:     req.AmountCents,
-		Currency:        req.Currency,
-		PaymentType:     paymentType,
-		CollectEmail:    collectEmail,
-		CollectShipping: collectShipping,
-		CollectName:     collectName,
-		ExpiresAt:       expiresAt,
-		MaxUses:         req.MaxUses,
-		RedirectURL:     req.RedirectURL,
-		Metadata:        req.Metadata,
+	link, err := h.paymentLinkService.CreatePaymentLink(ctx, params.PaymentLinkCreateParams{
+		WorkspaceID:         workspaceID,
+		ProductID:           req.ProductID,
+		PriceID:             req.PriceID,
+		AmountCents:         amountCents,
+		Currency:            req.Currency,
+		ExpiresAt:           expiresAtStr,
+		MaxRedemptions:      req.MaxUses,
+		RedirectURL:         req.RedirectURL,
+		Metadata:            metadata,
+		RequireCustomerInfo: collectEmail || collectName,
 	})
 	if err != nil {
 		h.common.HandleError(c, err, "Failed to create payment link", http.StatusInternalServerError, h.common.logger)
@@ -142,7 +145,7 @@ func (h *PaymentLinkHandler) CreatePaymentLink(c *gin.Context) {
 // @Produce json
 // @Param X-Workspace-ID header string true "Workspace ID"
 // @Param link_id path string true "Payment Link ID"
-// @Success 200 {object} services.PaymentLinkResponse
+// @Success 200 {object} responses.PaymentLinkResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/payment-links/{link_id} [get]
@@ -150,14 +153,14 @@ func (h *PaymentLinkHandler) GetPaymentLink(c *gin.Context) {
 	ctx := c.Request.Context()
 	workspaceID, err := GetWorkspaceID(c)
 	if err != nil {
-		h.common.HandleError(c, err, "Workspace ID required", http.StatusBadRequest, h.common.logger)
+		h.common.HandleError(c, err, errMsgWorkspaceIDRequired, http.StatusBadRequest, h.common.logger)
 		return
 	}
 
 	linkIDStr := c.Param("link_id")
 	linkID, err := uuid.Parse(linkIDStr)
 	if err != nil {
-		h.common.HandleError(c, err, "Invalid link ID", http.StatusBadRequest, h.common.logger)
+		h.common.HandleError(c, err, errMsgInvalidLinkID, http.StatusBadRequest, h.common.logger)
 		return
 	}
 
@@ -177,7 +180,7 @@ func (h *PaymentLinkHandler) GetPaymentLink(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param slug path string true "Payment Link Slug"
-// @Success 200 {object} services.PaymentLinkResponse
+// @Success 200 {object} responses.PaymentLinkResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/payment-links/slug/{slug} [get]
@@ -203,7 +206,7 @@ func (h *PaymentLinkHandler) GetPaymentLinkBySlug(c *gin.Context) {
 // @Param X-Workspace-ID header string true "Workspace ID"
 // @Param link_id path string true "Payment Link ID"
 // @Param request body UpdatePaymentLinkRequest true "Update request"
-// @Success 200 {object} services.PaymentLinkResponse
+// @Success 200 {object} responses.PaymentLinkResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -212,14 +215,14 @@ func (h *PaymentLinkHandler) UpdatePaymentLink(c *gin.Context) {
 	ctx := c.Request.Context()
 	workspaceID, err := GetWorkspaceID(c)
 	if err != nil {
-		h.common.HandleError(c, err, "Workspace ID required", http.StatusBadRequest, h.common.logger)
+		h.common.HandleError(c, err, errMsgWorkspaceIDRequired, http.StatusBadRequest, h.common.logger)
 		return
 	}
 
 	linkIDStr := c.Param("link_id")
 	linkID, err := uuid.Parse(linkIDStr)
 	if err != nil {
-		h.common.HandleError(c, err, "Invalid link ID", http.StatusBadRequest, h.common.logger)
+		h.common.HandleError(c, err, errMsgInvalidLinkID, http.StatusBadRequest, h.common.logger)
 		return
 	}
 
@@ -230,18 +233,25 @@ func (h *PaymentLinkHandler) UpdatePaymentLink(c *gin.Context) {
 	}
 
 	// Calculate expiration time if provided
-	var expiresAt *time.Time
+	var expiresAtStr *string
 	if req.ExpiresIn != nil && *req.ExpiresIn > 0 {
-		exp := time.Now().Add(time.Duration(*req.ExpiresIn) * time.Hour)
-		expiresAt = &exp
+		exp := time.Now().Add(time.Duration(*req.ExpiresIn) * time.Hour).Format(time.RFC3339)
+		expiresAtStr = &exp
 	}
 
-	link, err := h.paymentLinkService.UpdatePaymentLink(ctx, workspaceID, linkID, services.PaymentLinkUpdateParams{
-		Status:      req.Status,
-		ExpiresAt:   expiresAt,
-		MaxUses:     req.MaxUses,
-		RedirectURL: req.RedirectURL,
-		Metadata:    req.Metadata,
+	// Convert status to IsActive boolean
+	var isActive *bool
+	if req.Status != nil {
+		active := *req.Status == "active"
+		isActive = &active
+	}
+
+	link, err := h.paymentLinkService.UpdatePaymentLink(ctx, workspaceID, linkID, params.PaymentLinkUpdateParams{
+		IsActive:       isActive,
+		ExpiresAt:      expiresAtStr,
+		MaxRedemptions: req.MaxUses,
+		RedirectURL:    req.RedirectURL,
+		Metadata:       req.Metadata,
 	})
 	if err != nil {
 		h.common.HandleError(c, err, "Failed to update payment link", http.StatusInternalServerError, h.common.logger)
@@ -267,14 +277,14 @@ func (h *PaymentLinkHandler) DeactivatePaymentLink(c *gin.Context) {
 	ctx := c.Request.Context()
 	workspaceID, err := GetWorkspaceID(c)
 	if err != nil {
-		h.common.HandleError(c, err, "Workspace ID required", http.StatusBadRequest, h.common.logger)
+		h.common.HandleError(c, err, errMsgWorkspaceIDRequired, http.StatusBadRequest, h.common.logger)
 		return
 	}
 
 	linkIDStr := c.Param("link_id")
 	linkID, err := uuid.Parse(linkIDStr)
 	if err != nil {
-		h.common.HandleError(c, err, "Invalid link ID", http.StatusBadRequest, h.common.logger)
+		h.common.HandleError(c, err, errMsgInvalidLinkID, http.StatusBadRequest, h.common.logger)
 		return
 	}
 
@@ -306,12 +316,18 @@ func (h *PaymentLinkHandler) ListPaymentLinks(c *gin.Context) {
 	ctx := c.Request.Context()
 	workspaceID, err := GetWorkspaceID(c)
 	if err != nil {
-		h.common.HandleError(c, err, "Workspace ID required", http.StatusBadRequest, h.common.logger)
+		h.common.HandleError(c, err, errMsgWorkspaceIDRequired, http.StatusBadRequest, h.common.logger)
+		return
+	}
+
+	// Parse pagination parameters
+	limit, offset, err := helpers.ParsePaginationParamsAsInt(c)
+	if err != nil {
+		h.common.HandleError(c, err, "Invalid pagination parameters", http.StatusBadRequest, h.common.logger)
 		return
 	}
 
 	// Parse query parameters
-	limit, offset := GetPaginationParams(c)
 	productIDStr := c.Query("product_id")
 
 	var links []db.PaymentLink
@@ -320,7 +336,7 @@ func (h *PaymentLinkHandler) ListPaymentLinks(c *gin.Context) {
 		// Filter by product
 		productID, err := uuid.Parse(productIDStr)
 		if err != nil {
-			h.common.HandleError(c, err, "Invalid product ID", http.StatusBadRequest, h.common.logger)
+			h.common.HandleError(c, err, errMsgInvalidProductID, http.StatusBadRequest, h.common.logger)
 			return
 		}
 
@@ -385,7 +401,7 @@ func (h *PaymentLinkHandler) GetPaymentLinkStats(c *gin.Context) {
 	ctx := c.Request.Context()
 	workspaceID, err := GetWorkspaceID(c)
 	if err != nil {
-		h.common.HandleError(c, err, "Workspace ID required", http.StatusBadRequest, h.common.logger)
+		h.common.HandleError(c, err, errMsgWorkspaceIDRequired, http.StatusBadRequest, h.common.logger)
 		return
 	}
 
@@ -412,7 +428,7 @@ func (h *PaymentLinkHandler) GetPaymentLinkStats(c *gin.Context) {
 // @Produce json
 // @Param X-Workspace-ID header string true "Workspace ID"
 // @Param invoice_id path string true "Invoice ID"
-// @Success 201 {object} services.PaymentLinkResponse
+// @Success 201 {object} responses.PaymentLinkResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/invoices/{invoice_id}/payment-link [post]
@@ -420,14 +436,14 @@ func (h *PaymentLinkHandler) CreateInvoicePaymentLink(c *gin.Context) {
 	ctx := c.Request.Context()
 	workspaceID, err := GetWorkspaceID(c)
 	if err != nil {
-		h.common.HandleError(c, err, "Workspace ID required", http.StatusBadRequest, h.common.logger)
+		h.common.HandleError(c, err, errMsgWorkspaceIDRequired, http.StatusBadRequest, h.common.logger)
 		return
 	}
 
 	invoiceIDStr := c.Param("invoice_id")
 	invoiceID, err := uuid.Parse(invoiceIDStr)
 	if err != nil {
-		h.common.HandleError(c, err, "Invalid invoice ID", http.StatusBadRequest, h.common.logger)
+		h.common.HandleError(c, err, errMsgInvalidInvoiceID, http.StatusBadRequest, h.common.logger)
 		return
 	}
 

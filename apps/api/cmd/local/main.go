@@ -4,10 +4,11 @@
 package main
 
 import (
+	"log"
+
+	"github.com/cyphera/cyphera-api/apps/api/server"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
-	"github.com/cyphera/cyphera-api/apps/api/server"
-	"log"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"

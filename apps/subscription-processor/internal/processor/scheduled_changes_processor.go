@@ -7,8 +7,13 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
@@ -16,25 +21,85 @@ import (
 
 // ScheduledChangesProcessor processes scheduled subscription changes
 type ScheduledChangesProcessor struct {
-	service        *services.SubscriptionManagementService
+	service        interfaces.SubscriptionManagementService
 	db             *db.Queries
 	logger         *zap.Logger
 	interval       time.Duration
 	stopCh         chan struct{}
 	wg             sync.WaitGroup
-	paymentService *services.PaymentService
-	emailService   *services.EmailService
+	paymentService interfaces.PaymentService
+	emailService   interfaces.EmailService
+}
+
+// emailServiceAdapter adapts interfaces.EmailService to services.IEmailService
+type emailServiceAdapter struct {
+	service interfaces.EmailService
+}
+
+func (a *emailServiceAdapter) SendTransactionalEmail(ctx context.Context, params params.TransactionalEmailParams) error {
+	return a.service.SendTransactionalEmail(ctx, params)
+}
+
+func (a *emailServiceAdapter) SendBatchEmails(ctx context.Context, requests []requests.BatchEmailRequest) ([]responses.BatchEmailResult, error) {
+	return a.service.SendBatchEmails(ctx, requests)
+}
+
+func (a *emailServiceAdapter) SendDunningEmail(ctx context.Context, template *db.DunningEmailTemplate, data business.EmailData, toEmail string) error {
+	// Adapt the single EmailData to map format expected by the main interface
+	dataMap := map[string]business.EmailData{"default": data}
+	return a.service.SendDunningEmail(ctx, template, dataMap, toEmail)
+}
+
+// paymentServiceAdapter adapts interfaces.PaymentService to services.IPaymentService
+type paymentServiceAdapter struct {
+	service interfaces.PaymentService
+}
+
+func (a *paymentServiceAdapter) CreatePaymentFromSubscriptionEvent(ctx context.Context, params params.CreatePaymentFromSubscriptionEventParams) (*db.Payment, error) {
+	return a.service.CreatePaymentFromSubscriptionEvent(ctx, params)
+}
+
+func (a *paymentServiceAdapter) CreateComprehensivePayment(ctx context.Context, params params.CreateComprehensivePaymentParams) (*db.Payment, error) {
+	return a.service.CreateComprehensivePayment(ctx, params)
+}
+
+func (a *paymentServiceAdapter) GetPayment(ctx context.Context, params params.GetPaymentParams) (*db.Payment, error) {
+	return a.service.GetPayment(ctx, params)
+}
+
+func (a *paymentServiceAdapter) GetPaymentByTransactionHash(ctx context.Context, txHash string) (*db.Payment, error) {
+	return a.service.GetPaymentByTransactionHash(ctx, txHash)
+}
+
+func (a *paymentServiceAdapter) ListPayments(ctx context.Context, params params.ListPaymentsParams) ([]db.Payment, error) {
+	return a.service.ListPayments(ctx, params)
+}
+
+func (a *paymentServiceAdapter) UpdatePaymentStatus(ctx context.Context, params params.UpdatePaymentStatusParams) (*db.Payment, error) {
+	return a.service.UpdatePaymentStatus(ctx, params)
+}
+
+func (a *paymentServiceAdapter) GetPaymentMetrics(ctx context.Context, workspaceID uuid.UUID, startTime, endTime time.Time, currency string) (*db.GetPaymentMetricsRow, error) {
+	return a.service.GetPaymentMetrics(ctx, workspaceID, startTime, endTime, currency)
+}
+
+func (a *paymentServiceAdapter) CreateManualPayment(ctx context.Context, params params.CreateManualPaymentParams) (*db.Payment, error) {
+	return a.service.CreateManualPayment(ctx, params)
 }
 
 // NewScheduledChangesProcessor creates a new scheduled changes processor
 func NewScheduledChangesProcessor(
 	dbQueries *db.Queries,
-	paymentService *services.PaymentService,
-	emailService *services.EmailService,
+	paymentService interfaces.PaymentService,
+	emailService interfaces.EmailService,
 	interval time.Duration,
 ) *ScheduledChangesProcessor {
+	// Create adapters to bridge interface differences
+	emailAdapter := &emailServiceAdapter{service: emailService}
+	paymentAdapter := &paymentServiceAdapter{service: paymentService}
+
 	return &ScheduledChangesProcessor{
-		service:        services.NewSubscriptionManagementService(dbQueries, paymentService, emailService),
+		service:        services.NewSubscriptionManagementService(dbQueries, paymentAdapter, emailAdapter),
 		db:             dbQueries,
 		logger:         logger.Log,
 		interval:       interval,
@@ -360,17 +425,17 @@ func (p *ScheduledChangesProcessor) sendCancellationEmail(ctx context.Context, s
 </body>
 </html>`, customer.Name.String, product.Name, workspace.Name)
 
-	params := services.TransactionalEmailParams{
-		To:       []string{customer.Email.String},
-		Subject:  subject,
-		HTMLBody: htmlBody,
-		Tags: map[string]string{
+	emailParams := params.TransactionalEmailParams{
+		To:          []string{customer.Email.String},
+		Subject:     subject,
+		HTMLContent: htmlBody,
+		Tags: map[string]interface{}{
 			"category":        "subscription_cancelled",
 			"subscription_id": sub.ID.String(),
 		},
 	}
 
-	return p.emailService.SendTransactionalEmail(ctx, params)
+	return p.emailService.SendTransactionalEmail(ctx, emailParams)
 }
 
 // sendResumptionEmail sends an email notification when a subscription is resumed
@@ -423,17 +488,17 @@ func (p *ScheduledChangesProcessor) sendResumptionEmail(ctx context.Context, sub
 </body>
 </html>`, customer.Name.String, product.Name, workspace.Name)
 
-	params := services.TransactionalEmailParams{
-		To:       []string{customer.Email.String},
-		Subject:  subject,
-		HTMLBody: htmlBody,
-		Tags: map[string]string{
+	emailParams := params.TransactionalEmailParams{
+		To:          []string{customer.Email.String},
+		Subject:     subject,
+		HTMLContent: htmlBody,
+		Tags: map[string]interface{}{
 			"category":        "subscription_resumed",
 			"subscription_id": sub.ID.String(),
 		},
 	}
 
-	return p.emailService.SendTransactionalEmail(ctx, params)
+	return p.emailService.SendTransactionalEmail(ctx, emailParams)
 }
 
 // sendDunningCancellationEmail sends an email when a subscription is cancelled due to failed dunning
@@ -499,15 +564,15 @@ func (p *ScheduledChangesProcessor) sendDunningCancellationEmail(ctx context.Con
 </body>
 </html>`, customer.Name.String, product.Name, workspace.Name, workspace.Name)
 
-	params := services.TransactionalEmailParams{
-		To:       []string{customer.Email.String},
-		Subject:  subject,
-		HTMLBody: htmlBody,
-		Tags: map[string]string{
+	emailParams := params.TransactionalEmailParams{
+		To:          []string{customer.Email.String},
+		Subject:     subject,
+		HTMLContent: htmlBody,
+		Tags: map[string]interface{}{
 			"category":        "dunning_cancellation",
 			"subscription_id": sub.ID.String(),
 		},
 	}
 
-	return p.emailService.SendTransactionalEmail(ctx, params)
+	return p.emailService.SendTransactionalEmail(ctx, emailParams)
 }

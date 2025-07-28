@@ -57,8 +57,9 @@ cat > "libs/go/mocks/helpers.go" << 'EOF'
 package mocks
 
 import (
-	"github.com/golang/mock/gomock"
 	"testing"
+	
+	"go.uber.org/mock/gomock"
 )
 
 // NewMockPaymentSyncServiceForTest creates a new mock PaymentSyncService for testing

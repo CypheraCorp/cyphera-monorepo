@@ -7,6 +7,7 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"go.uber.org/zap"
 )
 
@@ -22,22 +23,9 @@ func NewCurrencyHelper(queries db.Querier) *CurrencyHelper {
 	}
 }
 
-// CurrencyResponse represents a currency in API responses
-type CurrencyResponse struct {
-	Code              string   `json:"code"`
-	Name              string   `json:"name"`
-	Symbol            string   `json:"symbol"`
-	DecimalPlaces     int32    `json:"decimal_places"`
-	IsActive          bool     `json:"is_active"`
-	SymbolPosition    string   `json:"symbol_position"`
-	ThousandSeparator string   `json:"thousand_separator"`
-	DecimalSeparator  string   `json:"decimal_separator"`
-	Countries         []string `json:"countries"`
-}
-
 // CurrencyToResponse converts db.FiatCurrency to CurrencyResponse
-func (h *CurrencyHelper) CurrencyToResponse(currency *db.FiatCurrency) CurrencyResponse {
-	response := CurrencyResponse{
+func (h *CurrencyHelper) CurrencyToResponse(currency *db.FiatCurrency) responses.CurrencyResponse {
+	response := responses.CurrencyResponse{
 		Code:          currency.Code,
 		Name:          currency.Name,
 		Symbol:        currency.Symbol,
@@ -201,7 +189,7 @@ func (h *CurrencyHelper) GetCurrencyDisplayName(currency *db.FiatCurrency) strin
 }
 
 // SortCurrenciesByCode sorts currencies alphabetically by their code
-func (h *CurrencyHelper) SortCurrenciesByCode(currencies []CurrencyResponse) []CurrencyResponse {
+func (h *CurrencyHelper) SortCurrenciesByCode(currencies []responses.CurrencyResponse) []responses.CurrencyResponse {
 	// Simple bubble sort for small lists
 	n := len(currencies)
 	for i := 0; i < n-1; i++ {
@@ -228,4 +216,28 @@ func (h *CurrencyHelper) GetMajorCurrencies() []string {
 		"INR", // Indian Rupee
 		"KRW", // South Korean Won
 	}
+}
+
+// ToResponsesCurrencyResponse converts helpers.CurrencyResponse to responses.CurrencyResponse
+func ToResponsesCurrencyResponse(helperResp responses.CurrencyResponse) responses.CurrencyResponse {
+	return responses.CurrencyResponse{
+		Code:              helperResp.Code,
+		Name:              helperResp.Name,
+		Symbol:            helperResp.Symbol,
+		DecimalPlaces:     helperResp.DecimalPlaces,
+		IsActive:          helperResp.IsActive,
+		SymbolPosition:    helperResp.SymbolPosition,
+		ThousandSeparator: helperResp.ThousandSeparator,
+		DecimalSeparator:  helperResp.DecimalSeparator,
+		Countries:         helperResp.Countries,
+	}
+}
+
+// ToResponsesCurrencyResponseList converts []helpers.CurrencyResponse to []responses.CurrencyResponse
+func ToResponsesCurrencyResponseList(helperResps []responses.CurrencyResponse) []responses.CurrencyResponse {
+	result := make([]responses.CurrencyResponse, len(helperResps))
+	for i, helperResp := range helperResps {
+		result[i] = ToResponsesCurrencyResponse(helperResp)
+	}
+	return result
 }

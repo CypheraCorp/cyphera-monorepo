@@ -7,6 +7,7 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -59,38 +60,8 @@ func (s *NetworkService) GetNetworkByChainID(ctx context.Context, chainID int32)
 	return &network, nil
 }
 
-// CreateNetworkParams contains parameters for creating a network
-type CreateNetworkParams struct {
-	Name              string
-	Type              string
-	NetworkType       string
-	CircleNetworkType string
-	BlockExplorerURL  string
-	ChainID           int32
-	IsTestnet         bool
-	Active            bool
-	LogoURL           string
-	DisplayName       string
-	ChainNamespace    string
-	GasConfig         *CreateGasConfigParams
-}
-
-// CreateGasConfigParams contains gas configuration parameters
-type CreateGasConfigParams struct {
-	BaseFeeMultiplier     float64
-	PriorityFeeMultiplier float64
-	DeploymentGasLimit    string
-	TokenTransferGasLimit string
-	SupportsEIP1559       bool
-	GasOracleURL          string
-	GasRefreshIntervalMs  int32
-	GasPriorityLevels     map[string]interface{}
-	AverageBlockTimeMs    int32
-	PeakHoursMultiplier   float64
-}
-
 // CreateNetwork creates a new network
-func (s *NetworkService) CreateNetwork(ctx context.Context, params CreateNetworkParams) (*db.Network, error) {
+func (s *NetworkService) CreateNetwork(ctx context.Context, params params.CreateNetworkParams) (*db.Network, error) {
 	dbParams := db.CreateNetworkParams{
 		Name:              params.Name,
 		Type:              params.Type,
@@ -143,39 +114,8 @@ func (s *NetworkService) CreateNetwork(ctx context.Context, params CreateNetwork
 	return &network, nil
 }
 
-// UpdateNetworkParams contains parameters for updating a network
-type UpdateNetworkParams struct {
-	ID                uuid.UUID
-	Name              string
-	Type              string
-	NetworkType       string
-	CircleNetworkType string
-	BlockExplorerURL  string
-	ChainID           int32
-	IsTestnet         *bool
-	Active            *bool
-	LogoURL           string
-	DisplayName       string
-	ChainNamespace    string
-	GasConfig         *UpdateGasConfigParams
-}
-
-// UpdateGasConfigParams contains gas configuration parameters for updates
-type UpdateGasConfigParams struct {
-	BaseFeeMultiplier     *float64
-	PriorityFeeMultiplier *float64
-	DeploymentGasLimit    *string
-	TokenTransferGasLimit *string
-	SupportsEIP1559       *bool
-	GasOracleURL          *string
-	GasRefreshIntervalMs  *int32
-	GasPriorityLevels     map[string]interface{}
-	AverageBlockTimeMs    *int32
-	PeakHoursMultiplier   *float64
-}
-
 // UpdateNetwork updates an existing network
-func (s *NetworkService) UpdateNetwork(ctx context.Context, params UpdateNetworkParams) (*db.Network, error) {
+func (s *NetworkService) UpdateNetwork(ctx context.Context, params params.UpdateNetworkParams) (*db.Network, error) {
 	dbParams := db.UpdateNetworkParams{
 		ID:                params.ID,
 		Name:              params.Name,
@@ -273,14 +213,8 @@ func (s *NetworkService) DeleteNetwork(ctx context.Context, networkID uuid.UUID)
 	return nil
 }
 
-// ListNetworksParams contains parameters for listing networks
-type ListNetworksParams struct {
-	IsTestnet *bool
-	IsActive  *bool
-}
-
 // ListNetworks retrieves networks with optional filtering
-func (s *NetworkService) ListNetworks(ctx context.Context, params ListNetworksParams) ([]db.Network, error) {
+func (s *NetworkService) ListNetworks(ctx context.Context, params params.ListNetworksParams) ([]db.Network, error) {
 	dbParams := db.ListNetworksParams{}
 
 	if params.IsTestnet != nil {

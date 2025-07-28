@@ -2,14 +2,13 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math"
-	"math/rand"
+	"math/big"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -18,13 +17,21 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	typeParams "github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
+)
+
+// Use types from the centralized packages
+type (
+	PriceResponse   = responses.PriceResponse
+	ProductResponse = responses.ProductResponse
 )
 
 // SubscriptionHandler manages subscription-related HTTP endpoints
@@ -35,15 +42,6 @@ type SubscriptionHandler struct {
 	paymentService       interfaces.PaymentService
 	logger               *zap.Logger
 	lastRedemptionTxHash string // Stores the transaction hash from the last successful redemption
-}
-
-// SubscriptionExistsError is a custom error for when a subscription already exists
-type SubscriptionExistsError struct {
-	Subscription *db.Subscription
-}
-
-func (e *SubscriptionExistsError) Error() string {
-	return fmt.Sprintf("subscription already exists with ID: %s", e.Subscription.ID)
 }
 
 // NewSubscriptionHandler creates a handler with interface dependencies
@@ -66,59 +64,6 @@ func NewSubscriptionHandler(
 	}
 }
 
-// SubscribeRequest represents the request body for subscribing to a product
-type SubscribeRequest struct {
-	SubscriberAddress string           `json:"subscriber_address" binding:"required"`
-	PriceID           string           `json:"price_id" binding:"required"`
-	ProductTokenID    string           `json:"product_token_id" binding:"required"`
-	TokenAmount       string           `json:"token_amount" binding:"required"`
-	Delegation        DelegationStruct `json:"delegation" binding:"required"`
-}
-
-// SubscriptionResponse represents a subscription along with its associated price and product details.
-type SubscriptionResponse struct {
-	ID                     uuid.UUID                    `json:"id"`
-	WorkspaceID            uuid.UUID                    `json:"workspace_id"`
-	CustomerID             uuid.UUID                    `json:"customer_id,omitempty"`
-	CustomerName           string                       `json:"customer_name,omitempty"`
-	CustomerEmail          string                       `json:"customer_email,omitempty"`
-	Status                 string                       `json:"status"`
-	CurrentPeriodStart     time.Time                    `json:"current_period_start"`
-	CurrentPeriodEnd       time.Time                    `json:"current_period_end"`
-	NextRedemptionDate     *time.Time                   `json:"next_redemption_date,omitempty"`
-	TotalRedemptions       int32                        `json:"total_redemptions"`
-	TotalAmountInCents     int32                        `json:"total_amount_in_cents"`
-	TokenAmount            int32                        `json:"token_amount"`
-	DelegationID           uuid.UUID                    `json:"delegation_id"`
-	CustomerWalletID       *uuid.UUID                   `json:"customer_wallet_id,omitempty"`
-	ExternalID             string                       `json:"external_id,omitempty"`
-	PaymentSyncStatus      string                       `json:"payment_sync_status,omitempty"`
-	PaymentSyncedAt        *time.Time                   `json:"payment_synced_at,omitempty"`
-	PaymentSyncVersion     int32                        `json:"payment_sync_version,omitempty"`
-	PaymentProvider        string                       `json:"payment_provider,omitempty"`
-	InitialTransactionHash string                       `json:"initial_transaction_hash,omitempty"`
-	Metadata               map[string]interface{}       `json:"metadata,omitempty"`
-	CreatedAt              time.Time                    `json:"created_at"`
-	UpdatedAt              time.Time                    `json:"updated_at"`
-	Price                  PriceResponse                `json:"price"`
-	Product                ProductResponse              `json:"product"`
-	ProductToken           helpers.ProductTokenResponse `json:"product_token"`
-}
-
-type CreateSubscriptionParams struct {
-	Customer       db.Customer
-	CustomerWallet db.CustomerWallet
-	WorkspaceID    uuid.UUID
-	ProductID      uuid.UUID
-	ProductTokenID uuid.UUID
-	Price          db.Price
-	TokenAmount    int64
-	DelegationData db.DelegationDatum
-	PeriodStart    time.Time
-	PeriodEnd      time.Time
-	NextRedemption time.Time
-}
-
 // GetSubscription godoc
 // @Summary Get a subscription by ID
 // @Description Retrieves a subscription by its ID
@@ -136,14 +81,14 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		h.common.HandleError(c, err, "Invalid workspace ID format", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	subscriptionID := c.Param("subscription_id")
 	parsedUUID, err := uuid.Parse(subscriptionID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid subscription ID format", err)
+		h.common.HandleError(c, err, "Invalid subscription ID format", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
@@ -152,11 +97,15 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 		WorkspaceID: parsedWorkspaceID,
 	})
 	if err != nil {
-		handleDBError(c, err, "Subscription not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			h.common.HandleError(c, err, "Subscription not found", http.StatusNotFound, h.common.GetLogger())
+		} else {
+			h.common.HandleError(c, err, "Failed to get subscription", http.StatusInternalServerError, h.common.GetLogger())
+		}
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, subscription)
+	c.JSON(http.StatusOK, subscription)
 }
 
 // ListSubscriptions godoc
@@ -175,16 +124,17 @@ func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		h.common.HandleError(c, err, "Invalid workspace ID format", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	// Get pagination parameters
-	limit, page, err := validatePaginationParams(c)
+	params, err := helpers.ParsePaginationParams(c)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), err)
+		h.common.HandleError(c, err, err.Error(), http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
+	limit, page := params.Limit, params.Page
 
 	if page < 1 {
 		page = 1
@@ -195,36 +145,47 @@ func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 
 	offset := (page - 1) * limit
 
-	params := db.ListSubscriptionDetailsWithPaginationParams{
+	dbParams := db.ListSubscriptionDetailsWithPaginationParams{
 		WorkspaceID: parsedWorkspaceID,
 		Limit:       int32(limit),
 		Offset:      int32(offset),
 	}
 
-	subscriptions, err := h.common.db.ListSubscriptionDetailsWithPagination(c.Request.Context(), params)
+	subscriptions, err := h.common.db.ListSubscriptionDetailsWithPagination(c.Request.Context(), dbParams)
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve subscriptions", err)
+		h.common.HandleError(c, err, "Failed to retrieve subscriptions", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}
 
 	// Get the total count for pagination metadata
 	totalCount, err := h.common.db.CountSubscriptions(c.Request.Context())
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to count subscriptions", err)
+		h.common.HandleError(c, err, "Failed to count subscriptions", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}
 
-	subscriptionResponses := make([]SubscriptionResponse, len(subscriptions))
-	for i, sub := range subscriptions {
+	subscriptionResponses := make([]responses.SubscriptionResponse, 0, len(subscriptions))
+	for _, sub := range subscriptions {
 		subscription, err := toSubscriptionResponse(sub)
 		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to convert subscription to response", err)
+			h.common.HandleError(c, err, "Failed to convert subscription to response", http.StatusInternalServerError, h.common.GetLogger())
 			return
 		}
-		subscriptionResponses[i] = subscription
+		subscriptionResponses = append(subscriptionResponses, subscription)
 	}
 
-	response := sendPaginatedSuccess(c, http.StatusOK, subscriptionResponses, int(page), int(limit), int(totalCount))
+	hasMore := (int(totalCount)+int(limit)-1)/int(limit) > int(page)
+	response := PaginatedResponse{
+		Data:    subscriptionResponses,
+		Object:  "list",
+		HasMore: hasMore,
+		Pagination: Pagination{
+			CurrentPage: int(page),
+			PerPage:     int(limit),
+			TotalItems:  int(totalCount),
+			TotalPages:  (int(totalCount) + int(limit) - 1) / int(limit),
+		},
+	}
 	c.JSON(http.StatusOK, response)
 }
 
@@ -244,14 +205,14 @@ func (h *SubscriptionHandler) ListSubscriptionsByCustomer(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		h.common.HandleError(c, err, "Invalid workspace ID format", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	customerID := c.Param("customer_id")
 	parsedUUID, err := uuid.Parse(customerID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid customer ID format", err)
+		h.common.HandleError(c, err, "Invalid customer ID format", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
@@ -260,20 +221,20 @@ func (h *SubscriptionHandler) ListSubscriptionsByCustomer(c *gin.Context) {
 		WorkspaceID: parsedWorkspaceID,
 	})
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve customer subscriptions", err)
+		h.common.HandleError(c, err, "Failed to retrieve customer subscriptions", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}
 
-	subscriptionResponses := make([]SubscriptionResponse, len(subscriptions))
-	for i, sub := range subscriptions {
+	subscriptionResponses := make([]responses.SubscriptionResponse, 0, len(subscriptions))
+	for _, sub := range subscriptions {
 		subscription, err := toSubscriptionResponseFromDBSubscription(sub)
 		if err != nil {
-			sendError(c, http.StatusInternalServerError, "Failed to convert subscription to response", err)
+			h.common.HandleError(c, err, "Failed to convert subscription to response", http.StatusInternalServerError, h.common.GetLogger())
 			return
 		}
-		subscriptionResponses[i] = subscription
+		subscriptionResponses = append(subscriptionResponses, subscription)
 	}
-	sendSuccess(c, http.StatusOK, subscriptionResponses)
+	c.JSON(http.StatusOK, subscriptionResponses)
 }
 
 // ListSubscriptionsByProduct godoc
@@ -292,13 +253,13 @@ func (h *SubscriptionHandler) ListSubscriptionsByProduct(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		h.common.HandleError(c, err, "Invalid workspace ID format", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 	productID := c.Param("product_id")
 	parsedUUID, err := uuid.Parse(productID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
+		h.common.HandleError(c, err, "Invalid product ID format", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
@@ -307,25 +268,11 @@ func (h *SubscriptionHandler) ListSubscriptionsByProduct(c *gin.Context) {
 		WorkspaceID: parsedWorkspaceID,
 	})
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to retrieve product subscriptions", err)
+		h.common.HandleError(c, err, "Failed to retrieve product subscriptions", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, subscriptions)
-}
-
-// UpdateSubscriptionRequest represents the request body for updating a subscription
-type UpdateSubscriptionRequest struct {
-	CustomerID       string          `json:"customer_id"`
-	ProductID        string          `json:"product_id"`
-	ProductTokenID   string          `json:"product_token_id"`
-	DelegationID     string          `json:"delegation_id"`
-	CustomerWalletID string          `json:"customer_wallet_id"`
-	Status           string          `json:"status"`
-	StartDate        int64           `json:"start_date"`
-	EndDate          int64           `json:"end_date"`
-	NextRedemption   int64           `json:"next_redemption"`
-	Metadata         json.RawMessage `json:"metadata"`
+	c.JSON(http.StatusOK, subscriptions)
 }
 
 // UpdateSubscription godoc
@@ -340,20 +287,24 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	subscriptionID := c.Param("subscription_id")
 	parsedSubscriptionID, err := uuid.Parse(subscriptionID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid subscription ID format", err)
+		h.common.HandleError(c, err, "Invalid subscription ID format", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	// Check if subscription exists
 	existingSubscription, err := h.common.db.GetSubscription(ctx, parsedSubscriptionID)
 	if err != nil {
-		handleDBError(c, err, "Subscription not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			h.common.HandleError(c, err, "Subscription not found", http.StatusNotFound, h.common.GetLogger())
+		} else {
+			h.common.HandleError(c, err, "Failed to get subscription", http.StatusInternalServerError, h.common.GetLogger())
+		}
 		return
 	}
 
-	var request UpdateSubscriptionRequest
+	var request params.UpdateSubscriptionRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid request format", err)
+		h.common.HandleError(c, err, "Invalid request format", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
@@ -378,7 +329,7 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	if request.CustomerID != "" {
 		parsedCustomerID, err := uuid.Parse(request.CustomerID)
 		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid customer ID format", err)
+			h.common.HandleError(c, err, "Invalid customer ID format", http.StatusBadRequest, h.common.GetLogger())
 			return
 		}
 		params.CustomerID = parsedCustomerID
@@ -387,7 +338,7 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	if request.ProductID != "" {
 		parsedProductID, err := uuid.Parse(request.ProductID)
 		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid product ID format", err)
+			h.common.HandleError(c, err, "Invalid product ID format", http.StatusBadRequest, h.common.GetLogger())
 			return
 		}
 		params.ProductID = parsedProductID
@@ -396,7 +347,7 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	if request.ProductTokenID != "" {
 		parsedProductTokenID, err := uuid.Parse(request.ProductTokenID)
 		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid product token ID format", err)
+			h.common.HandleError(c, err, "Invalid product token ID format", http.StatusBadRequest, h.common.GetLogger())
 			return
 		}
 		params.ProductTokenID = parsedProductTokenID
@@ -405,7 +356,7 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	if request.DelegationID != "" {
 		parsedDelegationID, err := uuid.Parse(request.DelegationID)
 		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid delegation ID format", err)
+			h.common.HandleError(c, err, "Invalid delegation ID format", http.StatusBadRequest, h.common.GetLogger())
 			return
 		}
 		params.DelegationID = parsedDelegationID
@@ -414,7 +365,7 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	if request.CustomerWalletID != "" {
 		parsedCustomerWalletID, err := uuid.Parse(request.CustomerWalletID)
 		if err != nil {
-			sendError(c, http.StatusBadRequest, "Invalid customer wallet ID format", err)
+			h.common.HandleError(c, err, "Invalid customer wallet ID format", http.StatusBadRequest, h.common.GetLogger())
 			return
 		}
 		params.CustomerWalletID = pgtype.UUID{
@@ -428,7 +379,7 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 		case string(db.SubscriptionStatusActive), string(db.SubscriptionStatusCanceled), string(db.SubscriptionStatusExpired), string(db.SubscriptionStatusSuspended), string(db.SubscriptionStatusFailed):
 			params.Status = db.SubscriptionStatus(request.Status)
 		default:
-			sendError(c, http.StatusBadRequest, "Invalid status value", nil)
+			h.common.HandleError(c, nil, "Invalid status value", http.StatusBadRequest, h.common.GetLogger())
 			return
 		}
 	}
@@ -461,11 +412,11 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	// Update subscription
 	subscription, err := h.common.db.UpdateSubscription(ctx, params)
 	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to update subscription", err)
+		h.common.HandleError(c, err, "Failed to update subscription", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, subscription)
+	c.JSON(http.StatusOK, subscription)
 }
 
 // DeleteSubscription godoc
@@ -485,14 +436,14 @@ func (h *SubscriptionHandler) DeleteSubscription(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid workspace ID format", err)
+		h.common.HandleError(c, err, "Invalid workspace ID format", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	subscriptionID := c.Param("subscription_id")
 	parsedUUID, err := uuid.Parse(subscriptionID)
 	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid subscription ID format", err)
+		h.common.HandleError(c, err, "Invalid subscription ID format", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
@@ -501,27 +452,35 @@ func (h *SubscriptionHandler) DeleteSubscription(c *gin.Context) {
 		WorkspaceID: parsedWorkspaceID,
 	})
 	if err != nil {
-		handleDBError(c, err, "Subscription not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			h.common.HandleError(c, err, "Subscription not found", http.StatusNotFound, h.common.GetLogger())
+		} else {
+			h.common.HandleError(c, err, "Failed to get subscription", http.StatusInternalServerError, h.common.GetLogger())
+		}
 		return
 	}
 
 	if subscription.WorkspaceID != parsedWorkspaceID {
-		sendError(c, http.StatusBadRequest, "Subscription does not belong to this workspace", nil)
+		h.common.HandleError(c, nil, "Subscription does not belong to this workspace", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	if subscription.Status != db.SubscriptionStatusCanceled && subscription.Status != db.SubscriptionStatusExpired {
-		sendError(c, http.StatusBadRequest, "Subscription is not canceled or expired", nil)
+		h.common.HandleError(c, nil, "Subscription is not canceled or expired", http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	err = h.common.db.DeleteSubscription(c.Request.Context(), parsedUUID)
 	if err != nil {
-		handleDBError(c, err, "Failed to delete subscription")
+		if errors.Is(err, pgx.ErrNoRows) {
+			h.common.HandleError(c, err, "Failed to delete subscription", http.StatusNotFound, h.common.GetLogger())
+		} else {
+			h.common.HandleError(c, err, "Failed to delete subscription", http.StatusInternalServerError, h.common.GetLogger())
+		}
 		return
 	}
 
-	sendSuccessMessage(c, http.StatusOK, "Subscription successfully deleted")
+	c.JSON(http.StatusOK, gin.H{"message": "Subscription successfully deleted"})
 }
 
 // CalculateNextRedemption computes the next scheduled redemption date based on interval type.
@@ -567,26 +526,6 @@ func CalculatePeriodEnd(start time.Time, intervalType string, termLength int32) 
 	}
 }
 
-// GetRedemptionStatusResponse represents the response for the redemption status endpoint
-type GetRedemptionStatusResponse struct {
-	SubscriptionID   string     `json:"subscription_id"`
-	Status           string     `json:"status"` // pending, success, failed
-	Message          string     `json:"message"`
-	LastRedemptionAt *time.Time `json:"last_redemption_at,omitempty"`
-	LastAttemptedAt  *time.Time `json:"last_attempted_at,omitempty"`
-	TotalRedemptions int32      `json:"total_redemptions"`
-	NextRedemptionAt time.Time  `json:"next_redemption_at"`
-	TransactionHash  string     `json:"transaction_hash,omitempty"`
-	FailureReason    string     `json:"failure_reason,omitempty"`
-}
-
-// ProcessDueSubscriptionsResult contains statistics about the processing job
-type ProcessDueSubscriptionsResult struct {
-	Total     int `json:"total"`
-	Succeeded int `json:"succeeded"`
-	Failed    int `json:"failed"`
-}
-
 // processSubscriptionParams contains all parameters needed to process a subscription
 type processSubscriptionParams struct {
 	ctx            context.Context
@@ -599,9 +538,9 @@ type processSubscriptionParams struct {
 	token          db.Token
 	network        db.Network
 	now            time.Time
-	queries        db.Querier                     // Database queries interface (could be transaction or regular)
-	tx             pgx.Tx                         // Optional transaction for atomic operations
-	results        *ProcessDueSubscriptionsResult // Optional results tracker for ProcessDueSubscriptions
+	queries        db.Querier                               // Database queries interface (could be transaction or regular)
+	tx             pgx.Tx                                   // Optional transaction for atomic operations
+	results        *responses.ProcessDueSubscriptionsResult // Optional results tracker for ProcessDueSubscriptions
 }
 
 // processSubscriptionResult contains the result of processing a subscription
@@ -618,42 +557,50 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 	result := processSubscriptionResult{}
 	originalSubscription := params.subscription // Keep a reference to the initially fetched one
 
-	log.Printf("processSubscription: Re-fetching subscription %s for idempotency check within transaction.", originalSubscription.ID)
+	logger.Info("processSubscription: Re-fetching subscription for idempotency check within transaction",
+		zap.String("subscription_id", originalSubscription.ID.String()))
 	currentDBSub, err := params.queries.GetSubscription(params.ctx, originalSubscription.ID)
 	if err != nil {
 		errMsg := fmt.Sprintf("processSubscription: Failed to re-fetch subscription %s for idempotency check: %v", originalSubscription.ID, err)
-		log.Println(errMsg)
+		logger.Error(errMsg)
 		if params.results != nil {
-			params.results.Failed++ // Count as failed for this run if fetch fails
+			params.results.FailedCount++ // Count as failed for this run if fetch fails
 		}
 		return result, errors.New(errMsg)
 	}
-	log.Printf("processSubscription: Fetched current state for %s: Status=%s, NextRedemptionDate=%v, TotalRedemptions=%d",
-		currentDBSub.ID, currentDBSub.Status, currentDBSub.NextRedemptionDate.Time, currentDBSub.TotalRedemptions)
+	logger.Info("processSubscription: Fetched current state",
+		zap.String("subscription_id", currentDBSub.ID.String()),
+		zap.String("status", string(currentDBSub.Status)),
+		zap.Time("next_redemption_date", currentDBSub.NextRedemptionDate.Time),
+		zap.Int32("total_redemptions", currentDBSub.TotalRedemptions))
 
 	// IDEMPOTENCY CHECKS:
 	// 1. Check for Terminal Status (Completed or Failed by a previous run)
 	if currentDBSub.Status == db.SubscriptionStatusCompleted {
-		log.Printf("processSubscription: Subscription %s already marked as COMPLETED. Skipping this run's counters.", currentDBSub.ID)
+		logger.Info("processSubscription: Subscription already marked as COMPLETED. Skipping this run's counters",
+			zap.String("subscription_id", currentDBSub.ID.String()))
 		// Do not increment Succeeded/Failed for *this* run if already completed
 		result.isProcessed = true // Considered processed (by a previous run)
 		result.isCompleted = true
 		return result, nil
 	}
 	if currentDBSub.Status == db.SubscriptionStatusFailed {
-		log.Printf("processSubscription: Subscription %s already marked as FAILED. Skipping, but counting as Failed for this run.", currentDBSub.ID)
+		logger.Info("processSubscription: Subscription already marked as FAILED. Skipping, but counting as Failed for this run",
+			zap.String("subscription_id", currentDBSub.ID.String()))
 		if params.results != nil {
-			params.results.Failed++ // Count as Failed for this run as we found it failed
+			params.results.FailedCount++ // Count as Failed for this run as we found it failed
 		}
 		return result, nil
 	}
 
 	// 2. Check if Next Redemption Date has already been advanced past the current processing time
 	if currentDBSub.NextRedemptionDate.Valid && currentDBSub.NextRedemptionDate.Time.After(params.now) {
-		log.Printf("processSubscription: Subscription %s NextRedemptionDate (%v) is already past current processing time (%v). Likely processed by a concurrent/retried run. Skipping, counting as Succeeded for this run.",
-			currentDBSub.ID, currentDBSub.NextRedemptionDate.Time, params.now)
+		logger.Info("processSubscription: Subscription NextRedemptionDate is already past current processing time. Likely processed by concurrent/retried run. Skipping, counting as Succeeded",
+			zap.String("subscription_id", currentDBSub.ID.String()),
+			zap.Time("next_redemption_date", currentDBSub.NextRedemptionDate.Time),
+			zap.Time("current_processing_time", params.now))
 		if params.results != nil {
-			params.results.Succeeded++ // Count as Succeeded as it appears processed by another run
+			params.results.SuccessfulCount++ // Count as Succeeded as it appears processed by another run
 		}
 		result.isProcessed = true
 		return result, nil
@@ -661,12 +608,15 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 
 	// 3. Safeguard: Ensure the subscription fetched for processing is still in a processable state
 	if currentDBSub.Status != db.SubscriptionStatusActive && currentDBSub.Status != db.SubscriptionStatusOverdue {
-		log.Printf("processSubscription: Subscription %s is no longer in a processable status (current: %s). Skipping this run's counters.", currentDBSub.ID, currentDBSub.Status)
+		logger.Info("processSubscription: Subscription is no longer in a processable status. Skipping this run's counters",
+			zap.String("subscription_id", currentDBSub.ID.String()),
+			zap.String("current_status", string(currentDBSub.Status)))
 		// Do not increment Succeeded/Failed for this run, it's just a state mismatch found
 		return result, nil
 	}
 
-	log.Printf("processSubscription: Idempotency checks passed for subscription %s. Proceeding with redemption logic.", currentDBSub.ID)
+	logger.Info("processSubscription: Idempotency checks passed. Proceeding with redemption logic",
+		zap.String("subscription_id", currentDBSub.ID.String()))
 
 	// IMPORTANT FIX: Determine if this will be the final payment using the CURRENT subscription state
 	// instead of the potentially stale data passed in params.isFinalPayment
@@ -683,15 +633,18 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		}
 	}
 
-	log.Printf("processSubscription: Final payment determination for %s: TermLength=%d, CurrentTotalRedemptions=%d, WillBeFinal=%t",
-		currentDBSub.ID, params.Price.TermLength, currentDBSub.TotalRedemptions, isActualFinalPayment)
+	logger.Info("processSubscription: Final payment determination",
+		zap.String("subscription_id", currentDBSub.ID.String()),
+		zap.Int32("term_length", params.Price.TermLength),
+		zap.Int32("current_total_redemptions", currentDBSub.TotalRedemptions),
+		zap.Bool("will_be_final", isActualFinalPayment))
 
 	// Marshal delegation to JSON bytes for redemption
 	delegationBytes, err := json.Marshal(params.delegationData)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to marshal delegation data for subscription %s: %v",
 			originalSubscription.ID, err)
-		log.Println(errMsg)
+		logger.Error(errMsg)
 
 		// Create appropriate event based on transaction mode
 		if params.tx != nil {
@@ -704,12 +657,13 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 				Metadata:       nil,
 			})
 			if eventErr != nil {
-				log.Printf("Failed to record failure event for subscription %s: %v",
-					originalSubscription.ID, eventErr)
+				logger.Info("Failed to record failure event for subscription",
+					zap.String("subscription_id", originalSubscription.ID.String()),
+					zap.Error(eventErr))
 			}
 			// Update counters if tracking results
 			if params.results != nil {
-				params.results.Failed++ // Increment Failed here
+				params.results.FailedCount++ // Increment Failed here
 			}
 		} else {
 			_, eventErr := params.queries.CreateFailedRedemptionEvent(params.ctx, db.CreateFailedRedemptionEventParams{
@@ -719,8 +673,9 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 				Metadata:       nil,
 			})
 			if eventErr != nil {
-				log.Printf("Failed to record failure event for subscription %s: %v",
-					originalSubscription.ID, eventErr)
+				logger.Info("Failed to record failure event for subscription",
+					zap.String("subscription_id", originalSubscription.ID.String()),
+					zap.Error(eventErr))
 			}
 			// Non-transactional path might not update results struct directly
 		}
@@ -748,11 +703,15 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			backoff = maxBackoff
 		}
 		// Add jitter (±20%)
-		jitter := time.Duration(float64(backoff) * (0.8 + 0.4*rand.Float64()))
+		jitterFactor, _ := rand.Int(rand.Reader, big.NewInt(40))
+		jitter := time.Duration(float64(backoff) * (0.8 + float64(jitterFactor.Int64())/100.0))
 
 		if attempt > 0 {
-			log.Printf("Retrying delegation redemption for subscription %s (attempt %d/%d) after %v",
-				originalSubscription.ID, attempt+1, maxRetries, jitter) // Use originalSubscription.ID for consistent logging
+			logger.Info("Retrying delegation redemption for subscription",
+				zap.String("subscription_id", originalSubscription.ID.String()),
+				zap.Int("attempt", attempt+1),
+				zap.Int("max_retries", maxRetries),
+				zap.Duration("backoff", jitter)) // Use originalSubscription.ID for consistent logging
 			// Wait before retry
 			time.Sleep(jitter)
 		}
@@ -789,17 +748,24 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		detailedErr := redemptionError.Error()
 
 		if isPermanentRedemptionError(redemptionError) {
-			log.Printf("Permanent error redeeming delegation for subscription %s, won't retry: %v",
-				originalSubscription.ID, detailedErr)
+			logger.Info("Permanent error redeeming delegation, won't retry",
+				zap.String("subscription_id", originalSubscription.ID.String()),
+				zap.String("error", detailedErr))
 			break // Break loop for permanent error
 		} else if strings.Contains(detailedErr, "AA25 invalid account nonce") {
-			log.Printf("Temporary error (Nonce Collision AA25) redeeming delegation for subscription %s (attempt %d/%d): %v. Will retry if attempts remain.",
-				originalSubscription.ID, attempt+1, maxRetries, detailedErr)
+			logger.Info("Temporary error (Nonce Collision AA25) redeeming delegation. Will retry if attempts remain",
+				zap.String("subscription_id", originalSubscription.ID.String()),
+				zap.Int("attempt", attempt+1),
+				zap.Int("max_retries", maxRetries),
+				zap.String("error", detailedErr))
 			// Continue loop
 		} else {
 			// Other temporary error
-			log.Printf("Temporary error redeeming delegation for subscription %s (attempt %d/%d): %v. Will retry if attempts remain.",
-				originalSubscription.ID, attempt+1, maxRetries, detailedErr)
+			logger.Info("Temporary error redeeming delegation. Will retry if attempts remain",
+				zap.String("subscription_id", originalSubscription.ID.String()),
+				zap.Int("attempt", attempt+1),
+				zap.Int("max_retries", maxRetries),
+				zap.String("error", detailedErr))
 			// Continue loop
 		}
 		// If not broken, the loop continues to the next attempt
@@ -813,10 +779,10 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		var nextRedemptionDate pgtype.Timestamptz
 		if params.Price.IntervalType == "" {
 			errMsg := fmt.Sprintf("IntervalType is null for recurring price %s (subscription %s)", params.Price.ID, originalSubscription.ID)
-			log.Println(errMsg)
+			logger.Error(errMsg)
 			// Record failure event and update results before returning
 			if params.tx != nil && params.results != nil {
-				params.results.Failed++
+				params.results.FailedCount++
 				// Optionally record event here too
 			}
 			return result, errors.New(errMsg) // isProcessed remains false
@@ -835,7 +801,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		_, err := params.queries.IncrementSubscriptionRedemption(params.ctx, incrementParams)
 		if err != nil {
 			errMsg := fmt.Sprintf("Failed to update subscription %s after successful redemption: %v", originalSubscription.ID, err)
-			log.Println(errMsg)
+			logger.Error(errMsg)
 			// Even though redemption worked, the overall process failed if DB update fails.
 			if params.tx != nil { // Record failure event if in transaction
 				_, eventErr := params.queries.CreateSubscriptionEvent(params.ctx, db.CreateSubscriptionEventParams{
@@ -847,10 +813,12 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 					Metadata:       nil,
 				})
 				if eventErr != nil {
-					log.Printf("Failed to record DB update failure event for %s: %v", originalSubscription.ID, eventErr)
+					logger.Info("Failed to record DB update failure event",
+						zap.String("subscription_id", originalSubscription.ID.String()),
+						zap.Error(eventErr))
 				}
 				if params.results != nil {
-					params.results.Failed++
+					params.results.FailedCount++
 				}
 			} else { // Non-transactional path might have different event recording
 				_, eventErr := params.queries.CreateFailedRedemptionEvent(params.ctx, db.CreateFailedRedemptionEventParams{
@@ -860,7 +828,9 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 					Metadata:       nil,
 				})
 				if eventErr != nil {
-					log.Printf("Failed to record DB update failure event for %s: %v", originalSubscription.ID, eventErr)
+					logger.Info("Failed to record DB update failure event",
+						zap.String("subscription_id", originalSubscription.ID.String()),
+						zap.Error(eventErr))
 				}
 			}
 			result.isProcessed = false
@@ -870,7 +840,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 		// Both redemption and DB update succeeded
 		result.isProcessed = true
 		if params.results != nil {
-			params.results.Succeeded++ // Increment Succeeded here
+			params.results.SuccessfulCount++ // Increment Succeeded here
 		}
 
 		// Use the ACTUAL final payment determination, not the potentially stale one from params
@@ -878,16 +848,18 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			// Call CompleteSubscription which sets status and nullifies next_redemption_date
 			if _, updateErr := params.queries.CompleteSubscription(params.ctx, originalSubscription.ID); updateErr != nil {
 				errMsg := fmt.Sprintf("CRITICAL: Failed to mark subscription %s as completed after successful final payment: %v", originalSubscription.ID, updateErr)
-				log.Printf(errMsg)
+				logger.Info(errMsg)
 				// This is critical for final payments - we need to ensure completion status is set
 				result.isProcessed = false
 				if params.results != nil {
-					params.results.Failed++
+					params.results.FailedCount++
 				}
 				return result, fmt.Errorf(errMsg)
 			} else {
 				result.isCompleted = true // Internal flag for event type
-				log.Printf("Marked subscription %s as completed (via CompleteSubscription) after successful final payment. TotalRedemptions will be %d", originalSubscription.ID, currentDBSub.TotalRedemptions+1)
+				logger.Info("Marked subscription as completed (via CompleteSubscription) after successful final payment",
+					zap.String("subscription_id", originalSubscription.ID.String()),
+					zap.Int32("total_redemptions", currentDBSub.TotalRedemptions+1))
 			}
 		}
 
@@ -912,10 +884,10 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			})
 			if eventErr != nil {
 				errMsg := fmt.Sprintf("CRITICAL: Failed to record redeemed event for subscription %s after successful on-chain redemption. Transaction will be rolled back: %v", originalSubscription.ID, eventErr)
-				log.Printf(errMsg)
+				logger.Info(errMsg)
 				result.isProcessed = false
 				if params.results != nil {
-					params.results.Failed++
+					params.results.FailedCount++
 				}
 				return result, fmt.Errorf(errMsg)
 			}
@@ -923,10 +895,10 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			// Validate that the redeemed event was properly created
 			if validationErr := h.logAndValidateEventCreation(params.ctx, params.queries, originalSubscription.ID, db.SubscriptionEventTypeRedeemed, result.txHash); validationErr != nil {
 				errMsg := fmt.Sprintf("CRITICAL: Redeemed event creation validation failed for subscription %s: %v", originalSubscription.ID, validationErr)
-				log.Printf(errMsg)
+				logger.Info(errMsg)
 				result.isProcessed = false
 				if params.results != nil {
-					params.results.Failed++
+					params.results.FailedCount++
 				}
 				return result, fmt.Errorf(errMsg)
 			}
@@ -934,7 +906,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			// Create payment record for the redeemed event
 			payment, paymentErr := h.paymentService.CreatePaymentFromSubscriptionEvent(
 				params.ctx,
-				services.CreatePaymentFromSubscriptionEventParams{
+				typeParams.CreatePaymentFromSubscriptionEventParams{
 					SubscriptionEvent: &redeemedEvent,
 					Subscription:      &db.Subscription{ID: originalSubscription.ID, WorkspaceID: params.product.WorkspaceID, CustomerID: originalSubscription.CustomerID},
 					Product:           &params.product,
@@ -947,14 +919,16 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			)
 			if paymentErr != nil {
 				errMsg := fmt.Sprintf("CRITICAL: Failed to create payment record for subscription %s after successful redemption. Transaction will be rolled back: %v", originalSubscription.ID, paymentErr)
-				log.Printf(errMsg)
+				logger.Info(errMsg)
 				result.isProcessed = false
 				if params.results != nil {
-					params.results.Failed++
+					params.results.FailedCount++
 				}
 				return result, fmt.Errorf(errMsg)
 			}
-			log.Printf("Created payment record %s for subscription %s redemption", payment.ID, originalSubscription.ID)
+			logger.Info("Created payment record for subscription redemption",
+				zap.String("payment_id", payment.ID.String()),
+				zap.String("subscription_id", originalSubscription.ID.String()))
 
 			// 2. If this is the final payment, ALSO create a "completed" event (separate from redemption)
 			if result.isCompleted {
@@ -974,15 +948,16 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 				})
 				if completionEventErr != nil {
 					errMsg := fmt.Sprintf("CRITICAL: Failed to record completion event for subscription %s after successful final payment. Transaction will be rolled back: %v", originalSubscription.ID, completionEventErr)
-					log.Printf(errMsg)
+					logger.Info(errMsg)
 					result.isProcessed = false
 					if params.results != nil {
-						params.results.Failed++
+						params.results.FailedCount++
 					}
 					return result, fmt.Errorf(errMsg)
 				}
 
-				log.Printf("Created both redeemed and completed events for final payment of subscription %s", originalSubscription.ID)
+				logger.Info("Created both redeemed and completed events for final payment",
+					zap.String("subscription_id", originalSubscription.ID.String()))
 			}
 		} else { // Non-transactional path
 			// 1. Create the "redeemed" event (always)
@@ -994,7 +969,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			})
 			if eventErr != nil {
 				errMsg := fmt.Sprintf("CRITICAL: Failed to record non-tx redeemed event for subscription %s after successful on-chain redemption: %v", originalSubscription.ID, eventErr)
-				log.Printf(errMsg)
+				logger.Info(errMsg)
 				result.isProcessed = false
 				return result, fmt.Errorf(errMsg)
 			}
@@ -1002,7 +977,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			// Validate that the redeemed event was properly created
 			if validationErr := h.logAndValidateEventCreation(params.ctx, params.queries, originalSubscription.ID, db.SubscriptionEventTypeRedeemed, result.txHash); validationErr != nil {
 				errMsg := fmt.Sprintf("CRITICAL: Non-tx redeemed event creation validation failed for subscription %s: %v", originalSubscription.ID, validationErr)
-				log.Printf(errMsg)
+				logger.Info(errMsg)
 				result.isProcessed = false
 				return result, fmt.Errorf(errMsg)
 			}
@@ -1014,7 +989,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			})
 			if evtErr != nil || len(redeemedEvents) == 0 {
 				errMsg := fmt.Sprintf("CRITICAL: Failed to fetch redeemed event for payment creation for subscription %s: %v", originalSubscription.ID, evtErr)
-				log.Printf(errMsg)
+				logger.Info(errMsg)
 				result.isProcessed = false
 				return result, fmt.Errorf(errMsg)
 			}
@@ -1022,7 +997,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			// Create payment record for the redeemed event
 			payment, paymentErr := h.paymentService.CreatePaymentFromSubscriptionEvent(
 				params.ctx,
-				services.CreatePaymentFromSubscriptionEventParams{
+				typeParams.CreatePaymentFromSubscriptionEventParams{
 					SubscriptionEvent: &redeemedEvents[0],
 					Subscription:      &db.Subscription{ID: originalSubscription.ID, WorkspaceID: params.product.WorkspaceID, CustomerID: originalSubscription.CustomerID},
 					Product:           &params.product,
@@ -1035,11 +1010,13 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 			)
 			if paymentErr != nil {
 				errMsg := fmt.Sprintf("CRITICAL: Failed to create payment record for subscription %s after successful redemption (non-tx): %v", originalSubscription.ID, paymentErr)
-				log.Printf(errMsg)
+				logger.Info(errMsg)
 				result.isProcessed = false
 				return result, fmt.Errorf(errMsg)
 			}
-			log.Printf("Created payment record %s for subscription %s redemption (non-tx path)", payment.ID, originalSubscription.ID)
+			logger.Info("Created payment record for subscription redemption (non-tx path)",
+				zap.String("payment_id", payment.ID.String()),
+				zap.String("subscription_id", originalSubscription.ID.String()))
 
 			// 2. If this is the final payment, ALSO create a "completed" event (separate from redemption)
 			if result.isCompleted {
@@ -1060,24 +1037,28 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 				})
 				if completionEventErr != nil {
 					errMsg := fmt.Sprintf("CRITICAL: Failed to record non-tx completion event for subscription %s after successful final payment: %v", originalSubscription.ID, completionEventErr)
-					log.Printf(errMsg)
+					logger.Info(errMsg)
 					result.isProcessed = false
 					return result, fmt.Errorf(errMsg)
 				}
 
-				log.Printf("Created both redeemed and completed events for final payment of subscription %s (non-tx path)", originalSubscription.ID)
+				logger.Info("Created both redeemed and completed events for final payment (non-tx path)",
+					zap.String("subscription_id", originalSubscription.ID.String()))
 			}
 		}
 
-		log.Printf("Successfully processed subscription %s, next redemption at %s, isCompleted: %t", originalSubscription.ID, nextRedemptionDate.Time, result.isCompleted)
+		logger.Info("Successfully processed subscription, next redemption scheduled",
+			zap.String("subscription_id", originalSubscription.ID.String()),
+			zap.Time("next_redemption", nextRedemptionDate.Time),
+			zap.Bool("is_completed", result.isCompleted))
 
 	} else {
 		// Redemption failed (exhausted retries or hit permanent error)
 		errMsg := fmt.Sprintf("Failed to redeem delegation for subscription %s after %d attempts: %v",
 			originalSubscription.ID, maxRetries, redemptionError)
-		log.Println(errMsg)
+		logger.Error(errMsg)
 		if params.results != nil {
-			params.results.Failed++ // Increment Failed here
+			params.results.FailedCount++ // Increment Failed here
 		}
 
 		// If this was the final payment and redemption failed, update status
@@ -1088,9 +1069,13 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 				Status: db.SubscriptionStatusOverdue, // Or Failed, depending on logic
 			}
 			if _, updateErr = params.queries.UpdateSubscriptionStatus(params.ctx, updateParams); updateErr != nil {
-				log.Printf("Failed to update subscription %s to overdue/failed status after redemption failure: %v", originalSubscription.ID, updateErr)
+				logger.Info("Failed to update subscription to overdue/failed status after redemption failure",
+					zap.String("subscription_id", originalSubscription.ID.String()),
+					zap.Error(updateErr))
 			} else {
-				log.Printf("Marked subscription %s as %s due to failed final payment redemption", originalSubscription.ID, updateParams.Status)
+				logger.Info("Marked subscription as failed due to final payment redemption failure",
+					zap.String("subscription_id", originalSubscription.ID.String()),
+					zap.String("status", string(updateParams.Status)))
 			}
 		}
 
@@ -1105,7 +1090,7 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 				Metadata:       nil,
 			})
 			if eventErr != nil {
-				log.Printf("Failed to record failure event for subscription %s: %v", originalSubscription.ID, eventErr)
+				logger.Info("Failed to record failure event for subscription", zap.String("subscription_id", originalSubscription.ID.String()), zap.Error(eventErr))
 			}
 		} else { // Non-transactional path
 			_, eventErr := params.queries.CreateFailedRedemptionEvent(params.ctx, db.CreateFailedRedemptionEventParams{
@@ -1115,7 +1100,9 @@ func (h *SubscriptionHandler) processSubscription(params processSubscriptionPara
 				Metadata:       nil,
 			})
 			if eventErr != nil {
-				log.Printf("Failed to record non-tx failure event for subscription %s: %v", originalSubscription.ID, eventErr)
+				logger.Info("Failed to record non-tx failure event for subscription",
+					zap.String("subscription_id", originalSubscription.ID.String()),
+					zap.Error(eventErr))
 			}
 		}
 
@@ -1154,15 +1141,16 @@ func isPermanentRedemptionError(err error) bool {
 
 // ProcessDueSubscriptions finds and processes all subscriptions that are due for redemption
 // It uses a transaction for atomicity and updates subscription status based on the result
-func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (ProcessDueSubscriptionsResult, error) {
-	log.Printf("Entering ProcessDueSubscriptions")
-	results := ProcessDueSubscriptionsResult{}
+func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (responses.ProcessDueSubscriptionsResult, error) {
+	logger.Info("Entering ProcessDueSubscriptions")
+	results := responses.ProcessDueSubscriptionsResult{}
 	now := time.Now()
 
 	// Get database pool
 	pool, err := h.common.GetDBPool()
 	if err != nil {
-		log.Printf("Error in ProcessDueSubscriptions: failed to get database pool: %v", err)
+		logger.Info("Error in ProcessDueSubscriptions: failed to get database pool",
+			zap.Error(err))
 		return results, fmt.Errorf("failed to get database pool: %w", err)
 	}
 
@@ -1175,61 +1163,79 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 
 		// Query for subscriptions due for redemption and lock them for processing
 		nowPgType := pgtype.Timestamptz{Time: now, Valid: true}
-		log.Printf("ProcessDueSubscriptions: Querying for subscriptions due before %v", now)
+		logger.Info("ProcessDueSubscriptions: Querying for subscriptions due before",
+			zap.Time("before", now))
 		subscriptions, err := qtx.ListSubscriptionsDueForRedemption(ctx, nowPgType)
 		if err != nil {
-			log.Printf("Error in ProcessDueSubscriptions: failed to fetch subscriptions due for redemption: %v", err)
+			logger.Info("Error in ProcessDueSubscriptions: failed to fetch subscriptions due for redemption",
+				zap.Error(err))
 			return fmt.Errorf("failed to fetch subscriptions due for redemption: %w", err)
 		}
 
 		// Update result count
-		results.Total = len(subscriptions)
-		if results.Total == 0 {
-			log.Printf("ProcessDueSubscriptions: No subscriptions found due for renewal.")
+		results.ProcessedCount = len(subscriptions)
+		if results.ProcessedCount == 0 {
+			logger.Info("ProcessDueSubscriptions: No subscriptions found due for renewal.")
 			// No subscriptions to process, transaction will commit automatically
-			log.Printf("Exiting ProcessDueSubscriptions. Total: 0, Succeeded: 0, Failed: 0")
+			logger.Info("Exiting ProcessDueSubscriptions. Total: 0, Succeeded: 0, Failed: 0")
 			return nil
 		}
 
-		log.Printf("Found %d subscriptions due for redemption", results.Total)
+		logger.Info("Found subscriptions due for redemption",
+			zap.Int("count", results.ProcessedCount))
 
 		// Process each subscription within the transaction
 		for i, subscription := range subscriptions {
-			log.Printf("Processing subscription %d/%d: ID: %s, Status: %s, ProductID: %s, CurrentPeriodEnd: %v",
-				i+1, results.Total, subscription.ID, subscription.Status, subscription.ProductID, subscription.CurrentPeriodEnd.Time)
+			logger.Info("Processing subscription",
+				zap.Int("current", i+1),
+				zap.Int("total", results.ProcessedCount),
+				zap.String("subscription_id", subscription.ID.String()),
+				zap.String("status", string(subscription.Status)),
+				zap.String("product_id", subscription.ProductID.String()),
+				zap.Time("current_period_end", subscription.CurrentPeriodEnd.Time))
 
 			// Skip subscriptions that are not in a processable state (active or overdue)
 			if !(subscription.Status == db.SubscriptionStatusActive || subscription.Status == db.SubscriptionStatusOverdue) {
-				log.Printf("Skipping subscription %s with non-processable status %s", subscription.ID, subscription.Status)
+				logger.Info("Skipping subscription with non-processable status",
+					zap.String("subscription_id", subscription.ID.String()),
+					zap.String("status", string(subscription.Status)))
 				continue
 			}
 
 			// Get required data for processing
 			product, err := qtx.GetProductWithoutWorkspaceId(ctx, subscription.ProductID)
 			if err != nil {
-				log.Printf("Failed to get product for subscription %s: %v", subscription.ID, err)
-				results.Failed++
+				logger.Info("Failed to get product for subscription",
+					zap.String("subscription_id", subscription.ID.String()),
+					zap.Error(err))
+				results.FailedCount++
 				continue
 			}
 
 			productToken, err := qtx.GetProductToken(ctx, subscription.ProductTokenID)
 			if err != nil {
-				log.Printf("Failed to get product token for subscription %s: %v", subscription.ID, err)
-				results.Failed++
+				logger.Info("Failed to get product token for subscription",
+					zap.String("subscription_id", subscription.ID.String()),
+					zap.Error(err))
+				results.FailedCount++
 				continue
 			}
 
 			token, err := qtx.GetToken(ctx, productToken.TokenID)
 			if err != nil {
-				log.Printf("Failed to get token for subscription %s: %v", subscription.ID, err)
-				results.Failed++
+				logger.Info("Failed to get token for subscription",
+					zap.String("subscription_id", subscription.ID.String()),
+					zap.Error(err))
+				results.FailedCount++
 				continue
 			}
 
 			network, err := qtx.GetNetwork(ctx, token.NetworkID)
 			if err != nil {
-				log.Printf("Failed to get network for token %s: %v", token.ID, err)
-				results.Failed++
+				logger.Info("Failed to get network for token",
+					zap.String("token_id", token.ID.String()),
+					zap.Error(err))
+				results.FailedCount++
 				continue
 			}
 
@@ -1238,23 +1244,30 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 				WorkspaceID: product.WorkspaceID,
 			})
 			if err != nil {
-				log.Printf("Failed to get merchant wallet for subscription %s: %v", subscription.ID, err)
-				results.Failed++
+				logger.Info("Failed to get merchant wallet for subscription",
+					zap.String("subscription_id", subscription.ID.String()),
+					zap.Error(err))
+				results.FailedCount++
 				continue
 			}
 
 			delegationData, err := qtx.GetDelegationData(ctx, subscription.DelegationID)
 			if err != nil {
-				log.Printf("Failed to get delegation data for subscription %s: %v", subscription.ID, err)
-				results.Failed++
+				logger.Info("Failed to get delegation data for subscription",
+					zap.String("subscription_id", subscription.ID.String()),
+					zap.Error(err))
+				results.FailedCount++
 				continue
 			}
 
 			// Fetch the Price for the current subscription to determine term length and other price details
 			price, err := qtx.GetPrice(ctx, subscription.PriceID)
 			if err != nil {
-				log.Printf("Failed to get price %s for subscription %s: %v", subscription.PriceID, subscription.ID, err)
-				results.Failed++
+				logger.Info("Failed to get price for subscription",
+					zap.String("price_id", subscription.PriceID.String()),
+					zap.String("subscription_id", subscription.ID.String()),
+					zap.Error(err))
+				results.FailedCount++
 				continue
 			}
 
@@ -1275,39 +1288,47 @@ func (h *SubscriptionHandler) ProcessDueSubscriptions(ctx context.Context) (Proc
 				results:        &results,
 			}
 
-			log.Printf("Calling h.processSubscription for subscription ID: %s", subscription.ID)
+			logger.Info("Calling h.processSubscription for subscription",
+				zap.String("subscription_id", subscription.ID.String()))
 			_, err = h.processSubscription(params)
 			if err != nil {
-				// Error handling is done in processSubscription, which updates results.Failed (potentially)
+				// Error handling is done in processSubscription, which updates results.FailedCount (potentially)
 				// and logs the specific error. We just log that we are continuing based on the error return.
-				log.Printf("Error returned by h.processSubscription for subscription ID %s: %v. Continuing.", subscription.ID, err)
+				logger.Info("Error returned by h.processSubscription. Continuing",
+					zap.String("subscription_id", subscription.ID.String()),
+					zap.Error(err))
 				// Note: The result counters (Failed/Completed/Succeeded) are primarily managed within processSubscription
 				// based on its internal logic and idempotency checks.
 				continue
 			}
 			// If processSubscription didn't return an error, we rely on the counters updated within it.
 			// No need for explicit Succeeded++ here anymore, it's handled based on idempotency/completion inside.
-			log.Printf("Finished h.processSubscription call for subscription ID: %s (Results updated internally).", subscription.ID)
+			logger.Info("Finished h.processSubscription call (Results updated internally)",
+				zap.String("subscription_id", subscription.ID.String()))
 
 		}
 
-		log.Printf("ProcessDueSubscriptions transaction scope complete. Results - Succeeded: %d, Failed: %d",
-			results.Succeeded, results.Failed)
+		logger.Info("ProcessDueSubscriptions transaction scope complete",
+			zap.Int("succeeded", results.SuccessfulCount),
+			zap.Int("failed", results.FailedCount))
 		return nil
 	})
 
 	if err != nil {
-		log.Printf("Error in ProcessDueSubscriptions: transaction failed: %v", err)
+		logger.Info("Error in ProcessDueSubscriptions: transaction failed",
+			zap.Error(err))
 		return results, err
 	}
 
-	log.Printf("Exiting ProcessDueSubscriptions. Total Found: %d, Succeeded: %d, Failed: %d",
-		results.Total, results.Succeeded, results.Failed)
+	logger.Info("Exiting ProcessDueSubscriptions",
+		zap.Int("total_found", results.ProcessedCount),
+		zap.Int("succeeded", results.SuccessfulCount),
+		zap.Int("failed", results.FailedCount))
 	return results, nil
 }
 
 // toSubscriptionResponse converts a db.ListSubscriptionDetailsWithPaginationRow to a SubscriptionResponse.
-func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationRow) (SubscriptionResponse, error) {
+func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationRow) (responses.SubscriptionResponse, error) {
 	// Helper to convert pgtype.Text to string for enums
 	helperPgEnumTextToString := func(pgText pgtype.Text) string {
 		if pgText.Valid {
@@ -1332,7 +1353,7 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 		intervalTypeStr = string(subDetails.PriceIntervalType)
 	}
 
-	resp := SubscriptionResponse{
+	resp := responses.SubscriptionResponse{
 		ID:                 subDetails.SubscriptionID,
 		WorkspaceID:        subDetails.ProductWorkspaceID,
 		Status:             string(subDetails.SubscriptionStatus),
@@ -1352,7 +1373,7 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 			Type:                string(subDetails.PriceType),
 			Nickname:            helperPgEnumTextToString(subDetails.PriceNickname),
 			Currency:            string(subDetails.PriceCurrency),
-			UnitAmountInPennies: subDetails.PriceUnitAmountInPennies,
+			UnitAmountInPennies: int64(subDetails.PriceUnitAmountInPennies), // Convert int32 to int64
 			IntervalType:        intervalTypeStr,
 			TermLength:          subDetails.PriceTermLength,
 			Metadata:            subDetails.PriceMetadata, // Expecting json.RawMessage
@@ -1367,7 +1388,7 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 			Active:      subDetails.ProductActive,
 			Metadata:    subDetails.ProductMetadata, // Expecting json.RawMessage
 		},
-		ProductToken: helpers.ProductTokenResponse{
+		ProductToken: responses.ProductTokenResponse{
 			ID:          subDetails.ProductTokenID.String(),
 			TokenID:     subDetails.ProductTokenTokenID.String(),
 			TokenSymbol: subDetails.TokenSymbol,
@@ -1380,8 +1401,8 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 }
 
 // toSubscriptionResponseFromDBSubscription converts a db.Subscription to a SubscriptionResponse.
-func toSubscriptionResponseFromDBSubscription(sub db.Subscription) (SubscriptionResponse, error) {
-	resp := SubscriptionResponse{
+func toSubscriptionResponseFromDBSubscription(sub db.Subscription) (responses.SubscriptionResponse, error) {
+	resp := responses.SubscriptionResponse{
 		ID:          sub.ID,
 		CustomerID:  sub.CustomerID,
 		WorkspaceID: sub.WorkspaceID,
@@ -1401,285 +1422,6 @@ func toSubscriptionResponseFromDBSubscription(sub db.Subscription) (Subscription
 	return resp, nil
 }
 
-// SubscribeToProductByPriceID godoc
-// @Summary Subscribe to a product by price ID
-// @Description Subscribe to a product by specifying the price ID
-// @Tags subscriptions
-// @Accept json
-// @Produce json
-// @Tags exclude
-func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
-	ctx := c.Request.Context()
-	priceIDStr := c.Param("price_id")
-	parsedPriceID, err := uuid.Parse(priceIDStr)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid price ID format", err)
-		return
-	}
-
-	var request SubscribeRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid request format", err)
-		return
-	}
-	request.PriceID = priceIDStr
-
-	price, err := h.common.db.GetPrice(ctx, parsedPriceID)
-	if err != nil {
-		handleDBError(c, err, "Price not found")
-		return
-	}
-
-	if !price.Active {
-		sendError(c, http.StatusBadRequest, "Cannot subscribe to inactive price", nil)
-		return
-	}
-
-	product, err := h.common.db.GetProductWithoutWorkspaceId(ctx, price.ProductID)
-	if err != nil {
-		handleDBError(c, err, "Product associated with the price not found")
-		return
-	}
-
-	if err := h.validateSubscriptionRequest(request, product.ID); err != nil {
-		sendError(c, http.StatusBadRequest, err.Error(), err)
-		return
-	}
-
-	if !product.Active {
-		sendError(c, http.StatusBadRequest, "Cannot subscribe to a price of an inactive product", nil)
-		return
-	}
-
-	parsedProductTokenID, err := uuid.Parse(request.ProductTokenID)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid product token ID format", err)
-		return
-	}
-
-	merchantWallet, err := h.common.db.GetWalletByID(ctx, db.GetWalletByIDParams{
-		ID:          product.WalletID,
-		WorkspaceID: product.WorkspaceID,
-	})
-	if err != nil {
-		handleDBError(c, err, "Merchant wallet not found")
-		return
-	}
-
-	productToken, err := h.common.db.GetProductToken(ctx, parsedProductTokenID)
-	if err != nil {
-		handleDBError(c, err, "Product token not found")
-		return
-	}
-
-	token, err := h.common.db.GetToken(ctx, productToken.TokenID)
-	if err != nil {
-		handleDBError(c, err, "Token not found")
-		return
-	}
-
-	network, err := h.common.db.GetNetwork(ctx, token.NetworkID)
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to get network details", err)
-		return
-	}
-
-	tokenAmount, err := strconv.ParseInt(request.TokenAmount, 10, 64)
-	if err != nil {
-		sendError(c, http.StatusBadRequest, "Invalid token amount format", err)
-		return
-	}
-
-	executionObject := dsClient.ExecutionObject{
-		MerchantAddress:      merchantWallet.WalletAddress,
-		TokenContractAddress: token.ContractAddress,
-		TokenDecimals:        token.Decimals,
-		TokenAmount:          tokenAmount,
-		ChainID:              uint32(network.ChainID),
-		NetworkName:          network.Name,
-	}
-
-	if productToken.ProductID != product.ID {
-		sendError(c, http.StatusBadRequest, "Product token does not belong to the specified product", nil)
-		return
-	}
-
-	normalizedAddress := normalizeWalletAddress(request.SubscriberAddress, determineNetworkType(productToken.NetworkType))
-
-	// Get database pool
-	pool, err := h.common.GetDBPool()
-	if err != nil {
-		sendError(c, http.StatusInternalServerError, "Failed to get database pool", err)
-		return
-	}
-
-	var subscription db.Subscription
-	var updatedSubscription db.Subscription
-	var customer db.Customer
-	var customerWallet db.CustomerWallet
-
-	// Execute within transaction
-	err = helpers.WithTransaction(ctx, pool, func(tx pgx.Tx) error {
-		qtx := h.common.WithTx(tx)
-
-		var err error
-		customer, customerWallet, err = h.processCustomerAndWallet(ctx, qtx, normalizedAddress, product, productToken)
-		if err != nil {
-			return fmt.Errorf("failed to process customer or wallet: %w", err)
-		}
-
-		subscriptions, err := h.common.db.ListSubscriptionsByCustomer(ctx, db.ListSubscriptionsByCustomerParams{
-			CustomerID:  customer.ID,
-			WorkspaceID: product.WorkspaceID,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to check for existing subscription: %w", err)
-		}
-
-		var existingSubscription *db.Subscription
-		for i, sub := range subscriptions {
-			if sub.PriceID == price.ID && sub.Status == db.SubscriptionStatusActive {
-				existingSubscription = &subscriptions[i]
-				break
-			}
-		}
-
-		if existingSubscription != nil {
-			logger.Info("Subscription already exists for this price",
-				zap.String("subscription_id", existingSubscription.ID.String()),
-				zap.String("customer_id", customer.ID.String()),
-				zap.String("price_id", price.ID.String()))
-
-			duplicateErr := fmt.Errorf("subscription already exists for customer %s and price %s", customer.ID, price.ID)
-			h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, duplicateErr)
-
-			// Return a custom error that we'll handle after the transaction
-			return &SubscriptionExistsError{Subscription: existingSubscription}
-		}
-
-		delegationData, err := h.storeDelegationData(ctx, qtx, request.Delegation)
-		if err != nil {
-			return fmt.Errorf("failed to store delegation data: %w", err)
-		}
-
-		periodStart, periodEnd, nextRedemption := h.calculateSubscriptionPeriods(price)
-
-		subscription, err = h.createSubscription(ctx, qtx, CreateSubscriptionParams{
-			Customer:       customer,
-			CustomerWallet: customerWallet,
-			WorkspaceID:    product.WorkspaceID,
-			ProductID:      product.ID,
-			Price:          price,
-			ProductTokenID: parsedProductTokenID,
-			TokenAmount:    tokenAmount,
-			DelegationData: delegationData,
-			PeriodStart:    periodStart,
-			PeriodEnd:      periodEnd,
-			NextRedemption: nextRedemption,
-		})
-		if err != nil {
-			h.logFailedSubscriptionCreation(ctx, &customer.ID, product, price, productToken, normalizedAddress, request.Delegation.Signature, err)
-			return fmt.Errorf("failed to create subscription: %w", err)
-		}
-
-		eventMetadata, _ := json.Marshal(map[string]interface{}{
-			"product_name":   product.Name,
-			"price_type":     price.Type,
-			"wallet_address": customerWallet.WalletAddress,
-			"network_type":   customerWallet.NetworkType,
-		})
-
-		_, err = qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
-			SubscriptionID: subscription.ID,
-			EventType:      db.SubscriptionEventTypeCreated,
-			OccurredAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
-			AmountInCents:  price.UnitAmountInPennies,
-			Metadata:       eventMetadata,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create subscription creation event: %w", err)
-		}
-
-		logger.Info("Created subscription event",
-			zap.String("subscription_id", subscription.ID.String()),
-			zap.String("event_type", string(db.SubscriptionEventTypeCreated)))
-
-		return nil
-	})
-
-	// Handle transaction errors
-	if err != nil {
-		var subExistsErr *SubscriptionExistsError
-		if errors.As(err, &subExistsErr) {
-			c.JSON(http.StatusConflict, gin.H{
-				"message":      "Subscription already exists for this price",
-				"subscription": subExistsErr.Subscription,
-			})
-			return
-		}
-		sendError(c, http.StatusInternalServerError, "Transaction failed", err)
-		return
-	}
-
-	updatedSubscription, err = h.performInitialRedemption(ctx, customer, customerWallet, subscription, product, price, productToken, request.Delegation, executionObject)
-	if err != nil {
-		logger.Error("Initial redemption failed, subscription marked as failed and soft-deleted",
-			zap.Error(err),
-			zap.String("subscription_id", subscription.ID.String()),
-			zap.String("customer_id", customer.ID.String()),
-			zap.String("price_id", price.ID.String()))
-
-		_, updateErr := h.common.db.UpdateSubscriptionStatus(ctx, db.UpdateSubscriptionStatusParams{
-			ID:     subscription.ID,
-			Status: db.SubscriptionStatusFailed,
-		})
-
-		if updateErr != nil {
-			logger.Error("Failed to update subscription status after redemption failure",
-				zap.Error(updateErr),
-				zap.String("subscription_id", subscription.ID.String()))
-		}
-
-		deleteErr := h.common.db.DeleteSubscription(ctx, subscription.ID)
-		if deleteErr != nil {
-			logger.Error("Failed to soft-delete subscription after redemption failure",
-				zap.Error(deleteErr),
-				zap.String("subscription_id", subscription.ID.String()))
-		}
-
-		errorMsg := fmt.Sprintf("Initial redemption failed: %v", err)
-		_, eventErr := h.common.db.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
-			SubscriptionID:  subscription.ID,
-			EventType:       db.SubscriptionEventTypeFailedRedemption,
-			TransactionHash: pgtype.Text{String: "", Valid: false},
-			AmountInCents:   price.UnitAmountInPennies,
-			ErrorMessage:    pgtype.Text{String: errorMsg, Valid: true},
-			OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
-			Metadata:        json.RawMessage(`{}`),
-		})
-
-		if eventErr != nil {
-			logger.Error("Failed to create subscription event after redemption failure",
-				zap.Error(eventErr),
-				zap.String("subscription_id", subscription.ID.String()))
-		}
-
-		sendError(c, http.StatusInternalServerError, "Initial redemption failed, subscription marked as failed and soft-deleted", err)
-		return
-	}
-	// Create comprehensive response with all subscription fields and initial transaction hash
-	comprehensiveResponse, err := h.toComprehensiveSubscriptionResponse(ctx, updatedSubscription)
-	if err != nil {
-		logger.Error("Failed to create comprehensive subscription response",
-			zap.Error(err),
-			zap.String("subscription_id", updatedSubscription.ID.String()))
-		sendError(c, http.StatusInternalServerError, "Failed to create subscription response", err)
-		return
-	}
-
-	sendSuccess(c, http.StatusCreated, comprehensiveResponse)
-}
-
 // logAndValidateEventCreation helps debug event creation issues by logging details and optionally validating the event was created
 func (h *SubscriptionHandler) logAndValidateEventCreation(ctx context.Context, queries db.Querier, subscriptionID uuid.UUID, eventType db.SubscriptionEventType, txHash string) error {
 	// Get the latest event for this subscription to validate it was created properly
@@ -1697,8 +1439,11 @@ func (h *SubscriptionHandler) logAndValidateEventCreation(ctx context.Context, q
 		return fmt.Errorf("transaction hash mismatch: expected %s, got %v", txHash, latestEvent.TransactionHash)
 	}
 
-	log.Printf("Event creation validated: subscription %s, event_type %s, tx_hash %s, event_id %s",
-		subscriptionID, eventType, txHash, latestEvent.ID)
+	logger.Info("Event creation validated",
+		zap.String("subscription_id", subscriptionID.String()),
+		zap.String("event_type", string(eventType)),
+		zap.String("tx_hash", txHash),
+		zap.String("event_id", latestEvent.ID.String()))
 
 	return nil
 }

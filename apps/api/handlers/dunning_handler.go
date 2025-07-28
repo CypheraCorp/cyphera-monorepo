@@ -7,15 +7,18 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
-
-	"github.com/cyphera/cyphera-api/libs/go/db"
-	"github.com/cyphera/cyphera-api/libs/go/interfaces"
-	"github.com/cyphera/cyphera-api/libs/go/services"
 )
 
 type DunningHandler struct {
@@ -36,6 +39,13 @@ func NewDunningHandler(
 		retryEngine:    retryEngine,
 	}
 }
+
+// Use types from the centralized packages
+type CreateDunningConfigurationRequest = requests.CreateDunningConfigurationRequest
+type CreateEmailTemplateRequest = requests.CreateEmailTemplateRequest
+type DunningCampaignResponse = responses.DunningCampaignResponse
+type DunningCampaignDetailResponse = responses.DunningCampaignDetailResponse
+type CampaignStatsResponse = responses.CampaignStatsResponse
 
 // Configuration endpoints
 
@@ -63,7 +73,7 @@ func (h *DunningHandler) CreateConfiguration(c *gin.Context) {
 		return
 	}
 
-	config, err := h.dunningService.CreateConfiguration(c.Request.Context(), services.DunningConfigParams{
+	config, err := h.dunningService.CreateConfiguration(c.Request.Context(), params.DunningConfigParams{
 		WorkspaceID:            workspaceID,
 		Name:                   req.Name,
 		Description:            req.Description,
@@ -165,19 +175,21 @@ func (h *DunningHandler) ListCampaigns(c *gin.Context) {
 		return
 	}
 
-	limit, offset := GetPaginationParams(c)
-
-	// Parse filters
-	var status *string
-	if s := c.Query("status"); s != "" {
-		status = &s
+	limit, offset, err := helpers.ParsePaginationParamsAsInt(c)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid pagination parameters", err)
+		return
 	}
 
-	var customerID *uuid.UUID
+	// Parse filters - empty string will be treated as NULL in SQL
+	status := c.Query("status")
+	
+	// Parse customer ID - zero UUID will be treated as NULL in SQL
+	var customerID uuid.UUID
 	if cid := c.Query("customer_id"); cid != "" {
 		parsed, err := uuid.Parse(cid)
 		if err == nil {
-			customerID = &parsed
+			customerID = parsed
 		}
 	}
 
@@ -185,14 +197,8 @@ func (h *DunningHandler) ListCampaigns(c *gin.Context) {
 		WorkspaceID: workspaceID,
 		Limit:       int32(limit),
 		Offset:      int32(offset),
-	}
-
-	// Set optional parameters
-	if status != nil {
-		params.Status = *status
-	}
-	if customerID != nil {
-		params.CustomerID = *customerID
+		Status:      status,
+		CustomerID:  customerID,
 	}
 
 	campaigns, err := h.common.db.ListDunningCampaigns(c.Request.Context(), params)
@@ -379,15 +385,30 @@ func (h *DunningHandler) CreateEmailTemplate(c *gin.Context) {
 		return
 	}
 
-	template, err := h.dunningService.CreateEmailTemplate(c.Request.Context(), services.EmailTemplateParams{
-		WorkspaceID:        workspaceID,
-		Name:               req.Name,
-		TemplateType:       req.TemplateType,
-		Subject:            req.Subject,
-		BodyHTML:           req.BodyHTML,
-		BodyText:           req.BodyText,
-		AvailableVariables: req.AvailableVariables,
-		IsActive:           req.IsActive,
+	// Handle optional BodyText field
+	bodyText := ""
+	if req.BodyText != nil {
+		bodyText = *req.BodyText
+	}
+
+	// Parse available variables from JSON
+	var variables []string
+	if req.AvailableVariables != nil {
+		if err := json.Unmarshal(req.AvailableVariables, &variables); err != nil {
+			// If unmarshaling fails, use empty slice
+			variables = []string{}
+		}
+	}
+
+	template, err := h.dunningService.CreateEmailTemplate(c.Request.Context(), params.EmailTemplateParams{
+		WorkspaceID:  workspaceID,
+		TemplateName: req.Name,
+		TemplateType: req.TemplateType,
+		Subject:      req.Subject,
+		BodyHtml:     req.BodyHTML,
+		BodyText:     bodyText,
+		Variables:    variables,
+		IsActive:     req.IsActive,
 	})
 	if err != nil {
 		h.common.logger.Error("failed to create email template", zap.Error(err))
@@ -481,83 +502,6 @@ func (h *DunningHandler) GetCampaignStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
-}
-
-// Request/Response types
-
-type CreateDunningConfigurationRequest struct {
-	Name                   string          `json:"name" binding:"required"`
-	Description            *string         `json:"description"`
-	IsActive               bool            `json:"is_active"`
-	IsDefault              bool            `json:"is_default"`
-	MaxRetryAttempts       int32           `json:"max_retry_attempts" binding:"required,min=1,max=10"`
-	RetryIntervalDays      []int32         `json:"retry_interval_days" binding:"required"`
-	AttemptActions         json.RawMessage `json:"attempt_actions" binding:"required"`
-	FinalAction            string          `json:"final_action" binding:"required,oneof=cancel pause downgrade"`
-	FinalActionConfig      json.RawMessage `json:"final_action_config"`
-	SendPreDunningReminder bool            `json:"send_pre_dunning_reminder"`
-	PreDunningDays         int32           `json:"pre_dunning_days"`
-	AllowCustomerRetry     bool            `json:"allow_customer_retry"`
-	GracePeriodHours       int32           `json:"grace_period_hours"`
-}
-
-type CreateEmailTemplateRequest struct {
-	Name               string          `json:"name" binding:"required"`
-	TemplateType       string          `json:"template_type" binding:"required"`
-	Subject            string          `json:"subject" binding:"required"`
-	BodyHTML           string          `json:"body_html" binding:"required"`
-	BodyText           *string         `json:"body_text"`
-	AvailableVariables json.RawMessage `json:"available_variables"`
-	IsActive           bool            `json:"is_active"`
-}
-
-type DunningCampaignResponse struct {
-	ID                    uuid.UUID          `json:"id"`
-	WorkspaceID           uuid.UUID          `json:"workspace_id"`
-	ConfigurationID       uuid.UUID          `json:"configuration_id"`
-	SubscriptionID        pgtype.UUID        `json:"subscription_id"`
-	PaymentID             pgtype.UUID        `json:"payment_id"`
-	CustomerID            uuid.UUID          `json:"customer_id"`
-	Status                string             `json:"status"`
-	StartedAt             pgtype.Timestamptz `json:"started_at"`
-	CompletedAt           pgtype.Timestamptz `json:"completed_at"`
-	CurrentAttempt        int32              `json:"current_attempt"`
-	NextRetryAt           pgtype.Timestamptz `json:"next_retry_at"`
-	LastRetryAt           pgtype.Timestamptz `json:"last_retry_at"`
-	Recovered             pgtype.Bool        `json:"recovered"`
-	RecoveredAt           pgtype.Timestamptz `json:"recovered_at"`
-	RecoveredAmountCents  pgtype.Int8        `json:"recovered_amount_cents"`
-	FinalActionTaken      pgtype.Text        `json:"final_action_taken"`
-	FinalActionAt         pgtype.Timestamptz `json:"final_action_at"`
-	OriginalFailureReason pgtype.Text        `json:"original_failure_reason"`
-	OriginalAmountCents   int64              `json:"original_amount_cents"`
-	Currency              string             `json:"currency"`
-	Metadata              []byte             `json:"metadata"`
-	CreatedAt             pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	CustomerEmail         string             `json:"customer_email"`
-	CustomerName          string             `json:"customer_name"`
-	SubscriptionProductID uuid.UUID          `json:"subscription_product_id,omitempty"`
-}
-
-type DunningCampaignDetailResponse struct {
-	db.GetDunningCampaignRow
-	ConfigurationName string              `json:"configuration_name"`
-	MaxRetryAttempts  int32               `json:"max_retry_attempts"`
-	RetryIntervalDays []int32             `json:"retry_interval_days"`
-	CustomerEmail     string              `json:"customer_email"`
-	CustomerName      string              `json:"customer_name"`
-	Attempts          []db.DunningAttempt `json:"attempts"`
-}
-
-type CampaignStatsResponse struct {
-	ActiveCampaigns      int64   `json:"active_campaigns"`
-	RecoveredCampaigns   int64   `json:"recovered_campaigns"`
-	LostCampaigns        int64   `json:"lost_campaigns"`
-	AtRiskAmountCents    int64   `json:"at_risk_amount_cents"`
-	RecoveredAmountCents int64   `json:"recovered_amount_cents"`
-	LostAmountCents      int64   `json:"lost_amount_cents"`
-	RecoveryRate         float64 `json:"recovery_rate"`
 }
 
 // ProcessDueCampaigns manually triggers processing of due campaigns

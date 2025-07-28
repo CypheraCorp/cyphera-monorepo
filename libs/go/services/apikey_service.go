@@ -6,9 +6,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
@@ -74,27 +74,6 @@ func (s *APIKeyService) CompareAPIKeyHash(apiKey, hash string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(apiKey))
 }
 
-// CreateAPIKeyParams represents the parameters for creating an API key
-type CreateAPIKeyParams struct {
-	WorkspaceID uuid.UUID
-	Name        string
-	Description string
-	ExpiresAt   *time.Time
-	AccessLevel string
-	Metadata    map[string]interface{}
-}
-
-// UpdateAPIKeyParams represents the parameters for updating an API key
-type UpdateAPIKeyParams struct {
-	WorkspaceID uuid.UUID
-	ID          uuid.UUID
-	Name        string
-	Description string
-	ExpiresAt   *time.Time
-	AccessLevel string
-	Metadata    map[string]interface{}
-}
-
 // GetAPIKey retrieves an API key by ID and workspace
 func (s *APIKeyService) GetAPIKey(ctx context.Context, id, workspaceID uuid.UUID) (db.ApiKey, error) {
 	return s.db.GetAPIKey(ctx, db.GetAPIKeyParams{
@@ -114,7 +93,7 @@ func (s *APIKeyService) GetAllAPIKeys(ctx context.Context) ([]db.ApiKey, error) 
 }
 
 // CreateAPIKey creates a new API key with proper key generation and hashing
-func (s *APIKeyService) CreateAPIKey(ctx context.Context, params CreateAPIKeyParams) (db.ApiKey, string, string, error) {
+func (s *APIKeyService) CreateAPIKey(ctx context.Context, createParams params.CreateAPIKeyParams) (db.ApiKey, string, string, error) {
 	// Generate the API key
 	fullKey, keyPrefix, err := s.generateAPIKey()
 	if err != nil {
@@ -128,15 +107,15 @@ func (s *APIKeyService) CreateAPIKey(ctx context.Context, params CreateAPIKeyPar
 	}
 
 	// Marshal metadata
-	metadata, err := json.Marshal(params.Metadata)
+	metadata, err := json.Marshal(createParams.Metadata)
 	if err != nil {
 		return db.ApiKey{}, "", "", err
 	}
 
 	// Prepare expires_at
 	var expiresAt pgtype.Timestamptz
-	if params.ExpiresAt != nil {
-		expiresAt.Time = *params.ExpiresAt
+	if createParams.ExpiresAt != nil {
+		expiresAt.Time = *createParams.ExpiresAt
 		expiresAt.Valid = true
 	}
 
@@ -148,11 +127,11 @@ func (s *APIKeyService) CreateAPIKey(ctx context.Context, params CreateAPIKeyPar
 
 	// Create the API key in database
 	apiKey, err := s.db.CreateAPIKey(ctx, db.CreateAPIKeyParams{
-		WorkspaceID: params.WorkspaceID,
-		Name:        params.Name,
+		WorkspaceID: createParams.WorkspaceID,
+		Name:        createParams.Name,
 		KeyHash:     hashedKey,
 		KeyPrefix:   keyPrefixPgText,
-		AccessLevel: db.ApiKeyLevel(params.AccessLevel),
+		AccessLevel: db.ApiKeyLevel(createParams.AccessLevel),
 		ExpiresAt:   expiresAt,
 		Metadata:    metadata,
 	})
@@ -164,25 +143,25 @@ func (s *APIKeyService) CreateAPIKey(ctx context.Context, params CreateAPIKeyPar
 }
 
 // UpdateAPIKey updates an existing API key
-func (s *APIKeyService) UpdateAPIKey(ctx context.Context, params UpdateAPIKeyParams) (db.ApiKey, error) {
+func (s *APIKeyService) UpdateAPIKey(ctx context.Context, updateParams params.UpdateAPIKeyParams) (db.ApiKey, error) {
 	// Marshal metadata
-	metadata, err := json.Marshal(params.Metadata)
+	metadata, err := json.Marshal(updateParams.Metadata)
 	if err != nil {
 		return db.ApiKey{}, err
 	}
 
 	// Prepare expires_at
 	var expiresAt pgtype.Timestamptz
-	if params.ExpiresAt != nil {
-		expiresAt.Time = *params.ExpiresAt
+	if updateParams.ExpiresAt != nil {
+		expiresAt.Time = *updateParams.ExpiresAt
 		expiresAt.Valid = true
 	}
 
 	return s.db.UpdateAPIKey(ctx, db.UpdateAPIKeyParams{
-		WorkspaceID: params.WorkspaceID,
-		ID:          params.ID,
-		Name:        params.Name,
-		AccessLevel: db.ApiKeyLevel(params.AccessLevel),
+		WorkspaceID: updateParams.WorkspaceID,
+		ID:          updateParams.ID,
+		Name:        *updateParams.Name,
+		AccessLevel: db.ApiKeyLevel(updateParams.AccessLevel),
 		ExpiresAt:   expiresAt,
 		Metadata:    metadata,
 	})

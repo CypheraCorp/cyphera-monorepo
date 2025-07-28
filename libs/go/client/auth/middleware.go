@@ -15,6 +15,7 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 
 	"github.com/MicahParks/keyfunc/v2"
@@ -100,7 +101,7 @@ type RequestLog struct {
 }
 
 // EnsureValidAPIKeyOrToken is a middleware that checks for either a valid API key or JWT token
-func (ac *AuthClient) EnsureValidAPIKeyOrToken(services CommonServicesInterface) gin.HandlerFunc {
+func (ac *AuthClient) EnsureValidAPIKeyOrToken(services interfaces.CommonServicesInterface) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Debug: Log all headers to see what's being sent
 		logger.Log.Info("Request headers in auth middleware",
@@ -277,7 +278,7 @@ func (ac *AuthClient) EnsureValidAPIKeyOrToken(services CommonServicesInterface)
 }
 
 // validateAPIKey validates the API key and returns workspace and account information
-func (ac *AuthClient) validateAPIKey(c *gin.Context, services CommonServicesInterface, apiKey string) (db.Workspace, db.Account, db.ApiKey, error) {
+func (ac *AuthClient) validateAPIKey(c *gin.Context, services interfaces.CommonServicesInterface, apiKey string) (db.Workspace, db.Account, db.ApiKey, error) {
 	// Log the API key being validated (first few characters for security)
 	keyPreview := ""
 	if len(apiKey) > 4 {
@@ -374,7 +375,7 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, services CommonServicesInte
 }
 
 // validateJWTToken validates the Web3Auth JWT token and returns user information
-func (ac *AuthClient) validateJWTToken(c *gin.Context, services CommonServicesInterface, authHeader string) (db.User, db.Account, error) {
+func (ac *AuthClient) validateJWTToken(c *gin.Context, services interfaces.CommonServicesInterface, authHeader string) (db.User, db.Account, error) {
 	logger.Log.Info("validateJWTToken called",
 		zap.String("correlation_id", c.GetHeader("X-Correlation-ID")),
 		zap.String("path", c.Request.URL.Path),
@@ -757,7 +758,7 @@ func (ac *AuthClient) initializeJWKS() error {
 	return nil
 }
 
-func (ac *AuthClient) createUserFromWeb3AuthClaims(ctx context.Context, services CommonServicesInterface, claims *Web3AuthClaims, web3AuthID string) (db.User, error) {
+func (ac *AuthClient) createUserFromWeb3AuthClaims(ctx context.Context, services interfaces.CommonServicesInterface, claims *Web3AuthClaims, web3AuthID string) (db.User, error) {
 	logger.Log.Debug("Starting user creation from Web3Auth claims",
 		zap.String("web3auth_id", web3AuthID),
 		zap.String("email", claims.Email),

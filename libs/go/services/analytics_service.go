@@ -7,6 +7,7 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,119 +29,8 @@ func NewAnalyticsService(queries db.Querier, pool *pgxpool.Pool) *AnalyticsServi
 	}
 }
 
-// DashboardSummary represents the main dashboard overview
-type DashboardSummary struct {
-	MRR                 MoneyAmount    `json:"mrr"`
-	ARR                 MoneyAmount    `json:"arr"`
-	TotalRevenue        MoneyAmount    `json:"total_revenue"`
-	ActiveSubscriptions int32          `json:"active_subscriptions"`
-	TotalCustomers      int32          `json:"total_customers"`
-	ChurnRate           float64        `json:"churn_rate"`
-	GrowthRate          float64        `json:"growth_rate"`
-	PaymentSuccessRate  float64        `json:"payment_success_rate"`
-	LastUpdated         time.Time      `json:"last_updated"`
-	RevenueGrowth       *RevenueGrowth `json:"revenue_growth,omitempty"`
-}
-
-// MoneyAmount represents a monetary value with currency
-type MoneyAmount struct {
-	AmountCents int64  `json:"amount_cents"`
-	Currency    string `json:"currency"`
-	Formatted   string `json:"formatted"`
-}
-
-// RevenueGrowth represents revenue growth data
-type RevenueGrowth struct {
-	CurrentPeriod    time.Time   `json:"current_period"`
-	CurrentRevenue   MoneyAmount `json:"current_revenue"`
-	PreviousRevenue  MoneyAmount `json:"previous_revenue"`
-	GrowthPercentage float64     `json:"growth_percentage"`
-}
-
-// ChartDataPoint represents a single data point for charts
-type ChartDataPoint struct {
-	Date  string  `json:"date"`
-	Value float64 `json:"value"`
-	Label string  `json:"label,omitempty"`
-}
-
-// ChartData represents data for various chart types
-type ChartData struct {
-	ChartType string           `json:"chart_type"`
-	Title     string           `json:"title"`
-	Data      []ChartDataPoint `json:"data"`
-	Period    string           `json:"period"`
-}
-
-// PaymentMetrics represents payment metrics data
-type PaymentMetrics struct {
-	TotalSuccessful int64       `json:"total_successful"`
-	TotalFailed     int64       `json:"total_failed"`
-	TotalVolume     MoneyAmount `json:"total_volume"`
-	SuccessRate     float64     `json:"success_rate"`
-	GasMetrics      GasMetrics  `json:"gas_metrics"`
-	Period          int         `json:"period_days"`
-}
-
-// GasMetrics represents gas fee metrics
-type GasMetrics struct {
-	TotalGasFees     MoneyAmount `json:"total_gas_fees"`
-	SponsoredGasFees MoneyAmount `json:"sponsored_gas_fees"`
-}
-
-// NetworkMetrics represents payment metrics for a specific network
-type NetworkMetrics struct {
-	Payments    int   `json:"payments"`
-	VolumeCents int64 `json:"volume_cents"`
-	GasFeeCents int64 `json:"gas_fee_cents"`
-}
-
-// TokenMetrics represents payment metrics for a specific token
-type TokenMetrics struct {
-	Payments      int   `json:"payments"`
-	VolumeCents   int64 `json:"volume_cents"`
-	AvgPriceCents int64 `json:"avg_price_cents"`
-}
-
-// NetworkBreakdown represents network and token breakdown
-type NetworkBreakdown struct {
-	Date     string                    `json:"date"`
-	Networks map[string]NetworkMetrics `json:"networks"`
-	Tokens   map[string]TokenMetrics   `json:"tokens"`
-}
-
-// PieChartData represents data for pie charts
-type PieChartData struct {
-	ChartType string              `json:"chart_type"`
-	Title     string              `json:"title"`
-	Data      []PieChartDataPoint `json:"data"`
-	Total     MoneyAmount         `json:"total"`
-}
-
-// PieChartDataPoint represents a single pie slice
-type PieChartDataPoint struct {
-	Label string  `json:"label"`
-	Value float64 `json:"value"`
-	Color string  `json:"color,omitempty"`
-}
-
-// HourlyMetrics represents hourly breakdown
-type HourlyMetrics struct {
-	Date       string            `json:"date"`
-	HourlyData []HourlyDataPoint `json:"hourly_data"`
-	Currency   string            `json:"currency"`
-}
-
-// HourlyDataPoint represents metrics for a specific hour
-type HourlyDataPoint struct {
-	Hour     int     `json:"hour"`
-	Revenue  float64 `json:"revenue"`
-	Payments int     `json:"payments"`
-	NewUsers int     `json:"new_users"`
-}
-
 // GetDashboardSummary retrieves the main dashboard metrics
-func (s *AnalyticsService) GetDashboardSummary(ctx context.Context, workspaceID uuid.UUID, currency string) (*DashboardSummary, error) {
+func (s *AnalyticsService) GetDashboardSummary(ctx context.Context, workspaceID uuid.UUID, currency string) (*business.DashboardSummary, error) {
 	// Get workspace default currency if not provided
 	if currency == "" {
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
@@ -162,18 +52,18 @@ func (s *AnalyticsService) GetDashboardSummary(ctx context.Context, workspaceID 
 		return nil, err
 	}
 
-	summary := &DashboardSummary{
-		MRR: MoneyAmount{
+	summary := &business.DashboardSummary{
+		MRR: business.MoneyAmount{
 			AmountCents: latest.MrrCents.Int64,
 			Currency:    currency,
 			Formatted:   helpers.FormatMoney(latest.MrrCents.Int64, currency),
 		},
-		ARR: MoneyAmount{
+		ARR: business.MoneyAmount{
 			AmountCents: latest.ArrCents.Int64,
 			Currency:    currency,
 			Formatted:   helpers.FormatMoney(latest.ArrCents.Int64, currency),
 		},
-		TotalRevenue: MoneyAmount{
+		TotalRevenue: business.MoneyAmount{
 			AmountCents: latest.TotalRevenueCents.Int64,
 			Currency:    currency,
 			Formatted:   helpers.FormatMoney(latest.TotalRevenueCents.Int64, currency),
@@ -194,14 +84,14 @@ func (s *AnalyticsService) GetDashboardSummary(ctx context.Context, workspaceID 
 		FiatCurrency: currency,
 	})
 	if err == nil {
-		summary.RevenueGrowth = &RevenueGrowth{
+		summary.RevenueGrowth = &business.RevenueGrowth{
 			CurrentPeriod: growth.CurrentPeriod.Time,
-			CurrentRevenue: MoneyAmount{
+			CurrentRevenue: business.MoneyAmount{
 				AmountCents: growth.CurrentRevenue.Int64,
 				Currency:    currency,
 				Formatted:   helpers.FormatMoney(growth.CurrentRevenue.Int64, currency),
 			},
-			PreviousRevenue: MoneyAmount{
+			PreviousRevenue: business.MoneyAmount{
 				AmountCents: growth.PreviousRevenue.Int64,
 				Currency:    currency,
 				Formatted:   helpers.FormatMoney(growth.PreviousRevenue.Int64, currency),
@@ -214,7 +104,7 @@ func (s *AnalyticsService) GetDashboardSummary(ctx context.Context, workspaceID 
 }
 
 // GetRevenueChart returns revenue data for charting
-func (s *AnalyticsService) GetRevenueChart(ctx context.Context, workspaceID uuid.UUID, period string, days int, currency string) (*ChartData, error) {
+func (s *AnalyticsService) GetRevenueChart(ctx context.Context, workspaceID uuid.UUID, period string, days int, currency string) (*business.ChartData, error) {
 	// Get workspace default currency if not provided
 	if currency == "" {
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
@@ -242,16 +132,16 @@ func (s *AnalyticsService) GetRevenueChart(ctx context.Context, workspaceID uuid
 	}
 
 	// Convert to chart data
-	chartData := make([]ChartDataPoint, len(metrics))
+	chartData := make([]business.ChartDataPoint, len(metrics))
 	for i, metric := range metrics {
-		chartData[i] = ChartDataPoint{
+		chartData[i] = business.ChartDataPoint{
 			Date:  metric.MetricDate.Time.Format("2006-01-02"),
 			Value: float64(metric.TotalRevenueCents.Int64) / 100.0, // Convert cents to dollars
 			Label: helpers.FormatMoney(metric.TotalRevenueCents.Int64, currency),
 		}
 	}
 
-	return &ChartData{
+	return &business.ChartData{
 		ChartType: "line",
 		Title:     "Revenue Over Time",
 		Data:      chartData,
@@ -260,7 +150,7 @@ func (s *AnalyticsService) GetRevenueChart(ctx context.Context, workspaceID uuid
 }
 
 // GetCustomerChart returns customer growth data for charting
-func (s *AnalyticsService) GetCustomerChart(ctx context.Context, workspaceID uuid.UUID, metric, period string, days int, currency string) (*ChartData, error) {
+func (s *AnalyticsService) GetCustomerChart(ctx context.Context, workspaceID uuid.UUID, metric, period string, days int, currency string) (*business.ChartData, error) {
 	// Get workspace default currency if not provided
 	if currency == "" {
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
@@ -288,7 +178,7 @@ func (s *AnalyticsService) GetCustomerChart(ctx context.Context, workspaceID uui
 	}
 
 	// Convert to chart data based on selected metric
-	chartData := make([]ChartDataPoint, len(trends))
+	chartData := make([]business.ChartDataPoint, len(trends))
 	title := "Customer Metrics"
 
 	for i, trend := range trends {
@@ -308,13 +198,13 @@ func (s *AnalyticsService) GetCustomerChart(ctx context.Context, workspaceID uui
 			title = "Total Customers"
 		}
 
-		chartData[i] = ChartDataPoint{
+		chartData[i] = business.ChartDataPoint{
 			Date:  trend.MetricDate.Time.Format("2006-01-02"),
 			Value: value,
 		}
 	}
 
-	return &ChartData{
+	return &business.ChartData{
 		ChartType: "line",
 		Title:     title,
 		Data:      chartData,
@@ -323,7 +213,7 @@ func (s *AnalyticsService) GetCustomerChart(ctx context.Context, workspaceID uui
 }
 
 // GetPaymentMetrics returns payment success and failure metrics
-func (s *AnalyticsService) GetPaymentMetrics(ctx context.Context, workspaceID uuid.UUID, days int, currency string) (*PaymentMetrics, error) {
+func (s *AnalyticsService) GetPaymentMetrics(ctx context.Context, workspaceID uuid.UUID, days int, currency string) (*business.PaymentMetrics, error) {
 	// Get workspace default currency if not provided
 	if currency == "" {
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
@@ -350,22 +240,22 @@ func (s *AnalyticsService) GetPaymentMetrics(ctx context.Context, workspaceID uu
 		return nil, err
 	}
 
-	return &PaymentMetrics{
+	return &business.PaymentMetrics{
 		TotalSuccessful: summary.TotalSuccessfulPayments,
 		TotalFailed:     summary.TotalFailedPayments,
-		TotalVolume: MoneyAmount{
+		TotalVolume: business.MoneyAmount{
 			AmountCents: summary.TotalVolumeCents,
 			Currency:    currency,
 			Formatted:   helpers.FormatMoney(summary.TotalVolumeCents, currency),
 		},
 		SuccessRate: summary.AvgSuccessRate,
-		GasMetrics: GasMetrics{
-			TotalGasFees: MoneyAmount{
+		GasMetrics: business.GasMetrics{
+			TotalGasFees: business.MoneyAmount{
 				AmountCents: summary.TotalGasFees,
 				Currency:    currency,
 				Formatted:   helpers.FormatMoney(summary.TotalGasFees, currency),
 			},
-			SponsoredGasFees: MoneyAmount{
+			SponsoredGasFees: business.MoneyAmount{
 				AmountCents: summary.TotalSponsoredGas,
 				Currency:    currency,
 				Formatted:   helpers.FormatMoney(summary.TotalSponsoredGas, currency),
@@ -376,7 +266,7 @@ func (s *AnalyticsService) GetPaymentMetrics(ctx context.Context, workspaceID uu
 }
 
 // GetNetworkBreakdown returns payment volume breakdown by network
-func (s *AnalyticsService) GetNetworkBreakdown(ctx context.Context, workspaceID uuid.UUID, date time.Time, currency string) (*NetworkBreakdown, error) {
+func (s *AnalyticsService) GetNetworkBreakdown(ctx context.Context, workspaceID uuid.UUID, date time.Time, currency string) (*business.NetworkBreakdown, error) {
 	// Get workspace default currency if not provided
 	if currency == "" {
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
@@ -400,18 +290,18 @@ func (s *AnalyticsService) GetNetworkBreakdown(ctx context.Context, workspaceID 
 	}
 
 	// Parse network metrics JSON
-	var networkData map[string]NetworkMetrics
+	var networkData map[string]business.NetworkMetrics
 	if err := json.Unmarshal(metrics.NetworkMetrics, &networkData); err != nil {
 		return nil, err
 	}
 
 	// Parse token metrics JSON
-	var tokenData map[string]TokenMetrics
+	var tokenData map[string]business.TokenMetrics
 	if err := json.Unmarshal(metrics.TokenMetrics, &tokenData); err != nil {
 		return nil, err
 	}
 
-	return &NetworkBreakdown{
+	return &business.NetworkBreakdown{
 		Date:     date.Format("2006-01-02"),
 		Networks: networkData,
 		Tokens:   tokenData,
@@ -419,7 +309,7 @@ func (s *AnalyticsService) GetNetworkBreakdown(ctx context.Context, workspaceID 
 }
 
 // GetSubscriptionChart returns subscription metrics for charting
-func (s *AnalyticsService) GetSubscriptionChart(ctx context.Context, workspaceID uuid.UUID, metric, period string, days int, currency string) (*ChartData, error) {
+func (s *AnalyticsService) GetSubscriptionChart(ctx context.Context, workspaceID uuid.UUID, metric, period string, days int, currency string) (*business.ChartData, error) {
 	// Get workspace default currency if not provided
 	if currency == "" {
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
@@ -447,7 +337,7 @@ func (s *AnalyticsService) GetSubscriptionChart(ctx context.Context, workspaceID
 	}
 
 	// Convert to chart data based on selected metric
-	chartData := make([]ChartDataPoint, len(metrics))
+	chartData := make([]business.ChartDataPoint, len(metrics))
 	title := "Subscription Metrics"
 
 	for i, m := range metrics {
@@ -467,13 +357,13 @@ func (s *AnalyticsService) GetSubscriptionChart(ctx context.Context, workspaceID
 			title = "Active Subscriptions"
 		}
 
-		chartData[i] = ChartDataPoint{
+		chartData[i] = business.ChartDataPoint{
 			Date:  m.MetricDate.Time.Format("2006-01-02"),
 			Value: value,
 		}
 	}
 
-	return &ChartData{
+	return &business.ChartData{
 		ChartType: "line",
 		Title:     title,
 		Data:      chartData,
@@ -482,7 +372,7 @@ func (s *AnalyticsService) GetSubscriptionChart(ctx context.Context, workspaceID
 }
 
 // GetMRRChart returns MRR/ARR growth over time
-func (s *AnalyticsService) GetMRRChart(ctx context.Context, workspaceID uuid.UUID, metric, period string, months int, currency string) (*ChartData, error) {
+func (s *AnalyticsService) GetMRRChart(ctx context.Context, workspaceID uuid.UUID, metric, period string, months int, currency string) (*business.ChartData, error) {
 	// Get workspace default currency if not provided
 	if currency == "" {
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
@@ -510,7 +400,7 @@ func (s *AnalyticsService) GetMRRChart(ctx context.Context, workspaceID uuid.UUI
 	}
 
 	// Convert to chart data
-	chartData := make([]ChartDataPoint, len(metrics))
+	chartData := make([]business.ChartDataPoint, len(metrics))
 	title := "Monthly Recurring Revenue"
 	if metric == "arr" {
 		title = "Annual Recurring Revenue"
@@ -524,14 +414,14 @@ func (s *AnalyticsService) GetMRRChart(ctx context.Context, workspaceID uuid.UUI
 			cents = m.MrrCents.Int64
 		}
 
-		chartData[i] = ChartDataPoint{
+		chartData[i] = business.ChartDataPoint{
 			Date:  m.MetricDate.Time.Format("2006-01-02"),
 			Value: float64(cents) / 100.0, // Convert cents to dollars
 			Label: helpers.FormatMoney(cents, currency),
 		}
 	}
 
-	return &ChartData{
+	return &business.ChartData{
 		ChartType: "line",
 		Title:     title,
 		Data:      chartData,
@@ -540,7 +430,7 @@ func (s *AnalyticsService) GetMRRChart(ctx context.Context, workspaceID uuid.UUI
 }
 
 // GetGasFeePieChart returns gas fee breakdown as a pie chart
-func (s *AnalyticsService) GetGasFeePieChart(ctx context.Context, workspaceID uuid.UUID, days int, currency string) (*PieChartData, error) {
+func (s *AnalyticsService) GetGasFeePieChart(ctx context.Context, workspaceID uuid.UUID, days int, currency string) (*business.PieChartData, error) {
 	// Get workspace default currency if not provided
 	if currency == "" {
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
@@ -570,10 +460,10 @@ func (s *AnalyticsService) GetGasFeePieChart(ctx context.Context, workspaceID uu
 	sponsoredCents := summary.TotalSponsoredGas
 	customerCents := summary.TotalGasFees - sponsoredCents
 
-	return &PieChartData{
+	return &business.PieChartData{
 		ChartType: "pie",
 		Title:     "Gas Fee Distribution",
-		Data: []PieChartDataPoint{
+		Data: []business.PieChartDataPoint{
 			{
 				Label: "Merchant Sponsored",
 				Value: float64(sponsoredCents) / 100.0,
@@ -585,7 +475,7 @@ func (s *AnalyticsService) GetGasFeePieChart(ctx context.Context, workspaceID uu
 				Color: "#3B82F6", // Blue
 			},
 		},
-		Total: MoneyAmount{
+		Total: business.MoneyAmount{
 			AmountCents: summary.TotalGasFees,
 			Currency:    currency,
 			Formatted:   helpers.FormatMoney(summary.TotalGasFees, currency),
@@ -594,7 +484,7 @@ func (s *AnalyticsService) GetGasFeePieChart(ctx context.Context, workspaceID uu
 }
 
 // GetHourlyMetrics returns hourly metrics for today
-func (s *AnalyticsService) GetHourlyMetrics(ctx context.Context, workspaceID uuid.UUID, currency string) (*HourlyMetrics, error) {
+func (s *AnalyticsService) GetHourlyMetrics(ctx context.Context, workspaceID uuid.UUID, currency string) (*business.HourlyMetrics, error) {
 	// Get workspace default currency if not provided
 	if currency == "" {
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
@@ -619,10 +509,10 @@ func (s *AnalyticsService) GetHourlyMetrics(ctx context.Context, workspaceID uui
 	}
 
 	// Convert to response format
-	hourlyData := make([]HourlyDataPoint, 0, len(metrics))
+	hourlyData := make([]business.HourlyDataPoint, 0, len(metrics))
 	for _, m := range metrics {
 		if m.MetricHour.Valid {
-			hourlyData = append(hourlyData, HourlyDataPoint{
+			hourlyData = append(hourlyData, business.HourlyDataPoint{
 				Hour:     int(m.MetricHour.Int32),
 				Revenue:  float64(m.TotalRevenueCents.Int64) / 100.0,
 				Payments: int(m.SuccessfulPayments.Int32),
@@ -631,7 +521,7 @@ func (s *AnalyticsService) GetHourlyMetrics(ctx context.Context, workspaceID uui
 		}
 	}
 
-	return &HourlyMetrics{
+	return &business.HourlyMetrics{
 		Date:       today.Format("2006-01-02"),
 		HourlyData: hourlyData,
 		Currency:   currency,

@@ -48,15 +48,15 @@ var (
 	subscriptionManagementHandler *handlers.SubscriptionManagementHandler
 	paymentSyncHandler            *handlers.PaymentSyncHandlers
 	delegationClient              *dsClient.DelegationClient
-	redemptionProcessor           *handlers.RedemptionProcessor
-	circleHandler            *handlers.CircleHandler
-	currencyHandler          *handlers.CurrencyHandler
-	analyticsHandler         *handlers.AnalyticsHandler
-	gasSponsorshipHandler    *handlers.GasSponsorshipHandler
-	invoiceHandler           *handlers.InvoiceHandler
-	paymentLinkHandler       *handlers.PaymentLinkHandler
-	paymentPageHandler       *handlers.PaymentPageHandler
-	dunningHandler           *handlers.DunningHandler
+	redemptionProcessor           *services.RedemptionProcessor
+	circleHandler                 *handlers.CircleHandler
+	currencyHandler               *handlers.CurrencyHandler
+	analyticsHandler              *handlers.AnalyticsHandler
+	gasSponsorshipHandler         *handlers.GasSponsorshipHandler
+	invoiceHandler                *handlers.InvoiceHandler
+	paymentLinkHandler            *handlers.PaymentLinkHandler
+	paymentPageHandler            *handlers.PaymentPageHandler
+	dunningHandler                *handlers.DunningHandler
 
 	// Database
 	dbQueries *db.Queries
@@ -255,7 +255,7 @@ func InitializeHandlers() {
 	}
 
 	// validate cyphera wallet address
-	if !handlers.IsAddressValid(cypheraSmartWalletAddress) {
+	if !helpers.IsAddressValid(cypheraSmartWalletAddress) {
 		logger.Fatal("CYPHERA_SMART_WALLET_ADDRESS is not a valid address")
 	}
 
@@ -480,7 +480,7 @@ func InitializeRoutes(router *gin.Engine) {
 
 				// User management
 				admin.POST("/users", userHandler.CreateUser)
-				admin.GET("/users/:user_id", userHandler.GetUser)
+				admin.GET("/users/:user_id", userHandler.GetUserByID)
 				admin.PUT("/users/:user_id", middleware.ValidateInput(middleware.UpdateUserValidation), userHandler.UpdateUser)
 				admin.DELETE("/users/:user_id", userHandler.DeleteUser)
 

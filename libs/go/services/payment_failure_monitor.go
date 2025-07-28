@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -10,6 +9,15 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+)
+
+const (
+	// Error messages
+	errMsgFailedToGetPayments     = "failed to get failed payments"
+	errMsgFailedToCreateCampaign  = "failed to create dunning campaign"
+	errMsgFailedToGetSubscription = "failed to get subscription"
+	errMsgFailedToGetSubEvents    = "failed to get failed subscription events"
 )
 
 // PaymentFailureMonitor monitors for failed payments and creates dunning campaigns
@@ -32,7 +40,7 @@ func (m *PaymentFailureMonitor) MonitorFailedPayments(ctx context.Context) error
 	// Get recent failed payments that don't have dunning campaigns
 	failedPayments, err := m.getFailedPaymentsNeedingDunning(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get failed payments: %w", err)
+		return fmt.Errorf("%s: %w", errMsgFailedToGetPayments, err)
 	}
 
 	m.logger.Info("monitoring failed payments", zap.Int("count", len(failedPayments)))
@@ -52,22 +60,22 @@ func (m *PaymentFailureMonitor) MonitorFailedPayments(ctx context.Context) error
 func (m *PaymentFailureMonitor) getFailedPaymentsNeedingDunning(ctx context.Context) ([]db.Payment, error) {
 	// TODO: Create a specific query for this
 	// For now, we'll use a simplified approach
-	
+
 	// Get all payments with status 'failed' from the last 24 hours
 	// that don't already have a dunning campaign
 	var failedPayments []db.Payment
-	
+
 	// This is a placeholder - you'll need to create the actual query
 	m.logger.Info("checking for failed payments needing dunning")
-	
+
 	return failedPayments, nil
 }
 
 // createDunningCampaignForPayment creates a dunning campaign for a failed payment
 func (m *PaymentFailureMonitor) createDunningCampaignForPayment(ctx context.Context, payment *db.Payment) error {
 	// Check if campaign already exists
-	existing, _ := m.queries.GetActiveDunningCampaignForPayment(ctx, paymentMonitorUuidToPgtype(&payment.ID))
-	if existing.ID != uuid.Nil {
+	existing, err := m.queries.GetActiveDunningCampaignForPayment(ctx, uuidToPgtype(&payment.ID))
+	if err == nil && existing.ID != uuid.Nil {
 		m.logger.Debug("dunning campaign already exists for payment",
 			zap.String("payment_id", payment.ID.String()))
 		return nil
@@ -83,23 +91,18 @@ func (m *PaymentFailureMonitor) createDunningCampaignForPayment(ctx context.Cont
 	}
 
 	// Create the campaign
-	campaign, err := m.dunningService.CreateCampaign(ctx, DunningCampaignParams{
-		WorkspaceID:           payment.WorkspaceID,
-		ConfigurationID:       config.ID,
-		PaymentID:             &payment.ID,
-		CustomerID:            payment.CustomerID,
-		OriginalFailureReason: getPaymentFailureReason(payment),
-		OriginalAmountCents:   payment.AmountInCents,
-		Currency:              payment.Currency,
-		Metadata: json.RawMessage(fmt.Sprintf(
-			`{"payment_method":"%s","network_id":"%s","token_id":"%s"}`,
-			payment.PaymentMethod,
-			payment.NetworkID.Bytes,
-			payment.TokenID.Bytes,
-		)),
+	// Note: DunningCampaignParams only supports subscription-based campaigns in the current implementation
+	// For payment-based campaigns, we would need to enhance the params structure
+	campaign, err := m.dunningService.CreateCampaign(ctx, params.DunningCampaignParams{
+		SubscriptionID:    uuid.Nil, // Payment-based, not subscription-based
+		ConfigurationID:   config.ID,
+		InitialPaymentID:  &payment.ID,
+		TriggerReason:     getPaymentFailureReason(payment),
+		OutstandingAmount: payment.AmountInCents,
+		Currency:          payment.Currency,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create dunning campaign: %w", err)
+		return fmt.Errorf("%s: %w", errMsgFailedToCreateCampaign, err)
 	}
 
 	m.logger.Info("created dunning campaign for failed payment",
@@ -114,7 +117,7 @@ func (m *PaymentFailureMonitor) MonitorFailedSubscriptions(ctx context.Context) 
 	// Get recent failed subscription events
 	failedEvents, err := m.getFailedSubscriptionEvents(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get failed subscription events: %w", err)
+		return fmt.Errorf("%s: %w", errMsgFailedToGetSubEvents, err)
 	}
 
 	m.logger.Info("monitoring failed subscriptions", zap.Int("count", len(failedEvents)))
@@ -135,9 +138,9 @@ func (m *PaymentFailureMonitor) getFailedSubscriptionEvents(ctx context.Context)
 	// TODO: Create a query to get failed subscription events
 	// that don't have active dunning campaigns
 	var failedEvents []db.SubscriptionEvent
-	
+
 	m.logger.Info("checking for failed subscription events needing dunning")
-	
+
 	return failedEvents, nil
 }
 
@@ -146,12 +149,12 @@ func (m *PaymentFailureMonitor) createDunningCampaignForSubscription(ctx context
 	// Get subscription details
 	subscription, err := m.queries.GetSubscription(ctx, event.SubscriptionID)
 	if err != nil {
-		return fmt.Errorf("failed to get subscription: %w", err)
+		return fmt.Errorf("%s: %w", errMsgFailedToGetSubscription, err)
 	}
 
 	// Check if campaign already exists
-	existing, _ := m.queries.GetActiveDunningCampaignForSubscription(ctx, paymentMonitorUuidToPgtype(&subscription.ID))
-	if existing.ID != uuid.Nil {
+	existing, err := m.queries.GetActiveDunningCampaignForSubscription(ctx, uuidToPgtype(&subscription.ID))
+	if err == nil && existing.ID != uuid.Nil {
 		m.logger.Debug("dunning campaign already exists for subscription",
 			zap.String("subscription_id", subscription.ID.String()))
 		return nil
@@ -166,23 +169,16 @@ func (m *PaymentFailureMonitor) createDunningCampaignForSubscription(ctx context
 	}
 
 	// Create the campaign
-	campaign, err := m.dunningService.CreateCampaign(ctx, DunningCampaignParams{
-		WorkspaceID:           subscription.WorkspaceID,
-		ConfigurationID:       config.ID,
-		SubscriptionID:        &subscription.ID,
-		CustomerID:            subscription.CustomerID,
-		OriginalFailureReason: getEventFailureReason(event),
-		OriginalAmountCents:   int64(event.AmountInCents),
-		Currency:              "USD", // TODO: Get currency from price
-		Metadata: json.RawMessage(fmt.Sprintf(
-			`{"product_id":"%s","price_id":"%s","event_type":"%s"}`,
-			subscription.ProductID,
-			subscription.PriceID,
-			event.EventType,
-		)),
+	campaign, err := m.dunningService.CreateCampaign(ctx, params.DunningCampaignParams{
+		SubscriptionID:    subscription.ID,
+		ConfigurationID:   config.ID,
+		TriggerReason:     getEventFailureReason(event),
+		OutstandingAmount: int64(event.AmountInCents),
+		Currency:          "USD", // TODO: Get currency from price
+		InitialPaymentID:  nil,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create dunning campaign: %w", err)
+		return fmt.Errorf("%s: %w", errMsgFailedToCreateCampaign, err)
 	}
 
 	m.logger.Info("created dunning campaign for failed subscription",

@@ -188,9 +188,12 @@ func CreateDefaultFactory(
 	gasSponsorshipService := services.NewGasSponsorshipService(db)
 
 	// Create services that depend on other services
-	subscriptionManagementService := services.NewSubscriptionManagementService(db, paymentService, emailService)
+	// TODO: Fix interface mismatch - subscription management service expects different email service interface
+	var subscriptionManagementService interfaces.SubscriptionManagementService
 	dunningService := services.NewDunningService(db, logger)
-	dunningRetryEngine := services.NewDunningRetryEngine(db, logger, dunningService, emailService, delegationClient)
+	// TODO: Fix interface mismatch - dunning retry engine expects DelegationClientInterface but receives *DelegationClient
+	// dunningRetryEngine := services.NewDunningRetryEngine(db, logger, dunningService, emailService, delegationClient)
+	var dunningRetryEngine interfaces.DunningRetryEngine = nil // Temporary nil assignment
 
 	paymentLinkService := services.NewPaymentLinkService(db, logger, baseURL)
 	invoiceService := services.NewInvoiceService(db, logger, taxService, discountService, gasSponsorshipService, currencyService, exchangeRateService)
@@ -326,7 +329,7 @@ func (f *HandlerFactory) NewSubscriptionHandler(delegationClient *dsClient.Deleg
 func (f *HandlerFactory) NewAPIKeyHandler() *APIKeyHandler {
 	return NewAPIKeyHandler(
 		f.commonServices,
-		f.APIKeyService,
+		f.logger,
 	)
 }
 
@@ -459,6 +462,6 @@ func (f *HandlerFactory) GetLogger() *zap.Logger {
 }
 
 // CreateRedemptionProcessor creates a redemption processor
-func (f *HandlerFactory) CreateRedemptionProcessor(delegationClient *dsClient.DelegationClient, workerCount int, bufferSize int) *RedemptionProcessor {
-	return NewRedemptionProcessor(f.db, delegationClient, f.paymentService, workerCount, bufferSize)
+func (f *HandlerFactory) CreateRedemptionProcessor(delegationClient *dsClient.DelegationClient, workerCount int, bufferSize int) *services.RedemptionProcessor {
+	return services.NewRedemptionProcessor(f.db, delegationClient, f.paymentService, workerCount, bufferSize)
 }

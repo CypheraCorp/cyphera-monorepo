@@ -10,19 +10,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
 
-	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 )
 
+// DelegationClientInterface is a local interface to avoid circular dependency
+type DelegationClientInterface interface {
+	ProcessPayment(ctx context.Context, params params.LocalProcessPaymentParams) (*responses.LocalProcessPaymentResponse, error)
+}
+
 type DunningRetryEngine struct {
-	queries          *db.Queries
+	queries          db.Querier
 	logger           *zap.Logger
 	dunningService   *DunningService
 	emailService     *EmailService
-	delegationClient *dsClient.DelegationClient
+	delegationClient DelegationClientInterface
 }
 
-func NewDunningRetryEngine(queries *db.Queries, logger *zap.Logger, dunningService *DunningService, emailService *EmailService, delegationClient *dsClient.DelegationClient) *DunningRetryEngine {
+func NewDunningRetryEngine(queries db.Querier, logger *zap.Logger, dunningService *DunningService, emailService *EmailService, delegationClient DelegationClientInterface) *DunningRetryEngine {
 	return &DunningRetryEngine{
 		queries:          queries,
 		logger:           logger,
@@ -155,11 +162,10 @@ func (e *DunningRetryEngine) processAttemptActions(ctx context.Context, campaign
 // retryPayment attempts to retry the failed payment
 func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.DunningCampaign, attemptNumber int32) error {
 	// Create attempt record
-	attempt, err := e.dunningService.CreateAttempt(ctx, DunningAttemptParams{
+	attempt, err := e.dunningService.CreateAttempt(ctx, params.DunningAttemptParams{
 		CampaignID:    campaign.ID,
 		AttemptNumber: attemptNumber,
 		AttemptType:   "retry_payment",
-		Metadata:      json.RawMessage(`{}`),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create attempt record: %w", err)
@@ -171,17 +177,17 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 		e.logger.Warn("delegation client not available, payment retry functionality not yet implemented",
 			zap.String("campaign_id", campaign.ID.String()),
 			zap.Int32("attempt_number", attemptNumber))
-		
+
 		// Mark attempt as failed with explanation
 		errorMsg := "payment retry requires delegation server integration (not yet implemented)"
 		_, err = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, "failed", &errorMsg)
 		if err != nil {
 			e.logger.Error("failed to update attempt status", zap.Error(err))
 		}
-		
+
 		return nil
 	}
-	
+
 	// Get subscription details for payment retry
 	if campaign.SubscriptionID.Valid {
 		// Get subscription
@@ -191,7 +197,7 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 			_, _ = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, "failed", &errorMsg)
 			return fmt.Errorf("failed to get subscription: %w", err)
 		}
-		
+
 		// Get delegation data from delegation_data table using delegation_id
 		delegationData, err := e.queries.GetDelegationData(ctx, subscription.DelegationID)
 		if err != nil {
@@ -199,7 +205,7 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 			_, _ = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, "failed", &errorMsg)
 			return fmt.Errorf("failed to get delegation data: %w", err)
 		}
-		
+
 		// Get product token info (contains network and token details)
 		productToken, err := e.queries.GetProductToken(ctx, subscription.ProductTokenID)
 		if err != nil {
@@ -207,7 +213,7 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 			_, _ = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, "failed", &errorMsg)
 			return fmt.Errorf("failed to get product token: %w", err)
 		}
-		
+
 		// Get workspace wallet address
 		workspaceWallets, err := e.queries.ListWalletsByWorkspaceID(ctx, campaign.WorkspaceID)
 		if err != nil || len(workspaceWallets) == 0 {
@@ -215,35 +221,10 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 			_, _ = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, "failed", &errorMsg)
 			return fmt.Errorf("no workspace wallet found")
 		}
-		
+
 		// Use the first wallet as merchant address
 		merchantAddress := workspaceWallets[0].WalletAddress
-		
-		// Convert delegation data to bytes
-		delegationBytes, err := json.Marshal(map[string]interface{}{
-			"delegate":  delegationData.Delegate,
-			"delegator": delegationData.Delegator,
-			"authority": delegationData.Authority,
-			"caveats":   delegationData.Caveats,
-			"salt":      delegationData.Salt,
-			"signature": delegationData.Signature,
-		})
-		if err != nil {
-			errorMsg := fmt.Sprintf("failed to marshal delegation data: %v", err)
-			_, _ = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, "failed", &errorMsg)
-			return fmt.Errorf("failed to marshal delegation: %w", err)
-		}
-		
-		// Prepare execution object for payment
-		executionObj := dsClient.ExecutionObject{
-			MerchantAddress:      merchantAddress,
-			TokenContractAddress: productToken.ContractAddress,
-			TokenAmount:          campaign.OriginalAmountCents,
-			TokenDecimals:        productToken.Decimals,
-			ChainID:              uint32(productToken.ChainID),
-			NetworkName:          productToken.NetworkName,
-		}
-		
+
 		// Log payment retry attempt
 		e.logger.Info("attempting payment retry",
 			zap.String("campaign_id", campaign.ID.String()),
@@ -251,9 +232,21 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 			zap.Int64("amount", campaign.OriginalAmountCents),
 			zap.String("merchant_address", merchantAddress),
 			zap.String("token_address", productToken.ContractAddress))
-		
+
 		// Attempt to process the payment
-		txHash, err := e.delegationClient.RedeemDelegation(ctx, delegationBytes, executionObj)
+		paymentParams := params.LocalProcessPaymentParams{
+			DelegationID:     delegationData.ID.String(),
+			RecipientAddress: merchantAddress,
+			Amount:           fmt.Sprintf("%d", campaign.OriginalAmountCents),
+			TokenAddress:     productToken.ContractAddress,
+			NetworkID:        productToken.NetworkID,
+		}
+
+		response, err := e.delegationClient.ProcessPayment(ctx, paymentParams)
+		var txHash string
+		if err == nil && response != nil {
+			txHash = response.TransactionHash
+		}
 		if err != nil {
 			// Payment failed
 			errorMsg := fmt.Sprintf("payment retry failed: %v", err)
@@ -261,27 +254,27 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 			if updateErr != nil {
 				e.logger.Error("failed to update attempt status", zap.Error(updateErr))
 			}
-			
+
 			e.logger.Error("payment retry failed",
 				zap.String("campaign_id", campaign.ID.String()),
 				zap.Int32("attempt_number", attemptNumber),
 				zap.Error(err))
-			
+
 			return nil // Don't return error to allow other campaigns to be processed
 		}
-		
+
 		// Payment successful!
 		e.logger.Info("payment retry successful",
 			zap.String("campaign_id", campaign.ID.String()),
 			zap.String("tx_hash", txHash),
 			zap.Int32("attempt_number", attemptNumber))
-		
+
 		// Update attempt as successful
 		_, err = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, "success", nil)
 		if err != nil {
 			e.logger.Error("failed to update attempt status", zap.Error(err))
 		}
-		
+
 		// Store the payment transaction hash in attempt metadata
 		attemptMetadata, _ := json.Marshal(map[string]string{
 			"transaction_hash": txHash,
@@ -294,7 +287,7 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 		if err != nil {
 			e.logger.Error("failed to update attempt metadata", zap.Error(err))
 		}
-		
+
 		// Recover the campaign
 		_, err = e.dunningService.RecoverCampaign(ctx, campaign.ID, campaign.OriginalAmountCents)
 		if err != nil {
@@ -344,20 +337,18 @@ func (e *DunningRetryEngine) sendEmail(ctx context.Context, campaign *db.Dunning
 	}
 
 	// Create attempt record
-	attempt, err := e.dunningService.CreateAttempt(ctx, DunningAttemptParams{
-		CampaignID:        campaign.ID,
-		AttemptNumber:     attemptNumber,
-		AttemptType:       "send_email",
-		CommunicationType: stringPtr("email"),
-		EmailTemplateID:   &template.ID,
-		Metadata:          json.RawMessage(`{}`),
+	attempt, err := e.dunningService.CreateAttempt(ctx, params.DunningAttemptParams{
+		CampaignID:      campaign.ID,
+		AttemptNumber:   attemptNumber,
+		AttemptType:     "send_email",
+		EmailTemplateID: &template.ID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create attempt record: %w", err)
 	}
 
 	// Prepare email data
-	emailData := EmailData{
+	emailData := business.EmailData{
 		CustomerName:      fullCampaign.CustomerName.String,
 		CustomerEmail:     fullCampaign.CustomerEmail.String,
 		Amount:            formatAmount(campaign.OriginalAmountCents, campaign.Currency),
@@ -366,14 +357,14 @@ func (e *DunningRetryEngine) sendEmail(ctx context.Context, campaign *db.Dunning
 		RetryDate:         calculateNextRetryDate(campaign, &fullCampaign).Format("January 2, 2006"),
 		AttemptsRemaining: int(fullCampaign.MaxRetryAttempts - attemptNumber),
 		PaymentLink:       fmt.Sprintf("https://app.cyphera.com/payment/retry/%s", campaign.ID.String()), // TODO: Get actual payment link
-		SupportEmail:      "support@cyphera.com", // TODO: Get from workspace settings
-		MerchantName:      "Cyphera", // TODO: Get from workspace settings
+		SupportEmail:      "support@cyphera.com",                                                         // TODO: Get from workspace settings
+		MerchantName:      "Cyphera",                                                                     // TODO: Get from workspace settings
 		UnsubscribeLink:   fmt.Sprintf("https://app.cyphera.com/unsubscribe/%s", campaign.CustomerID.String()),
 	}
 
 	// Send email
 	if e.emailService != nil {
-		err = e.emailService.SendDunningEmail(ctx, &template, emailData, fullCampaign.CustomerEmail.String)
+		err = e.emailService.SendDunningEmail(ctx, &template, map[string]business.EmailData{"default": emailData}, fullCampaign.CustomerEmail.String)
 		if err != nil {
 			// Update attempt as failed
 			_, updateErr := e.queries.UpdateDunningAttempt(ctx, db.UpdateDunningAttemptParams{
@@ -413,12 +404,10 @@ func (e *DunningRetryEngine) sendEmail(ctx context.Context, campaign *db.Dunning
 // createInAppNotification creates an in-app notification for the customer
 func (e *DunningRetryEngine) createInAppNotification(ctx context.Context, campaign *db.DunningCampaign, attemptNumber int32) error {
 	// Create attempt record
-	attempt, err := e.dunningService.CreateAttempt(ctx, DunningAttemptParams{
-		CampaignID:        campaign.ID,
-		AttemptNumber:     attemptNumber,
-		AttemptType:       "in_app_notification",
-		CommunicationType: stringPtr("in_app"),
-		Metadata:          json.RawMessage(`{}`),
+	attempt, err := e.dunningService.CreateAttempt(ctx, params.DunningAttemptParams{
+		CampaignID:    campaign.ID,
+		AttemptNumber: attemptNumber,
+		AttemptType:   "in_app_notification",
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create attempt record: %w", err)
@@ -468,10 +457,10 @@ func (e *DunningRetryEngine) handleMaxAttemptsReached(ctx context.Context, campa
 func (e *DunningRetryEngine) MonitorFailedPayments(ctx context.Context) error {
 	// TODO: Query for failed payments that don't have active dunning campaigns
 	// This would typically be called by a background job or scheduler
-	
+
 	// For now, this is a placeholder
 	e.logger.Info("monitoring for failed payments")
-	
+
 	return nil
 }
 
@@ -491,7 +480,7 @@ func stringPtr(s string) *string {
 func formatAmount(cents int64, currency string) string {
 	// Convert cents to dollars (or equivalent for other currencies)
 	amount := float64(cents) / 100.0
-	
+
 	// Format based on currency
 	switch currency {
 	case "USD":
@@ -510,7 +499,7 @@ func calculateNextRetryDate(campaign *db.DunningCampaign, fullCampaign *db.GetDu
 	if campaign.NextRetryAt.Valid {
 		return campaign.NextRetryAt.Time
 	}
-	
+
 	// Default to 7 days from now if not set
 	return time.Now().Add(7 * 24 * time.Hour)
 }

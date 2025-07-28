@@ -3,11 +3,15 @@ package services
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
@@ -26,88 +30,8 @@ func NewTaxService(queries db.Querier) *TaxService {
 	}
 }
 
-// TaxCalculationParams contains parameters for tax calculation
-type TaxCalculationParams struct {
-	WorkspaceID       uuid.UUID
-	CustomerID        uuid.UUID
-	ProductID         *uuid.UUID
-	SubscriptionID    *uuid.UUID
-	AmountCents       int64
-	Currency          string
-	CustomerAddress   *Address
-	BusinessAddress   *Address
-	TransactionType   string // "subscription", "one_time", "refund"
-	ProductType       string // "digital", "physical", "service"
-	IsB2B             bool
-	CustomerVATNumber *string
-	TaxExempt         bool
-}
-
-// Address represents a tax-relevant address
-type Address struct {
-	Street1    string `json:"street1"`
-	Street2    string `json:"street2,omitempty"`
-	City       string `json:"city"`
-	State      string `json:"state"`
-	PostalCode string `json:"postal_code"`
-	Country    string `json:"country"`
-}
-
-// TaxCalculationResult contains the calculated tax information
-type TaxCalculationResult struct {
-	SubtotalCents      int64           `json:"subtotal_cents"`
-	TotalTaxCents      int64           `json:"total_tax_cents"`
-	TotalAmountCents   int64           `json:"total_amount_cents"`
-	TaxBreakdown       []TaxLineItem   `json:"tax_breakdown"`
-	AppliedJurisdictions []string      `json:"applied_jurisdictions"`
-	TaxExemptReason    *string         `json:"tax_exempt_reason,omitempty"`
-	CalculatedAt       time.Time       `json:"calculated_at"`
-	Confidence         float64         `json:"confidence"` // 0.0 to 1.0
-	AuditTrail         TaxAuditTrail   `json:"audit_trail"`
-}
-
-// TaxLineItem represents a single tax component
-type TaxLineItem struct {
-	TaxType         string  `json:"tax_type"`     // "sales", "vat", "gst", "excise"
-	Jurisdiction    string  `json:"jurisdiction"` // "US-CA", "EU-DE", "CA-ON"
-	Rate            float64 `json:"rate"`         // e.g., 0.0825 for 8.25%
-	TaxableAmount   int64   `json:"taxable_amount_cents"`
-	TaxAmountCents  int64   `json:"tax_amount_cents"`
-	Description     string  `json:"description"`
-	IsReversCharge  bool    `json:"is_reverse_charge"`
-}
-
-// TaxAuditTrail contains audit information for tax calculations
-type TaxAuditTrail struct {
-	RulesVersion     string            `json:"rules_version"`
-	DetectedLocation *Address          `json:"detected_location,omitempty"`
-	AppliedRules     []string          `json:"applied_rules"`
-	Overrides        []TaxOverride     `json:"overrides,omitempty"`
-	Notes            []string          `json:"notes,omitempty"`
-}
-
-// TaxOverride represents a manual tax override
-type TaxOverride struct {
-	Reason      string    `json:"reason"`
-	OriginalTax int64     `json:"original_tax_cents"`
-	NewTax      int64     `json:"new_tax_cents"`
-	AppliedBy   uuid.UUID `json:"applied_by"`
-	AppliedAt   time.Time `json:"applied_at"`
-}
-
-// TaxJurisdiction represents a tax jurisdiction with its rules
-type TaxJurisdiction struct {
-	Code        string            `json:"code"`
-	Name        string            `json:"name"`
-	Type        string            `json:"type"` // "country", "state", "province", "city"
-	TaxRates    map[string]float64 `json:"tax_rates"` // product_type -> rate
-	Thresholds  map[string]int64  `json:"thresholds"` // minimum amounts
-	IsActive    bool              `json:"is_active"`
-	EffectiveDate time.Time       `json:"effective_date"`
-}
-
 // CalculateTax performs comprehensive tax calculation
-func (s *TaxService) CalculateTax(ctx context.Context, params TaxCalculationParams) (*TaxCalculationResult, error) {
+func (s *TaxService) CalculateTax(ctx context.Context, params params.TaxCalculationParams) (*responses.TaxCalculationResult, error) {
 	s.logger.Info("Calculating tax",
 		zap.String("workspace_id", params.WorkspaceID.String()),
 		zap.String("customer_id", params.CustomerID.String()),
@@ -115,12 +39,12 @@ func (s *TaxService) CalculateTax(ctx context.Context, params TaxCalculationPara
 		zap.String("currency", params.Currency),
 		zap.Bool("is_b2b", params.IsB2B))
 
-	result := &TaxCalculationResult{
-		SubtotalCents:    params.AmountCents,
-		TaxBreakdown:     []TaxLineItem{},
-		CalculatedAt:     time.Now(),
-		Confidence:       1.0,
-		AuditTrail: TaxAuditTrail{
+	result := &responses.TaxCalculationResult{
+		SubtotalCents: params.AmountCents,
+		TaxBreakdown:  []business.TaxLineItem{},
+		CalculatedAt:  time.Now(),
+		Confidence:    1.0,
+		AuditTrail: business.TaxAuditTrail{
 			RulesVersion: "v2024.1",
 			AppliedRules: []string{},
 			Notes:        []string{},
@@ -156,7 +80,7 @@ func (s *TaxService) CalculateTax(ctx context.Context, params TaxCalculationPara
 }
 
 // determineJurisdiction determines the applicable tax jurisdiction
-func (s *TaxService) determineJurisdiction(ctx context.Context, params TaxCalculationParams) (*TaxJurisdiction, error) {
+func (s *TaxService) determineJurisdiction(ctx context.Context, params params.TaxCalculationParams) (*business.TaxJurisdiction, error) {
 	// Priority order: Customer address > Business address > Workspace default
 	address := params.CustomerAddress
 	if address == nil {
@@ -169,7 +93,7 @@ func (s *TaxService) determineJurisdiction(ctx context.Context, params TaxCalcul
 		if err != nil {
 			return nil, fmt.Errorf("failed to get workspace: %w", err)
 		}
-		
+
 		// Parse default tax jurisdiction from workspace
 		return s.getDefaultJurisdiction(workspace), nil
 	}
@@ -179,48 +103,48 @@ func (s *TaxService) determineJurisdiction(ctx context.Context, params TaxCalcul
 }
 
 // shouldApplyReverseCharge determines if reverse charge should be applied for B2B
-func (s *TaxService) shouldApplyReverseCharge(jurisdiction *TaxJurisdiction, params TaxCalculationParams) bool {
+func (s *TaxService) shouldApplyReverseCharge(jurisdiction *business.TaxJurisdiction, params params.TaxCalculationParams) bool {
 	// EU reverse charge logic
 	if strings.HasPrefix(jurisdiction.Code, "EU-") && params.CustomerVATNumber != nil {
-		return s.isValidEUVATNumber(*params.CustomerVATNumber) && 
-			   s.isDigitalService(params.ProductType)
+		return s.isValidEUVATNumber(*params.CustomerVATNumber) &&
+			s.isDigitalService(params.ProductType)
 	}
-	
+
 	// Other jurisdictions with reverse charge rules
 	reverseChargeJurisdictions := map[string]bool{
-		"UK":  true,
-		"AU":  true,
-		"CA":  true,
+		"UK": true,
+		"AU": true,
+		"CA": true,
 	}
-	
+
 	return reverseChargeJurisdictions[jurisdiction.Code] && params.CustomerVATNumber != nil
 }
 
 // calculateReverseCharge handles B2B reverse charge scenarios
-func (s *TaxService) calculateReverseCharge(ctx context.Context, params TaxCalculationParams, jurisdiction *TaxJurisdiction, result *TaxCalculationResult) (*TaxCalculationResult, error) {
+func (s *TaxService) calculateReverseCharge(ctx context.Context, params params.TaxCalculationParams, jurisdiction *business.TaxJurisdiction, result *responses.TaxCalculationResult) (*responses.TaxCalculationResult, error) {
 	// In reverse charge, customer pays the tax in their jurisdiction
-	taxLineItem := TaxLineItem{
-		TaxType:         "vat",
-		Jurisdiction:    jurisdiction.Code,
-		Rate:            0.0, // Merchant doesn't charge tax
-		TaxableAmount:   params.AmountCents,
-		TaxAmountCents:  0,
-		Description:     "Reverse charge - customer responsible for VAT",
-		IsReversCharge:  true,
+	taxLineItem := business.TaxLineItem{
+		TaxType:        "vat",
+		Jurisdiction:   jurisdiction.Code,
+		Rate:           0.0, // Merchant doesn't charge tax
+		TaxableAmount:  params.AmountCents,
+		TaxAmountCents: 0,
+		Description:    "Reverse charge - customer responsible for VAT",
+		IsReversCharge: true,
 	}
 
 	result.TaxBreakdown = append(result.TaxBreakdown, taxLineItem)
 	result.TotalTaxCents = 0
 	result.TotalAmountCents = params.AmountCents
 	result.AuditTrail.AppliedRules = append(result.AuditTrail.AppliedRules, "B2B_REVERSE_CHARGE")
-	result.AuditTrail.Notes = append(result.AuditTrail.Notes, 
+	result.AuditTrail.Notes = append(result.AuditTrail.Notes,
 		fmt.Sprintf("Reverse charge applied for VAT number: %s", *params.CustomerVATNumber))
 
 	return result, nil
 }
 
 // calculateStandardTax calculates standard tax rates
-func (s *TaxService) calculateStandardTax(ctx context.Context, params TaxCalculationParams, jurisdiction *TaxJurisdiction, result *TaxCalculationResult) (*TaxCalculationResult, error) {
+func (s *TaxService) calculateStandardTax(ctx context.Context, params params.TaxCalculationParams, jurisdiction *business.TaxJurisdiction, result *responses.TaxCalculationResult) (*responses.TaxCalculationResult, error) {
 	// Get applicable tax rate for product type
 	taxRate, exists := jurisdiction.TaxRates[params.ProductType]
 	if !exists {
@@ -231,15 +155,47 @@ func (s *TaxService) calculateStandardTax(ctx context.Context, params TaxCalcula
 	threshold, hasThreshold := jurisdiction.Thresholds[params.ProductType]
 	if hasThreshold && params.AmountCents < threshold {
 		taxRate = 0.0
-		result.AuditTrail.Notes = append(result.AuditTrail.Notes, 
+		result.AuditTrail.Notes = append(result.AuditTrail.Notes,
 			fmt.Sprintf("Amount below tax threshold: %d < %d", params.AmountCents, threshold))
 	}
 
-	// Calculate tax amount
-	taxAmountCents := int64(float64(params.AmountCents) * taxRate)
+	// Calculate tax amount with overflow protection
+	var taxAmountCents int64
+	if params.AmountCents > math.MaxInt64/2 || taxRate > 0.5 {
+		// For very large amounts or high tax rates, use safer calculation
+		// Check if multiplication would overflow
+		maxAmountForRate := int64(float64(math.MaxInt64) / taxRate)
+		if params.AmountCents > maxAmountForRate {
+			taxAmountCents = math.MaxInt64 / 2 // Cap the tax amount
+		} else {
+			taxAmountCents = int64(float64(params.AmountCents) * taxRate)
+		}
+	} else {
+		taxAmountCents = int64(float64(params.AmountCents) * taxRate)
+	}
+
+	// Calculate total with overflow protection
+	var totalAmountCents int64
+	if taxAmountCents >= 0 {
+		// Positive tax amount
+		if params.AmountCents > math.MaxInt64-taxAmountCents {
+			// Would overflow, cap at max value
+			totalAmountCents = math.MaxInt64
+		} else {
+			totalAmountCents = params.AmountCents + taxAmountCents
+		}
+	} else {
+		// Negative tax amount (refund scenario)
+		if params.AmountCents < math.MinInt64-taxAmountCents {
+			// Would underflow, cap at min value
+			totalAmountCents = math.MinInt64
+		} else {
+			totalAmountCents = params.AmountCents + taxAmountCents
+		}
+	}
 
 	// Create tax line item
-	taxLineItem := TaxLineItem{
+	taxLineItem := business.TaxLineItem{
 		TaxType:        s.getTaxTypeForJurisdiction(jurisdiction.Code),
 		Jurisdiction:   jurisdiction.Code,
 		Rate:           taxRate,
@@ -251,22 +207,29 @@ func (s *TaxService) calculateStandardTax(ctx context.Context, params TaxCalcula
 
 	result.TaxBreakdown = append(result.TaxBreakdown, taxLineItem)
 	result.TotalTaxCents = taxAmountCents
-	result.TotalAmountCents = params.AmountCents + taxAmountCents
-	result.AuditTrail.AppliedRules = append(result.AuditTrail.AppliedRules, 
+	result.TotalAmountCents = totalAmountCents
+	result.AuditTrail.AppliedRules = append(result.AuditTrail.AppliedRules,
 		fmt.Sprintf("STANDARD_TAX_%s", jurisdiction.Code))
 
 	return result, nil
 }
 
 // StoreTaxCalculation stores tax calculation for audit purposes
-func (s *TaxService) StoreTaxCalculation(ctx context.Context, paymentID uuid.UUID, calculation *TaxCalculationResult) error {
+func (s *TaxService) StoreTaxCalculation(ctx context.Context, paymentID uuid.UUID, calculation *responses.TaxCalculationResult) error {
+	// Handle nil calculation
+	if calculation == nil {
+		s.logger.Info("Tax calculation storage not yet implemented - nil calculation provided",
+			zap.String("payment_id", paymentID.String()))
+		return nil
+	}
+
 	// TODO: Implement once tax_calculations table is created
 	s.logger.Info("Tax calculation storage not yet implemented",
 		zap.String("payment_id", paymentID.String()),
 		zap.Int64("tax_cents", calculation.TotalTaxCents))
-	
+
 	return nil
-	
+
 	/* Original implementation for when DB is ready:
 	auditTrailJSON, err := json.Marshal(calculation.AuditTrail)
 	if err != nil {
@@ -303,9 +266,36 @@ func (s *TaxService) StoreTaxCalculation(ctx context.Context, paymentID uuid.UUI
 }
 
 // GetTaxRatesForJurisdiction retrieves current tax rates for a jurisdiction
-func (s *TaxService) GetTaxRatesForJurisdiction(ctx context.Context, jurisdictionCode string) (*TaxJurisdiction, error) {
+func (s *TaxService) GetTaxRatesForJurisdiction(ctx context.Context, jurisdictionCode string) (*business.TaxJurisdiction, error) {
 	// This would normally query a tax rates database or external service
 	return s.getJurisdictionByCode(jurisdictionCode), nil
+}
+
+// isEUCountry checks if a country code is in the EU
+func (s *TaxService) isEUCountry(countryCode string) bool {
+	euCountries := map[string]bool{
+		"AT": true, "BE": true, "BG": true, "HR": true, "CY": true, "CZ": true,
+		"DK": true, "EE": true, "FI": true, "FR": true, "DE": true, "GR": true,
+		"HU": true, "IE": true, "IT": true, "LV": true, "LT": true, "LU": true,
+		"MT": true, "NL": true, "PL": true, "PT": true, "RO": true, "SK": true,
+		"SI": true, "ES": true, "SE": true,
+	}
+	return euCountries[countryCode]
+}
+
+// getCountryName returns a human-readable country name
+func (s *TaxService) getCountryName(countryCode string) string {
+	countryNames := map[string]string{
+		"AT": "Austria", "BE": "Belgium", "BG": "Bulgaria", "HR": "Croatia", "CY": "Cyprus", "CZ": "Czech Republic",
+		"DK": "Denmark", "EE": "Estonia", "FI": "Finland", "FR": "France", "DE": "Germany", "GR": "Greece",
+		"HU": "Hungary", "IE": "Ireland", "IT": "Italy", "LV": "Latvia", "LT": "Lithuania", "LU": "Luxembourg",
+		"MT": "Malta", "NL": "Netherlands", "PL": "Poland", "PT": "Portugal", "RO": "Romania", "SK": "Slovakia",
+		"SI": "Slovenia", "ES": "Spain", "SE": "Sweden",
+	}
+	if name, exists := countryNames[countryCode]; exists {
+		return name
+	}
+	return countryCode
 }
 
 // ValidateVATNumber validates EU VAT numbers
@@ -317,16 +307,16 @@ func (s *TaxService) ValidateVATNumber(ctx context.Context, vatNumber, countryCo
 // Helper functions
 
 // getDefaultJurisdiction returns default tax jurisdiction for workspace
-func (s *TaxService) getDefaultJurisdiction(workspace db.Workspace) *TaxJurisdiction {
+func (s *TaxService) getDefaultJurisdiction(workspace db.Workspace) *business.TaxJurisdiction {
 	// Parse from workspace configuration or use US as default
-	return &TaxJurisdiction{
+	return &business.TaxJurisdiction{
 		Code: "US",
 		Name: "United States",
 		Type: "country",
 		TaxRates: map[string]float64{
-			"digital":  0.0,    // No federal tax on digital goods
-			"physical": 0.0,    // Varies by state
-			"service":  0.0,    // Varies by state  
+			"digital":  0.0, // No federal tax on digital goods
+			"physical": 0.0, // Varies by state
+			"service":  0.0, // Varies by state
 			"default":  0.0,
 		},
 		Thresholds: map[string]int64{
@@ -338,25 +328,25 @@ func (s *TaxService) getDefaultJurisdiction(workspace db.Workspace) *TaxJurisdic
 }
 
 // getJurisdictionFromAddress determines jurisdiction from address
-func (s *TaxService) getJurisdictionFromAddress(address *Address) *TaxJurisdiction {
+func (s *TaxService) getJurisdictionFromAddress(address *business.Address) *business.TaxJurisdiction {
 	// Simplified jurisdiction mapping - in production this would be more comprehensive
-	jurisdictions := map[string]*TaxJurisdiction{
+	jurisdictions := map[string]*business.TaxJurisdiction{
 		"US": {
-			Code: "US-" + address.State,
-			Name: fmt.Sprintf("United States - %s", address.State),
-			Type: "state",
-			TaxRates: s.getUSStateTaxRates(address.State),
-			Thresholds: map[string]int64{"default": 0},
-			IsActive: true,
+			Code:          "US-" + address.State,
+			Name:          fmt.Sprintf("United States - %s", address.State),
+			Type:          "state",
+			TaxRates:      s.getUSStateTaxRates(address.State),
+			Thresholds:    map[string]int64{"default": 0},
+			IsActive:      true,
 			EffectiveDate: time.Now(),
 		},
 		"CA": {
-			Code: "CA-" + address.State,
-			Name: fmt.Sprintf("Canada - %s", address.State),
-			Type: "province", 
-			TaxRates: s.getCanadaTaxRates(address.State),
-			Thresholds: map[string]int64{"default": 0},
-			IsActive: true,
+			Code:          "CA-" + address.State,
+			Name:          fmt.Sprintf("Canada - %s", address.State),
+			Type:          "province",
+			TaxRates:      s.getCanadaTaxRates(address.State),
+			Thresholds:    map[string]int64{"default": 0},
+			IsActive:      true,
 			EffectiveDate: time.Now(),
 		},
 		"GB": {
@@ -364,13 +354,13 @@ func (s *TaxService) getJurisdictionFromAddress(address *Address) *TaxJurisdicti
 			Name: "United Kingdom",
 			Type: "country",
 			TaxRates: map[string]float64{
-				"digital": 0.20,
+				"digital":  0.20,
 				"physical": 0.20,
-				"service": 0.20,
-				"default": 0.20,
+				"service":  0.20,
+				"default":  0.20,
 			},
-			Thresholds: map[string]int64{"default": 0},
-			IsActive: true,
+			Thresholds:    map[string]int64{"default": 0},
+			IsActive:      true,
 			EffectiveDate: time.Now(),
 		},
 	}
@@ -379,14 +369,32 @@ func (s *TaxService) getJurisdictionFromAddress(address *Address) *TaxJurisdicti
 		return jurisdiction
 	}
 
+	// Check if it's an EU country
+	if s.isEUCountry(address.Country) {
+		return &business.TaxJurisdiction{
+			Code: "EU-" + address.Country,
+			Name: s.getCountryName(address.Country),
+			Type: "country",
+			TaxRates: map[string]float64{
+				"digital":  0.19, // Standard EU VAT rate approximation
+				"physical": 0.19,
+				"service":  0.19,
+				"default":  0.19,
+			},
+			Thresholds:    map[string]int64{"default": 0},
+			IsActive:      true,
+			EffectiveDate: time.Now(),
+		}
+	}
+
 	// Default to no tax for unknown jurisdictions
-	return &TaxJurisdiction{
-		Code: address.Country,
-		Name: address.Country,
-		Type: "country",
-		TaxRates: map[string]float64{"default": 0.0},
-		Thresholds: map[string]int64{"default": 0},
-		IsActive: true,
+	return &business.TaxJurisdiction{
+		Code:          address.Country,
+		Name:          address.Country,
+		Type:          "country",
+		TaxRates:      map[string]float64{"default": 0.0},
+		Thresholds:    map[string]int64{"default": 0},
+		IsActive:      true,
 		EffectiveDate: time.Now(),
 	}
 }
@@ -412,9 +420,9 @@ func (s *TaxService) getUSStateTaxRates(state string) map[string]float64 {
 func (s *TaxService) getCanadaTaxRates(province string) map[string]float64 {
 	// Simplified Canadian tax rates (GST + PST/HST)
 	provinceTaxRates := map[string]map[string]float64{
-		"ON": {"digital": 0.13, "physical": 0.13, "service": 0.13, "default": 0.13}, // HST
-		"BC": {"digital": 0.12, "physical": 0.12, "service": 0.12, "default": 0.12}, // GST + PST
-		"AB": {"digital": 0.05, "physical": 0.05, "service": 0.05, "default": 0.05}, // GST only
+		"ON": {"digital": 0.13, "physical": 0.13, "service": 0.13, "default": 0.13},             // HST
+		"BC": {"digital": 0.12, "physical": 0.12, "service": 0.12, "default": 0.12},             // GST + PST
+		"AB": {"digital": 0.05, "physical": 0.05, "service": 0.05, "default": 0.05},             // GST only
 		"QC": {"digital": 0.14975, "physical": 0.14975, "service": 0.14975, "default": 0.14975}, // GST + QST
 	}
 
@@ -426,18 +434,18 @@ func (s *TaxService) getCanadaTaxRates(province string) map[string]float64 {
 }
 
 // getJurisdictionByCode retrieves jurisdiction configuration by code
-func (s *TaxService) getJurisdictionByCode(code string) *TaxJurisdiction {
+func (s *TaxService) getJurisdictionByCode(code string) *business.TaxJurisdiction {
 	// This would normally query a database or external service
 	// For now, return a default based on common codes
 	if strings.HasPrefix(code, "US-") {
 		state := strings.TrimPrefix(code, "US-")
-		return &TaxJurisdiction{
-			Code: code,
-			Name: fmt.Sprintf("United States - %s", state),
-			Type: "state",
-			TaxRates: s.getUSStateTaxRates(state),
-			Thresholds: map[string]int64{"default": 0},
-			IsActive: true,
+		return &business.TaxJurisdiction{
+			Code:          code,
+			Name:          fmt.Sprintf("United States - %s", state),
+			Type:          "state",
+			TaxRates:      s.getUSStateTaxRates(state),
+			Thresholds:    map[string]int64{"default": 0},
+			IsActive:      true,
 			EffectiveDate: time.Now(),
 		}
 	}
@@ -468,10 +476,10 @@ func (s *TaxService) isValidEUVATNumber(vatNumber string) bool {
 // isDigitalService determines if a product type is a digital service
 func (s *TaxService) isDigitalService(productType string) bool {
 	digitalTypes := map[string]bool{
-		"digital":     true,
-		"software":    true,
+		"digital":      true,
+		"software":     true,
 		"subscription": true,
-		"saas":        true,
+		"saas":         true,
 	}
 	return digitalTypes[productType]
 }

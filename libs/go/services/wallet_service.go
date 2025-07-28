@@ -7,6 +7,8 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -27,57 +29,29 @@ func NewWalletService(queries db.Querier) *WalletService {
 	}
 }
 
-// CircleWalletData represents Circle-specific wallet data
-type CircleWalletData struct {
-	CircleWalletID string
-	CircleUserID   string
-	ChainID        int32
-	State          string
-}
-
-// WalletWithCircleData represents a wallet with optional Circle data
-type WalletWithCircleData struct {
-	Wallet     db.Wallet
-	CircleData *CircleWalletData
-}
-
-// CreateWalletParams contains parameters for creating a wallet
-type CreateWalletParams struct {
-	WorkspaceID   uuid.UUID
-	WalletType    string
-	WalletAddress string
-	NetworkType   string
-	NetworkID     *uuid.UUID
-	Nickname      string
-	ENS           string
-	IsPrimary     bool
-	Verified      bool
-	Metadata      map[string]interface{}
-}
-
 // CreateWallet creates a new wallet
-func (s *WalletService) CreateWallet(ctx context.Context, params CreateWalletParams) (*db.Wallet, error) {
+func (s *WalletService) CreateWallet(ctx context.Context, createParams params.CreateWalletParams) (*db.Wallet, error) {
 	// Validate required fields
-	if params.WalletType == "" {
+	if createParams.WalletType == "" {
 		return nil, fmt.Errorf("wallet type is required")
 	}
-	if params.WalletAddress == "" {
+	if createParams.WalletAddress == "" {
 		return nil, fmt.Errorf("wallet address is required")
 	}
-	if params.NetworkType == "" {
+	if createParams.NetworkType == "" {
 		return nil, fmt.Errorf("network type is required")
 	}
 
 	// Validate wallet type
-	if params.WalletType != "wallet" && params.WalletType != "circle_wallet" {
-		return nil, fmt.Errorf("invalid wallet type: %s", params.WalletType)
+	if createParams.WalletType != "wallet" && createParams.WalletType != "circle_wallet" {
+		return nil, fmt.Errorf("invalid wallet type: %s", createParams.WalletType)
 	}
 
 	// Convert metadata to JSON
 	metadataJSON := []byte("{}")
-	if params.Metadata != nil {
+	if createParams.Metadata != nil {
 		var err error
-		metadataJSON, err = json.Marshal(params.Metadata)
+		metadataJSON, err = json.Marshal(createParams.Metadata)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal metadata: %w", err)
 		}
@@ -85,28 +59,28 @@ func (s *WalletService) CreateWallet(ctx context.Context, params CreateWalletPar
 
 	// Prepare network ID
 	var networkID pgtype.UUID
-	if params.NetworkID != nil {
-		networkID = pgtype.UUID{Bytes: *params.NetworkID, Valid: true}
+	if createParams.NetworkID != nil {
+		networkID = pgtype.UUID{Bytes: *createParams.NetworkID, Valid: true}
 	}
 
 	// Create wallet
 	wallet, err := s.queries.CreateWallet(ctx, db.CreateWalletParams{
-		WorkspaceID:   params.WorkspaceID,
-		WalletType:    params.WalletType,
-		WalletAddress: params.WalletAddress,
-		NetworkType:   db.NetworkType(params.NetworkType),
+		WorkspaceID:   createParams.WorkspaceID,
+		WalletType:    createParams.WalletType,
+		WalletAddress: createParams.WalletAddress,
+		NetworkType:   db.NetworkType(createParams.NetworkType),
 		NetworkID:     networkID,
-		Nickname:      pgtype.Text{String: params.Nickname, Valid: params.Nickname != ""},
-		Ens:           pgtype.Text{String: params.ENS, Valid: params.ENS != ""},
-		IsPrimary:     pgtype.Bool{Bool: params.IsPrimary, Valid: true},
-		Verified:      pgtype.Bool{Bool: params.Verified, Valid: true},
+		Nickname:      pgtype.Text{String: createParams.Nickname, Valid: createParams.Nickname != ""},
+		Ens:           pgtype.Text{String: createParams.ENS, Valid: createParams.ENS != ""},
+		IsPrimary:     pgtype.Bool{Bool: createParams.IsPrimary, Valid: true},
+		Verified:      pgtype.Bool{Bool: createParams.Verified, Valid: true},
 		Metadata:      metadataJSON,
 	})
 	if err != nil {
 		s.logger.Error("Failed to create wallet",
-			zap.String("workspace_id", params.WorkspaceID.String()),
-			zap.String("wallet_type", params.WalletType),
-			zap.String("wallet_address", params.WalletAddress),
+			zap.String("workspace_id", createParams.WorkspaceID.String()),
+			zap.String("wallet_type", createParams.WalletType),
+			zap.String("wallet_address", createParams.WalletAddress),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to create wallet: %w", err)
 	}
@@ -120,7 +94,7 @@ func (s *WalletService) CreateWallet(ctx context.Context, params CreateWalletPar
 }
 
 // CreateWalletsForAllNetworks creates wallets for all active networks
-func (s *WalletService) CreateWalletsForAllNetworks(ctx context.Context, params CreateWalletParams) ([]db.Wallet, error) {
+func (s *WalletService) CreateWalletsForAllNetworks(ctx context.Context, createParams params.CreateWalletParams) ([]db.Wallet, error) {
 	// Get all active networks
 	networks, err := s.queries.ListNetworks(ctx, db.ListNetworksParams{
 		IsActive: pgtype.Bool{Bool: true, Valid: true},
@@ -136,10 +110,10 @@ func (s *WalletService) CreateWalletsForAllNetworks(ctx context.Context, params 
 	// Create wallets for each network
 	var createdWallets []db.Wallet
 	for _, network := range networks {
-		params.NetworkType = string(network.NetworkType)
-		params.NetworkID = &network.ID
+		createParams.NetworkType = string(network.NetworkType)
+		createParams.NetworkID = &network.ID
 
-		wallet, err := s.CreateWallet(ctx, params)
+		wallet, err := s.CreateWallet(ctx, createParams)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create wallet for network %s: %w", network.Name, err)
 		}
@@ -171,7 +145,7 @@ func (s *WalletService) GetWallet(ctx context.Context, walletID, workspaceID uui
 }
 
 // GetWalletWithCircleData retrieves a wallet with Circle data
-func (s *WalletService) GetWalletWithCircleData(ctx context.Context, walletID, workspaceID uuid.UUID) (*WalletWithCircleData, error) {
+func (s *WalletService) GetWalletWithCircleData(ctx context.Context, walletID, workspaceID uuid.UUID) (*business.WalletWithCircleData, error) {
 	result, err := s.queries.GetWalletWithCircleDataByID(ctx, db.GetWalletWithCircleDataByIDParams{
 		ID:          walletID,
 		WorkspaceID: workspaceID,
@@ -188,7 +162,7 @@ func (s *WalletService) GetWalletWithCircleData(ctx context.Context, walletID, w
 	}
 
 	// Convert to wallet with Circle data
-	walletData := &WalletWithCircleData{
+	walletData := &business.WalletWithCircleData{
 		Wallet: db.Wallet{
 			ID:            result.ID,
 			WorkspaceID:   result.WorkspaceID,
@@ -209,7 +183,7 @@ func (s *WalletService) GetWalletWithCircleData(ctx context.Context, walletID, w
 
 	// Add Circle data if present
 	if result.CircleWalletID.Valid && result.CircleUserID.Valid {
-		walletData.CircleData = &CircleWalletData{
+		walletData.CircleData = &business.CircleWalletData{
 			CircleWalletID: result.CircleWalletID.String(),
 			CircleUserID:   result.CircleUserID.String(),
 			ChainID:        result.ChainID.Int32,
@@ -276,57 +250,47 @@ func (s *WalletService) ListWalletsWithCircleData(ctx context.Context, workspace
 	return wallets, nil
 }
 
-// UpdateWalletParams contains parameters for updating a wallet
-type UpdateWalletParams struct {
-	ID        uuid.UUID
-	Nickname  *string
-	ENS       *string
-	IsPrimary *bool
-	Verified  *bool
-	Metadata  map[string]interface{}
-}
-
 // UpdateWallet updates an existing wallet
-func (s *WalletService) UpdateWallet(ctx context.Context, workspaceID uuid.UUID, params UpdateWalletParams) (*db.Wallet, error) {
+func (s *WalletService) UpdateWallet(ctx context.Context, workspaceID uuid.UUID, updateParams params.UpdateWalletParams) (*db.Wallet, error) {
 	// First verify the wallet belongs to the workspace
-	_, err := s.GetWallet(ctx, params.ID, workspaceID)
+	_, err := s.GetWallet(ctx, updateParams.ID, workspaceID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Prepare update params
-	updateParams := db.UpdateWalletParams{
-		ID: params.ID,
+	updateParamsObj := db.UpdateWalletParams{
+		ID: updateParams.ID,
 	}
 
 	// Set optional fields
-	if params.Nickname != nil {
-		updateParams.Nickname = pgtype.Text{String: *params.Nickname, Valid: true}
+	if updateParams.Nickname != nil {
+		updateParamsObj.Nickname = pgtype.Text{String: *updateParams.Nickname, Valid: true}
 	}
-	if params.ENS != nil {
-		updateParams.Ens = pgtype.Text{String: *params.ENS, Valid: true}
+	if updateParams.ENS != nil {
+		updateParamsObj.Ens = pgtype.Text{String: *updateParams.ENS, Valid: true}
 	}
-	if params.IsPrimary != nil {
-		updateParams.IsPrimary = pgtype.Bool{Bool: *params.IsPrimary, Valid: true}
+	if updateParams.IsPrimary != nil {
+		updateParamsObj.IsPrimary = pgtype.Bool{Bool: *updateParams.IsPrimary, Valid: true}
 	}
-	if params.Verified != nil {
-		updateParams.Verified = pgtype.Bool{Bool: *params.Verified, Valid: true}
+	if updateParams.Verified != nil {
+		updateParamsObj.Verified = pgtype.Bool{Bool: *updateParams.Verified, Valid: true}
 	}
 
 	// Convert metadata to JSON if provided
-	if params.Metadata != nil {
-		metadataJSON, err := json.Marshal(params.Metadata)
+	if updateParams.Metadata != nil {
+		metadataJSON, err := json.Marshal(updateParams.Metadata)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal metadata: %w", err)
 		}
-		updateParams.Metadata = metadataJSON
+		updateParamsObj.Metadata = metadataJSON
 	}
 
 	// Update wallet
-	wallet, err := s.queries.UpdateWallet(ctx, updateParams)
+	wallet, err := s.queries.UpdateWallet(ctx, updateParamsObj)
 	if err != nil {
 		s.logger.Error("Failed to update wallet",
-			zap.String("wallet_id", params.ID.String()),
+			zap.String("wallet_id", updateParams.ID.String()),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to update wallet: %w", err)
 	}

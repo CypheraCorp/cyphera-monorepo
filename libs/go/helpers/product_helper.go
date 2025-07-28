@@ -5,72 +5,27 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"github.com/google/uuid"
 )
 
-// ProductDetailResponse represents detailed product response with extended fields
-type ProductDetailResponse struct {
-	ID            string                    `json:"id"`
-	Object        string                    `json:"object"`
-	WorkspaceID   string                    `json:"workspace_id"`
-	WalletID      string                    `json:"wallet_id"`
-	Name          string                    `json:"name"`
-	Description   string                    `json:"description,omitempty"`
-	ImageURL      string                    `json:"image_url,omitempty"`
-	URL           string                    `json:"url,omitempty"`
-	Active        bool                      `json:"active"`
-	Metadata      json.RawMessage           `json:"metadata,omitempty" swaggertype:"object"`
-	CreatedAt     int64                     `json:"created_at"`
-	UpdatedAt     int64                     `json:"updated_at"`
-	Prices        []PriceResponse           `json:"prices,omitempty"`
-	ProductTokens []ProductTokenResponse    `json:"product_tokens,omitempty"`
-}
-
-// PublicProductTokenResponse represents a product token in public API responses
-type PublicProductTokenResponse struct {
-	ProductTokenID string `json:"product_token_id"`
-	NetworkID      string `json:"network_id"`
-	NetworkName    string `json:"network_name"`
-	NetworkChainID string `json:"network_chain_id"`
-	TokenID        string `json:"token_id"`
-	TokenName      string `json:"token_name"`
-	TokenSymbol    string `json:"token_symbol"`
-	TokenDecimals  int32  `json:"token_decimals"`
-	TokenAddress   string `json:"token_address"`
-}
-
-// PublicProductResponse represents a product in public API responses (no auth required)
-type PublicProductResponse struct {
-	ID            string                       `json:"id"`
-	AccountID     string                       `json:"account_id"`
-	WorkspaceID   string                       `json:"workspace_id"`
-	WalletAddress string                       `json:"wallet_address"`
-	Name          string                       `json:"name"`
-	Description   string                       `json:"description,omitempty"`
-	ImageURL      string                       `json:"image_url,omitempty"`
-	URL           string                       `json:"url,omitempty"`
-	ProductTokens []PublicProductTokenResponse `json:"product_tokens"`
-	Price         PriceResponse                `json:"price"`
-}
-
 // ToProductDetailResponse converts database product model to detailed API response
-func ToProductDetailResponse(p db.Product, dbPrices []db.Price) ProductDetailResponse {
+func ToProductDetailResponse(p db.Product, dbPrices []db.Price) responses.ProductDetailResponse {
 	var metadata map[string]interface{}
 	if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
 		log.Printf("Error unmarshaling product metadata: %v", err)
 	}
 
-	apiPrices := make([]PriceResponse, len(dbPrices))
+	apiPrices := make([]responses.PriceResponse, len(dbPrices))
 	for i, dbPrice := range dbPrices {
 		apiPrices[i] = ToPriceResponseFromDB(dbPrice)
 	}
 
-	return ProductDetailResponse{
+	return responses.ProductDetailResponse{
 		ID:          p.ID.String(),
 		Object:      "product",
 		WorkspaceID: p.WorkspaceID.String(),
@@ -87,45 +42,25 @@ func ToProductDetailResponse(p db.Product, dbPrices []db.Price) ProductDetailRes
 	}
 }
 
-// ToPriceResponseFromDB converts database price model to API response
-func ToPriceResponseFromDB(p db.Price) PriceResponse {
-	var metadata map[string]interface{}
-	if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
-		log.Printf("Error unmarshaling price metadata: %v", err)
-	}
-	return PriceResponse{
-		ID:                  p.ID.String(),
-		Object:              "price",
-		ProductID:           p.ProductID.String(),
-		Active:              p.Active,
-		Type:                string(p.Type),
-		Nickname:            p.Nickname.String,
-		Currency:            string(p.Currency),
-		UnitAmountInPennies: int64(p.UnitAmountInPennies), // Convert int32 to int64 to match existing type
-		IntervalType:        string(p.IntervalType),
-		TermLength:          p.TermLength,
-		Metadata:            p.Metadata,
-		CreatedAt:           p.CreatedAt.Time.Unix(),
-		UpdatedAt:           p.UpdatedAt.Time.Unix(),
-	}
-}
-
 // ToPublicProductResponse converts database models to public API response
-func ToPublicProductResponse(workspace db.Workspace, product db.Product, price db.Price, productTokens []db.GetActiveProductTokensByProductRow, wallet db.Wallet) PublicProductResponse {
-	publicProductTokens := make([]PublicProductTokenResponse, len(productTokens))
+func ToPublicProductResponse(workspace db.Workspace, product db.Product, price db.Price, productTokens []db.GetActiveProductTokensByProductRow, wallet db.Wallet) responses.PublicProductResponse {
+	publicProductTokens := make([]responses.ProductTokenResponse, len(productTokens))
 	for i, pt := range productTokens {
-		publicProductTokens[i] = PublicProductTokenResponse{
-			ProductTokenID: pt.ID.String(),
+		publicProductTokens[i] = responses.ProductTokenResponse{
+			ID:             pt.ID.String(),
+			Object:         "product_token",
+			ProductID:      product.ID.String(),
+			ProductTokenID: pt.ID.String(), // Same as ID for product_token record
 			NetworkID:      pt.NetworkID.String(),
-			NetworkName:    pt.NetworkName,
-			NetworkChainID: strconv.Itoa(int(pt.ChainID)),
 			TokenID:        pt.TokenID.String(),
-			TokenName:      pt.TokenName,
 			TokenSymbol:    pt.TokenSymbol,
-			TokenDecimals:  int32(pt.Decimals),
+			Active:         true,
+			Metadata:       json.RawMessage("{}"), // GetActiveProductTokensByProductRow doesn't have metadata
+			CreatedAt:      pt.CreatedAt.Time.Unix(),
+			UpdatedAt:      pt.UpdatedAt.Time.Unix(),
 		}
 	}
-	return PublicProductResponse{
+	return responses.PublicProductResponse{
 		ID:            product.ID.String(),
 		AccountID:     workspace.AccountID.String(),
 		WorkspaceID:   workspace.ID.String(),
@@ -287,4 +222,24 @@ func MarshalCaveats(caveats interface{}) json.RawMessage {
 		return json.RawMessage("{}")
 	}
 	return bytes
+}
+
+// ToPriceResponseFromDB converts database price model to API response
+func ToPriceResponseFromDB(p db.Price) responses.PriceResponse {
+	return responses.PriceResponse{
+		ID:                  p.ID.String(),
+		Object:              "price",
+		ProductID:           p.ProductID.String(),
+		Active:              p.Active,
+		Type:                string(p.Type),
+		Nickname:            p.Nickname.String,
+		Currency:            p.Currency,
+		UnitAmountInPennies: int64(p.UnitAmountInPennies),
+		IntervalType:        string(p.IntervalType),
+		IntervalCount:       0, // Price doesn't have IntervalCount in db, defaulting to 0
+		TermLength:          p.TermLength,
+		Metadata:            p.Metadata,
+		CreatedAt:           p.CreatedAt.Time.Unix(),
+		UpdatedAt:           p.UpdatedAt.Time.Unix(),
+	}
 }

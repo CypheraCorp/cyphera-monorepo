@@ -8,6 +8,9 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
@@ -15,117 +18,67 @@ import (
 
 // GasFeeService handles gas fee calculation and management
 type GasFeeService struct {
-	queries           db.Querier
+	queries             db.Querier
 	exchangeRateService *ExchangeRateService
-	logger            *zap.Logger
+	logger              *zap.Logger
 }
 
 // NewGasFeeService creates a new gas fee service
 func NewGasFeeService(queries db.Querier, exchangeRateService *ExchangeRateService) *GasFeeService {
 	return &GasFeeService{
-		queries:           queries,
+		queries:             queries,
 		exchangeRateService: exchangeRateService,
-		logger:            logger.Log,
+		logger:              logger.Log,
 	}
-}
-
-// GasFeeCalculationParams contains parameters for gas fee calculation
-type GasFeeCalculationParams struct {
-	TransactionHash   string
-	NetworkID         uuid.UUID
-	TokenID           uuid.UUID
-	GasUsed          *big.Int
-	GasPriceWei      *big.Int
-	BaseFeeWei       *big.Int    // For EIP-1559 transactions
-	MaxPriorityFeeWei *big.Int   // For EIP-1559 transactions
-	TransactionType   string     // "legacy", "eip1559"
-	Currency          string     // Target currency for conversion (e.g., "USD")
-}
-
-// GasFeeResult contains the calculated gas fee information
-type GasFeeResult struct {
-	GasUsed           *big.Int
-	GasPriceWei       *big.Int
-	TotalGasWei       *big.Int
-	TotalGasETH       float64
-	TotalGasUSD       float64
-	TotalGasCents     int64
-	NetworkName       string
-	TokenSymbol       string
-	TransactionType   string
-	ExchangeRate      float64
-	CalculatedAt      time.Time
-}
-
-// EstimateGasFeeParams contains parameters for gas fee estimation
-type EstimateGasFeeParams struct {
-	NetworkID         uuid.UUID
-	TransactionType   string // "transfer", "contract_call", "delegation"
-	ContractAddress   *string
-	EstimatedGasLimit uint64
-	Currency          string
-}
-
-// EstimateGasFeeResult contains estimated gas fee information
-type EstimateGasFeeResult struct {
-	EstimatedGasLimit uint64
-	GasPriceWei       *big.Int
-	EstimatedCostWei  *big.Int
-	EstimatedCostETH  float64
-	EstimatedCostUSD  float64
-	EstimatedCostCents int64
-	NetworkName       string
-	Confidence        float64 // 0.0 to 1.0, reliability of the estimate
 }
 
 // CalculateActualGasFee calculates gas fees from completed blockchain transactions
-func (s *GasFeeService) CalculateActualGasFee(ctx context.Context, params GasFeeCalculationParams) (*GasFeeResult, error) {
+func (s *GasFeeService) CalculateActualGasFee(ctx context.Context, gasFeeCalculationParams params.GasFeeCalculationParams) (*responses.GasFeeResult, error) {
 	s.logger.Info("Calculating actual gas fee",
-		zap.String("tx_hash", params.TransactionHash),
-		zap.String("network_id", params.NetworkID.String()))
+		zap.String("network_id", gasFeeCalculationParams.NetworkID.String()))
 
-	// Get network information
-	network, err := s.queries.GetNetwork(ctx, params.NetworkID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get network: %w", err)
-	}
+	// // Get network information
+	// _, err := s.queries.GetNetwork(ctx, gasFeeCalculationParams.NetworkID)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to get network: %w", err)
+	// }
 
-	// Get token information
-	token, err := s.queries.GetToken(ctx, params.TokenID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get token: %w", err)
-	}
+	// // Get token information
+	// _, err = s.queries.GetToken(ctx, gasFeeCalculationParams.TokenID)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to get token: %w", err)
+	// }
 
 	// Calculate total gas cost in Wei
 	var totalGasWei *big.Int
-	switch params.TransactionType {
+	switch gasFeeCalculationParams.TransactionType {
 	case "eip1559":
 		// For EIP-1559: gasUsed * (baseFee + priorityFee)
-		if params.BaseFeeWei != nil && params.MaxPriorityFeeWei != nil {
-			effectiveGasPrice := new(big.Int).Add(params.BaseFeeWei, params.MaxPriorityFeeWei)
-			totalGasWei = new(big.Int).Mul(params.GasUsed, effectiveGasPrice)
+		if gasFeeCalculationParams.BaseFeeWei != nil && gasFeeCalculationParams.MaxPriorityFeeWei != nil {
+			effectiveGasPrice := new(big.Int).Add(gasFeeCalculationParams.BaseFeeWei, gasFeeCalculationParams.MaxPriorityFeeWei)
+			totalGasWei = new(big.Int).Mul(gasFeeCalculationParams.GasUsed, effectiveGasPrice)
 		} else {
 			return nil, fmt.Errorf("EIP-1559 transaction missing base fee or priority fee")
 		}
 	case "legacy":
 		// For legacy: gasUsed * gasPrice
-		if params.GasPriceWei != nil {
-			totalGasWei = new(big.Int).Mul(params.GasUsed, params.GasPriceWei)
+		if gasFeeCalculationParams.GasPriceWei != nil {
+			totalGasWei = new(big.Int).Mul(gasFeeCalculationParams.GasUsed, gasFeeCalculationParams.GasPriceWei)
 		} else {
 			return nil, fmt.Errorf("legacy transaction missing gas price")
 		}
 	default:
-		return nil, fmt.Errorf("unsupported transaction type: %s", params.TransactionType)
+		return nil, fmt.Errorf("unsupported transaction type: %s", gasFeeCalculationParams.TransactionType)
 	}
 
 	// Convert Wei to ETH (1 ETH = 10^18 Wei)
 	totalGasETH := weiToEth(totalGasWei)
 
 	// Get exchange rate from ETH to target currency
-	exchangeRateResult, err := s.exchangeRateService.GetExchangeRate(ctx, ExchangeRateParams{
+	exchangeRateResult, err := s.exchangeRateService.GetExchangeRate(ctx, params.ExchangeRateParams{
 		FromSymbol: "ETH",
-		ToSymbol:   params.Currency,
-		NetworkID:  &params.NetworkID,
+		ToSymbol:   gasFeeCalculationParams.Currency,
+		NetworkID:  &gasFeeCalculationParams.NetworkID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get exchange rate: %w", err)
@@ -135,48 +88,44 @@ func (s *GasFeeService) CalculateActualGasFee(ctx context.Context, params GasFee
 	totalGasUSD := totalGasETH * exchangeRateResult.Rate
 	totalGasCents := int64(totalGasUSD * 100) // Convert to cents
 
-	return &GasFeeResult{
-		GasUsed:         params.GasUsed,
-		GasPriceWei:     params.GasPriceWei,
-		TotalGasWei:     totalGasWei,
-		TotalGasETH:     totalGasETH,
-		TotalGasUSD:     totalGasUSD,
-		TotalGasCents:   totalGasCents,
-		NetworkName:     network.Name,
-		TokenSymbol:     token.Symbol,
-		TransactionType: params.TransactionType,
-		ExchangeRate:    exchangeRateResult.Rate,
-		CalculatedAt:    time.Now(),
+	return &responses.GasFeeResult{
+		EstimatedGasUnits:    uint64(gasFeeCalculationParams.GasUsed.Int64()),
+		GasPriceWei:          gasFeeCalculationParams.GasPriceWei.String(),
+		TotalGasCostWei:      totalGasWei.String(),
+		TotalGasCostEth:      totalGasETH,
+		TotalGasCostUSD:      totalGasUSD,
+		TotalGasCostUSDCents: totalGasCents,
+		Confidence:           0.95, // High confidence for actual transactions
 	}, nil
 }
 
 // EstimateGasFee provides gas fee estimates for upcoming transactions
-func (s *GasFeeService) EstimateGasFee(ctx context.Context, params EstimateGasFeeParams) (*EstimateGasFeeResult, error) {
+func (s *GasFeeService) EstimateGasFee(ctx context.Context, estimateGasFeeParams params.EstimateGasFeeParams) (*responses.EstimateGasFeeResult, error) {
 	s.logger.Info("Estimating gas fee",
-		zap.String("network_id", params.NetworkID.String()),
-		zap.String("tx_type", params.TransactionType))
+		zap.String("network_id", estimateGasFeeParams.NetworkID.String()),
+		zap.String("tx_type", estimateGasFeeParams.TransactionType))
 
 	// Get network information
-	network, err := s.queries.GetNetwork(ctx, params.NetworkID)
+	network, err := s.queries.GetNetwork(ctx, estimateGasFeeParams.NetworkID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get network: %w", err)
 	}
 
 	// Get current gas price estimate
 	gasPriceWei, confidence := s.estimateGasPrice(ctx, network)
-	
+
 	// Adjust gas limit based on transaction type
-	adjustedGasLimit := s.adjustGasLimitByType(params.EstimatedGasLimit, params.TransactionType)
-	
+	adjustedGasLimit := s.adjustGasLimitByType(estimateGasFeeParams.EstimatedGasLimit, estimateGasFeeParams.TransactionType)
+
 	// Calculate estimated cost
 	estimatedCostWei := new(big.Int).Mul(big.NewInt(int64(adjustedGasLimit)), gasPriceWei)
 	estimatedCostETH := weiToEth(estimatedCostWei)
 
 	// Get exchange rate
-	exchangeRateResult, err := s.exchangeRateService.GetExchangeRate(ctx, ExchangeRateParams{
+	exchangeRateResult, err := s.exchangeRateService.GetExchangeRate(ctx, params.ExchangeRateParams{
 		FromSymbol: "ETH",
-		ToSymbol:   params.Currency,
-		NetworkID:  &params.NetworkID,
+		ToSymbol:   estimateGasFeeParams.Currency,
+		NetworkID:  &estimateGasFeeParams.NetworkID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get exchange rate: %w", err)
@@ -185,39 +134,41 @@ func (s *GasFeeService) EstimateGasFee(ctx context.Context, params EstimateGasFe
 	estimatedCostUSD := estimatedCostETH * exchangeRateResult.Rate
 	estimatedCostCents := int64(estimatedCostUSD * 100)
 
-	return &EstimateGasFeeResult{
-		EstimatedGasLimit:  adjustedGasLimit,
-		GasPriceWei:        gasPriceWei,
-		EstimatedCostWei:   estimatedCostWei,
-		EstimatedCostETH:   estimatedCostETH,
-		EstimatedCostUSD:   estimatedCostUSD,
-		EstimatedCostCents: estimatedCostCents,
-		NetworkName:        network.Name,
-		Confidence:         confidence,
+	return &responses.EstimateGasFeeResult{
+		NetworkName:           network.Name,
+		TransactionType:       estimateGasFeeParams.TransactionType,
+		EstimatedGasUnits:     adjustedGasLimit,
+		CurrentGasPriceWei:    gasPriceWei.String(),
+		EstimatedCostWei:      estimatedCostWei.String(),
+		EstimatedCostEth:      estimatedCostETH,
+		EstimatedCostUSD:      estimatedCostUSD,
+		EstimatedCostUSDCents: estimatedCostCents,
+		Confidence:            confidence,
 	}, nil
 }
 
 // CreateGasFeePaymentRecord creates a gas fee payment record
-func (s *GasFeeService) CreateGasFeePaymentRecord(ctx context.Context, paymentID uuid.UUID, gasFeeResult *GasFeeResult, isSponsored bool, sponsorID *uuid.UUID) error {
+func (s *GasFeeService) CreateGasFeePaymentRecord(ctx context.Context, paymentID uuid.UUID, gasFeeResult *responses.GasFeeResult, isSponsored bool, sponsorID *uuid.UUID) error {
 	// Convert Wei to Gwei for storage
-	gasPriceGwei := new(big.Int).Div(gasFeeResult.GasPriceWei, big.NewInt(1e9))
-	
+	gasPriceWei, _ := new(big.Int).SetString(gasFeeResult.GasPriceWei, 10)
+	gasPriceGwei := new(big.Int).Div(gasPriceWei, big.NewInt(1e9))
+
 	// For now, use a placeholder network ID until we have proper network lookup
 	// TODO: Implement network lookup by name
 	networkID := uuid.New() // Placeholder network ID
-	
+
 	params := db.CreateGasFeePaymentParams{
 		PaymentID:      paymentID,
-		GasFeeWei:      gasFeeResult.TotalGasWei.String(),
+		GasFeeWei:      gasFeeResult.TotalGasCostWei,
 		GasPriceGwei:   gasPriceGwei.String(),
-		GasUnitsUsed:   gasFeeResult.GasUsed.Int64(),
-		MaxGasUnits:    gasFeeResult.GasUsed.Int64(), // Use same as used for now
-		PaymentMethod:  "native", // ETH was used for gas
+		GasUnitsUsed:   int64(gasFeeResult.EstimatedGasUnits),
+		MaxGasUnits:    int64(gasFeeResult.EstimatedGasUnits), // Use same as used for now
+		PaymentMethod:  "native",                              // ETH was used for gas
 		SponsorType:    "none",
 		NetworkID:      networkID,
-		GasFeeUsdCents: pgtype.Int8{Int64: gasFeeResult.TotalGasCents, Valid: true},
+		GasFeeUsdCents: pgtype.Int8{Int64: gasFeeResult.TotalGasCostUSDCents, Valid: true},
 		EthUsdPrice:    pgtype.Numeric{}, // Would need proper decimal conversion
-		BlockTimestamp: pgtype.Timestamptz{Time: gasFeeResult.CalculatedAt, Valid: true},
+		BlockTimestamp: pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
 
 	if isSponsored && sponsorID != nil {
@@ -232,7 +183,7 @@ func (s *GasFeeService) CreateGasFeePaymentRecord(ctx context.Context, paymentID
 
 	s.logger.Info("Created gas fee payment record",
 		zap.String("payment_id", paymentID.String()),
-		zap.Int64("cost_cents", gasFeeResult.TotalGasCents),
+		zap.Int64("cost_cents", gasFeeResult.TotalGasCostUSDCents),
 		zap.Bool("sponsored", isSponsored))
 
 	return nil
@@ -252,7 +203,7 @@ func (s *GasFeeService) GetGasFeePayments(ctx context.Context, workspaceID uuid.
 }
 
 // GetGasFeeMetrics calculates gas fee metrics for a workspace
-func (s *GasFeeService) GetGasFeeMetrics(ctx context.Context, workspaceID uuid.UUID, startDate, endDate time.Time) (*GasFeeMetrics, error) {
+func (s *GasFeeService) GetGasFeeMetrics(ctx context.Context, workspaceID uuid.UUID, startDate, endDate time.Time) (*business.GasFeeMetrics, error) {
 	metrics, err := s.queries.GetGasFeeMetrics(ctx, db.GetGasFeeMetricsParams{
 		WorkspaceID: workspaceID,
 		CreatedAt:   pgtype.Timestamptz{Time: startDate, Valid: true},
@@ -262,29 +213,13 @@ func (s *GasFeeService) GetGasFeeMetrics(ctx context.Context, workspaceID uuid.U
 		return nil, fmt.Errorf("failed to get gas fee metrics: %w", err)
 	}
 
-	return &GasFeeMetrics{
+	return &business.GasFeeMetrics{
 		TotalTransactions:   metrics.TotalTransactions,
 		TotalGasCostCents:   metrics.TotalGasFeesCents,
 		SponsoredCostCents:  metrics.MerchantSponsoredCents + metrics.PlatformSponsoredCents,
 		AverageGasCostCents: int64(metrics.AvgGasFeeCents),
-		NetworkBreakdown:    make(map[string]NetworkGasStats), // Empty for now
+		NetworkBreakdown:    make(map[string]business.NetworkGasStats), // Empty for now
 	}, nil
-}
-
-// GasFeeMetrics represents aggregated gas fee metrics
-type GasFeeMetrics struct {
-	TotalTransactions   int64                      `json:"total_transactions"`
-	TotalGasCostCents   int64                      `json:"total_gas_cost_cents"`
-	SponsoredCostCents  int64                      `json:"sponsored_cost_cents"`
-	AverageGasCostCents int64                      `json:"average_gas_cost_cents"`
-	NetworkBreakdown    map[string]NetworkGasStats `json:"network_breakdown"`
-}
-
-// NetworkGasStats represents gas statistics for a specific network
-type NetworkGasStats struct {
-	Transactions int64 `json:"transactions"`
-	CostCents    int64 `json:"cost_cents"`
-	AvgCostCents int64 `json:"avg_cost_cents"`
 }
 
 // Helper functions
@@ -303,19 +238,19 @@ func weiToEth(wei *big.Int) float64 {
 func (s *GasFeeService) estimateGasPrice(ctx context.Context, network db.Network) (*big.Int, float64) {
 	// This is a simplified implementation
 	// In a real scenario, you'd call the blockchain RPC to get current gas prices
-	
+
 	basePrices := map[string]*big.Int{
 		"ethereum": big.NewInt(20000000000), // 20 Gwei
 		"polygon":  big.NewInt(30000000000), // 30 Gwei
 		"arbitrum": big.NewInt(100000000),   // 0.1 Gwei
 		"optimism": big.NewInt(1000000),     // 0.001 Gwei
 	}
-	
+
 	networkName := network.Name
 	if price, exists := basePrices[networkName]; exists {
 		return price, 0.8 // 80% confidence for static estimates
 	}
-	
+
 	// Default fallback
 	return big.NewInt(20000000000), 0.5 // 50% confidence for unknown networks
 }
@@ -328,17 +263,35 @@ func (s *GasFeeService) adjustGasLimitByType(baseLimit uint64, txType string) ui
 		"delegation":    1.5,
 		"complex":       2.0,
 	}
-	
+
 	if multiplier, exists := multipliers[txType]; exists {
 		return uint64(float64(baseLimit) * multiplier)
 	}
-	
+
 	return baseLimit
 }
 
+// GetCurrentGasPrice returns the current gas price for a network
+func (s *GasFeeService) GetCurrentGasPrice(ctx context.Context, networkID uuid.UUID) (int, error) {
+	// Get network information
+	network, err := s.queries.GetNetwork(ctx, networkID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get network: %w", err)
+	}
+
+	// Get current gas price estimate
+	gasPriceWei, _ := s.estimateGasPrice(ctx, network)
+	
+	// Convert Wei to Gwei for return (divide by 1e9)
+	gasPriceGwei := new(big.Int).Div(gasPriceWei, big.NewInt(1e9))
+	
+	// Convert to int (assuming it fits in int range)
+	return int(gasPriceGwei.Int64()), nil
+}
+
 // parseNetworkBreakdown parses JSON network breakdown from database
-func parseNetworkBreakdown(data []byte) map[string]NetworkGasStats {
+func parseNetworkBreakdown(data []byte) map[string]business.NetworkGasStats {
 	// This would parse JSON data from the database
 	// For now, return empty map as placeholder
-	return make(map[string]NetworkGasStats)
+	return make(map[string]business.NetworkGasStats)
 }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 )
 
 func main() {
@@ -131,7 +132,7 @@ Attempts remaining: {{.AttemptsRemaining}}`,
 	}
 
 	// Send using the service
-	emailData := services.EmailData{
+	emailData := business.EmailData{
 		CustomerName:      "Test User",
 		CustomerEmail:     testEmail,
 		Amount:            "$99.99",
@@ -145,7 +146,7 @@ Attempts remaining: {{.AttemptsRemaining}}`,
 		UnsubscribeLink:   "https://app.cyphera.com/unsubscribe",
 	}
 
-	err = emailService.SendDunningEmail(context.Background(), template, emailData, testEmail)
+	err = emailService.SendDunningEmail(context.Background(), template, map[string]business.EmailData{"test": emailData}, testEmail)
 	if err != nil {
 		log.Printf("Failed to send via email service: %v", err)
 	} else {

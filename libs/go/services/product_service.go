@@ -2,12 +2,13 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
@@ -27,70 +28,43 @@ func NewProductService(queries db.Querier) *ProductService {
 	}
 }
 
-// CreateProductParams contains parameters for creating a product
-type CreateProductParams struct {
-	WorkspaceID   uuid.UUID
-	WalletID      uuid.UUID
-	Name          string
-	Description   string
-	ImageURL      string
-	URL           string
-	Active        bool
-	Metadata      json.RawMessage
-	Prices        []CreatePriceParams
-	ProductTokens []helpers.CreateProductTokenRequest
-}
-
-// CreatePriceParams contains parameters for creating a price
-type CreatePriceParams struct {
-	Active              bool
-	Type                string
-	Nickname            string
-	Currency            string
-	UnitAmountInPennies int32
-	IntervalType        string
-	IntervalCount       int32
-	TermLength          int32
-	Metadata            json.RawMessage
-}
-
 // CreateProduct creates a new product with associated prices and product tokens
-func (s *ProductService) CreateProduct(ctx context.Context, params CreateProductParams) (*db.Product, []db.Price, error) {
+func (s *ProductService) CreateProduct(ctx context.Context, createParams params.CreateProductParams) (*db.Product, []db.Price, error) {
 	// Validate required fields
-	if params.Name == "" {
+	if createParams.Name == "" {
 		return nil, nil, fmt.Errorf("product name is required")
 	}
-	if params.WorkspaceID == uuid.Nil {
+	if createParams.WorkspaceID == uuid.Nil {
 		return nil, nil, fmt.Errorf("workspace ID is required")
 	}
-	if params.WalletID == uuid.Nil {
+	if createParams.WalletID == uuid.Nil {
 		return nil, nil, fmt.Errorf("wallet ID is required")
 	}
 
 	// Validate product fields using helpers
-	if err := helpers.ValidateProductName(params.Name); err != nil {
+	if err := helpers.ValidateProductName(createParams.Name); err != nil {
 		return nil, nil, err
 	}
-	if err := helpers.ValidateProductDescription(params.Description); err != nil {
+	if err := helpers.ValidateProductDescription(createParams.Description); err != nil {
 		return nil, nil, err
 	}
-	if err := helpers.ValidateImageURL(params.ImageURL); err != nil {
+	if err := helpers.ValidateImageURL(createParams.ImageURL); err != nil {
 		return nil, nil, err
 	}
-	if err := helpers.ValidateProductURL(params.URL); err != nil {
+	if err := helpers.ValidateProductURL(createParams.URL); err != nil {
 		return nil, nil, err
 	}
-	if err := helpers.ValidateMetadata(params.Metadata); err != nil {
+	if err := helpers.ValidateMetadata(createParams.Metadata); err != nil {
 		return nil, nil, err
 	}
 
 	// Validate wallet ownership
-	if err := s.validateWalletOwnership(ctx, params.WalletID, params.WorkspaceID); err != nil {
+	if err := s.validateWalletOwnership(ctx, createParams.WalletID, createParams.WorkspaceID); err != nil {
 		return nil, nil, err
 	}
 
 	// Validate prices
-	for i, price := range params.Prices {
+	for i, price := range createParams.Prices {
 		if err := s.validatePrice(price); err != nil {
 			return nil, nil, fmt.Errorf("price %d validation failed: %w", i+1, err)
 		}
@@ -98,33 +72,33 @@ func (s *ProductService) CreateProduct(ctx context.Context, params CreateProduct
 
 	// Create the product
 	product, err := s.queries.CreateProduct(ctx, db.CreateProductParams{
-		WorkspaceID: params.WorkspaceID,
-		WalletID:    params.WalletID,
-		Name:        params.Name,
-		Description: pgtype.Text{String: params.Description, Valid: params.Description != ""},
-		ImageUrl:    pgtype.Text{String: params.ImageURL, Valid: params.ImageURL != ""},
-		Url:         pgtype.Text{String: params.URL, Valid: params.URL != ""},
-		Active:      params.Active,
-		Metadata:    params.Metadata,
+		WorkspaceID: createParams.WorkspaceID,
+		WalletID:    createParams.WalletID,
+		Name:        createParams.Name,
+		Description: pgtype.Text{String: createParams.Description, Valid: createParams.Description != ""},
+		ImageUrl:    pgtype.Text{String: createParams.ImageURL, Valid: createParams.ImageURL != ""},
+		Url:         pgtype.Text{String: createParams.URL, Valid: createParams.URL != ""},
+		Active:      createParams.Active,
+		Metadata:    createParams.Metadata,
 	})
 	if err != nil {
 		s.logger.Error("Failed to create product",
-			zap.String("name", params.Name),
-			zap.String("workspace_id", params.WorkspaceID.String()),
+			zap.String("name", createParams.Name),
+			zap.String("workspace_id", createParams.WorkspaceID.String()),
 			zap.Error(err))
 		return nil, nil, fmt.Errorf("failed to create product: %w", err)
 	}
 
 	// Create associated prices
-	prices := make([]db.Price, len(params.Prices))
-	for i, priceParam := range params.Prices {
+	prices := make([]db.Price, len(createParams.Prices))
+	for i, priceParam := range createParams.Prices {
 		dbPrice, err := s.queries.CreatePrice(ctx, db.CreatePriceParams{
 			ProductID:           product.ID,
 			Active:              priceParam.Active,
 			Type:                db.PriceType(priceParam.Type),
 			Nickname:            pgtype.Text{String: priceParam.Nickname, Valid: priceParam.Nickname != ""},
 			Currency:            priceParam.Currency,
-			UnitAmountInPennies: priceParam.UnitAmountInPennies,
+			UnitAmountInPennies: int32(priceParam.UnitAmountInPennies),
 			IntervalType:        db.IntervalType(priceParam.IntervalType),
 			TermLength:          priceParam.TermLength,
 			Metadata:            priceParam.Metadata,
@@ -140,8 +114,8 @@ func (s *ProductService) CreateProduct(ctx context.Context, params CreateProduct
 	}
 
 	// Create product tokens if provided
-	if len(params.ProductTokens) > 0 {
-		if err := s.createProductTokens(ctx, product.ID, params.ProductTokens); err != nil {
+	if len(createParams.ProductTokens) > 0 {
+		if err := s.createProductTokens(ctx, product.ID, createParams.ProductTokens); err != nil {
 			s.logger.Error("Failed to create product tokens",
 				zap.String("product_id", product.ID.String()),
 				zap.Error(err))
@@ -153,37 +127,31 @@ func (s *ProductService) CreateProduct(ctx context.Context, params CreateProduct
 		zap.String("product_id", product.ID.String()),
 		zap.String("name", product.Name),
 		zap.Int("prices_count", len(prices)),
-		zap.Int("product_tokens_count", len(params.ProductTokens)))
+		zap.Int("product_tokens_count", len(createParams.ProductTokens)))
 
 	return &product, prices, nil
 }
 
-// GetProductParams contains parameters for retrieving a product
-type GetProductParams struct {
-	ProductID   uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
 // GetProduct retrieves a product by ID with its associated prices
-func (s *ProductService) GetProduct(ctx context.Context, params GetProductParams) (*db.Product, []db.Price, error) {
-	if params.ProductID == uuid.Nil {
+func (s *ProductService) GetProduct(ctx context.Context, getParams params.GetProductParams) (*db.Product, []db.Price, error) {
+	if getParams.ProductID == uuid.Nil {
 		return nil, nil, fmt.Errorf("product ID is required")
 	}
 
 	// Get the product
 	product, err := s.queries.GetProduct(ctx, db.GetProductParams{
-		ID:          params.ProductID,
-		WorkspaceID: params.WorkspaceID,
+		ID:          getParams.ProductID,
+		WorkspaceID: getParams.WorkspaceID,
 	})
 	if err != nil {
 		s.logger.Error("Failed to get product",
-			zap.String("product_id", params.ProductID.String()),
+			zap.String("product_id", getParams.ProductID.String()),
 			zap.Error(err))
 		return nil, nil, fmt.Errorf("product not found: %w", err)
 	}
 
 	// Validate workspace access if provided
-	if params.WorkspaceID != uuid.Nil && product.WorkspaceID != params.WorkspaceID {
+	if getParams.WorkspaceID != uuid.Nil && product.WorkspaceID != getParams.WorkspaceID {
 		return nil, nil, fmt.Errorf("product not found in workspace")
 	}
 
@@ -199,114 +167,102 @@ func (s *ProductService) GetProduct(ctx context.Context, params GetProductParams
 	return &product, prices, nil
 }
 
-// ListProductsParams contains parameters for listing products
-type ListProductsParams struct {
-	WorkspaceID uuid.UUID
-	Limit       int32
-	Offset      int32
-	Active      *bool
-}
-
-// ListProductsResult contains the result of listing products
-type ListProductsResult struct {
-	Products []db.Product
-	Total    int64
-	HasMore  bool
-}
-
 // ListProducts retrieves a paginated list of products for a workspace
-func (s *ProductService) ListProducts(ctx context.Context, params ListProductsParams) (*ListProductsResult, error) {
-	if params.WorkspaceID == uuid.Nil {
+func (s *ProductService) ListProducts(ctx context.Context, listParams params.ListProductsParams) (*responses.ListProductsResult, error) {
+	if listParams.WorkspaceID == uuid.Nil {
 		return nil, fmt.Errorf("workspace ID is required")
 	}
 
 	// Set default pagination
-	if params.Limit <= 0 {
-		params.Limit = 10
+	if listParams.Limit <= 0 {
+		listParams.Limit = 10
 	}
-	if params.Limit > 100 {
-		params.Limit = 100
+	if listParams.Limit > 100 {
+		listParams.Limit = 100
 	}
 
 	// Get products with pagination
 	products, err := s.queries.ListProductsWithPagination(ctx, db.ListProductsWithPaginationParams{
-		WorkspaceID: params.WorkspaceID,
-		Limit:       params.Limit,
-		Offset:      params.Offset,
+		WorkspaceID: listParams.WorkspaceID,
+		Limit:       listParams.Limit,
+		Offset:      listParams.Offset,
 	})
 
 	if err != nil {
 		s.logger.Error("Failed to list products",
-			zap.String("workspace_id", params.WorkspaceID.String()),
+			zap.String("workspace_id", listParams.WorkspaceID.String()),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to retrieve products: %w", err)
 	}
 
 	// Get total count
-	total, err := s.queries.CountProducts(ctx, params.WorkspaceID)
+	total, err := s.queries.CountProducts(ctx, listParams.WorkspaceID)
 
 	if err != nil {
 		s.logger.Error("Failed to count products",
-			zap.String("workspace_id", params.WorkspaceID.String()),
+			zap.String("workspace_id", listParams.WorkspaceID.String()),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to count products: %w", err)
 	}
 
-	hasMore := int64(params.Offset+params.Limit) < total
+	hasMore := int64(listParams.Offset+listParams.Limit) < total
 
-	return &ListProductsResult{
-		Products: products,
+	// Convert products to ProductDetailResponse
+	productResponses := make([]responses.ProductDetailResponse, len(products))
+	for i, product := range products {
+		// Get prices for the product
+		prices, err := s.queries.ListPricesByProduct(ctx, product.ID)
+		if err != nil {
+			s.logger.Warn("Failed to get prices for product",
+				zap.String("product_id", product.ID.String()),
+				zap.Error(err))
+			prices = []db.Price{} // Continue with empty prices
+		}
+
+		// Convert to response format
+		productResponses[i] = helpers.ToProductDetailResponse(product, prices)
+	}
+
+	return &responses.ListProductsResult{
+		Products: productResponses,
 		Total:    total,
 		HasMore:  hasMore,
 	}, nil
 }
 
-// UpdateProductParams contains parameters for updating a product
-type UpdateProductParams struct {
-	ProductID   uuid.UUID
-	WorkspaceID uuid.UUID
-	Name        *string
-	Description *string
-	ImageURL    *string
-	URL         *string
-	Active      *bool
-	Metadata    json.RawMessage
-	WalletID    *uuid.UUID
-}
-
 // UpdateProduct updates an existing product
-func (s *ProductService) UpdateProduct(ctx context.Context, params UpdateProductParams) (*db.Product, error) {
-	if params.ProductID == uuid.Nil {
+func (s *ProductService) UpdateProduct(ctx context.Context, updateParams params.UpdateProductParams) (*db.Product, error) {
+	if updateParams.ProductID == uuid.Nil {
 		return nil, fmt.Errorf("product ID is required")
 	}
 
 	// Get existing product
 	existingProduct, err := s.queries.GetProduct(ctx, db.GetProductParams{
-		ID:          params.ProductID,
-		WorkspaceID: params.WorkspaceID,
+		ID:          updateParams.ProductID,
+		WorkspaceID: updateParams.WorkspaceID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("product not found: %w", err)
 	}
 
 	// Validate workspace access
-	if params.WorkspaceID != uuid.Nil && existingProduct.WorkspaceID != params.WorkspaceID {
+	if updateParams.WorkspaceID != uuid.Nil && existingProduct.WorkspaceID != updateParams.WorkspaceID {
 		return nil, fmt.Errorf("product not found in workspace")
 	}
 
 	// Validate updates
-	if err := s.validateProductUpdate(ctx, params, existingProduct); err != nil {
+	if err := s.validateProductUpdate(ctx, updateParams, existingProduct); err != nil {
 		return nil, err
 	}
 
 	// Build update parameters
-	updateParams := s.buildUpdateParams(params, existingProduct)
+	dbUpdateParams := s.buildUpdateParams(updateParams, existingProduct)
 
 	// Update the product
-	updatedProduct, err := s.queries.UpdateProduct(ctx, updateParams)
+	updatedProduct, err := s.queries.UpdateProduct(ctx, dbUpdateParams)
 	if err != nil {
 		s.logger.Error("Failed to update product",
-			zap.String("product_id", params.ProductID.String()),
+			zap.String("product_id", updateParams.ProductID.String()),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to update product: %w", err)
 	}
@@ -359,7 +315,7 @@ func (s *ProductService) DeleteProduct(ctx context.Context, productID uuid.UUID,
 }
 
 // validatePrice validates price parameters
-func (s *ProductService) validatePrice(price CreatePriceParams) error {
+func (s *ProductService) validatePrice(price params.CreatePriceParams) error {
 	// Validate price type
 	priceType, err := helpers.ValidatePriceType(price.Type)
 	if err != nil {
@@ -373,7 +329,7 @@ func (s *ProductService) validatePrice(price CreatePriceParams) error {
 	}
 
 	// Validate price amount
-	if err := helpers.ValidatePriceInPennies(price.UnitAmountInPennies); err != nil {
+	if err := helpers.ValidatePriceInPennies(int32(price.UnitAmountInPennies)); err != nil {
 		return err
 	}
 
@@ -408,22 +364,14 @@ func (s *ProductService) validateWalletOwnership(ctx context.Context, walletID, 
 }
 
 // createProductTokens creates product tokens for a product
-func (s *ProductService) createProductTokens(ctx context.Context, productID uuid.UUID, tokens []helpers.CreateProductTokenRequest) error {
+func (s *ProductService) createProductTokens(ctx context.Context, productID uuid.UUID, tokens []params.CreateProductTokenParams) error {
 	for _, pt := range tokens {
-		networkID, err := uuid.Parse(pt.NetworkID)
-		if err != nil {
-			return fmt.Errorf("invalid network ID format: %w", err)
-		}
+		// NetworkID and TokenID are already UUIDs, no need to parse
 
-		tokenID, err := uuid.Parse(pt.TokenID)
-		if err != nil {
-			return fmt.Errorf("invalid token ID format: %w", err)
-		}
-
-		_, err = s.queries.CreateProductToken(ctx, db.CreateProductTokenParams{
+		_, err := s.queries.CreateProductToken(ctx, db.CreateProductTokenParams{
 			ProductID: productID,
-			NetworkID: networkID,
-			TokenID:   tokenID,
+			NetworkID: pt.NetworkID,
+			TokenID:   pt.TokenID,
 			Active:    pt.Active,
 		})
 		if err != nil {
@@ -434,7 +382,7 @@ func (s *ProductService) createProductTokens(ctx context.Context, productID uuid
 }
 
 // validateProductUpdate validates product update parameters
-func (s *ProductService) validateProductUpdate(ctx context.Context, params UpdateProductParams, existingProduct db.Product) error {
+func (s *ProductService) validateProductUpdate(ctx context.Context, params params.UpdateProductParams, existingProduct db.Product) error {
 	// Validate name if provided
 	if params.Name != nil {
 		if err := helpers.ValidateProductName(*params.Name); err != nil {
@@ -481,7 +429,7 @@ func (s *ProductService) validateProductUpdate(ctx context.Context, params Updat
 }
 
 // buildUpdateParams builds the database update parameters
-func (s *ProductService) buildUpdateParams(params UpdateProductParams, existingProduct db.Product) db.UpdateProductParams {
+func (s *ProductService) buildUpdateParams(params params.UpdateProductParams, existingProduct db.Product) db.UpdateProductParams {
 	updateParams := db.UpdateProductParams{
 		ID:          params.ProductID,
 		Name:        existingProduct.Name,
@@ -520,7 +468,7 @@ func (s *ProductService) buildUpdateParams(params UpdateProductParams, existingP
 }
 
 // GetPublicProductByPriceID retrieves a product and its details for public access via price ID
-func (s *ProductService) GetPublicProductByPriceID(ctx context.Context, priceID uuid.UUID) (*helpers.PublicProductResponse, error) {
+func (s *ProductService) GetPublicProductByPriceID(ctx context.Context, priceID uuid.UUID) (*responses.PublicProductResponse, error) {
 	if priceID == uuid.Nil {
 		return nil, fmt.Errorf("price ID is required")
 	}

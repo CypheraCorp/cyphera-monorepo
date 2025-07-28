@@ -2,52 +2,14 @@ package helpers
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 )
 
-// NetworkResponse represents the standardized API response for network operations
-type NetworkResponse struct {
-	ID                string             `json:"id"`
-	Object            string             `json:"object"`
-	Name              string             `json:"name"`
-	Type              string             `json:"type"`
-	ChainID           int32              `json:"chain_id"`
-	NetworkType       string             `json:"network_type"`
-	CircleNetworkType string             `json:"circle_network_type"`
-	BlockExplorerURL  string             `json:"block_explorer_url,omitempty"`
-	IsTestnet         bool               `json:"is_testnet"`
-	Active            bool               `json:"active"`
-	LogoURL           string             `json:"logo_url,omitempty"`
-	DisplayName       string             `json:"display_name,omitempty"`
-	ChainNamespace    string             `json:"chain_namespace,omitempty"`
-	CreatedAt         int64              `json:"created_at"`
-	UpdatedAt         int64              `json:"updated_at"`
-	GasConfig         *GasConfigResponse `json:"gas_config,omitempty"`
-}
-
-// GasConfigResponse represents gas configuration for a network
-type GasConfigResponse struct {
-	BaseFeeMultiplier     float64                `json:"base_fee_multiplier"`
-	PriorityFeeMultiplier float64                `json:"priority_fee_multiplier"`
-	DeploymentGasLimit    string                 `json:"deployment_gas_limit"`
-	TokenTransferGasLimit string                 `json:"token_transfer_gas_limit"`
-	SupportsEIP1559       bool                   `json:"supports_eip1559"`
-	GasOracleURL          string                 `json:"gas_oracle_url,omitempty"`
-	GasRefreshIntervalMs  int32                  `json:"gas_refresh_interval_ms"`
-	GasPriorityLevels     map[string]interface{} `json:"gas_priority_levels"`
-	AverageBlockTimeMs    int32                  `json:"average_block_time_ms"`
-	PeakHoursMultiplier   float64                `json:"peak_hours_multiplier"`
-}
-
-// NetworkWithTokensResponse represents a network with its associated tokens
-type NetworkWithTokensResponse struct {
-	NetworkResponse NetworkResponse `json:"network"`
-	Tokens          []TokenResponse `json:"tokens"`
-}
-
 // ToNetworkResponse converts database model to API response
-func ToNetworkResponse(n db.Network) NetworkResponse {
+func ToNetworkResponse(n db.Network) responses.NetworkResponse {
 	var blockExplorerURL string
 	if n.BlockExplorerUrl.Valid {
 		blockExplorerURL = n.BlockExplorerUrl.String
@@ -69,7 +31,7 @@ func ToNetworkResponse(n db.Network) NetworkResponse {
 	}
 
 	// Build gas config
-	gasConfig := &GasConfigResponse{
+	gasConfig := &responses.GasConfigResponse{
 		DeploymentGasLimit:    n.DeploymentGasLimit.String,
 		TokenTransferGasLimit: n.TokenTransferGasLimit.String,
 		SupportsEIP1559:       n.SupportsEip1559.Bool,
@@ -106,7 +68,7 @@ func ToNetworkResponse(n db.Network) NetworkResponse {
 		}
 	}
 
-	return NetworkResponse{
+	return responses.NetworkResponse{
 		ID:                n.ID.String(),
 		Object:            "network",
 		Name:              n.Name,
@@ -127,14 +89,74 @@ func ToNetworkResponse(n db.Network) NetworkResponse {
 }
 
 // ToNetworkWithTokensResponse converts network and tokens to response
-func ToNetworkWithTokensResponse(network db.Network, tokens []db.Token) NetworkWithTokensResponse {
-	tokenResponses := make([]TokenResponse, len(tokens))
+func ToNetworkWithTokensResponse(network db.Network, tokens []db.Token) responses.NetworkWithTokensResponse {
+	tokenResponses := make([]responses.TokenResponse, len(tokens))
 	for i, token := range tokens {
 		tokenResponses[i] = ToTokenResponse(token)
 	}
 
-	return NetworkWithTokensResponse{
-		NetworkResponse: ToNetworkResponse(network),
-		Tokens:          tokenResponses,
+	return responses.NetworkWithTokensResponse{
+		Network: ToNetworkResponse(network),
+		Tokens:  tokenResponses,
+	}
+}
+
+// Circle blockchain identifiers constants
+const (
+	CircleEthSepolia      = "ETH-SEPOLIA"
+	CircleEth             = "ETH"
+	CircleArb             = "ARB"
+	CircleArbSepolia      = "ARB-SEPOLIA"
+	CircleMatic           = "MATIC"
+	CircleMaticAmoy       = "MATIC-AMOY"
+	CircleBase            = "BASE"
+	CircleBaseSepolia     = "BASE-SEPOLIA"
+	CircleUnichain        = "UNICHAIN"
+	CircleUnichainSepolia = "UNICHAIN-SEPOLIA"
+	CircleOp              = "OP"
+	CircleOPSepolia       = "OP-SEPOLIA"
+)
+
+// GetNetworkType converts a Circle blockchain identifier to the corresponding NetworkType enum.
+// It returns NetworkTypeEvm for Ethereum-based chains and NetworkTypeSolana for Solana chains.
+func GetNetworkType(blockchain string) db.NetworkType {
+	switch blockchain {
+	case CircleEth, CircleEthSepolia, CircleArb, CircleArbSepolia, CircleMatic, CircleMaticAmoy, CircleBase, CircleBaseSepolia, CircleUnichain, CircleUnichainSepolia:
+		return db.NetworkTypeEvm
+	default:
+		return db.NetworkTypeEvm // Default to EVM
+	}
+}
+
+// GetCircleNetworkType converts a Circle blockchain identifier to the corresponding CircleNetworkType enum.
+// It returns an error if the blockchain is not supported.
+func GetCircleNetworkType(blockchain string) (db.CircleNetworkType, error) {
+	switch blockchain {
+	case CircleEth:
+		return db.CircleNetworkTypeETH, nil
+	case CircleEthSepolia:
+		return db.CircleNetworkTypeETHSEPOLIA, nil
+	case CircleArb:
+		return db.CircleNetworkTypeARB, nil
+	case CircleArbSepolia:
+		return db.CircleNetworkTypeARBSEPOLIA, nil
+	case CircleMatic:
+		return db.CircleNetworkTypeMATIC, nil
+	case CircleMaticAmoy:
+		return db.CircleNetworkTypeMATICAMOY, nil
+	case CircleBase:
+		return db.CircleNetworkTypeBASE, nil
+	case CircleBaseSepolia:
+		return db.CircleNetworkTypeBASESEPOLIA, nil
+	case CircleUnichain:
+		return db.CircleNetworkTypeUNI, nil
+	case CircleUnichainSepolia:
+		return db.CircleNetworkTypeUNI, nil
+	case CircleOp:
+		return db.CircleNetworkTypeOP, nil
+	case CircleOPSepolia:
+		return db.CircleNetworkTypeOPSEPOLIA, nil
+	default:
+		return "", fmt.Errorf("unsupported blockchain: %s", blockchain)
 	}
 }

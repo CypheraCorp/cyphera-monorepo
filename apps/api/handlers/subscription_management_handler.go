@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -32,34 +33,32 @@ func NewSubscriptionManagementHandler(
 	}
 }
 
-// UpgradeSubscriptionRequest represents the request to upgrade a subscription
-type UpgradeSubscriptionRequest struct {
-	LineItems []services.LineItemUpdate `json:"line_items" binding:"required,min=1"`
-	Reason    string                    `json:"reason" binding:"max=500"`
+// Use types from the centralized packages
+type UpgradeSubscriptionRequest = requests.UpgradeSubscriptionRequest
+type DowngradeSubscriptionRequest = requests.DowngradeSubscriptionRequest
+type CancelSubscriptionRequest = requests.CancelSubscriptionRequest
+type PauseSubscriptionRequest = requests.PauseSubscriptionRequest
+type PreviewChangeRequest = requests.PreviewChangeRequest
+
+// Helper functions to convert between request and service types
+func toServicesLineItemUpdate(reqItem requests.LineItemUpdate) requests.LineItemUpdate {
+	return requests.LineItemUpdate{
+		Action:         reqItem.Action,
+		LineItemID:     reqItem.LineItemID,
+		ProductID:      reqItem.ProductID,
+		PriceID:        reqItem.PriceID,
+		ProductTokenID: reqItem.ProductTokenID,
+		Quantity:       reqItem.Quantity,
+		UnitAmount:     reqItem.UnitAmount,
+	}
 }
 
-// DowngradeSubscriptionRequest represents the request to downgrade a subscription
-type DowngradeSubscriptionRequest struct {
-	LineItems []services.LineItemUpdate `json:"line_items" binding:"required,min=1"`
-	Reason    string                    `json:"reason" binding:"max=500"`
-}
-
-// CancelSubscriptionRequest represents the request to cancel a subscription
-type CancelSubscriptionRequest struct {
-	Reason   string `json:"reason" binding:"required,max=500"`
-	Feedback string `json:"feedback" binding:"max=1000"`
-}
-
-// PauseSubscriptionRequest represents the request to pause a subscription
-type PauseSubscriptionRequest struct {
-	PauseUntil string `json:"pause_until,omitempty"` // RFC3339 timestamp
-	Reason     string `json:"reason" binding:"required,max=500"`
-}
-
-// PreviewChangeRequest represents the request to preview a subscription change
-type PreviewChangeRequest struct {
-	ChangeType string                    `json:"change_type" binding:"required,oneof=upgrade downgrade cancel"`
-	LineItems  []services.LineItemUpdate `json:"line_items,omitempty"`
+func toServicesLineItemUpdateList(reqItems []requests.LineItemUpdate) []requests.LineItemUpdate {
+	result := make([]requests.LineItemUpdate, len(reqItems))
+	for i, reqItem := range reqItems {
+		result[i] = toServicesLineItemUpdate(reqItem)
+	}
+	return result
 }
 
 // @Summary Upgrade a subscription
@@ -99,7 +98,7 @@ func (h *SubscriptionManagementHandler) UpgradeSubscription(c *gin.Context) {
 	//     return
 	// }
 
-	err = h.service.UpgradeSubscription(ctx, subscriptionID, req.LineItems, req.Reason)
+	err = h.service.UpgradeSubscription(ctx, subscriptionID, toServicesLineItemUpdateList(req.LineItems), req.Reason)
 	if err != nil {
 		h.logger.Error("Failed to upgrade subscription",
 			zap.String("subscription_id", subscriptionID.String()),
@@ -145,7 +144,7 @@ func (h *SubscriptionManagementHandler) DowngradeSubscription(c *gin.Context) {
 		return
 	}
 
-	err = h.service.DowngradeSubscription(ctx, subscriptionID, req.LineItems, req.Reason)
+	err = h.service.DowngradeSubscription(ctx, subscriptionID, toServicesLineItemUpdateList(req.LineItems), req.Reason)
 	if err != nil {
 		h.logger.Error("Failed to downgrade subscription",
 			zap.String("subscription_id", subscriptionID.String()),
@@ -372,7 +371,7 @@ func (h *SubscriptionManagementHandler) PreviewChange(c *gin.Context) {
 		return
 	}
 
-	preview, err := h.service.PreviewChange(ctx, subscriptionID, req.ChangeType, req.LineItems)
+	preview, err := h.service.PreviewChange(ctx, subscriptionID, req.ChangeType, toServicesLineItemUpdateList(req.LineItems))
 	if err != nil {
 		h.logger.Error("Failed to preview change",
 			zap.String("subscription_id", subscriptionID.String()),

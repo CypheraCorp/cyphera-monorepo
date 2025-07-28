@@ -2,43 +2,13 @@ package helpers
 
 import (
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 )
 
-// ProductTokenResponse represents the standardized API response for product token operations
-type ProductTokenResponse struct {
-	ID              string `json:"id"`
-	ProductID       string `json:"product_id"`
-	NetworkID       string `json:"network_id"`
-	TokenID         string `json:"token_id"`
-	TokenName       string `json:"token_name,omitempty"`
-	TokenSymbol     string `json:"token_symbol,omitempty"`
-	TokenDecimals   int32  `json:"token_decimals,omitempty"`
-	ContractAddress string `json:"contract_address,omitempty"`
-	GasToken        bool   `json:"gas_token,omitempty"`
-	ChainID         int32  `json:"chain_id,omitempty"`
-	NetworkName     string `json:"network_name,omitempty"`
-	NetworkType     string `json:"network_type,omitempty"`
-	Active          bool   `json:"active"`
-	CreatedAt       int64  `json:"created_at"`
-	UpdatedAt       int64  `json:"updated_at"`
-}
-
-// CreateProductTokenRequest represents the request body for creating a product token
-type CreateProductTokenRequest struct {
-	ProductID string `json:"product_id" binding:"required"`
-	NetworkID string `json:"network_id" binding:"required"`
-	TokenID   string `json:"token_id" binding:"required"`
-	Active    bool   `json:"active"`
-}
-
-// UpdateProductTokenRequest represents the request body for updating a product token
-type UpdateProductTokenRequest struct {
-	Active bool `json:"active" binding:"required"`
-}
 
 // Helper functions to convert database models to API responses
-func toBasicProductTokenResponse(pt db.ProductsToken) ProductTokenResponse {
-	return ProductTokenResponse{
+func toBasicProductTokenResponse(pt db.ProductsToken) responses.ProductTokenResponse {
+	return responses.ProductTokenResponse{
 		ID:        pt.ID.String(),
 		ProductID: pt.ProductID.String(),
 		NetworkID: pt.NetworkID.String(),
@@ -49,8 +19,8 @@ func toBasicProductTokenResponse(pt db.ProductsToken) ProductTokenResponse {
 	}
 }
 
-func toProductTokenResponse(pt db.GetProductTokenRow) ProductTokenResponse {
-	return ProductTokenResponse{
+func toProductTokenResponse(pt db.GetProductTokenRow) responses.ProductTokenResponse {
+	return responses.ProductTokenResponse{
 		ID:              pt.ID.String(),
 		ProductID:       pt.ProductID.String(),
 		NetworkID:       pt.NetworkID.String(),
@@ -68,8 +38,8 @@ func toProductTokenResponse(pt db.GetProductTokenRow) ProductTokenResponse {
 	}
 }
 
-func toProductTokenByIdsResponse(pt db.GetProductTokenByIdsRow) ProductTokenResponse {
-	return ProductTokenResponse{
+func toProductTokenByIdsResponse(pt db.GetProductTokenByIdsRow) responses.ProductTokenResponse {
+	return responses.ProductTokenResponse{
 		ID:              pt.ID.String(),
 		ProductID:       pt.ProductID.String(),
 		NetworkID:       pt.NetworkID.String(),
@@ -84,8 +54,8 @@ func toProductTokenByIdsResponse(pt db.GetProductTokenByIdsRow) ProductTokenResp
 	}
 }
 
-func toProductTokenByNetworkResponse(pt db.GetProductTokensByNetworkRow) ProductTokenResponse {
-	return ProductTokenResponse{
+func toProductTokenByNetworkResponse(pt db.GetProductTokensByNetworkRow) responses.ProductTokenResponse {
+	return responses.ProductTokenResponse{
 		ID:              pt.ID.String(),
 		ProductID:       pt.ProductID.String(),
 		NetworkID:       pt.NetworkID.String(),
@@ -100,8 +70,8 @@ func toProductTokenByNetworkResponse(pt db.GetProductTokensByNetworkRow) Product
 	}
 }
 
-func toActiveProductTokenByNetworkResponse(pt db.GetActiveProductTokensByNetworkRow) ProductTokenResponse {
-	return ProductTokenResponse{
+func toActiveProductTokenByNetworkResponse(pt db.GetActiveProductTokensByNetworkRow) responses.ProductTokenResponse {
+	return responses.ProductTokenResponse{
 		ID:              pt.ID.String(),
 		ProductID:       pt.ProductID.String(),
 		NetworkID:       pt.NetworkID.String(),
@@ -116,8 +86,8 @@ func toActiveProductTokenByNetworkResponse(pt db.GetActiveProductTokensByNetwork
 	}
 }
 
-func ToActiveProductTokenByProductResponse(pt db.GetActiveProductTokensByProductRow) ProductTokenResponse {
-	return ProductTokenResponse{
+func ToActiveProductTokenByProductResponse(pt db.GetActiveProductTokensByProductRow) responses.ProductTokenResponse {
+	return responses.ProductTokenResponse{
 		ID:              pt.ID.String(),
 		ProductID:       pt.ProductID.String(),
 		NetworkID:       pt.NetworkID.String(),
@@ -136,8 +106,8 @@ func ToActiveProductTokenByProductResponse(pt db.GetActiveProductTokensByProduct
 	}
 }
 
-func toProductTokensByProductResponse(pt db.GetProductTokensByProductRow) ProductTokenResponse {
-	return ProductTokenResponse{
+func toProductTokensByProductResponse(pt db.GetProductTokensByProductRow) responses.ProductTokenResponse {
+	return responses.ProductTokenResponse{
 		ID:              pt.ID.String(),
 		ProductID:       pt.ProductID.String(),
 		NetworkID:       pt.NetworkID.String(),

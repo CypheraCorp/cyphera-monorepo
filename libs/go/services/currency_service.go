@@ -11,6 +11,9 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
@@ -18,16 +21,16 @@ import (
 
 // CurrencyService handles currency-related operations
 type CurrencyService struct {
-	queries       db.Querier
-	logger        *zap.Logger
+	queries        db.Querier
+	logger         *zap.Logger
 	currencyHelper *helpers.CurrencyHelper
 }
 
 // NewCurrencyService creates a new currency service
 func NewCurrencyService(queries db.Querier) *CurrencyService {
 	return &CurrencyService{
-		queries:       queries,
-		logger:        logger.Log,
+		queries:        queries,
+		logger:         logger.Log,
 		currencyHelper: helpers.NewCurrencyHelper(queries),
 	}
 }
@@ -271,13 +274,13 @@ func (s *CurrencyService) GetSmallestUnit(ctx context.Context, currencyCode stri
 }
 
 // ListActiveCurrencies retrieves all active fiat currencies
-func (s *CurrencyService) ListActiveCurrencies(ctx context.Context) ([]helpers.CurrencyResponse, error) {
+func (s *CurrencyService) ListActiveCurrencies(ctx context.Context) ([]responses.CurrencyResponse, error) {
 	currencies, err := s.queries.ListActiveFiatCurrencies(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list active currencies: %w", err)
 	}
 
-	response := make([]helpers.CurrencyResponse, len(currencies))
+	response := make([]responses.CurrencyResponse, len(currencies))
 	for i, currency := range currencies {
 		response[i] = s.currencyHelper.CurrencyToResponse(&currency)
 	}
@@ -286,7 +289,7 @@ func (s *CurrencyService) ListActiveCurrencies(ctx context.Context) ([]helpers.C
 }
 
 // GetCurrency retrieves a specific currency by code
-func (s *CurrencyService) GetCurrency(ctx context.Context, code string) (*helpers.CurrencyResponse, error) {
+func (s *CurrencyService) GetCurrency(ctx context.Context, code string) (*responses.CurrencyResponse, error) {
 	currency, err := s.queries.GetFiatCurrency(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get currency: %w", err)
@@ -297,7 +300,7 @@ func (s *CurrencyService) GetCurrency(ctx context.Context, code string) (*helper
 }
 
 // GetWorkspaceCurrencySettings retrieves currency settings for a workspace
-func (s *CurrencyService) GetWorkspaceCurrencySettings(ctx context.Context, workspaceID uuid.UUID) (*WorkspaceCurrencySettings, error) {
+func (s *CurrencyService) GetWorkspaceCurrencySettings(ctx context.Context, workspaceID uuid.UUID) (*business.WorkspaceCurrencySettings, error) {
 	workspace, err := s.queries.GetWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
@@ -308,14 +311,14 @@ func (s *CurrencyService) GetWorkspaceCurrencySettings(ctx context.Context, work
 		return nil, fmt.Errorf("failed to parse supported currencies: %w", err)
 	}
 
-	return &WorkspaceCurrencySettings{
+	return &business.WorkspaceCurrencySettings{
 		DefaultCurrency:     workspace.DefaultCurrency.String,
 		SupportedCurrencies: supportedCurrencies,
 	}, nil
 }
 
 // UpdateWorkspaceCurrencySettings updates currency settings for a workspace
-func (s *CurrencyService) UpdateWorkspaceCurrencySettings(ctx context.Context, workspaceID uuid.UUID, req *UpdateWorkspaceCurrencyRequest) (*WorkspaceCurrencySettings, error) {
+func (s *CurrencyService) UpdateWorkspaceCurrencySettings(ctx context.Context, workspaceID uuid.UUID, req *requests.UpdateWorkspaceCurrencyRequest) (*business.WorkspaceCurrencySettings, error) {
 	// Update default currency if provided
 	if req.DefaultCurrency != nil {
 		// Validate currency exists and is active
@@ -359,13 +362,13 @@ func (s *CurrencyService) UpdateWorkspaceCurrencySettings(ctx context.Context, w
 }
 
 // ListWorkspaceSupportedCurrencies retrieves currencies supported by a workspace
-func (s *CurrencyService) ListWorkspaceSupportedCurrencies(ctx context.Context, workspaceID uuid.UUID) ([]helpers.CurrencyResponse, error) {
+func (s *CurrencyService) ListWorkspaceSupportedCurrencies(ctx context.Context, workspaceID uuid.UUID) ([]responses.CurrencyResponse, error) {
 	currencies, err := s.queries.ListWorkspaceSupportedCurrencies(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list workspace currencies: %w", err)
 	}
 
-	response := make([]helpers.CurrencyResponse, len(currencies))
+	response := make([]responses.CurrencyResponse, len(currencies))
 	for i, currency := range currencies {
 		response[i] = s.currencyHelper.CurrencyToResponse(&currency)
 	}
@@ -373,17 +376,7 @@ func (s *CurrencyService) ListWorkspaceSupportedCurrencies(ctx context.Context, 
 	return response, nil
 }
 
-// WorkspaceCurrencySettings represents workspace currency settings
-type WorkspaceCurrencySettings struct {
-	DefaultCurrency     string   `json:"default_currency"`
-	SupportedCurrencies []string `json:"supported_currencies"`
-}
 
-// UpdateWorkspaceCurrencyRequest represents a request to update workspace currency settings
-type UpdateWorkspaceCurrencyRequest struct {
-	DefaultCurrency     *string  `json:"default_currency,omitempty"`
-	SupportedCurrencies []string `json:"supported_currencies,omitempty"`
-}
 
 // ValidateAmount validates if an amount is valid for a currency
 func (s *CurrencyService) ValidateAmount(ctx context.Context, amountCents int64, currencyCode string) error {

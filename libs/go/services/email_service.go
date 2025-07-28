@@ -13,18 +13,22 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 )
 
 type EmailService struct {
-	client *resend.Client
-	logger *zap.Logger
+	client    *resend.Client
+	logger    *zap.Logger
 	fromEmail string
 	fromName  string
 }
 
 func NewEmailService(apiKey string, fromEmail string, fromName string, logger *zap.Logger) *EmailService {
 	client := resend.NewClient(apiKey)
-	
+
 	return &EmailService{
 		client:    client,
 		logger:    logger,
@@ -33,25 +37,17 @@ func NewEmailService(apiKey string, fromEmail string, fromName string, logger *z
 	}
 }
 
-// EmailData contains the data for email templates
-type EmailData struct {
-	CustomerName       string
-	CustomerEmail      string
-	Amount             string
-	Currency           string
-	ProductName        string
-	RetryDate          string
-	AttemptsRemaining  int
-	PaymentLink        string
-	SupportEmail       string
-	MerchantName       string
-	UnsubscribeLink    string
-}
-
 // SendDunningEmail sends a dunning email using a template
-func (s *EmailService) SendDunningEmail(ctx context.Context, template *db.DunningEmailTemplate, data EmailData, toEmail string) error {
+func (s *EmailService) SendDunningEmail(ctx context.Context, template *db.DunningEmailTemplate, data map[string]business.EmailData, toEmail string) error {
+	// Extract the first email data from the map
+	var emailData business.EmailData
+	for _, d := range data {
+		emailData = d
+		break
+	}
+
 	// Parse and execute HTML template
-	htmlContent, err := s.parseTemplate(template.BodyHtml, data)
+	htmlContent, err := s.parseTemplate(template.BodyHtml, emailData)
 	if err != nil {
 		return fmt.Errorf("failed to parse HTML template: %w", err)
 	}
@@ -59,7 +55,7 @@ func (s *EmailService) SendDunningEmail(ctx context.Context, template *db.Dunnin
 	// Parse and execute text template if available
 	var textContent string
 	if template.BodyText.Valid && template.BodyText.String != "" {
-		textContent, err = s.parseTemplate(template.BodyText.String, data)
+		textContent, err = s.parseTemplate(template.BodyText.String, emailData)
 		if err != nil {
 			return fmt.Errorf("failed to parse text template: %w", err)
 		}
@@ -70,23 +66,23 @@ func (s *EmailService) SendDunningEmail(ctx context.Context, template *db.Dunnin
 	params := &resend.SendEmailRequest{
 		From:    from,
 		To:      []string{toEmail},
-		Subject: s.parseSubject(template.Subject, data),
+		Subject: s.parseSubject(template.Subject, emailData),
 		Html:    htmlContent,
 		Text:    textContent,
 		Headers: map[string]string{
 			"X-Entity-Ref-ID": uuid.New().String(),
 			"X-Campaign-Type": "dunning",
 		},
-		Tags: []resend.Tag{
-			{Name: "category", Value: "dunning"},
-			{Name: "template_type", Value: template.TemplateType},
+		Tags: map[string]interface{}{
+			"category":      "dunning",
+			"template_type": template.TemplateType,
 		},
 	}
 
 	// Send email
 	sent, err := s.client.Emails.Send(params)
 	if err != nil {
-		s.logger.Error("failed to send dunning email", 
+		s.logger.Error("failed to send dunning email",
 			zap.Error(err),
 			zap.String("to", toEmail),
 			zap.String("template_type", template.TemplateType))
@@ -102,71 +98,80 @@ func (s *EmailService) SendDunningEmail(ctx context.Context, template *db.Dunnin
 }
 
 // SendTransactionalEmail sends a general transactional email
-func (s *EmailService) SendTransactionalEmail(ctx context.Context, params TransactionalEmailParams) error {
+func (s *EmailService) SendTransactionalEmail(ctx context.Context, emailParams params.TransactionalEmailParams) error {
 	from := fmt.Sprintf("%s <%s>", s.fromName, s.fromEmail)
-	
-	emailParams := &resend.SendEmailRequest{
+
+	resendParams := &resend.SendEmailRequest{
 		From:    from,
-		To:      params.To,
-		Subject: params.Subject,
-		Html:    params.HTMLBody,
-		Text:    params.TextBody,
-		Cc:      params.Cc,
-		Bcc:     params.Bcc,
-		ReplyTo: params.ReplyTo,
-		Headers: params.Headers,
-		Tags:    convertToResendTags(params.Tags),
+		To:      emailParams.To,
+		Subject: emailParams.Subject,
+		Html:    emailParams.HTMLContent,
+		Text:    emailParams.TextContent,
+		Cc:      emailParams.CC,
+		Bcc:     emailParams.BCC,
+		Headers: emailParams.Headers,
 	}
 
-	sent, err := s.client.Emails.Send(emailParams)
+	if emailParams.ReplyTo != nil {
+		resendParams.ReplyTo = *emailParams.ReplyTo
+	}
+
+	// Convert tags if provided
+	if len(emailParams.Tags) > 0 {
+		resendParams.Tags = make(map[string]interface{})
+		for key, value := range emailParams.Tags {
+			resendParams.Tags[key] = value
+		}
+	}
+
+	sent, err := s.client.Emails.Send(resendParams)
 	if err != nil {
-		s.logger.Error("failed to send transactional email", 
+		s.logger.Error("failed to send transactional email",
 			zap.Error(err),
-			zap.Strings("to", params.To),
-			zap.String("subject", params.Subject))
+			zap.Strings("to", emailParams.To),
+			zap.String("subject", emailParams.Subject))
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
 	s.logger.Info("transactional email sent successfully",
 		zap.String("email_id", sent.Id),
-		zap.Strings("to", params.To),
-		zap.String("subject", params.Subject))
+		zap.Strings("to", emailParams.To),
+		zap.String("subject", emailParams.Subject))
 
 	return nil
 }
 
 // SendBatchEmails sends multiple emails in a batch
-func (s *EmailService) SendBatchEmails(ctx context.Context, requests []BatchEmailRequest) ([]BatchEmailResult, error) {
-	results := make([]BatchEmailResult, len(requests))
-	
+func (s *EmailService) SendBatchEmails(ctx context.Context, requests []requests.BatchEmailRequest) ([]responses.BatchEmailResult, error) {
+	results := make([]responses.BatchEmailResult, len(requests))
+
 	// Process each email
 	for i, req := range requests {
-		params := TransactionalEmailParams{
-			To:       req.To,
-			Subject:  req.Subject,
-			HTMLBody: req.HTMLBody,
-			TextBody: req.TextBody,
-			Tags:     req.Tags,
+		emailParams := params.TransactionalEmailParams{
+			To:          []string{req.ToEmail},
+			Subject:     req.Subject,
+			HTMLContent: req.HTMLContent,
+			TextContent: req.TextContent,
 		}
-		
-		err := s.SendTransactionalEmail(ctx, params)
-		results[i] = BatchEmailResult{
+
+		err := s.SendTransactionalEmail(ctx, emailParams)
+		results[i] = responses.BatchEmailResult{
 			Index:   i,
 			Success: err == nil,
-			Error:   err,
+			Error:   fmt.Sprintf("%v", err),
 		}
-		
+
 		// Add small delay to avoid rate limiting
 		if i < len(requests)-1 {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
-	
+
 	return results, nil
 }
 
 // parseTemplate parses and executes a template with the given data
-func (s *EmailService) parseTemplate(templateStr string, data EmailData) (string, error) {
+func (s *EmailService) parseTemplate(templateStr string, data business.EmailData) (string, error) {
 	tmpl, err := template.New("email").Parse(templateStr)
 	if err != nil {
 		return "", err
@@ -181,7 +186,7 @@ func (s *EmailService) parseTemplate(templateStr string, data EmailData) (string
 }
 
 // parseSubject replaces simple placeholders in the subject line
-func (s *EmailService) parseSubject(subject string, data EmailData) string {
+func (s *EmailService) parseSubject(subject string, data business.EmailData) string {
 	replacer := strings.NewReplacer(
 		"{{customer_name}}", data.CustomerName,
 		"{{amount}}", data.Amount,
@@ -194,41 +199,11 @@ func (s *EmailService) parseSubject(subject string, data EmailData) string {
 
 // Helper types
 
-type TransactionalEmailParams struct {
-	To       []string
+// DunningEmailTemplate represents a simple email template
+type DunningEmailTemplate struct {
 	Subject  string
-	HTMLBody string
-	TextBody string
-	Cc       []string
-	Bcc      []string
-	ReplyTo  string
-	Headers  map[string]string
-	Tags     map[string]string
-}
-
-type BatchEmailRequest struct {
-	To       []string
-	Subject  string
-	HTMLBody string
-	TextBody string
-	Tags     map[string]string
-}
-
-type BatchEmailResult struct {
-	Index   int
-	Success bool
-	Error   error
-}
-
-func convertToResendTags(tags map[string]string) []resend.Tag {
-	var resendTags []resend.Tag
-	for name, value := range tags {
-		resendTags = append(resendTags, resend.Tag{
-			Name:  name,
-			Value: value,
-		})
-	}
-	return resendTags
+	BodyHTML string
+	BodyText string
 }
 
 // Email templates for common scenarios
@@ -401,10 +376,4 @@ Unsubscribe from these notifications: {{.UnsubscribeLink}}`,
 </html>`,
 		},
 	}
-}
-
-type DunningEmailTemplate struct {
-	Subject  string
-	BodyHTML string
-	BodyText string
 }

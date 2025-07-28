@@ -8,7 +8,9 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -16,12 +18,22 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Domain-specific handlers
+// AccountHandler handles account-related operations
 type AccountHandler struct {
 	common         *CommonServices
 	accountService interfaces.AccountService
 	walletService  interfaces.WalletService
 }
+
+// Use types from the centralized packages
+type CreateAccountRequest = requests.CreateAccountRequest
+type EmbeddedWalletRequest = requests.EmbeddedWalletRequest
+type UpdateAccountRequest = requests.UpdateAccountRequest
+type OnboardAccountRequest = requests.OnboardAccountRequest
+
+type AccountResponse = responses.AccountResponse
+type AccountDetailsResponse = responses.AccountDetailsResponse
+type AccountAccessResponse = responses.AccountAccessResponse
 
 // NewAccountHandler creates a handler with interface dependencies
 func NewAccountHandler(
@@ -34,74 +46,6 @@ func NewAccountHandler(
 		accountService: accountService,
 		walletService:  walletService,
 	}
-}
-
-// CreateAccountRequest represents the request body for creating an account
-type CreateAccountRequest struct {
-	Name               string                 `json:"name" binding:"required"`
-	AccountType        string                 `json:"account_type" binding:"required,oneof=admin merchant"`
-	Description        string                 `json:"description,omitempty"`
-	BusinessName       string                 `json:"business_name,omitempty"`
-	BusinessType       string                 `json:"business_type,omitempty"`
-	WebsiteURL         string                 `json:"website_url,omitempty"`
-	SupportEmail       string                 `json:"support_email,omitempty"`
-	SupportPhone       string                 `json:"support_phone,omitempty"`
-	FinishedOnboarding bool                   `json:"finished_onboarding,omitempty"`
-	Metadata           map[string]interface{} `json:"metadata,omitempty"`
-	// Web3Auth embedded wallet data to be created during registration
-	WalletData *EmbeddedWalletRequest `json:"wallet_data,omitempty"`
-}
-
-// EmbeddedWalletRequest represents the request body for creating an embedded wallet during account creation
-// This is different from CreateWalletRequest as it doesn't require network_id (we create for all active networks)
-type EmbeddedWalletRequest struct {
-	WalletType    string                 `json:"wallet_type" binding:"required"` // 'web3auth', 'wallet', or 'circle_wallet'
-	WalletAddress string                 `json:"wallet_address" binding:"required"`
-	NetworkType   string                 `json:"network_type" binding:"required"`
-	Nickname      string                 `json:"nickname,omitempty"`
-	ENS           string                 `json:"ens,omitempty"`
-	IsPrimary     bool                   `json:"is_primary"`
-	Verified      bool                   `json:"verified"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
-	// Circle wallet specific fields
-	CircleUserID   string `json:"circle_user_id,omitempty"`   // Only for circle wallets
-	CircleWalletID string `json:"circle_wallet_id,omitempty"` // Only for circle wallets
-	ChainID        int32  `json:"chain_id,omitempty"`         // Only for circle wallets
-	State          string `json:"state,omitempty"`            // Only for circle wallets
-}
-
-// UpdateAccountRequest represents the request body for updating an account
-type UpdateAccountRequest struct {
-	Name               string                 `json:"name,omitempty"`
-	Description        string                 `json:"description,omitempty"`
-	BusinessName       string                 `json:"business_name,omitempty"`
-	BusinessType       string                 `json:"business_type,omitempty"`
-	WebsiteURL         string                 `json:"website_url,omitempty"`
-	SupportEmail       string                 `json:"support_email,omitempty"`
-	SupportPhone       string                 `json:"support_phone,omitempty"`
-	AccountType        string                 `json:"account_type,omitempty" binding:"omitempty,oneof=admin merchant"`
-	FinishedOnboarding bool                   `json:"finished_onboarding,omitempty"`
-	Metadata           map[string]interface{} `json:"metadata,omitempty"`
-}
-
-// AccountAccessResponse represents the response from checking account access
-type AccountAccessResponse struct {
-	User      db.User
-	Account   db.Account
-	Workspace []db.Workspace
-}
-
-// OnboardAccountRequest represents the request body for onboarding an account
-type OnboardAccountRequest struct {
-	AddressLine1  string `json:"address_line1"` // Frontend sends address_line1 (no underscore)
-	AddressLine2  string `json:"address_line2"` // Frontend sends address_line2 (no underscore)
-	City          string `json:"city"`
-	State         string `json:"state"`
-	PostalCode    string `json:"postal_code"`
-	Country       string `json:"country"`
-	FirstName     string `json:"first_name"`
-	LastName      string `json:"last_name"`
-	WalletAddress string `json:"wallet_address"`
 }
 
 func (h *AccountHandler) ListAccounts(c *gin.Context) {
@@ -284,7 +228,7 @@ func (h *AccountHandler) CreateAccount(c *gin.Context) {
 	}
 
 	// Create account using service
-	account, err := h.accountService.CreateAccount(c.Request.Context(), services.CreateAccountParams{
+	account, err := h.accountService.CreateAccount(c.Request.Context(), params.CreateAccountParams{
 		Name:               req.Name,
 		AccountType:        req.AccountType,
 		BusinessName:       req.BusinessName,
@@ -473,7 +417,7 @@ func (h *AccountHandler) SignInRegisterAccount(c *gin.Context) {
 	}
 
 	// Handle sign-in or registration
-	result, err := h.accountService.SignInOrRegisterAccount(c.Request.Context(), services.CreateAccountParams{
+	result, err := h.accountService.SignInOrRegisterAccount(c.Request.Context(), params.CreateAccountParams{
 		Name:               req.Name,
 		AccountType:        req.AccountType,
 		BusinessName:       req.BusinessName,
@@ -544,7 +488,7 @@ func (h *AccountHandler) OnboardAccount(c *gin.Context) {
 	}
 
 	// Onboard account using service
-	err = h.accountService.OnboardAccount(c.Request.Context(), services.OnboardAccountParams{
+	err = h.accountService.OnboardAccount(c.Request.Context(), params.OnboardAccountParams{
 		AccountID:    workspace.AccountID,
 		UserID:       parsedUserID,
 		FirstName:    req.FirstName,

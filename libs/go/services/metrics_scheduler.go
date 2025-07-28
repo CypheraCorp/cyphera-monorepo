@@ -22,6 +22,9 @@ type MetricsScheduler struct {
 	currencyService *CurrencyService
 	stopCh          chan struct{}
 	wg              sync.WaitGroup
+	stopOnce        sync.Once
+	stopped         bool
+	mu              sync.RWMutex
 }
 
 // NewMetricsScheduler creates a new metrics scheduler
@@ -54,9 +57,19 @@ func (s *MetricsScheduler) Start() {
 
 // Stop gracefully shuts down the scheduler
 func (s *MetricsScheduler) Stop() {
-	s.logger.Info("Stopping metrics scheduler")
-	close(s.stopCh)
-	s.wg.Wait()
+	s.stopOnce.Do(func() {
+		s.mu.Lock()
+		if s.stopped {
+			s.mu.Unlock()
+			return
+		}
+		s.stopped = true
+		s.mu.Unlock()
+
+		s.logger.Info("Stopping metrics scheduler")
+		close(s.stopCh)
+		s.wg.Wait()
+	})
 }
 
 // runHourlySchedule runs metric calculations every hour

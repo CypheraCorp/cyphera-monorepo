@@ -8,6 +8,9 @@ import (
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
@@ -15,12 +18,12 @@ import (
 
 // PaymentService handles business logic for payment operations
 type PaymentService struct {
-	queries             db.Querier
-	logger              *zap.Logger
-	gasFeeService       *GasFeeService
-	taxService          *TaxService
-	discountService     *DiscountService
-	exchangeRateService *ExchangeRateService
+	queries               db.Querier
+	logger                *zap.Logger
+	gasFeeService         *GasFeeService
+	taxService            *TaxService
+	discountService       *DiscountService
+	exchangeRateService   *ExchangeRateService
 	gasSponsorshipService *GasSponsorshipService
 }
 
@@ -43,24 +46,8 @@ func NewPaymentService(queries db.Querier, cmcAPIKey string) *PaymentService {
 	}
 }
 
-// CreatePaymentFromSubscriptionEventParams contains parameters for creating a payment from a subscription event
-type CreatePaymentFromSubscriptionEventParams struct {
-	SubscriptionEvent   *db.SubscriptionEvent
-	Subscription        *db.Subscription
-	Product             *db.Product
-	Price               *db.Price
-	Customer            *db.Customer
-	TransactionHash     string
-	NetworkID           uuid.UUID
-	TokenID             uuid.UUID
-	CryptoAmount        string // Decimal as string
-	ExchangeRate        string // Decimal as string
-	GasFeeUSDCents      int64
-	GasSponsored        bool
-}
-
 // CreatePaymentFromSubscriptionEvent creates a payment record when a subscription redemption occurs
-func (s *PaymentService) CreatePaymentFromSubscriptionEvent(ctx context.Context, params CreatePaymentFromSubscriptionEventParams) (*db.Payment, error) {
+func (s *PaymentService) CreatePaymentFromSubscriptionEvent(ctx context.Context, params params.CreatePaymentFromSubscriptionEventParams) (*db.Payment, error) {
 	event := params.SubscriptionEvent
 	subscription := params.Subscription
 	price := params.Price
@@ -85,14 +72,14 @@ func (s *PaymentService) CreatePaymentFromSubscriptionEvent(ctx context.Context,
 
 	// Prepare payment parameters
 	paymentParams := db.CreatePaymentParams{
-		WorkspaceID:    subscription.WorkspaceID,
-		SubscriptionID: pgtype.UUID{Bytes: subscription.ID, Valid: true},
-		SubscriptionEvent: pgtype.UUID{Bytes: event.ID, Valid: true},
-		CustomerID:     customer.ID,
-		AmountInCents:  int64(event.AmountInCents),
-		Currency:       string(price.Currency),
-		Status:         "completed", // Subscription events are already completed
-		PaymentMethod:  "crypto",
+		WorkspaceID:        subscription.WorkspaceID,
+		SubscriptionID:     pgtype.UUID{Bytes: subscription.ID, Valid: true},
+		SubscriptionEvent:  pgtype.UUID{Bytes: event.ID, Valid: true},
+		CustomerID:         customer.ID,
+		AmountInCents:      int64(event.AmountInCents),
+		Currency:           string(price.Currency),
+		Status:             "completed", // Subscription events are already completed
+		PaymentMethod:      "crypto",
 		ProductAmountCents: int64(event.AmountInCents),
 	}
 
@@ -142,7 +129,7 @@ func (s *PaymentService) CreatePaymentFromSubscriptionEvent(ctx context.Context,
 		paymentParams.HasGasFee = pgtype.Bool{Bool: true, Valid: true}
 		paymentParams.GasFeeUsdCents = pgtype.Int8{Int64: params.GasFeeUSDCents, Valid: true}
 		paymentParams.GasSponsored = pgtype.Bool{Bool: params.GasSponsored, Valid: true}
-		
+
 		// If customer pays gas, add to total amount
 		if !params.GasSponsored {
 			paymentParams.GasAmountCents = pgtype.Int8{Int64: params.GasFeeUSDCents, Valid: true}
@@ -179,106 +166,71 @@ func (s *PaymentService) CreatePaymentFromSubscriptionEvent(ctx context.Context,
 	return &payment, nil
 }
 
-// CreateComprehensivePaymentParams contains all parameters for a comprehensive payment
-type CreateComprehensivePaymentParams struct {
-	WorkspaceID         uuid.UUID
-	CustomerID          uuid.UUID
-	InvoiceID           *uuid.UUID
-	SubscriptionID      *uuid.UUID
-	ProductID           *uuid.UUID
-	AmountCents         int64
-	Currency            string
-	PaymentMethod       string
-	TransactionHash     *string
-	NetworkID           *uuid.UUID
-	TokenID             *uuid.UUID
-	GasUsed             *int64
-	GasPriceWei         *string
-	CryptoAmount        *string
-	DiscountCode        *string
-	CustomerAddress     *PaymentAddress
-	BusinessAddress     *PaymentAddress
-	IsB2B               bool
-	CustomerVATNumber   *string
-	ProductType         string
-	TransactionType     string
-}
-
-// PaymentAddress represents an address for payment processing
-type PaymentAddress struct {
-	Street1    string `json:"street1"`
-	Street2    string `json:"street2,omitempty"`
-	City       string `json:"city"`
-	State      string `json:"state"`
-	PostalCode string `json:"postal_code"`
-	Country    string `json:"country"`
-}
-
 // CreateComprehensivePayment creates a payment with full business logic integration
-func (s *PaymentService) CreateComprehensivePayment(ctx context.Context, params CreateComprehensivePaymentParams) (*db.Payment, error) {
+func (s *PaymentService) CreateComprehensivePayment(ctx context.Context, paymentParams params.CreateComprehensivePaymentParams) (*db.Payment, error) {
 	s.logger.Info("Creating comprehensive payment",
-		zap.String("workspace_id", params.WorkspaceID.String()),
-		zap.String("customer_id", params.CustomerID.String()),
-		zap.Int64("amount_cents", params.AmountCents),
-		zap.String("currency", params.Currency))
+		zap.String("workspace_id", paymentParams.WorkspaceID.String()),
+		zap.String("customer_id", paymentParams.CustomerID.String()),
+		zap.Int64("amount_cents", paymentParams.AmountCents),
+		zap.String("currency", paymentParams.Currency))
 
 	// Step 1: Calculate taxes
-	var taxResult *TaxCalculationResult
+	var taxResult *responses.TaxCalculationResult
 	var err error
-	
-	if params.CustomerAddress != nil || params.BusinessAddress != nil {
-		taxParams := TaxCalculationParams{
-			WorkspaceID:       params.WorkspaceID,
-			CustomerID:        params.CustomerID,
-			ProductID:         params.ProductID,
-			SubscriptionID:    params.SubscriptionID,
-			AmountCents:       params.AmountCents,
-			Currency:          params.Currency,
-			CustomerAddress:   convertToTaxAddress(params.CustomerAddress),
-			BusinessAddress:   convertToTaxAddress(params.BusinessAddress),
-			TransactionType:   params.TransactionType,
-			ProductType:       params.ProductType,
-			IsB2B:             params.IsB2B,
-			CustomerVATNumber: params.CustomerVATNumber,
+
+	if paymentParams.CustomerAddress != nil || paymentParams.BusinessAddress != nil {
+		taxParams := params.TaxCalculationParams{
+			WorkspaceID:       paymentParams.WorkspaceID,
+			CustomerID:        paymentParams.CustomerID,
+			ProductID:         paymentParams.ProductID,
+			SubscriptionID:    paymentParams.SubscriptionID,
+			AmountCents:       paymentParams.AmountCents,
+			Currency:          paymentParams.Currency,
+			CustomerAddress:   convertPaymentToTaxAddress(paymentParams.CustomerAddress),
+			BusinessAddress:   convertPaymentToTaxAddress(paymentParams.BusinessAddress),
+			TransactionType:   paymentParams.TransactionType,
+			ProductType:       paymentParams.ProductType,
+			IsB2B:             paymentParams.IsB2B,
+			CustomerVATNumber: paymentParams.CustomerVATNumber,
 		}
-		
+
 		taxResult, err = s.taxService.CalculateTax(ctx, taxParams)
 		if err != nil {
 			s.logger.Warn("Failed to calculate tax, proceeding without", zap.Error(err))
-			taxResult = &TaxCalculationResult{
-				SubtotalCents:    params.AmountCents,
+			taxResult = &responses.TaxCalculationResult{
+				SubtotalCents:    paymentParams.AmountCents,
 				TotalTaxCents:    0,
-				TotalAmountCents: params.AmountCents,
+				TotalAmountCents: paymentParams.AmountCents,
 			}
 		}
 	} else {
 		// No tax calculation needed
-		taxResult = &TaxCalculationResult{
-			SubtotalCents:    params.AmountCents,
+		taxResult = &responses.TaxCalculationResult{
+			SubtotalCents:    paymentParams.AmountCents,
 			TotalTaxCents:    0,
-			TotalAmountCents: params.AmountCents,
+			TotalAmountCents: paymentParams.AmountCents,
 		}
 	}
 
 	// Step 2: Apply discounts if provided
-	var discountResult *DiscountApplicationResult
+	var discountResult *responses.DiscountApplicationResult
 	finalAmount := taxResult.TotalAmountCents
-	
-	if params.DiscountCode != nil && *params.DiscountCode != "" {
+
+	if paymentParams.DiscountCode != nil && *paymentParams.DiscountCode != "" {
 		// Get customer info for discount validation
-		customer, err := s.queries.GetCustomer(ctx, params.CustomerID)
+		customer, err := s.queries.GetCustomer(ctx, paymentParams.CustomerID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get customer for discount validation: %w", err)
 		}
 
-		discountParams := DiscountApplicationParams{
-			WorkspaceID:    params.WorkspaceID,
-			CustomerID:     params.CustomerID,
-			ProductID:      params.ProductID,
-			SubscriptionID: params.SubscriptionID,
-			DiscountCode:   *params.DiscountCode,
+		discountParams := params.DiscountApplicationParams{
+			WorkspaceID:    paymentParams.WorkspaceID,
+			CustomerID:     paymentParams.CustomerID,
+			ProductID:      paymentParams.ProductID,
+			SubscriptionID: paymentParams.SubscriptionID,
+			DiscountCode:   *paymentParams.DiscountCode,
 			AmountCents:    taxResult.TotalAmountCents,
-			Currency:       params.Currency,
+			Currency:       paymentParams.Currency,
 			IsNewCustomer:  customer.CreatedAt.Time.After(time.Now().AddDate(0, 0, -1)), // Rough new customer check
 			CustomerEmail:  customer.Email.String,
 		}
@@ -292,37 +244,37 @@ func (s *PaymentService) CreateComprehensivePayment(ctx context.Context, params 
 	}
 
 	// Step 3: Calculate gas fees if this is a crypto transaction
-	var gasFeeResult *GasFeeResult
+	var gasFeeResult *responses.GasFeeResult
 	var gasCostCents int64 = 0
-	
-	if params.PaymentMethod == "crypto" && params.NetworkID != nil {
+
+	if paymentParams.PaymentMethod == "crypto" && paymentParams.NetworkID != nil {
 		// Estimate gas fee for the transaction
-		estimateParams := EstimateGasFeeParams{
-			NetworkID:         *params.NetworkID,
-			TransactionType:   params.TransactionType,
+		estimateParams := params.EstimateGasFeeParams{
+			NetworkID:         *paymentParams.NetworkID,
+			TransactionType:   paymentParams.TransactionType,
 			EstimatedGasLimit: 21000, // Standard ETH transfer
-			Currency:          params.Currency,
+			Currency:          paymentParams.Currency,
 		}
 
 		gasEstimate, err := s.gasFeeService.EstimateGasFee(ctx, estimateParams)
 		if err != nil {
 			s.logger.Warn("Failed to estimate gas fee", zap.Error(err))
 		} else {
-			gasCostCents = gasEstimate.EstimatedCostCents
+			gasCostCents = gasEstimate.EstimatedCostUSDCents
 		}
 	}
 
 	// Step 4: Check gas sponsorship
 	var gasSponsored bool
 	var sponsorID *uuid.UUID
-	
-	if gasCostCents > 0 && params.ProductID != nil {
-		sponsorshipParams := SponsorshipCheckParams{
-			WorkspaceID:     params.WorkspaceID,
-			CustomerID:      params.CustomerID,
-			ProductID:       *params.ProductID,
+
+	if gasCostCents > 0 && paymentParams.ProductID != nil {
+		sponsorshipParams := params.SponsorshipCheckParams{
+			WorkspaceID:     paymentParams.WorkspaceID,
+			CustomerID:      paymentParams.CustomerID,
+			ProductID:       *paymentParams.ProductID,
 			GasCostUSDCents: gasCostCents,
-			TransactionType: params.TransactionType,
+			TransactionType: paymentParams.TransactionType,
 		}
 
 		sponsorshipDecision, err := s.gasSponsorshipService.ShouldSponsorGas(ctx, sponsorshipParams)
@@ -335,61 +287,61 @@ func (s *PaymentService) CreateComprehensivePayment(ctx context.Context, params 
 	}
 
 	// Step 5: Create the payment record
-	paymentParams := db.CreatePaymentParams{
-		WorkspaceID:        params.WorkspaceID,
-		CustomerID:         params.CustomerID,
+	paymentParamsObj := db.CreatePaymentParams{
+		WorkspaceID:        paymentParams.WorkspaceID,
+		CustomerID:         paymentParams.CustomerID,
 		AmountInCents:      finalAmount,
-		Currency:           params.Currency,
+		Currency:           paymentParams.Currency,
 		Status:             "pending", // Will be updated when confirmed
-		PaymentMethod:      params.PaymentMethod,
-		ProductAmountCents: params.AmountCents,
+		PaymentMethod:      paymentParams.PaymentMethod,
+		ProductAmountCents: paymentParams.AmountCents,
 		HasGasFee:          pgtype.Bool{Bool: gasCostCents > 0, Valid: true},
 		GasSponsored:       pgtype.Bool{Bool: gasSponsored, Valid: true},
 	}
 
 	// Set optional fields
-	if params.InvoiceID != nil {
-		paymentParams.InvoiceID = pgtype.UUID{Bytes: *params.InvoiceID, Valid: true}
+	if paymentParams.InvoiceID != nil {
+		paymentParamsObj.InvoiceID = pgtype.UUID{Bytes: *paymentParams.InvoiceID, Valid: true}
 	}
 
-	if params.SubscriptionID != nil {
-		paymentParams.SubscriptionID = pgtype.UUID{Bytes: *params.SubscriptionID, Valid: true}
+	if paymentParams.SubscriptionID != nil {
+		paymentParamsObj.SubscriptionID = pgtype.UUID{Bytes: *paymentParams.SubscriptionID, Valid: true}
 	}
 
-	if params.TransactionHash != nil {
-		paymentParams.TransactionHash = pgtype.Text{String: *params.TransactionHash, Valid: true}
+	if paymentParams.TransactionHash != nil {
+		paymentParamsObj.TransactionHash = pgtype.Text{String: *paymentParams.TransactionHash, Valid: true}
 	}
 
-	if params.NetworkID != nil {
-		paymentParams.NetworkID = pgtype.UUID{Bytes: *params.NetworkID, Valid: true}
+	if paymentParams.NetworkID != nil {
+		paymentParamsObj.NetworkID = pgtype.UUID{Bytes: *paymentParams.NetworkID, Valid: true}
 	}
 
-	if params.TokenID != nil {
-		paymentParams.TokenID = pgtype.UUID{Bytes: *params.TokenID, Valid: true}
+	if paymentParams.TokenID != nil {
+		paymentParamsObj.TokenID = pgtype.UUID{Bytes: *paymentParams.TokenID, Valid: true}
 	}
 
 	// Set tax and discount amounts
 	if taxResult.TotalTaxCents > 0 {
-		paymentParams.TaxAmountCents = pgtype.Int8{Int64: taxResult.TotalTaxCents, Valid: true}
+		paymentParamsObj.TaxAmountCents = pgtype.Int8{Int64: taxResult.TotalTaxCents, Valid: true}
 	}
 
 	if gasCostCents > 0 {
-		paymentParams.GasAmountCents = pgtype.Int8{Int64: gasCostCents, Valid: true}
-		paymentParams.GasFeeUsdCents = pgtype.Int8{Int64: gasCostCents, Valid: true}
+		paymentParamsObj.GasAmountCents = pgtype.Int8{Int64: gasCostCents, Valid: true}
+		paymentParamsObj.GasFeeUsdCents = pgtype.Int8{Int64: gasCostCents, Valid: true}
 	}
 
 	if discountResult != nil && discountResult.IsValid {
-		paymentParams.DiscountAmountCents = pgtype.Int8{Int64: discountResult.DiscountAmountCents, Valid: true}
+		paymentParamsObj.DiscountAmountCents = pgtype.Int8{Int64: discountResult.DiscountAmountCents, Valid: true}
 	}
 
 	// Create the payment
-	payment, err := s.queries.CreatePayment(ctx, paymentParams)
+	payment, err := s.queries.CreatePayment(ctx, paymentParamsObj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create payment: %w", err)
 	}
 
 	// Step 6: Create related records
-	
+
 	// Store tax calculation if applicable
 	if taxResult != nil && taxResult.TotalTaxCents > 0 {
 		if err := s.taxService.StoreTaxCalculation(ctx, payment.ID, taxResult); err != nil {
@@ -406,8 +358,8 @@ func (s *PaymentService) CreateComprehensivePayment(ctx context.Context, params 
 
 	// Record gas sponsorship if applicable
 	if gasSponsored && sponsorID != nil {
-		sponsorshipRecord := SponsorshipRecord{
-			WorkspaceID:     params.WorkspaceID,
+		sponsorshipRecord := business.SponsorshipRecord{
+			WorkspaceID:     paymentParams.WorkspaceID,
 			PaymentID:       payment.ID,
 			GasCostUSDCents: gasCostCents,
 			SponsorType:     "merchant",
@@ -429,14 +381,8 @@ func (s *PaymentService) CreateComprehensivePayment(ctx context.Context, params 
 	return &payment, nil
 }
 
-// GetPaymentParams contains parameters for retrieving a payment
-type GetPaymentParams struct {
-	PaymentID   uuid.UUID
-	WorkspaceID uuid.UUID
-}
-
 // GetPayment retrieves a payment by ID with workspace validation
-func (s *PaymentService) GetPayment(ctx context.Context, params GetPaymentParams) (*db.Payment, error) {
+func (s *PaymentService) GetPayment(ctx context.Context, params params.GetPaymentParams) (*db.Payment, error) {
 	payment, err := s.queries.GetPayment(ctx, db.GetPaymentParams{
 		ID:          params.PaymentID,
 		WorkspaceID: params.WorkspaceID,
@@ -471,17 +417,8 @@ func (s *PaymentService) GetPaymentByTransactionHash(ctx context.Context, txHash
 	return &payment, nil
 }
 
-// ListPaymentsParams contains parameters for listing payments
-type ListPaymentsParams struct {
-	WorkspaceID uuid.UUID
-	CustomerID  *uuid.UUID
-	Status      string
-	Limit       int32
-	Offset      int32
-}
-
 // ListPayments retrieves a paginated list of payments
-func (s *PaymentService) ListPayments(ctx context.Context, params ListPaymentsParams) ([]db.Payment, error) {
+func (s *PaymentService) ListPayments(ctx context.Context, params params.ListPaymentsParams) ([]db.Payment, error) {
 	if params.Limit <= 0 {
 		params.Limit = 20
 	}
@@ -498,10 +435,10 @@ func (s *PaymentService) ListPayments(ctx context.Context, params ListPaymentsPa
 		})
 	}
 
-	if params.Status != "" {
+	if params.Status != nil {
 		return s.queries.GetPaymentsByStatus(ctx, db.GetPaymentsByStatusParams{
 			WorkspaceID: params.WorkspaceID,
-			Status:      params.Status,
+			Status:      *params.Status,
 			Limit:       params.Limit,
 			Offset:      params.Offset,
 		})
@@ -514,28 +451,23 @@ func (s *PaymentService) ListPayments(ctx context.Context, params ListPaymentsPa
 	})
 }
 
-// UpdatePaymentStatusParams contains parameters for updating payment status
-type UpdatePaymentStatusParams struct {
-	PaymentID    uuid.UUID
-	WorkspaceID  uuid.UUID
-	Status       string
-	ErrorMessage string
-}
-
 // UpdatePaymentStatus updates the status of a payment
-func (s *PaymentService) UpdatePaymentStatus(ctx context.Context, params UpdatePaymentStatusParams) (*db.Payment, error) {
-	errorMsg := pgtype.Text{String: params.ErrorMessage, Valid: params.ErrorMessage != ""}
-	
+func (s *PaymentService) UpdatePaymentStatus(ctx context.Context, paymentParams params.UpdatePaymentStatusParams) (*db.Payment, error) {
+	var errorMsg pgtype.Text
+	if paymentParams.FailureReason != nil {
+		errorMsg = pgtype.Text{String: *paymentParams.FailureReason, Valid: true}
+	}
+
 	payment, err := s.queries.UpdatePaymentStatus(ctx, db.UpdatePaymentStatusParams{
-		ID:           params.PaymentID,
-		WorkspaceID:  params.WorkspaceID,
-		Status:       params.Status,
+		ID:           paymentParams.PaymentID,
+		WorkspaceID:  paymentParams.WorkspaceID,
+		Status:       paymentParams.Status,
 		ErrorMessage: errorMsg,
 	})
 	if err != nil {
 		s.logger.Error("Failed to update payment status",
-			zap.String("payment_id", params.PaymentID.String()),
-			zap.String("status", params.Status),
+			zap.String("payment_id", paymentParams.PaymentID.String()),
+			zap.String("status", paymentParams.Status),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to update payment status: %w", err)
 	}
@@ -566,32 +498,13 @@ func (s *PaymentService) GetPaymentMetrics(ctx context.Context, workspaceID uuid
 	return &metrics, nil
 }
 
-// CreateManualPaymentParams contains parameters for creating a manual payment
-type CreateManualPaymentParams struct {
-	WorkspaceID         uuid.UUID
-	CustomerID          uuid.UUID
-	SubscriptionID      *uuid.UUID
-	InvoiceID           *uuid.UUID
-	AmountInCents       int64
-	Currency            string
-	PaymentMethod       string
-	TransactionHash     string
-	NetworkID           *uuid.UUID
-	TokenID             *uuid.UUID
-	CryptoAmount        string
-	ExchangeRate        string
-	ExternalPaymentID   string
-	PaymentProvider     string
-	Metadata            map[string]interface{}
-}
-
 // CreateManualPayment creates a payment manually (not from subscription event)
-func (s *PaymentService) CreateManualPayment(ctx context.Context, params CreateManualPaymentParams) (*db.Payment, error) {
+func (s *PaymentService) CreateManualPayment(ctx context.Context, paymentParams params.CreateManualPaymentParams) (*db.Payment, error) {
 	// Prepare metadata
 	var metadataBytes []byte
-	if params.Metadata != nil {
+	if paymentParams.Metadata != nil {
 		var err error
-		metadataBytes, err = json.Marshal(params.Metadata)
+		metadataBytes, err = json.Marshal(paymentParams.Metadata)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal metadata: %w", err)
 		}
@@ -600,71 +513,71 @@ func (s *PaymentService) CreateManualPayment(ctx context.Context, params CreateM
 	}
 
 	// Prepare payment parameters
-	paymentParams := db.CreatePaymentParams{
-		WorkspaceID:        params.WorkspaceID,
-		CustomerID:         params.CustomerID,
-		AmountInCents:      params.AmountInCents,
-		Currency:           params.Currency,
+	paymentParamsObj := db.CreatePaymentParams{
+		WorkspaceID:        paymentParams.WorkspaceID,
+		CustomerID:         paymentParams.CustomerID,
+		AmountInCents:      paymentParams.AmountInCents,
+		Currency:           paymentParams.Currency,
 		Status:             "completed", // Manual payments are typically already completed
-		PaymentMethod:      params.PaymentMethod,
-		ProductAmountCents: params.AmountInCents, // Assume full amount is for product
+		PaymentMethod:      paymentParams.PaymentMethod,
+		ProductAmountCents: paymentParams.AmountInCents, // Assume full amount is for product
 		Metadata:           metadataBytes,
 	}
 
 	// Add optional fields
-	if params.SubscriptionID != nil {
-		paymentParams.SubscriptionID = pgtype.UUID{Bytes: *params.SubscriptionID, Valid: true}
+	if paymentParams.SubscriptionID != nil {
+		paymentParamsObj.SubscriptionID = pgtype.UUID{Bytes: *paymentParams.SubscriptionID, Valid: true}
 	}
 
-	if params.InvoiceID != nil {
-		paymentParams.InvoiceID = pgtype.UUID{Bytes: *params.InvoiceID, Valid: true}
+	if paymentParams.InvoiceID != nil {
+		paymentParamsObj.InvoiceID = pgtype.UUID{Bytes: *paymentParams.InvoiceID, Valid: true}
 	}
 
-	if params.TransactionHash != "" {
-		paymentParams.TransactionHash = pgtype.Text{String: params.TransactionHash, Valid: true}
+	if paymentParams.TransactionHash != "" {
+		paymentParamsObj.TransactionHash = pgtype.Text{String: paymentParams.TransactionHash, Valid: true}
 	}
 
-	if params.NetworkID != nil {
-		paymentParams.NetworkID = pgtype.UUID{Bytes: *params.NetworkID, Valid: true}
+	if paymentParams.NetworkID != nil {
+		paymentParamsObj.NetworkID = pgtype.UUID{Bytes: *paymentParams.NetworkID, Valid: true}
 	}
 
-	if params.TokenID != nil {
-		paymentParams.TokenID = pgtype.UUID{Bytes: *params.TokenID, Valid: true}
+	if paymentParams.TokenID != nil {
+		paymentParamsObj.TokenID = pgtype.UUID{Bytes: *paymentParams.TokenID, Valid: true}
 	}
 
-	if params.ExternalPaymentID != "" {
-		paymentParams.ExternalPaymentID = pgtype.Text{String: params.ExternalPaymentID, Valid: true}
+	if paymentParams.ExternalPaymentID != "" {
+		paymentParamsObj.ExternalPaymentID = pgtype.Text{String: paymentParams.ExternalPaymentID, Valid: true}
 	}
 
-	if params.PaymentProvider != "" {
-		paymentParams.PaymentProvider = pgtype.Text{String: params.PaymentProvider, Valid: true}
+	if paymentParams.PaymentProvider != "" {
+		paymentParamsObj.PaymentProvider = pgtype.Text{String: paymentParams.PaymentProvider, Valid: true}
 	}
 
 	// Create the payment
-	payment, err := s.queries.CreatePayment(ctx, paymentParams)
+	payment, err := s.queries.CreatePayment(ctx, paymentParamsObj)
 	if err != nil {
 		s.logger.Error("Failed to create manual payment",
-			zap.String("customer_id", params.CustomerID.String()),
-			zap.String("payment_method", params.PaymentMethod),
+			zap.String("customer_id", paymentParamsObj.CustomerID.String()),
+			zap.String("payment_method", paymentParamsObj.PaymentMethod),
 			zap.Error(err))
 		return nil, fmt.Errorf("failed to create payment: %w", err)
 	}
 
 	s.logger.Info("Manual payment created successfully",
 		zap.String("payment_id", payment.ID.String()),
-		zap.String("payment_method", params.PaymentMethod),
+		zap.String("payment_method", payment.PaymentMethod),
 		zap.Int64("amount_cents", payment.AmountInCents))
 
 	return &payment, nil
 }
 
 // Helper function to convert PaymentAddress to tax service Address type
-func convertToTaxAddress(addr *PaymentAddress) *Address {
+func convertPaymentToTaxAddress(addr *params.PaymentAddress) *business.Address {
 	if addr == nil {
 		return nil
 	}
 	// Convert PaymentAddress to tax service Address
-	return &Address{
+	return &business.Address{
 		Street1:    addr.Street1,
 		Street2:    addr.Street2,
 		City:       addr.City,

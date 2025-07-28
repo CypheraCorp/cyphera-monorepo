@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
@@ -16,43 +19,22 @@ import (
 // SubscriptionManagementService handles all subscription lifecycle operations
 type SubscriptionManagementService struct {
 	db             db.Querier
-	calculator     ProrationCalculatorInterface
-	paymentService PaymentServiceInterface
-	emailService   EmailServiceInterface
+	calculator     IProrationCalculator
+	paymentService IPaymentService
+	emailService   IEmailService
 	logger         *zap.Logger
 }
-
-// PaymentServiceInterface defines the interface for payment operations
-type PaymentServiceInterface interface {
-	CreatePaymentFromSubscriptionEvent(ctx context.Context, params CreatePaymentFromSubscriptionEventParams) (*db.Payment, error)
-}
-
-// EmailServiceInterface defines the interface for email operations
-type EmailServiceInterface interface {
-	SendTransactionalEmail(ctx context.Context, params TransactionalEmailParams) error
-}
-
-// ProrationCalculatorInterface defines the interface for proration calculations
-type ProrationCalculatorInterface interface {
-	CalculateUpgradeProration(currentPeriodStart, currentPeriodEnd time.Time, oldAmountCents, newAmountCents int64, changeDate time.Time) *ProrationResult
-	ScheduleDowngrade(currentPeriodEnd time.Time, changeType string) *ScheduleChangeResult
-	CalculatePauseCredit(currentPeriodStart, currentPeriodEnd time.Time, amountCents int64, pauseDate time.Time) *ProrationResult
-	AddBillingPeriod(start time.Time, intervalType string, intervalCount int) time.Time
-	FormatProrationExplanation(result *ProrationResult) string
-}
-
-
-
 
 // NewSubscriptionManagementService creates a new subscription management service
 func NewSubscriptionManagementService(
 	db db.Querier,
-	paymentService PaymentServiceInterface,
-	emailService EmailServiceInterface,
+	paymentService IPaymentService,
+	emailService IEmailService,
 ) *SubscriptionManagementService {
+	var calculator IProrationCalculator = NewProrationCalculator()
 	return &SubscriptionManagementService{
 		db:             db,
-		calculator:     NewProrationCalculator(),
+		calculator:     calculator,
 		paymentService: paymentService,
 		emailService:   emailService,
 		logger:         zap.L(),
@@ -62,9 +44,9 @@ func NewSubscriptionManagementService(
 // NewSubscriptionManagementServiceWithDependencies creates a service with custom dependencies
 func NewSubscriptionManagementServiceWithDependencies(
 	db db.Querier,
-	calculator ProrationCalculatorInterface,
-	paymentService PaymentServiceInterface,
-	emailService EmailServiceInterface,
+	calculator IProrationCalculator,
+	paymentService IPaymentService,
+	emailService IEmailService,
 	logger *zap.Logger,
 ) *SubscriptionManagementService {
 	if logger == nil {
@@ -79,33 +61,11 @@ func NewSubscriptionManagementServiceWithDependencies(
 	}
 }
 
-// LineItemUpdate represents a change to subscription line items
-type LineItemUpdate struct {
-	Action         string    `json:"action"` // add, update, remove
-	LineItemID     uuid.UUID `json:"line_item_id,omitempty"`
-	ProductID      uuid.UUID `json:"product_id,omitempty"`
-	PriceID        uuid.UUID `json:"price_id,omitempty"`
-	ProductTokenID uuid.UUID `json:"product_token_id,omitempty"`
-	Quantity       int       `json:"quantity"`
-	UnitAmount     int64     `json:"unit_amount,omitempty"`
-}
-
-// ChangePreview shows what will happen with a subscription change
-type ChangePreview struct {
-	CurrentAmount     int64            `json:"current_amount"`
-	NewAmount         int64            `json:"new_amount"`
-	ProrationCredit   int64            `json:"proration_credit,omitempty"`
-	ImmediateCharge   int64            `json:"immediate_charge,omitempty"`
-	EffectiveDate     time.Time        `json:"effective_date"`
-	ProrationDetails  *ProrationResult `json:"proration_details,omitempty"`
-	Message           string           `json:"message"`
-}
-
 // UpgradeSubscription handles immediate subscription upgrades with proration
 func (sms *SubscriptionManagementService) UpgradeSubscription(
 	ctx context.Context,
 	subscriptionID uuid.UUID,
-	newLineItems []LineItemUpdate,
+	newLineItems []requests.LineItemUpdate,
 	reason string,
 ) error {
 	// Get current subscription details
@@ -142,17 +102,17 @@ func (sms *SubscriptionManagementService) UpgradeSubscription(
 	prorationCalc, _ := json.Marshal(proration.Calculation)
 
 	scheduleChange, err := sms.db.CreateScheduleChange(ctx, db.CreateScheduleChangeParams{
-		SubscriptionID:        subscriptionID,
-		ChangeType:            "upgrade",
-		ScheduledFor:          pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		FromLineItems:         fromLineItems,
-		ToLineItems:           toLineItems,
-		ProrationAmountCents:  pgtype.Int8{Int64: proration.NetAmount, Valid: true},
-		ProrationCalculation:  prorationCalc,
-		Status:                "processing",
-		Reason:                pgtype.Text{String: reason, Valid: true},
-		InitiatedBy:           pgtype.Text{String: "customer", Valid: true},
-		Metadata:              []byte("{}"),
+		SubscriptionID:       subscriptionID,
+		ChangeType:           "upgrade",
+		ScheduledFor:         pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		FromLineItems:        fromLineItems,
+		ToLineItems:          toLineItems,
+		ProrationAmountCents: pgtype.Int8{Int64: proration.NetAmount, Valid: true},
+		ProrationCalculation: prorationCalc,
+		Status:               "processing",
+		Reason:               pgtype.Text{String: reason, Valid: true},
+		InitiatedBy:          pgtype.Text{String: "customer", Valid: true},
+		Metadata:             []byte("{}"),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create schedule change: %w", err)
@@ -161,9 +121,9 @@ func (sms *SubscriptionManagementService) UpgradeSubscription(
 	// Update subscription immediately
 	// In real implementation, would update line items properly
 	_, err = sms.db.UpdateSubscriptionForUpgrade(ctx, db.UpdateSubscriptionForUpgradeParams{
-		ID:                   subscriptionID,
-		PriceID:              sub.PriceID, // Would be updated in real implementation
-		TotalAmountInCents:   int32(newTotal),
+		ID:                 subscriptionID,
+		PriceID:            sub.PriceID, // Would be updated in real implementation
+		TotalAmountInCents: int32(newTotal),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to update subscription: %w", err)
@@ -171,19 +131,19 @@ func (sms *SubscriptionManagementService) UpgradeSubscription(
 
 	// Create proration record
 	_, err = sms.db.CreateProrationRecord(ctx, db.CreateProrationRecordParams{
-		SubscriptionID:       subscriptionID,
-		ScheduleChangeID:     pgtype.UUID{Bytes: scheduleChange.ID, Valid: true},
-		ProrationType:        "upgrade_credit",
-		PeriodStart:          pgtype.Timestamptz{Time: sub.CurrentPeriodStart.Time, Valid: true},
-		PeriodEnd:            pgtype.Timestamptz{Time: sub.CurrentPeriodEnd.Time, Valid: true},
-		DaysTotal:            int32(proration.DaysTotal),
-		DaysUsed:             int32(proration.DaysUsed),
-		DaysRemaining:        int32(proration.DaysRemaining),
-		OriginalAmountCents:  oldTotal,
-		UsedAmountCents:      int64(float64(oldTotal) * float64(proration.DaysUsed) / float64(proration.DaysTotal)),
-		CreditAmountCents:    proration.CreditAmount,
-		AppliedToInvoiceID:   pgtype.UUID{Valid: false},
-		AppliedToPaymentID:   pgtype.UUID{Valid: false},
+		SubscriptionID:      subscriptionID,
+		ScheduleChangeID:    pgtype.UUID{Bytes: scheduleChange.ID, Valid: true},
+		ProrationType:       "upgrade_credit",
+		PeriodStart:         pgtype.Timestamptz{Time: sub.CurrentPeriodStart.Time, Valid: true},
+		PeriodEnd:           pgtype.Timestamptz{Time: sub.CurrentPeriodEnd.Time, Valid: true},
+		DaysTotal:           int32(proration.DaysTotal),
+		DaysUsed:            int32(proration.DaysUsed),
+		DaysRemaining:       int32(proration.DaysRemaining),
+		OriginalAmountCents: oldTotal,
+		UsedAmountCents:     int64(float64(oldTotal) * float64(proration.DaysUsed) / float64(proration.DaysTotal)),
+		CreditAmountCents:   proration.CreditAmount,
+		AppliedToInvoiceID:  pgtype.UUID{Valid: false},
+		AppliedToPaymentID:  pgtype.UUID{Valid: false},
 	})
 	if err != nil {
 		sms.logger.Error("Failed to create proration record", zap.Error(err))
@@ -192,22 +152,22 @@ func (sms *SubscriptionManagementService) UpgradeSubscription(
 	// Process immediate payment if there's a net charge
 	if proration.NetAmount > 0 {
 		// In real implementation, would process payment through payment service
-		sms.logger.Info("Processing proration payment", 
+		sms.logger.Info("Processing proration payment",
 			zap.Int64("amount", proration.NetAmount),
 			zap.String("subscription_id", subscriptionID.String()))
 	}
 
 	// Record state change
 	_, err = sms.db.RecordStateChange(ctx, db.RecordStateChangeParams{
-		SubscriptionID:     subscriptionID,
-		FromStatus:         db.NullSubscriptionStatus{SubscriptionStatus: sub.Status, Valid: true},
-		ToStatus:           sub.Status, // Status doesn't change on upgrade
-		FromAmountCents:    pgtype.Int8{Int64: oldTotal, Valid: true},
-		ToAmountCents:      pgtype.Int8{Int64: newTotal, Valid: true},
-		LineItemsSnapshot:  toLineItems,
-		ChangeReason:       pgtype.Text{String: reason, Valid: true},
-		ScheduleChangeID:   pgtype.UUID{Bytes: scheduleChange.ID, Valid: true},
-		InitiatedBy:        pgtype.Text{String: "customer", Valid: true},
+		SubscriptionID:    subscriptionID,
+		FromStatus:        db.NullSubscriptionStatus{SubscriptionStatus: sub.Status, Valid: true},
+		ToStatus:          sub.Status, // Status doesn't change on upgrade
+		FromAmountCents:   pgtype.Int8{Int64: oldTotal, Valid: true},
+		ToAmountCents:     pgtype.Int8{Int64: newTotal, Valid: true},
+		LineItemsSnapshot: toLineItems,
+		ChangeReason:      pgtype.Text{String: reason, Valid: true},
+		ScheduleChangeID:  pgtype.UUID{Bytes: scheduleChange.ID, Valid: true},
+		InitiatedBy:       pgtype.Text{String: "customer", Valid: true},
 	})
 	if err != nil {
 		sms.logger.Error("Failed to record state change", zap.Error(err))
@@ -229,7 +189,7 @@ func (sms *SubscriptionManagementService) UpgradeSubscription(
 			sms.logger.Error("Failed to send upgrade email", zap.Error(err))
 		}
 	}
-	
+
 	sms.logger.Info("Subscription upgraded successfully",
 		zap.String("subscription_id", subscriptionID.String()),
 		zap.Int64("old_amount", oldTotal),
@@ -243,7 +203,7 @@ func (sms *SubscriptionManagementService) UpgradeSubscription(
 func (sms *SubscriptionManagementService) DowngradeSubscription(
 	ctx context.Context,
 	subscriptionID uuid.UUID,
-	newLineItems []LineItemUpdate,
+	newLineItems []requests.LineItemUpdate,
 	reason string,
 ) error {
 	// Get current subscription
@@ -269,17 +229,17 @@ func (sms *SubscriptionManagementService) DowngradeSubscription(
 	toLineItems, _ := json.Marshal(newLineItems)
 
 	_, err = sms.db.CreateScheduleChange(ctx, db.CreateScheduleChangeParams{
-		SubscriptionID:        subscriptionID,
-		ChangeType:            "downgrade",
-		ScheduledFor:          pgtype.Timestamptz{Time: scheduleResult.ScheduledFor, Valid: true},
-		FromLineItems:         fromLineItems,
-		ToLineItems:           toLineItems,
-		ProrationAmountCents:  pgtype.Int8{Valid: false}, // No proration for downgrades
-		ProrationCalculation:  []byte("{}"),
-		Status:                "scheduled",
-		Reason:                pgtype.Text{String: reason, Valid: true},
-		InitiatedBy:           pgtype.Text{String: "customer", Valid: true},
-		Metadata:              []byte("{}"),
+		SubscriptionID:       subscriptionID,
+		ChangeType:           "downgrade",
+		ScheduledFor:         pgtype.Timestamptz{Time: scheduleResult.ScheduledFor, Valid: true},
+		FromLineItems:        fromLineItems,
+		ToLineItems:          toLineItems,
+		ProrationAmountCents: pgtype.Int8{Valid: false}, // No proration for downgrades
+		ProrationCalculation: []byte("{}"),
+		Status:               "scheduled",
+		Reason:               pgtype.Text{String: reason, Valid: true},
+		InitiatedBy:          pgtype.Text{String: "customer", Valid: true},
+		Metadata:             []byte("{}"),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create schedule change: %w", err)
@@ -293,7 +253,7 @@ func (sms *SubscriptionManagementService) DowngradeSubscription(
 			sms.logger.Error("Failed to send downgrade email", zap.Error(err))
 		}
 	}
-	
+
 	sms.logger.Info("Subscription downgrade scheduled",
 		zap.String("subscription_id", subscriptionID.String()),
 		zap.Time("effective_date", scheduleResult.ScheduledFor))
@@ -335,17 +295,17 @@ func (sms *SubscriptionManagementService) CancelSubscription(
 	// Create schedule change
 	metadata, _ := json.Marshal(map[string]string{"feedback": feedback})
 	_, err = sms.db.CreateScheduleChange(ctx, db.CreateScheduleChangeParams{
-		SubscriptionID:        subscriptionID,
-		ChangeType:            "cancel",
-		ScheduledFor:          pgtype.Timestamptz{Time: cancelDate, Valid: true},
-		FromLineItems:         []byte("{}"),
-		ToLineItems:           []byte("{}"),
-		ProrationAmountCents:  pgtype.Int8{Valid: false},
-		ProrationCalculation:  []byte("{}"),
-		Status:                "scheduled",
-		Reason:                pgtype.Text{String: reason, Valid: true},
-		InitiatedBy:           pgtype.Text{String: "customer", Valid: true},
-		Metadata:              metadata,
+		SubscriptionID:       subscriptionID,
+		ChangeType:           "cancel",
+		ScheduledFor:         pgtype.Timestamptz{Time: cancelDate, Valid: true},
+		FromLineItems:        []byte("{}"),
+		ToLineItems:          []byte("{}"),
+		ProrationAmountCents: pgtype.Int8{Valid: false},
+		ProrationCalculation: []byte("{}"),
+		Status:               "scheduled",
+		Reason:               pgtype.Text{String: reason, Valid: true},
+		InitiatedBy:          pgtype.Text{String: "customer", Valid: true},
+		Metadata:             metadata,
 	})
 	if err != nil {
 		sms.logger.Error("Failed to create schedule change for cancellation", zap.Error(err))
@@ -357,7 +317,7 @@ func (sms *SubscriptionManagementService) CancelSubscription(
 			sms.logger.Error("Failed to send cancellation email", zap.Error(err))
 		}
 	}
-	
+
 	sms.logger.Info("Subscription cancellation scheduled",
 		zap.String("subscription_id", subscriptionID.String()),
 		zap.Time("cancel_date", cancelDate))
@@ -397,8 +357,8 @@ func (sms *SubscriptionManagementService) PauseSubscription(
 	}
 
 	_, err = sms.db.PauseSubscription(ctx, db.PauseSubscriptionParams{
-		ID:           subscriptionID,
-		PauseEndsAt:  pauseEndsAt,
+		ID:          subscriptionID,
+		PauseEndsAt: pauseEndsAt,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to pause subscription: %w", err)
@@ -407,17 +367,17 @@ func (sms *SubscriptionManagementService) PauseSubscription(
 	// Create schedule change for automatic resume if pause end date provided
 	if pauseUntil != nil {
 		_, err = sms.db.CreateScheduleChange(ctx, db.CreateScheduleChangeParams{
-			SubscriptionID:        subscriptionID,
-			ChangeType:            "resume",
-			ScheduledFor:          pgtype.Timestamptz{Time: *pauseUntil, Valid: true},
-			FromLineItems:         []byte("{}"),
-			ToLineItems:           []byte("{}"),
-			ProrationAmountCents:  pgtype.Int8{Valid: false},
-			ProrationCalculation:  []byte("{}"),
-			Status:                "scheduled",
-			Reason:                pgtype.Text{String: "Automatic resume after pause period", Valid: true},
-			InitiatedBy:           pgtype.Text{String: "system", Valid: true},
-			Metadata:              []byte("{}"),
+			SubscriptionID:       subscriptionID,
+			ChangeType:           "resume",
+			ScheduledFor:         pgtype.Timestamptz{Time: *pauseUntil, Valid: true},
+			FromLineItems:        []byte("{}"),
+			ToLineItems:          []byte("{}"),
+			ProrationAmountCents: pgtype.Int8{Valid: false},
+			ProrationCalculation: []byte("{}"),
+			Status:               "scheduled",
+			Reason:               pgtype.Text{String: "Automatic resume after pause period", Valid: true},
+			InitiatedBy:          pgtype.Text{String: "system", Valid: true},
+			Metadata:             []byte("{}"),
 		})
 		if err != nil {
 			sms.logger.Error("Failed to schedule automatic resume", zap.Error(err))
@@ -427,19 +387,19 @@ func (sms *SubscriptionManagementService) PauseSubscription(
 	// Create proration record if there's a credit
 	if pauseCredit.CreditAmount > 0 {
 		_, err = sms.db.CreateProrationRecord(ctx, db.CreateProrationRecordParams{
-			SubscriptionID:       subscriptionID,
-			ScheduleChangeID:     pgtype.UUID{Valid: false},
-			ProrationType:        "pause_credit",
-			PeriodStart:          pgtype.Timestamptz{Time: sub.CurrentPeriodStart.Time, Valid: true},
-			PeriodEnd:            pgtype.Timestamptz{Time: sub.CurrentPeriodEnd.Time, Valid: true},
-			DaysTotal:            int32(pauseCredit.DaysTotal),
-			DaysUsed:             int32(pauseCredit.DaysUsed),
-			DaysRemaining:        int32(pauseCredit.DaysRemaining),
-			OriginalAmountCents:  int64(sub.TotalAmountInCents),
-			UsedAmountCents:      int64(float64(sub.TotalAmountInCents) * float64(pauseCredit.DaysUsed) / float64(pauseCredit.DaysTotal)),
-			CreditAmountCents:    pauseCredit.CreditAmount,
-			AppliedToInvoiceID:   pgtype.UUID{Valid: false},
-			AppliedToPaymentID:   pgtype.UUID{Valid: false},
+			SubscriptionID:      subscriptionID,
+			ScheduleChangeID:    pgtype.UUID{Valid: false},
+			ProrationType:       "pause_credit",
+			PeriodStart:         pgtype.Timestamptz{Time: sub.CurrentPeriodStart.Time, Valid: true},
+			PeriodEnd:           pgtype.Timestamptz{Time: sub.CurrentPeriodEnd.Time, Valid: true},
+			DaysTotal:           int32(pauseCredit.DaysTotal),
+			DaysUsed:            int32(pauseCredit.DaysUsed),
+			DaysRemaining:       int32(pauseCredit.DaysRemaining),
+			OriginalAmountCents: int64(sub.TotalAmountInCents),
+			UsedAmountCents:     int64(float64(sub.TotalAmountInCents) * float64(pauseCredit.DaysUsed) / float64(pauseCredit.DaysTotal)),
+			CreditAmountCents:   pauseCredit.CreditAmount,
+			AppliedToInvoiceID:  pgtype.UUID{Valid: false},
+			AppliedToPaymentID:  pgtype.UUID{Valid: false},
 		})
 		if err != nil {
 			sms.logger.Error("Failed to create pause credit record", zap.Error(err))
@@ -452,7 +412,7 @@ func (sms *SubscriptionManagementService) PauseSubscription(
 			sms.logger.Error("Failed to send pause email", zap.Error(err))
 		}
 	}
-	
+
 	sms.logger.Info("Subscription paused",
 		zap.String("subscription_id", subscriptionID.String()),
 		zap.Int64("credit_amount", pauseCredit.CreditAmount))
@@ -481,9 +441,9 @@ func (sms *SubscriptionManagementService) ResumeSubscription(
 
 	// Update subscription
 	_, err = sms.db.ResumeSubscription(ctx, db.ResumeSubscriptionParams{
-		ID:                   subscriptionID,
-		CurrentPeriodStart:   pgtype.Timestamptz{Time: newPeriodStart, Valid: true},
-		CurrentPeriodEnd:     pgtype.Timestamptz{Time: newPeriodEnd, Valid: true},
+		ID:                 subscriptionID,
+		CurrentPeriodStart: pgtype.Timestamptz{Time: newPeriodStart, Valid: true},
+		CurrentPeriodEnd:   pgtype.Timestamptz{Time: newPeriodEnd, Valid: true},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to resume subscription: %w", err)
@@ -494,15 +454,15 @@ func (sms *SubscriptionManagementService) ResumeSubscription(
 
 	// Record state change
 	_, err = sms.db.RecordStateChange(ctx, db.RecordStateChangeParams{
-		SubscriptionID:     subscriptionID,
-		FromStatus:         db.NullSubscriptionStatus{SubscriptionStatus: db.SubscriptionStatusSuspended, Valid: true},
-		ToStatus:           db.SubscriptionStatusActive,
-		FromAmountCents:    pgtype.Int8{Int64: int64(sub.TotalAmountInCents), Valid: true},
-		ToAmountCents:      pgtype.Int8{Int64: int64(sub.TotalAmountInCents), Valid: true},
-		LineItemsSnapshot:  []byte("{}"),
-		ChangeReason:       pgtype.Text{String: "Subscription resumed", Valid: true},
-		ScheduleChangeID:   pgtype.UUID{Valid: false},
-		InitiatedBy:        pgtype.Text{String: "customer", Valid: true},
+		SubscriptionID:    subscriptionID,
+		FromStatus:        db.NullSubscriptionStatus{SubscriptionStatus: db.SubscriptionStatusSuspended, Valid: true},
+		ToStatus:          db.SubscriptionStatusActive,
+		FromAmountCents:   pgtype.Int8{Int64: int64(sub.TotalAmountInCents), Valid: true},
+		ToAmountCents:     pgtype.Int8{Int64: int64(sub.TotalAmountInCents), Valid: true},
+		LineItemsSnapshot: []byte("{}"),
+		ChangeReason:      pgtype.Text{String: "Subscription resumed", Valid: true},
+		ScheduleChangeID:  pgtype.UUID{Valid: false},
+		InitiatedBy:       pgtype.Text{String: "customer", Valid: true},
 	})
 
 	// Send confirmation email
@@ -511,7 +471,7 @@ func (sms *SubscriptionManagementService) ResumeSubscription(
 			sms.logger.Error("Failed to send resume email", zap.Error(err))
 		}
 	}
-	
+
 	sms.logger.Info("Subscription resumed",
 		zap.String("subscription_id", subscriptionID.String()),
 		zap.Time("new_period_start", newPeriodStart),
@@ -556,7 +516,7 @@ func (sms *SubscriptionManagementService) ReactivateCancelledSubscription(
 			}
 		}
 	}
-	
+
 	sms.logger.Info("Subscription reactivated",
 		zap.String("subscription_id", subscriptionID.String()))
 
@@ -568,8 +528,8 @@ func (sms *SubscriptionManagementService) PreviewChange(
 	ctx context.Context,
 	subscriptionID uuid.UUID,
 	changeType string,
-	newLineItems []LineItemUpdate,
-) (*ChangePreview, error) {
+	newLineItems []requests.LineItemUpdate,
+) (*business.ChangePreview, error) {
 	sub, err := sms.db.GetSubscription(ctx, subscriptionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get subscription: %w", err)
@@ -578,7 +538,7 @@ func (sms *SubscriptionManagementService) PreviewChange(
 	currentAmount := int64(sub.TotalAmountInCents)
 	newAmount := sms.calculateNewTotal(ctx, newLineItems)
 
-	preview := &ChangePreview{
+	preview := &business.ChangePreview{
 		CurrentAmount: currentAmount,
 		NewAmount:     newAmount,
 	}
@@ -667,7 +627,7 @@ func (sms *SubscriptionManagementService) ProcessScheduledChanges(ctx context.Co
 
 // Helper methods
 
-func (sms *SubscriptionManagementService) calculateNewTotal(ctx context.Context, lineItems []LineItemUpdate) int64 {
+func (sms *SubscriptionManagementService) calculateNewTotal(ctx context.Context, lineItems []requests.LineItemUpdate) int64 {
 	// Simplified calculation - in real implementation would look up prices and calculate properly
 	var total int64
 	for _, item := range lineItems {
@@ -736,7 +696,7 @@ func (sms *SubscriptionManagementService) sendSubscriptionChangeEmail(ctx contex
 
 	// Prepare email based on change type
 	var subject, htmlBody, textBody string
-	
+
 	switch changeType {
 	case "upgrade":
 		subject = fmt.Sprintf("Subscription Upgraded - %s", product.Name)
@@ -772,7 +732,7 @@ func (sms *SubscriptionManagementService) sendSubscriptionChangeEmail(ctx contex
         </div>
     </div>
 </body>
-</html>`, 
+</html>`,
 			customer.Name.String, product.Name, formatAmount(oldAmount), formatAmount(newAmount),
 			func() string {
 				if prorationAmount > 0 {
@@ -781,7 +741,7 @@ func (sms *SubscriptionManagementService) sendSubscriptionChangeEmail(ctx contex
 				return ""
 			}(),
 			workspace.Name)
-			
+
 	case "downgrade":
 		subject = fmt.Sprintf("Subscription Downgrade Scheduled - %s", product.Name)
 		htmlBody = fmt.Sprintf(`
@@ -818,7 +778,7 @@ func (sms *SubscriptionManagementService) sendSubscriptionChangeEmail(ctx contex
 </body>
 </html>`,
 			customer.Name.String, product.Name, formatAmount(oldAmount), formatAmount(newAmount), workspace.Name)
-			
+
 	case "cancel":
 		subject = fmt.Sprintf("Subscription Cancellation Scheduled - %s", product.Name)
 		htmlBody = fmt.Sprintf(`
@@ -856,7 +816,7 @@ func (sms *SubscriptionManagementService) sendSubscriptionChangeEmail(ctx contex
 </body>
 </html>`,
 			customer.Name.String, product.Name, workspace.Name)
-			
+
 	case "pause":
 		subject = fmt.Sprintf("Subscription Paused - %s", product.Name)
 		htmlBody = fmt.Sprintf(`
@@ -898,7 +858,7 @@ func (sms *SubscriptionManagementService) sendSubscriptionChangeEmail(ctx contex
 				return ""
 			}(),
 			workspace.Name)
-			
+
 	case "resume":
 		subject = fmt.Sprintf("Subscription Resumed - %s", product.Name)
 		htmlBody = fmt.Sprintf(`
@@ -933,7 +893,7 @@ func (sms *SubscriptionManagementService) sendSubscriptionChangeEmail(ctx contex
 </body>
 </html>`,
 			customer.Name.String, product.Name, formatAmount(newAmount), workspace.Name)
-			
+
 	case "reactivate":
 		subject = fmt.Sprintf("Subscription Reactivated - %s", product.Name)
 		htmlBody = fmt.Sprintf(`
@@ -968,22 +928,21 @@ func (sms *SubscriptionManagementService) sendSubscriptionChangeEmail(ctx contex
 </body>
 </html>`,
 			customer.Name.String, product.Name, formatAmount(oldAmount), workspace.Name)
-			
+
 	default:
 		return fmt.Errorf("unknown change type: %s", changeType)
 	}
 
 	// Send the email
-	params := TransactionalEmailParams{
-		To:       []string{customer.Email.String},
-		Subject:  subject,
-		HTMLBody: htmlBody,
-		TextBody: textBody, // In production, would generate text version
-		Tags: map[string]string{
-			"category":          "subscription_change",
-			"change_type":       changeType,
-			"subscription_id":   sub.ID.String(),
-			"workspace_id":      sub.WorkspaceID.String(),
+	params := params.TransactionalEmailParams{
+		To:          []string{customer.Email.String},
+		Subject:     subject,
+		HTMLContent: htmlBody,
+		TextContent: textBody, // In production, would generate text version
+		Tags: map[string]interface{}{
+			"subscription_change": changeType,
+			"subscription_id":     sub.ID.String(),
+			"workspace_id":        sub.WorkspaceID.String(),
 		},
 	}
 

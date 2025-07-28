@@ -2,55 +2,55 @@ package handlers
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
-	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
-// APIKeyHandler handles API key related operations
+// APIKeyHandler handles API key operations
 type APIKeyHandler struct {
 	common        *CommonServices
+	logger        *zap.Logger
 	apiKeyService interfaces.APIKeyService
 }
 
-// NewAPIKeyHandler creates a handler with interface dependency
-func NewAPIKeyHandler(
-	common *CommonServices,
-	apiKeyService interfaces.APIKeyService,
-) *APIKeyHandler {
+// NewAPIKeyHandler creates a new API key handler
+func NewAPIKeyHandler(common *CommonServices, logger *zap.Logger) *APIKeyHandler {
 	return &APIKeyHandler{
 		common:        common,
-		apiKeyService: apiKeyService,
+		logger:        logger,
+		apiKeyService: common.GetAPIKeyService(),
 	}
 }
 
-// Use types from helpers
-type APIKeyResponse = helpers.APIKeyResponse
+// Use types from the centralized packages
+type CreateAPIKeyRequest = requests.CreateAPIKeyRequest
+type UpdateAPIKeyRequest = requests.UpdateAPIKeyRequest
+type APIKeyResponse = responses.APIKeyResponse
+type ListAPIKeysResponse = responses.ListAPIKeysResponse
 
-// CreateAPIKeyRequest represents the request body for creating an API key
-type CreateAPIKeyRequest struct {
-	Name        string                 `json:"name" binding:"required"`
-	Description string                 `json:"description,omitempty"`
-	ExpiresAt   *time.Time             `json:"expires_at,omitempty"`
-	AccessLevel string                 `json:"access_level" binding:"required,oneof=read write admin"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+// convertAPIKeyResponse converts helpers.APIKeyResponse to responses.APIKeyResponse
+func convertAPIKeyResponse(helperResponse responses.APIKeyResponse) APIKeyResponse {
+	return APIKeyResponse{
+		ID:          helperResponse.ID,
+		Object:      "api_key",
+		Name:        helperResponse.Name,
+		AccessLevel: helperResponse.AccessLevel,
+		ExpiresAt:   helperResponse.ExpiresAt,
+		LastUsedAt:  helperResponse.LastUsedAt,
+		Metadata:    helperResponse.Metadata,
+		CreatedAt:   helperResponse.CreatedAt,
+		UpdatedAt:   helperResponse.UpdatedAt,
+		KeyPrefix:   helperResponse.KeyPrefix,
+	}
 }
-
-// UpdateAPIKeyRequest represents the request body for updating an API key
-type UpdateAPIKeyRequest struct {
-	Name        string                 `json:"name,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	ExpiresAt   *time.Time             `json:"expires_at,omitempty"`
-	AccessLevel string                 `json:"access_level,omitempty" binding:"omitempty,oneof=read write admin"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-}
-
-// Use types from helpers
-type ListAPIKeysResponse = helpers.ListAPIKeysResponse
 
 // GetAPIKeyByID godoc
 // @Summary Get an API key
@@ -85,7 +85,7 @@ func (h *APIKeyHandler) GetAPIKeyByID(c *gin.Context) {
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, helpers.ToAPIKeyResponse(apiKey))
+	sendSuccess(c, http.StatusOK, convertAPIKeyResponse(helpers.ToAPIKeyResponse(apiKey)))
 }
 
 // ListAPIKeys godoc
@@ -113,9 +113,10 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 		return
 	}
 
+	// Convert to API response format
 	response := make([]APIKeyResponse, len(apiKeys))
 	for i, key := range apiKeys {
-		response[i] = helpers.ToAPIKeyResponse(key)
+		response[i] = convertAPIKeyResponse(helpers.ToAPIKeyResponse(key))
 	}
 
 	listAPIKeysResponse := ListAPIKeysResponse{
@@ -137,13 +138,14 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
 	apiKeys, err := h.apiKeyService.GetAllAPIKeys(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve API keys"})
+		sendError(c, http.StatusInternalServerError, "Failed to retrieve API keys", err)
 		return
 	}
 
+	// Convert to API response format
 	response := make([]APIKeyResponse, len(apiKeys))
 	for i, key := range apiKeys {
-		response[i] = helpers.ToAPIKeyResponse(key)
+		response[i] = convertAPIKeyResponse(helpers.ToAPIKeyResponse(key))
 	}
 
 	listAPIKeysResponse := ListAPIKeysResponse{
@@ -153,7 +155,7 @@ func (h *APIKeyHandler) GetAllAPIKeys(c *gin.Context) {
 		Total:   int64(len(apiKeys)),
 	}
 
-	sendList(c, listAPIKeysResponse)
+	sendSuccess(c, http.StatusOK, listAPIKeysResponse)
 }
 
 // CreateAPIKey godoc
@@ -177,7 +179,7 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	}
 
 	// Create API key using service
-	apiKey, fullKey, keyPrefix, err := h.apiKeyService.CreateAPIKey(c.Request.Context(), services.CreateAPIKeyParams{
+	apiKey, fullKey, keyPrefix, err := h.apiKeyService.CreateAPIKey(c.Request.Context(), params.CreateAPIKeyParams{
 		WorkspaceID: parsedWorkspaceID,
 		Name:        req.Name,
 		Description: req.Description,
@@ -191,7 +193,7 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	}
 
 	// Include the full key in the response (only time it's shown)
-	response := helpers.ToAPIKeyResponse(apiKey)
+	response := convertAPIKeyResponse(helpers.ToAPIKeyResponse(apiKey))
 	response.Key = fullKey
 	response.KeyPrefix = keyPrefix
 
@@ -225,11 +227,11 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 		return
 	}
 
-	updatedAPIKey, err := h.apiKeyService.UpdateAPIKey(c.Request.Context(), services.UpdateAPIKeyParams{
+	updatedAPIKey, err := h.apiKeyService.UpdateAPIKey(c.Request.Context(), params.UpdateAPIKeyParams{
 		WorkspaceID: parsedWorkspaceID,
 		ID:          parsedUUID,
-		Name:        req.Name,
-		Description: req.Description,
+		Name:        &req.Name,
+		Description: &req.Description,
 		ExpiresAt:   req.ExpiresAt,
 		AccessLevel: req.AccessLevel,
 		Metadata:    req.Metadata,
@@ -239,7 +241,7 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 		return
 	}
 
-	sendSuccess(c, http.StatusOK, helpers.ToAPIKeyResponse(updatedAPIKey))
+	sendSuccess(c, http.StatusOK, convertAPIKeyResponse(helpers.ToAPIKeyResponse(updatedAPIKey)))
 }
 
 // DeleteAPIKey godoc

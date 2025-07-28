@@ -9,6 +9,8 @@ import (
 	ps "github.com/cyphera/cyphera-api/libs/go/client/payment_sync"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -31,55 +33,19 @@ func NewPaymentSyncHandlers(common *CommonServices, syncClient *ps.PaymentSyncCl
 	}
 }
 
-// Configuration Management Request/Response Types
-
-// PaymentProviderConfig represents the configuration for a payment provider
-// @Description Configuration details for a payment provider
-type PaymentProviderConfig struct {
-	APIKey         string `json:"api_key" binding:"required"`
-	WebhookSecret  string `json:"webhook_secret" binding:"required"`
-	PublishableKey string `json:"publishable_key,omitempty"`
-	Environment    string `json:"environment" binding:"required"` // "test" or "live"
-	BaseURL        string `json:"base_url,omitempty"`
-}
-
-type CreateConfigurationRequest struct {
-	ProviderName       string                 `json:"provider_name" binding:"required"`
-	IsActive           bool                   `json:"is_active"`
-	IsTestMode         bool                   `json:"is_test_mode"`
-	Configuration      PaymentProviderConfig  `json:"configuration" binding:"required"`
-	WebhookEndpointURL string                 `json:"webhook_endpoint_url,omitempty"`
-	ConnectedAccountID string                 `json:"connected_account_id,omitempty"`
-	Metadata           map[string]interface{} `json:"metadata,omitempty"`
-}
-
-type UpdateConfigurationRequest struct {
-	IsActive           *bool                  `json:"is_active,omitempty"`
-	IsTestMode         *bool                  `json:"is_test_mode,omitempty"`
-	Configuration      *PaymentProviderConfig `json:"configuration,omitempty"`
-	WebhookEndpointURL *string                `json:"webhook_endpoint_url,omitempty"`
-	ConnectedAccountID *string                `json:"connected_account_id,omitempty"`
-	Metadata           map[string]interface{} `json:"metadata,omitempty"`
-}
-
-type ConfigurationResponse struct {
-	ID                 string                 `json:"id"`
-	WorkspaceID        string                 `json:"workspace_id"`
-	ProviderName       string                 `json:"provider_name"`
-	IsActive           bool                   `json:"is_active"`
-	IsTestMode         bool                   `json:"is_test_mode"`
-	WebhookEndpointURL string                 `json:"webhook_endpoint_url,omitempty"`
-	ConnectedAccountID string                 `json:"connected_account_id,omitempty"`
-	LastSyncAt         *int64                 `json:"last_sync_at,omitempty"`
-	LastWebhookAt      *int64                 `json:"last_webhook_at,omitempty"`
-	Metadata           map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt          int64                  `json:"created_at"`
-	UpdatedAt          int64                  `json:"updated_at"`
-	// Note: Configuration is not returned for security reasons
-}
+// Use types from the centralized packages
+type PaymentProviderConfig = requests.PaymentProviderConfig
+type CreateConfigurationRequest = requests.CreateConfigurationRequest
+type UpdateConfigurationRequest = requests.UpdateConfigurationRequest
+type InitialSyncRequest = requests.InitialSyncRequest
+type CreateProviderAccountRequest = requests.CreateProviderAccountRequest
+type ConfigurationResponse = responses.ConfigurationResponse
+type InitialSyncResponse = responses.InitialSyncResponse
+type SyncSessionResponse = responses.SyncSessionResponse
+type ProviderAccountResponse = responses.ProviderAccountResponse
 
 // Helper function to convert handler PaymentProviderConfig to ps.PaymentProviderConfig
-func (h *PaymentSyncHandlers) convertToClientConfig(config PaymentProviderConfig) ps.PaymentProviderConfig {
+func (h *PaymentSyncHandlers) convertToClientConfig(config requests.PaymentProviderConfig) ps.PaymentProviderConfig {
 	return ps.PaymentProviderConfig{
 		APIKey:         config.APIKey,
 		WebhookSecret:  config.WebhookSecret,
@@ -87,67 +53,6 @@ func (h *PaymentSyncHandlers) convertToClientConfig(config PaymentProviderConfig
 		Environment:    config.Environment,
 		BaseURL:        config.BaseURL,
 	}
-}
-
-// Sync Operation Request/Response Types
-
-type InitialSyncRequest struct {
-	EntityTypes   []string `json:"entity_types,omitempty"`
-	BatchSize     int      `json:"batch_size,omitempty"`
-	FullSync      bool     `json:"full_sync"`
-	StartingAfter string   `json:"starting_after,omitempty"`
-	EndingBefore  string   `json:"ending_before,omitempty"`
-}
-
-type InitialSyncResponse struct {
-	SessionID   string                 `json:"session_id"`
-	Status      string                 `json:"status"`
-	Provider    string                 `json:"provider"`
-	EntityTypes []string               `json:"entity_types"`
-	Config      map[string]interface{} `json:"config"`
-	CreatedAt   string                 `json:"created_at"`
-}
-
-type SyncSessionResponse struct {
-	ID           string                 `json:"id"`
-	WorkspaceID  string                 `json:"workspace_id"`
-	Provider     string                 `json:"provider"`
-	SessionType  string                 `json:"session_type"`
-	Status       string                 `json:"status"`
-	EntityTypes  []string               `json:"entity_types"`
-	Config       map[string]interface{} `json:"config,omitempty"`
-	Progress     map[string]interface{} `json:"progress,omitempty"`
-	ErrorSummary map[string]interface{} `json:"error_summary,omitempty"`
-	StartedAt    *string                `json:"started_at,omitempty"`
-	CompletedAt  *string                `json:"completed_at,omitempty"`
-	CreatedAt    string                 `json:"created_at"`
-	UpdatedAt    string                 `json:"updated_at"`
-}
-
-// CreateProviderAccountRequest represents the request to create a provider account mapping
-type CreateProviderAccountRequest struct {
-	ProviderName      string                 `json:"provider_name" binding:"required"`
-	ProviderAccountID string                 `json:"provider_account_id" binding:"required"`
-	AccountType       string                 `json:"account_type" binding:"required"`
-	IsActive          bool                   `json:"is_active"`
-	Environment       string                 `json:"environment" binding:"required"`
-	DisplayName       string                 `json:"display_name,omitempty"`
-	Metadata          map[string]interface{} `json:"metadata,omitempty"`
-}
-
-// ProviderAccountResponse represents the response for provider account operations
-type ProviderAccountResponse struct {
-	ID                string                 `json:"id"`
-	WorkspaceID       string                 `json:"workspace_id"`
-	ProviderName      string                 `json:"provider_name"`
-	ProviderAccountID string                 `json:"provider_account_id"`
-	AccountType       string                 `json:"account_type"`
-	IsActive          bool                   `json:"is_active"`
-	Environment       string                 `json:"environment"`
-	DisplayName       string                 `json:"display_name,omitempty"`
-	Metadata          map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt         string                 `json:"created_at"`
-	UpdatedAt         string                 `json:"updated_at"`
 }
 
 // Configuration Management Handlers
