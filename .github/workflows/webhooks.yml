@@ -11,13 +11,13 @@ on:
       - 'apps/webhook-processor/**'
       - 'apps/dlq-processor/**'
       - 'deployment/template-webhook.yaml'
-      - 'internal/client/payment_sync/**'
-      - 'internal/handlers/payment_sync_handlers.go'
-      - 'internal/handlers/error_recovery_handlers.go'
-      - 'internal/db/webhook_management.sql.go'
-      - 'internal/db/workspace_payment_configurations.sql.go'
-      - 'internal/db/workspace_provider_accounts.sql.go'
-      - 'internal/db/payment_sync.sql.go'
+      - 'libs/go/client/payment_sync/**'
+      - 'apps/api/handlers/payment_sync_handlers.go'
+      - 'apps/api/handlers/error_recovery_handlers.go'
+      - 'libs/go/db/webhook_management.sql.go'
+      - 'libs/go/db/workspace_payment_configurations.sql.go'
+      - 'libs/go/db/workspace_provider_accounts.sql.go'
+      - 'libs/go/db/payment_sync.sql.go'
       - '.github/workflows/webhooks.yml'
       - '.github/workflows/deploy-webhook-sam.yml'
       - 'Dockerfile'
@@ -32,13 +32,13 @@ on:
       - 'apps/webhook-processor/**'
       - 'apps/dlq-processor/**'
       - 'deployment/template-webhook.yaml'
-      - 'internal/client/payment_sync/**'
-      - 'internal/handlers/payment_sync_handlers.go'
-      - 'internal/handlers/error_recovery_handlers.go'
-      - 'internal/db/webhook_management.sql.go'
-      - 'internal/db/workspace_payment_configurations.sql.go'
-      - 'internal/db/workspace_provider_accounts.sql.go'
-      - 'internal/db/payment_sync.sql.go'
+      - 'libs/go/client/payment_sync/**'
+      - 'apps/api/handlers/payment_sync_handlers.go'
+      - 'apps/api/handlers/error_recovery_handlers.go'
+      - 'libs/go/db/webhook_management.sql.go'
+      - 'libs/go/db/workspace_payment_configurations.sql.go'
+      - 'libs/go/db/workspace_provider_accounts.sql.go'
+      - 'libs/go/db/payment_sync.sql.go'
       - '.github/workflows/webhooks.yml'
       - '.github/workflows/deploy-webhook-sam.yml'
       - 'Dockerfile'
@@ -95,9 +95,9 @@ jobs:
     - name: Check required Go files exist
       run: |
         echo "🔍 Checking required webhook command files..."
-        test -f cmd/webhook-receiver/main.go || (echo "❌ webhook-receiver/main.go missing" && exit 1)
-        test -f cmd/webhook-processor/main.go || (echo "❌ webhook-processor/main.go missing" && exit 1)
-        test -f cmd/dlq-processor/main.go || (echo "❌ dlq-processor/main.go missing" && exit 1)
+        test -f apps/webhook-receiver/cmd/main.go || (echo "❌ webhook-receiver/cmd/main.go missing" && exit 1)
+        test -f apps/webhook-processor/cmd/main.go || (echo "❌ webhook-processor/cmd/main.go missing" && exit 1)
+        test -f apps/dlq-processor/cmd/main.go || (echo "❌ dlq-processor/cmd/main.go missing" && exit 1)
         echo "✅ All required command files exist"
 
     - name: Check Makefile build targets
@@ -150,11 +150,11 @@ jobs:
         PAYMENT_SYNC_ENCRYPTION_KEY: fake_encryption_key_for_testing_32chars
       run: |
         echo "🧪 Testing webhook components..."
-        go test -v ./cmd/webhook-receiver/... || echo "No tests in webhook-receiver yet"
-        go test -v ./cmd/webhook-processor/... || echo "No tests in webhook-processor yet"
-        go test -v ./cmd/dlq-processor/... || echo "No tests in dlq-processor yet"
-        go test -v ./internal/client/payment_sync/...
-        go test -v ./internal/handlers -run ".*PaymentSync.*"
+        go test -v ./apps/webhook-receiver/... || echo "No tests in webhook-receiver yet"
+        go test -v ./apps/webhook-processor/... || echo "No tests in webhook-processor yet"
+        go test -v ./apps/dlq-processor/... || echo "No tests in dlq-processor yet"
+        go test -v ./libs/go/client/payment_sync/... || echo "No tests in payment_sync yet"
+        go test -v ./apps/api/handlers -run ".*PaymentSync.*" || echo "No PaymentSync handler tests yet"
         echo "✅ Tests completed"
 
   # ============================================================================
