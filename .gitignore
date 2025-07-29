@@ -50,6 +50,13 @@ terraform/.terraform/
 *.swo
 tmp/
 
+# AI tool directories and files (contain sensitive data)
+.claude/
+.claude-code/
+.cursor/
+*.env.claude
+.env.claude
+
 # Serverless
 .serverless/
 node_modules/
