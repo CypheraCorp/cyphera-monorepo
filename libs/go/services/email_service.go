@@ -73,9 +73,9 @@ func (s *EmailService) SendDunningEmail(ctx context.Context, template *db.Dunnin
 			"X-Entity-Ref-ID": uuid.New().String(),
 			"X-Campaign-Type": "dunning",
 		},
-		Tags: map[string]interface{}{
-			"category":      "dunning",
-			"template_type": template.TemplateType,
+		Tags: []resend.Tag{
+			{Name: "category", Value: "dunning"},
+			{Name: "template_type", Value: template.TemplateType},
 		},
 	}
 
@@ -118,9 +118,14 @@ func (s *EmailService) SendTransactionalEmail(ctx context.Context, emailParams p
 
 	// Convert tags if provided
 	if len(emailParams.Tags) > 0 {
-		resendParams.Tags = make(map[string]interface{})
+		resendParams.Tags = make([]resend.Tag, 0, len(emailParams.Tags))
 		for key, value := range emailParams.Tags {
-			resendParams.Tags[key] = value
+			// Convert interface{} to string
+			valueStr := fmt.Sprintf("%v", value)
+			resendParams.Tags = append(resendParams.Tags, resend.Tag{
+				Name:  key,
+				Value: valueStr,
+			})
 		}
 	}
 
