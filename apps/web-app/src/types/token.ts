@@ -17,11 +17,13 @@ export interface TokenResponse {
 }
 
 /**
- * Request payload for token price
+ * Request payload for token price - MUST match backend GetTokenQuoteRequest
  */
 export interface TokenQuotePayload {
-  fiat_symbol: string; // if provided, the conversion amount is in USD or EUR
-  token_symbol: string; // The symbol of the token to convert TO (e.g. USDC, USDT, ETH, BTC, etc.)
+  token_id: string;    // UUID of the token
+  network_id: string;  // UUID of the network
+  amount_wei: string;  // Amount in wei (smallest unit)
+  to_currency: string; // Target currency (e.g., "USD", "EUR")
 }
 
 /**

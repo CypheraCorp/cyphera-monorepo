@@ -68,9 +68,14 @@ export function ProductPaymentCard({ product, isAuthenticated = false }: Product
       setAmountBigInt(null);
 
       try {
+        // Calculate 1 token in wei (smallest unit) to get price per token
+        const oneTokenInWei = (BigInt(10) ** BigInt(tokenDecimals)).toString();
+        
         const payload: TokenQuotePayload = {
-          fiat_symbol: product.price.currency,
-          token_symbol: primaryOption.token_symbol,
+          token_id: primaryOption.token_id,
+          network_id: primaryOption.network_id,
+          amount_wei: oneTokenInWei,
+          to_currency: product.price.currency.toUpperCase(),
         };
 
         const response = await fetch('/api/tokens/quote', {

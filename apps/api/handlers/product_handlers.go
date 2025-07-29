@@ -266,7 +266,7 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 		return
 	}
 
-	responseList := make([]responses.ProductResponse, 0, len(result.Products))
+	responseList := make([]responses.ProductResponse, len(result.Products))
 	for i, productDetail := range result.Products {
 		// Convert product detail to db.Product for compatibility
 		product := db.Product{
@@ -292,7 +292,7 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 			return
 		}
 		// TODO: Fix type conversion from helpers.ProductTokenResponse to responses.ProductTokenResponse
-		productTokenListResponse := make([]responses.ProductTokenResponse, 0, len(productTokenList))
+		productTokenListResponse := make([]responses.ProductTokenResponse, len(productTokenList))
 		for j, productToken := range productTokenList {
 			productTokenListResponse[j] = helpers.ToActiveProductTokenByProductResponse(productToken)
 		}
@@ -365,7 +365,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	}
 
 	// Convert request prices to service params
-	servicePrices := make([]params.CreatePriceParams, 0, len(req.Prices))
+	servicePrices := make([]params.CreatePriceParams, len(req.Prices))
 	for i, price := range req.Prices {
 		servicePrices[i] = params.CreatePriceParams{
 			Active:              price.Active,
@@ -381,7 +381,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 	}
 
 	// Convert request product tokens to service params
-	serviceTokens := make([]params.CreateProductTokenParams, 0, len(req.ProductTokens))
+	serviceTokens := make([]params.CreateProductTokenParams, len(req.ProductTokens))
 	for i, token := range req.ProductTokens {
 		networkID, err := uuid.Parse(token.NetworkID)
 		if err != nil {
@@ -549,8 +549,15 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 // Helper function to convert db.Price to PriceResponse
 func toPriceResponse(p db.Price) responses.PriceResponse {
 	var metadata map[string]interface{}
-	if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
-		logger.Error("Error unmarshaling price metadata", zap.Error(err))
+	if len(p.Metadata) > 0 && string(p.Metadata) != "null" {
+		if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
+			logger.Error("Error unmarshaling price metadata", zap.Error(err))
+			// Set empty metadata on error
+			metadata = make(map[string]interface{})
+		}
+	} else {
+		// Set empty metadata for null or empty JSON
+		metadata = make(map[string]interface{})
 	}
 
 	return responses.PriceResponse{
@@ -573,11 +580,18 @@ func toPriceResponse(p db.Price) responses.PriceResponse {
 // Helper function to convert database model to API response
 func toProductResponse(p db.Product, dbPrices []db.Price) responses.ProductResponse {
 	var metadata map[string]interface{}
-	if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
-		logger.Error("Error unmarshaling product metadata", zap.Error(err))
+	if len(p.Metadata) > 0 && string(p.Metadata) != "null" {
+		if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
+			logger.Error("Error unmarshaling product metadata", zap.Error(err))
+			// Set empty metadata on error
+			metadata = make(map[string]interface{})
+		}
+	} else {
+		// Set empty metadata for null or empty JSON
+		metadata = make(map[string]interface{})
 	}
 
-	apiPrices := make([]responses.PriceResponse, 0, len(dbPrices))
+	apiPrices := make([]responses.PriceResponse, len(dbPrices))
 	for i, dbPrice := range dbPrices {
 		apiPrices[i] = toPriceResponse(dbPrice)
 	}
@@ -833,7 +847,15 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 	}
 
 	// Create comprehensive response using the helper
-	comprehensiveResponse, err := helpers.ToComprehensiveSubscriptionResponse(ctx, h.common.db, *subscriptionResult.Subscription)
+	h.common.GetLogger().Info("Creating comprehensive subscription response",
+		zap.String("subscription_id", subscriptionResult.Subscription.ID.String()),
+		zap.String("transaction_hash", subscriptionResult.TransactionHash))
+	
+	// Create a context with timeout to avoid indefinite hangs
+	responseCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	
+	comprehensiveResponse, err := helpers.ToComprehensiveSubscriptionResponse(responseCtx, h.common.db, *subscriptionResult.Subscription)
 	if err != nil {
 		logger.Error("Failed to create comprehensive subscription response",
 			zap.Error(err),
@@ -841,6 +863,9 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		h.common.HandleError(c, err, "Failed to create subscription response", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}
+	
+	h.common.GetLogger().Info("Successfully created comprehensive subscription response",
+		zap.String("subscription_id", subscriptionResult.Subscription.ID.String()))
 
 	c.JSON(http.StatusCreated, comprehensiveResponse)
 }

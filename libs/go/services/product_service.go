@@ -367,7 +367,7 @@ func (s *ProductService) GetPublicProductByPriceID(ctx context.Context, priceID 
 	// Build response
 	response := helpers.ToPublicProductResponse(workspace, product, price, productTokens, wallet)
 
-	// Enrich product tokens with token addresses
+	// Enrich product tokens with complete token and network details
 	for i, pt := range response.ProductTokens {
 		tokenID, err := uuid.Parse(pt.TokenID)
 		if err != nil {
@@ -377,6 +377,7 @@ func (s *ProductService) GetPublicProductByPriceID(ctx context.Context, priceID 
 			continue
 		}
 
+		// Get token details
 		token, err := s.queries.GetToken(ctx, tokenID)
 		if err != nil {
 			s.logger.Warn("Failed to retrieve token details",
@@ -385,7 +386,24 @@ func (s *ProductService) GetPublicProductByPriceID(ctx context.Context, priceID 
 			continue
 		}
 
+		// Get network details
+		network, err := s.queries.GetNetwork(ctx, token.NetworkID)
+		if err != nil {
+			s.logger.Warn("Failed to retrieve network details",
+				zap.String("network_id", token.NetworkID.String()),
+				zap.Error(err))
+			continue
+		}
+
+		// Populate all the missing fields that the frontend needs
 		response.ProductTokens[i].TokenAddress = token.ContractAddress
+		response.ProductTokens[i].ContractAddress = token.ContractAddress
+		response.ProductTokens[i].TokenDecimals = token.Decimals
+		response.ProductTokens[i].TokenName = token.Name
+		response.ProductTokens[i].GasToken = token.GasToken
+		response.ProductTokens[i].NetworkName = network.DisplayName.String
+		response.ProductTokens[i].NetworkType = string(network.NetworkType)
+		response.ProductTokens[i].ChainID = network.ChainID
 	}
 
 	return &response, nil

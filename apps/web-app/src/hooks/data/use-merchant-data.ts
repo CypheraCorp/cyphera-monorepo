@@ -9,7 +9,7 @@ import type { WalletResponse } from '@/types/wallet';
 import type { NetworkWithTokensResponse } from '@/types/network';
 import type { CustomerResponse } from '@/types/customer';
 import type { SubscriptionResponse } from '@/types/subscription';
-import type { SubscriptionEventResponse } from '@/types/subscription-event';
+import type { SubscriptionEventFullResponse } from '@/types/subscription-event';
 
 // Query keys for consistent caching
 export const queryKeys = {
@@ -101,7 +101,7 @@ export function useSubscriptions(page = 1, limit = 10) {
 export function useTransactions(page = 1, limit = 10) {
   return useQuery({
     queryKey: queryKeys.transactions(page, limit),
-    queryFn: async (): Promise<PaginatedResponse<SubscriptionEventResponse>> => {
+    queryFn: async (): Promise<PaginatedResponse<SubscriptionEventFullResponse>> => {
       const response = await fetch(`/api/transactions?page=${page}&limit=${limit}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch transactions: ${response.statusText}`);

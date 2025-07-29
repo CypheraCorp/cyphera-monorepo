@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
+	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
@@ -105,6 +106,11 @@ func (s *SubscriptionEventService) ListSubscriptionEvents(ctx context.Context, p
 	}
 
 	// Get events
+	s.logger.Info("Fetching subscription events with pagination",
+		zap.String("workspace_id", params.WorkspaceID.String()),
+		zap.Int32("limit", params.Limit),
+		zap.Int32("offset", params.Offset))
+	
 	events, err := s.queries.ListSubscriptionEventDetailsWithPagination(ctx, db.ListSubscriptionEventDetailsWithPaginationParams{
 		WorkspaceID: params.WorkspaceID,
 		Limit:       params.Limit,
@@ -117,6 +123,20 @@ func (s *SubscriptionEventService) ListSubscriptionEvents(ctx context.Context, p
 		return nil, fmt.Errorf("failed to retrieve subscription events: %w", err)
 	}
 
+	s.logger.Info("Retrieved subscription events from database",
+		zap.String("workspace_id", params.WorkspaceID.String()),
+		zap.Int("events_count", len(events)),
+		zap.Any("first_event_sample", func() interface{} {
+			if len(events) > 0 {
+				return map[string]interface{}{
+					"id": events[0].SubscriptionEventID.String(),
+					"event_type": events[0].EventType,
+					"tx_hash": events[0].TransactionHash,
+				}
+			}
+			return nil
+		}()))
+
 	// Get total count
 	totalCount, err := s.queries.CountSubscriptionEventDetails(ctx, params.WorkspaceID)
 	if err != nil {
@@ -126,35 +146,32 @@ func (s *SubscriptionEventService) ListSubscriptionEvents(ctx context.Context, p
 		return nil, fmt.Errorf("failed to count subscription events: %w", err)
 	}
 
-	// Convert events to response format
-	responseEvents := make([]responses.SubscriptionEventResponse, len(events))
+	// Convert events to response format using the helper for full response
+	responseEvents := make([]responses.SubscriptionEventFullResponse, len(events))
 	for i, event := range events {
-		responseEvents[i] = responses.SubscriptionEventResponse{
-			ID:                 event.SubscriptionEventID,
-			SubscriptionID:     event.SubscriptionID,
-			EventType:          string(event.EventType),
-			TransactionHash:    event.TransactionHash.String,
-			EventAmountInCents: event.EventAmountInCents,
-			EventOccurredAt:    event.EventOccurredAt.Time,
-			ErrorMessage:       event.ErrorMessage.String,
-			EventMetadata:      event.EventMetadata,
-			EventCreatedAt:     event.EventCreatedAt.Time,
-			CustomerID:         event.CustomerID,
-			SubscriptionStatus: string(event.SubscriptionStatus),
-			ProductID:          event.ProductID,
-			ProductName:        event.ProductName,
-			PriceInfo: responses.SubscriptionEventPriceInfo{
-				ID:                  event.PriceID,
-				Type:                string(event.PriceType),
-				Currency:            event.PriceCurrency,
-				UnitAmountInPennies: int64(event.PriceUnitAmountInPennies),
-				IntervalType:        string(event.PriceIntervalType),
-				TermLength:          event.PriceTermLength,
-				CreatedAt:           event.EventCreatedAt.Time.Unix(),
-				UpdatedAt:           event.EventCreatedAt.Time.Unix(),
-			},
+		fullResponse, err := helpers.ToSubscriptionEventResponsePagination(ctx, event)
+		if err != nil {
+			s.logger.Error("Failed to convert subscription event to response",
+				zap.String("event_id", event.SubscriptionEventID.String()),
+				zap.Error(err))
+			return nil, fmt.Errorf("failed to convert subscription event to response: %w", err)
 		}
+		responseEvents[i] = fullResponse
 	}
+	
+	s.logger.Info("Converted events to response format",
+		zap.String("workspace_id", params.WorkspaceID.String()),
+		zap.Int("response_events_count", len(responseEvents)),
+		zap.Any("first_response_sample", func() interface{} {
+			if len(responseEvents) > 0 {
+				return map[string]interface{}{
+					"id": responseEvents[0].ID.String(),
+					"event_type": responseEvents[0].EventType,
+					"tx_hash": responseEvents[0].TransactionHash,
+				}
+			}
+			return nil
+		}()))
 	
 	return &responses.ListSubscriptionEventsResult{
 		Events: responseEvents,

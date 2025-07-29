@@ -295,9 +295,16 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, services interfaces.CommonS
 	// Note: In production with many keys, consider caching or using a different strategy
 	activeKeys, err := services.GetDB().GetAllActiveAPIKeys(c.Request.Context())
 	if err != nil {
-		logger.Log.Debug("Failed to retrieve active API keys",
+		logger.Log.Error("Failed to retrieve active API keys",
 			zap.Error(err),
+			zap.String("operation", "GetAllActiveAPIKeys"),
+			zap.String("key_preview", keyPreview),
 		)
+		// In development, provide more detailed error information
+		stage := os.Getenv("STAGE")
+		if stage == "local" || stage == "dev" {
+			return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("database connection error: %w", err)
+		}
 		return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("authentication service error")
 	}
 
@@ -332,6 +339,7 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, services interfaces.CommonS
 	logger.Log.Debug("API key found",
 		zap.String("key_id", key.ID.String()),
 		zap.String("workspace_id", key.WorkspaceID.String()),
+		zap.String("access_level", string(key.AccessLevel)),
 	)
 
 	// Check if API key is expired
@@ -343,26 +351,78 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, services interfaces.CommonS
 		return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("API key has expired")
 	}
 
-	// Get workspace associated with API key
-	workspace, err := services.GetDB().GetWorkspace(c.Request.Context(), key.WorkspaceID)
-	if err != nil {
-		logger.Log.Debug("Failed to get workspace for API key",
+	// Handle admin API keys differently - they can operate without workspace context
+	var workspace db.Workspace
+	var account db.Account
+	
+	if key.AccessLevel == "admin" {
+		logger.Log.Debug("Admin API key detected - allowing cross-workspace access",
 			zap.String("key_id", key.ID.String()),
-			zap.String("workspace_id", key.WorkspaceID.String()),
-			zap.Error(err),
 		)
-		return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid workspace")
-	}
+		
+		// For admin keys, we still need to get the account info from the associated workspace
+		// but we won't restrict operations to that specific workspace
+		adminWorkspace, err := services.GetDB().GetWorkspace(c.Request.Context(), key.WorkspaceID)
+		if err != nil {
+			logger.Log.Debug("Failed to get admin workspace for API key",
+				zap.String("key_id", key.ID.String()),
+				zap.String("workspace_id", key.WorkspaceID.String()),
+				zap.Error(err),
+			)
+			return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid admin workspace")
+		}
+		
+		adminAccount, err := services.GetDB().GetAccount(c.Request.Context(), adminWorkspace.AccountID)
+		if err != nil {
+			logger.Log.Debug("Failed to get admin account for workspace",
+				zap.String("workspace_id", adminWorkspace.ID.String()),
+				zap.String("account_id", adminWorkspace.AccountID.String()),
+				zap.Error(err),
+			)
+			return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid admin account")
+		}
+		
+		// Verify it's actually an admin account
+		if adminAccount.AccountType != "admin" {
+			logger.Log.Warn("Admin API key associated with non-admin account",
+				zap.String("key_id", key.ID.String()),
+				zap.String("account_type", string(adminAccount.AccountType)),
+			)
+			return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid admin privileges")
+		}
+		
+		workspace = adminWorkspace
+		account = adminAccount
+		
+		// Set admin context flags that can be used by handlers
+		c.Set("is_admin", true)
+		c.Set("admin_account_id", account.ID.String())
+		
+	} else {
+		// Regular API key - must be tied to a specific workspace
+		var err error
+		workspace, err = services.GetDB().GetWorkspace(c.Request.Context(), key.WorkspaceID)
+		if err != nil {
+			logger.Log.Debug("Failed to get workspace for API key",
+				zap.String("key_id", key.ID.String()),
+				zap.String("workspace_id", key.WorkspaceID.String()),
+				zap.Error(err),
+			)
+			return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid workspace")
+		}
 
-	// Get account associated with workspace
-	account, err := services.GetDB().GetAccount(c.Request.Context(), workspace.AccountID)
-	if err != nil {
-		logger.Log.Debug("Failed to get account for workspace",
-			zap.String("workspace_id", workspace.ID.String()),
-			zap.String("account_id", workspace.AccountID.String()),
-			zap.Error(err),
-		)
-		return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid account")
+		account, err = services.GetDB().GetAccount(c.Request.Context(), workspace.AccountID)
+		if err != nil {
+			logger.Log.Debug("Failed to get account for workspace",
+				zap.String("workspace_id", workspace.ID.String()),
+				zap.String("account_id", workspace.AccountID.String()),
+				zap.Error(err),
+			)
+			return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid account")
+		}
+		
+		// Set regular user context flags
+		c.Set("is_admin", false)
 	}
 
 	logger.Log.Debug("API key validation successful",

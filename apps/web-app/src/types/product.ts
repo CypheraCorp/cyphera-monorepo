@@ -135,19 +135,28 @@ export interface UpdateProductRequest {
 }
 
 /**
- * Public Product Token Response from the API
+ * Public Product Token Response from the API - MUST match backend ProductTokenResponse exactly
  */
 export interface PublicProductTokenResponse {
+  id: string;
+  object: string;
+  product_id: string;
   product_token_id: string;
   network_id: string;
-  network_name: string;
-  network_chain_id: string;
   token_id: string;
-  token_address: string;
-  token_name: string;
-  token_symbol: string;
-  token_image_url: string;
-  token_decimals: number; // int32
+  token_name?: string;
+  token_symbol?: string;
+  token_address?: string;
+  contract_address?: string;
+  token_decimals?: number;
+  gas_token?: boolean;
+  chain_id?: number;
+  network_name?: string;
+  network_type?: string;
+  active: boolean;
+  metadata?: Record<string, unknown>;
+  created_at: number;
+  updated_at: number;
 }
 
 /**

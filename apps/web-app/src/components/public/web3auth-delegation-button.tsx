@@ -491,7 +491,7 @@ export function Web3AuthDelegationButton({
         productName,
         customerName,
         tokenSymbol,
-        tokenAmount: subscriptionTokenAmount,
+        tokenAmount: subscriptionTokenAmount.toString(),
         totalAmountCents,
         walletAddress,
         subscriptionStatus: subscriptionStatus as string | undefined,

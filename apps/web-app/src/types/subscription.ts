@@ -26,7 +26,7 @@ export interface SubscriptionResponse {
   customer_id?: string;
   customer_name?: string;
   customer_email?: string;
-  token_amount: string;
+  token_amount: number;
   total_amount_in_cents?: number;
   status: SubscriptionStatus;
   current_period_start: string;

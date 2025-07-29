@@ -15,7 +15,7 @@ export class TokensAPI extends CypheraAPI {
    */
   async getTokenQuote(payload: TokenQuotePayload): Promise<TokenQuoteResponse> {
     try {
-      if (!payload.token_symbol || !payload.fiat_symbol) {
+      if (!payload.token_id || !payload.network_id || !payload.amount_wei || !payload.to_currency) {
         throw new Error('Missing required parameters');
       }
 

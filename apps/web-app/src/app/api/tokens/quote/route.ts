@@ -11,14 +11,16 @@ export async function POST(request: Request) {
     const tokensAPI = new TokensAPI();
     const payload = await request.json();
 
-    if (!payload.token_symbol || !payload.fiat_symbol) {
+    if (!payload.token_id || !payload.network_id || !payload.amount_wei || !payload.to_currency) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
     }
 
     // TokenQuotePayload
     const tokenQuotePayload: TokenQuotePayload = {
-      token_symbol: payload.token_symbol,
-      fiat_symbol: payload.fiat_symbol,
+      token_id: payload.token_id,
+      network_id: payload.network_id,
+      amount_wei: payload.amount_wei,
+      to_currency: payload.to_currency,
     };
 
     const result = await tokensAPI.getTokenQuote(tokenQuotePayload);

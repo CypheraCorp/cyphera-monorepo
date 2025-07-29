@@ -417,7 +417,12 @@ func (s *CustomerService) ProcessCustomerAndWallet(
 	processParams params.ProcessCustomerWalletParams,
 ) (*db.Customer, *db.CustomerWallet, error) {
 	// Create queries instance with transaction
-	qtx := db.New(tx)
+	var qtx db.Querier
+	if tx != nil {
+		qtx = db.New(tx)
+	} else {
+		qtx = s.queries
+	}
 	
 	customers, err := qtx.GetCustomersByWalletAddress(ctx, processParams.WalletAddress)
 	if err != nil {
@@ -489,7 +494,12 @@ func (s *CustomerService) CreateCustomerFromWallet(
 	tx pgx.Tx,
 	params params.CreateCustomerFromWalletParams,
 ) (*db.Customer, *db.CustomerWallet, error) {
-	qtx := db.New(tx)
+	var qtx db.Querier
+	if tx != nil {
+		qtx = db.New(tx)
+	} else {
+		qtx = s.queries
+	}
 	
 	s.logger.Info("Creating new customer for wallet address",
 		zap.String("wallet_address", params.WalletAddress),
@@ -582,7 +592,12 @@ func (s *CustomerService) FindOrCreateCustomerWallet(
 	tx pgx.Tx,
 	params params.FindOrCreateWalletParams,
 ) (*db.CustomerWallet, error) {
-	qtx := db.New(tx)
+	var qtx db.Querier
+	if tx != nil {
+		qtx = db.New(tx)
+	} else {
+		qtx = s.queries
+	}
 	
 	wallets, err := qtx.ListCustomerWallets(ctx, params.CustomerID)
 	if err != nil {

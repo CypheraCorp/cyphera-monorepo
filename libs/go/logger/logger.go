@@ -86,7 +86,8 @@ func InitLoggerWithConfig(config LoggerConfig) {
 	
 	// Enable caller information for debugging
 	zapConfig.DisableCaller = false
-	zapConfig.DisableStacktrace = config.Stage == "prod"
+	// Enable stacktraces for development and debug levels
+	zapConfig.DisableStacktrace = config.Stage == "prod" && level > zapcore.DebugLevel
 	
 	// Build the logger
 	logger, err := zapConfig.Build()

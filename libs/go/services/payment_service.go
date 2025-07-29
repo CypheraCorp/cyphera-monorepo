@@ -106,22 +106,25 @@ func (s *PaymentService) CreatePaymentFromSubscriptionEvent(ctx context.Context,
 	}
 
 	if params.CryptoAmount != "" {
-		paymentParams.CryptoAmount = pgtype.Numeric{
-			Int:   nil,
-			Exp:   0,
-			Valid: true,
+		// Parse the decimal string into a pgtype.Numeric
+		if err := paymentParams.CryptoAmount.Scan(params.CryptoAmount); err != nil {
+			s.logger.Warn("Failed to parse crypto amount, skipping field",
+				zap.String("crypto_amount", params.CryptoAmount),
+				zap.Error(err))
+			// Leave as invalid/null if parsing fails
+			paymentParams.CryptoAmount = pgtype.Numeric{Valid: false}
 		}
-		// Note: You may need to properly parse the decimal string here
-		// For now, just marking as valid
 	}
 
 	if params.ExchangeRate != "" {
-		paymentParams.ExchangeRate = pgtype.Numeric{
-			Int:   nil,
-			Exp:   0,
-			Valid: true,
+		// Parse the decimal string into a pgtype.Numeric
+		if err := paymentParams.ExchangeRate.Scan(params.ExchangeRate); err != nil {
+			s.logger.Warn("Failed to parse exchange rate, skipping field",
+				zap.String("exchange_rate", params.ExchangeRate),
+				zap.Error(err))
+			// Leave as invalid/null if parsing fails
+			paymentParams.ExchangeRate = pgtype.Numeric{Valid: false}
 		}
-		// Note: You may need to properly parse the decimal string here
 	}
 
 	// Handle gas fees

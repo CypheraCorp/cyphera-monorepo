@@ -1,6 +1,6 @@
 import { CypheraAPI, UserRequestContext } from './api';
 import type { PaginatedResponse, PaginationParams } from '@/types/common';
-import type { SubscriptionEventResponse } from '@/types/subscription-event';
+import type { SubscriptionEventFullResponse } from '@/types/subscription-event';
 import { logger } from '@/lib/core/logger/logger-utils'; /**
  * Transactions API class for handling transaction-related API requests
  * Extends the base CypheraAPI class (STATELESS regarding user)
@@ -16,7 +16,7 @@ export class TransactionsAPI extends CypheraAPI {
   async getTransactions(
     context: UserRequestContext,
     params?: PaginationParams
-  ): Promise<PaginatedResponse<SubscriptionEventResponse>> {
+  ): Promise<PaginatedResponse<SubscriptionEventFullResponse>> {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
@@ -24,7 +24,7 @@ export class TransactionsAPI extends CypheraAPI {
 
     try {
       logger.info('Fetching transactions from:', { url });
-      return await this.fetchWithRateLimit<PaginatedResponse<SubscriptionEventResponse>>(url, {
+      return await this.fetchWithRateLimit<PaginatedResponse<SubscriptionEventFullResponse>>(url, {
         method: 'GET',
         headers: this.getHeaders(context),
       });
@@ -44,9 +44,9 @@ export class TransactionsAPI extends CypheraAPI {
   async getTransactionById(
     context: UserRequestContext,
     transactionId: string
-  ): Promise<SubscriptionEventResponse> {
+  ): Promise<SubscriptionEventFullResponse> {
     try {
-      return await this.fetchWithRateLimit<SubscriptionEventResponse>(`${this.baseUrl}/subscription-events/${transactionId}`, {
+      return await this.fetchWithRateLimit<SubscriptionEventFullResponse>(`${this.baseUrl}/subscription-events/${transactionId}`, {
         method: 'GET',
         headers: this.getHeaders(context),
       });

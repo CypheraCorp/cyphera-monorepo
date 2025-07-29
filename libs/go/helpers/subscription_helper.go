@@ -224,25 +224,49 @@ func DetermineErrorType(err error) db.SubscriptionEventType {
 // ToComprehensiveSubscriptionResponse converts a db.Subscription to a comprehensive SubscriptionResponse
 // that includes all subscription fields plus the initial transaction hash from subscription events
 func ToComprehensiveSubscriptionResponse(ctx context.Context, queries db.Querier, subscription db.Subscription) (*responses.SubscriptionResponse, error) {
+	logger.Log.Info("Starting ToComprehensiveSubscriptionResponse",
+		zap.String("subscription_id", subscription.ID.String()),
+		zap.String("workspace_id", subscription.WorkspaceID.String()))
+	
 	// Get the subscription details with related data
+	logger.Log.Info("Calling GetSubscriptionWithDetails query",
+		zap.String("subscription_id", subscription.ID.String()))
+	
 	subscriptionDetails, err := queries.GetSubscriptionWithDetails(ctx, db.GetSubscriptionWithDetailsParams{
 		ID:          subscription.ID,
 		WorkspaceID: subscription.WorkspaceID,
 	})
 	if err != nil {
+		logger.Log.Error("GetSubscriptionWithDetails query failed",
+			zap.Error(err),
+			zap.String("subscription_id", subscription.ID.String()))
 		return nil, fmt.Errorf("failed to get subscription details: %w", err)
 	}
+	
+	logger.Log.Info("GetSubscriptionWithDetails query completed successfully",
+		zap.String("subscription_id", subscription.ID.String()))
 
 	// Get the initial transaction hash from the first redemption event
+	logger.Log.Info("Calling ListSubscriptionEventsBySubscription query",
+		zap.String("subscription_id", subscription.ID.String()))
+	
 	initialTxHash := ""
 	events, err := queries.ListSubscriptionEventsBySubscription(ctx, subscription.ID)
 	if err == nil {
+		logger.Log.Info("ListSubscriptionEventsBySubscription query completed successfully",
+			zap.String("subscription_id", subscription.ID.String()),
+			zap.Int("events_count", len(events)))
+		
 		for _, event := range events {
 			if event.EventType == db.SubscriptionEventTypeRedeemed && event.TransactionHash.Valid {
 				initialTxHash = event.TransactionHash.String
 				break
 			}
 		}
+	} else {
+		logger.Log.Error("ListSubscriptionEventsBySubscription query failed",
+			zap.Error(err),
+			zap.String("subscription_id", subscription.ID.String()))
 	}
 
 	// Parse metadata

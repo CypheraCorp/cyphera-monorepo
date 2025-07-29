@@ -282,7 +282,7 @@ func (p *ScheduledChangesProcessor) processDunningFinalActions(ctx context.Conte
 		return fmt.Errorf("failed to get campaigns needing final action: %w", err)
 	}
 
-	p.logger.Info("Processing dunning final actions",
+	p.logger.Info("processDunningFinalActions()",
 		zap.Int("campaign_count", len(campaigns)))
 
 	for _, campaign := range campaigns {

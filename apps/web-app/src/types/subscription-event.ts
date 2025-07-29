@@ -26,7 +26,7 @@ export interface SubscriptionEventPriceInfo {
  * Represents a detailed view of a subscription event.
  * Includes denormalized information from related entities like subscription, product, and price.
  */
-export interface SubscriptionEventResponse {
+export interface SubscriptionEventFullResponse {
   id: string; // uuid.UUID
   subscription_id: string; // uuid.UUID
   event_type: SubscriptionEventType; // db.SubscriptionEventType

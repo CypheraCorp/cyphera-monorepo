@@ -83,7 +83,7 @@ function useWeb3AuthUSDCBalance(productNetwork?: PublicProductTokenResponse) {
       return;
     }
 
-    const chainIdString = productNetwork.network_chain_id;
+    const chainIdString = productNetwork.chain_id?.toString();
     if (!chainIdString) {
       logger.log('❌ Chain ID not found for network:', productNetwork.network_name);
       return;
@@ -111,7 +111,7 @@ function useWeb3AuthUSDCBalance(productNetwork?: PublicProductTokenResponse) {
 
       logger.log('🔍 Current network details:', {
         productNetworkName: productNetwork.network_name,
-        productChainId: productNetwork.network_chain_id,
+        productChainId: productNetwork.chain_id,
         currentChainId: currentChainId,
         currentChainIdDecimal: parseInt(currentChainId, 16),
         usdcContractAddress: usdcAddress,
@@ -216,6 +216,15 @@ function useWeb3AuthUSDCBalance(productNetwork?: PublicProductTokenResponse) {
       };
       return networkMap[networkName] || null;
     };
+
+    if (!productNetwork.network_name) {
+      toast({
+        title: 'Error',
+        description: 'Network name is not available',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     const blockchainIdentifier = getBlockchainIdentifier(productNetwork.network_name);
     if (!blockchainIdentifier) {

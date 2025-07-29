@@ -23,10 +23,15 @@ type APIKeyHandler struct {
 
 // NewAPIKeyHandler creates a new API key handler
 func NewAPIKeyHandler(common *CommonServices, logger *zap.Logger) *APIKeyHandler {
+	var apiKeyService interfaces.APIKeyService
+	if common != nil {
+		apiKeyService = common.GetAPIKeyService()
+	}
+	
 	return &APIKeyHandler{
 		common:        common,
 		logger:        logger,
-		apiKeyService: common.GetAPIKeyService(),
+		apiKeyService: apiKeyService,
 	}
 }
 

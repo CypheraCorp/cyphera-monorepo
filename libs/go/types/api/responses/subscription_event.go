@@ -33,9 +33,11 @@ type SubscriptionEventResponse struct {
 	SubscriptionStatus string                     `json:"subscription_status,omitempty"`
 	ProductID          uuid.UUID                  `json:"product_id,omitempty"`
 	ProductName        string                     `json:"product_name,omitempty"`
-	PriceInfo          SubscriptionEventPriceInfo `json:"price_info,omitempty"`
-	// Note: Circular dependency - these fields reference other response types
-	// They may need to be interfaces{} or handled differently
+	Customer           CustomerResponse           `json:"customer"`
+	Product            ProductResponse            `json:"product"`
+	PriceInfo          SubscriptionEventPriceInfo `json:"price_info"`
+	ProductToken       ProductTokenResponse       `json:"product_token"`
+	Network            NetworkResponse            `json:"network"`
 }
 
 type SubscriptionEventFullResponse struct {
@@ -61,6 +63,6 @@ type SubscriptionEventFullResponse struct {
 
 // ListSubscriptionEventsResult represents the result of listing subscription events
 type ListSubscriptionEventsResult struct {
-	Events []SubscriptionEventResponse `json:"events"`
-	Total  int64                       `json:"total"`
+	Events []SubscriptionEventFullResponse `json:"events"`
+	Total  int64                           `json:"total"`
 }

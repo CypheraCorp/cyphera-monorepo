@@ -14,6 +14,6 @@ export interface WorkspaceResponse {
   account_id: string;
   metadata?: Record<string, unknown>;
   livemode: boolean;
-  created: number;
-  updated: number;
+  created_at: number;
+  updated_at: number;
 }

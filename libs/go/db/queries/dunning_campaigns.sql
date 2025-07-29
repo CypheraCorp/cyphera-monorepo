@@ -140,7 +140,7 @@ SELECT
 FROM dunning_campaigns dc
 JOIN dunning_configurations dconf ON dc.configuration_id = dconf.id
 WHERE dc.status = 'active'
-AND dc.current_attempt_number >= dconf.max_retry_attempts
+AND dc.current_attempt >= dconf.max_retry_attempts
 AND dc.final_action_taken IS NULL
 AND dconf.final_action IS NOT NULL
 AND dconf.final_action != ''

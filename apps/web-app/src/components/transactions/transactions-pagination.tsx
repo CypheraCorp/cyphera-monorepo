@@ -4,12 +4,12 @@ import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { PaginationControls } from '@/components/pagination-controls';
 import { PaginatedResponse } from '@/types/common';
-import { SubscriptionEventResponse } from '@/types/subscription-event';
+import { SubscriptionEventFullResponse } from '@/types/subscription-event';
 
 export function TransactionsPagination({
   pageData,
 }: {
-  pageData: PaginatedResponse<SubscriptionEventResponse>;
+  pageData: PaginatedResponse<SubscriptionEventFullResponse>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();

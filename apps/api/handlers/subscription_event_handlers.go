@@ -161,7 +161,7 @@ func (h *SubscriptionEventHandler) ListSubscriptionEvents(c *gin.Context) {
 	result, err := h.subscriptionEventService.ListSubscriptionEvents(c.Request.Context(), params.ListSubscriptionEventsParams{
 		WorkspaceID: parsedWorkspaceID,
 		Limit:       int32(limit),
-		Offset:      int32(page * limit), // Convert page to offset
+		Offset:      int32((page - 1) * limit), // Convert page to offset (page 1 = offset 0)
 	})
 	if err != nil {
 		h.common.HandleError(c, err, err.Error(), http.StatusInternalServerError, h.common.GetLogger())
@@ -169,7 +169,7 @@ func (h *SubscriptionEventHandler) ListSubscriptionEvents(c *gin.Context) {
 	}
 
 	// Pre-allocate slice with capacity for better memory efficiency
-	eventsResponse := make([]responses.SubscriptionEventResponse, 0, len(result.Events))
+	eventsResponse := make([]responses.SubscriptionEventFullResponse, 0, len(result.Events))
 	for _, event := range result.Events {
 		eventsResponse = append(eventsResponse, event)
 	}

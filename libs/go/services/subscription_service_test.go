@@ -12,6 +12,7 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/mocks"
 	"github.com/cyphera/cyphera-api/libs/go/services"
+	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"github.com/google/uuid"
@@ -1448,16 +1449,412 @@ func TestSubscriptionService_ConcurrentAccess(t *testing.T) {
 	})
 }
 
-// TestSubscriptionService_SubscribeToProductByPriceID tests comprehensive validation scenarios
-// Note: The SubscribeToProductByPriceID method includes validation for:
-// - Inactive prices and products
-// - Invalid product token ID formats  
-// - Product token ownership validation
-// - Invalid token amount formats
-// - Database error handling for price/product not found scenarios
-// The method is covered by integration tests in the handler layer.
-func TestSubscriptionService_SubscribeToProductByPriceID_ValidationCovered(t *testing.T) {
-	// This test is covered by integration testing due to complex mock dependencies
-	// The validation logic is tested through the handler integration tests
-	t.Skip("Validation covered by integration tests")
+// TestSubscriptionService_SubscribeToProductByPriceID tests the critical subscription workflow
+func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Test data setup
+	priceID := uuid.New()
+	productID := uuid.New()
+	productTokenID := uuid.New()
+	walletID := uuid.New()
+	workspaceID := uuid.New()
+	tokenID := uuid.New()
+	networkID := uuid.New()
+	customerID := uuid.New()
+	customerWalletID := uuid.New()
+	delegationDataID := uuid.New()
+	subscriptionID := uuid.New()
+
+	// Valid test objects
+	validPrice := db.Price{
+		ID:                  priceID,
+		ProductID:           productID,
+		Active:              true,
+		Type:                db.PriceTypeRecurring,
+		UnitAmountInPennies: 1000,
+		IntervalType:        db.IntervalTypeMonth,
+		TermLength:          1,
+	}
+
+	validProduct := db.Product{
+		ID:          productID,
+		WorkspaceID: workspaceID,
+		WalletID:    walletID,
+		Name:        "Test Product",
+		Active:      true,
+	}
+
+	validProductToken := db.GetProductTokenRow{
+		ID:          productTokenID,
+		ProductID:   productID,
+		TokenID:     tokenID,
+		NetworkID:   networkID,
+		NetworkType: string(db.NetworkTypeEvm),
+		Active:      true,
+	}
+
+	validToken := db.Token{
+		ID:              tokenID,
+		NetworkID:       networkID,
+		ContractAddress: "0xtoken123",
+		Symbol:          "USDC",
+		Active:          true,
+		Decimals:        6, // USDC has 6 decimals
+	}
+
+	validNetwork := db.Network{
+		ID:          networkID,
+		Name:        "ethereum",
+		Type:        "evm",
+		NetworkType: db.NetworkTypeEvm,
+		ChainID:     1, // Ethereum mainnet
+	}
+
+	validWallet := db.Wallet{
+		ID:            walletID,
+		WorkspaceID:   workspaceID,
+		WalletAddress: "0xmerchant123",
+	}
+
+	validCustomer := db.Customer{
+		ID:    customerID,
+		Email: pgtype.Text{String: "test@example.com", Valid: true},
+	}
+
+	validCustomerWallet := db.CustomerWallet{
+		ID:            customerWalletID,
+		CustomerID:    customerID,
+		WalletAddress: "0xcustomer123",
+		NetworkType:   "evm",
+	}
+
+	validDelegationData := db.DelegationDatum{
+		ID:        delegationDataID,
+		Delegate:  "0xcyphera123",
+		Delegator: "0xcustomer123",
+		Authority: "0xauthority123",
+		Salt:      "0xsalt123",
+		Signature: "0xsignature123",
+		Caveats:   json.RawMessage(`[{"type":"test"}]`),
+	}
+
+	validSubscription := db.Subscription{
+		ID:               subscriptionID,
+		CustomerID:       customerID,
+		WorkspaceID:      workspaceID,
+		ProductID:        productID,
+		PriceID:          priceID,
+		ProductTokenID:   productTokenID,
+		CustomerWalletID: pgtype.UUID{Bytes: customerWalletID, Valid: true},
+		DelegationID:     delegationDataID,
+		TokenAmount:      1000000,
+		Status:           db.SubscriptionStatusActive,
+		CurrentPeriodStart: pgtype.Timestamptz{
+			Time:  time.Now(),
+			Valid: true,
+		},
+		CurrentPeriodEnd: pgtype.Timestamptz{
+			Time:  time.Now().Add(30 * 24 * time.Hour),
+			Valid: true,
+		},
+		NextRedemptionDate: pgtype.Timestamptz{
+			Time:  time.Now().Add(24 * time.Hour),
+			Valid: true,
+		},
+	}
+
+	// Create valid subscription params
+	validParams := params.SubscribeToProductByPriceIDParams{
+		PriceID:                  priceID,
+		SubscriberAddress:        "0xcustomer123",
+		ProductTokenID:           productTokenID.String(),
+		TokenAmount:              "1000000",
+		DelegationData: params.DelegationParams{
+			Delegate:  "0xcyphera123",
+			Delegator: "0xcustomer123",
+			Authority: "0xauthority123",
+			Salt:      "0xsalt123",
+			Signature: "0xsignature123",
+			Caveats:   json.RawMessage(`["test"]`),
+		},
+	}
+
+	tests := []struct {
+		name        string
+		params      params.SubscribeToProductByPriceIDParams
+		setupMocks  func(*mocks.MockQuerier)
+		wantErr     bool
+		wantSuccess bool
+		errorString string
+	}{
+		{
+			name:   "creates subscription but fails initial redemption due to nil delegation client",
+			params: validParams,
+			setupMocks: func(mockQuerier *mocks.MockQuerier) {
+				// Mock getting price
+				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
+
+				// Mock getting product
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
+
+				// Mock getting merchant wallet
+				mockQuerier.EXPECT().GetWalletByID(gomock.Any(), db.GetWalletByIDParams{
+					ID:          walletID,
+					WorkspaceID: workspaceID,
+				}).Return(validWallet, nil)
+
+				// Mock getting product token
+				mockQuerier.EXPECT().GetProductToken(gomock.Any(), productTokenID).Return(validProductToken, nil)
+
+				// Mock getting token
+				mockQuerier.EXPECT().GetToken(gomock.Any(), tokenID).Return(validToken, nil)
+
+				// Mock getting network
+				mockQuerier.EXPECT().GetNetwork(gomock.Any(), networkID).Return(validNetwork, nil)
+
+				// Mock customer processing queries
+				mockQuerier.EXPECT().GetCustomersByWalletAddress(gomock.Any(), "0xcustomer123").Return([]db.Customer{validCustomer}, nil)
+				mockQuerier.EXPECT().IsCustomerInWorkspace(gomock.Any(), gomock.Any()).Return(true, nil)
+				mockQuerier.EXPECT().ListCustomerWallets(gomock.Any(), customerID).Return([]db.CustomerWallet{validCustomerWallet}, nil)
+				mockQuerier.EXPECT().UpdateCustomerWalletUsageTime(gomock.Any(), customerWalletID).Return(validCustomerWallet, nil)
+
+				// Mock delegation data storage
+				mockQuerier.EXPECT().CreateDelegationData(gomock.Any(), gomock.Any()).Return(validDelegationData, nil)
+
+				// Mock checking for existing subscriptions
+				mockQuerier.EXPECT().ListSubscriptionsByCustomer(gomock.Any(), gomock.Any()).Return([]db.Subscription{}, nil)
+
+				// Mock subscription creation
+				mockQuerier.EXPECT().CreateSubscription(gomock.Any(), gomock.Any()).Return(validSubscription, nil)
+
+				// Mock subscription event creation
+				mockQuerier.EXPECT().CreateSubscriptionEvent(gomock.Any(), gomock.Any()).Return(db.SubscriptionEvent{}, nil)
+
+				// Since delegation client is nil in tests, the initial redemption will fail immediately
+				// We need to mock the cleanup operations
+				mockQuerier.EXPECT().UpdateSubscriptionStatus(gomock.Any(), gomock.Any()).Return(db.Subscription{}, nil)
+				mockQuerier.EXPECT().DeleteSubscription(gomock.Any(), gomock.Any()).Return(nil)
+				mockQuerier.EXPECT().CreateSubscriptionEvent(gomock.Any(), gomock.Any()).Return(db.SubscriptionEvent{}, nil)
+			},
+			wantErr:     false,
+			wantSuccess: false,
+			errorString: "Initial redemption failed, subscription marked as failed and soft-deleted",
+		},
+		{
+			name: "fails with inactive price",
+			params: params.SubscribeToProductByPriceIDParams{
+				PriceID:           priceID,
+				SubscriberAddress: "0xcustomer123",
+				ProductTokenID:    productTokenID.String(),
+				TokenAmount:       "1000000",
+			},
+			setupMocks: func(mockQuerier *mocks.MockQuerier) {
+				inactivePrice := validPrice
+				inactivePrice.Active = false
+				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(inactivePrice, nil)
+			},
+			wantErr:     false,
+			wantSuccess: false,
+			errorString: "Cannot subscribe to inactive price",
+		},
+		{
+			name: "fails with inactive product",
+			params: params.SubscribeToProductByPriceIDParams{
+				PriceID:           priceID,
+				SubscriberAddress: "0xcustomer123",
+				ProductTokenID:    productTokenID.String(),
+				TokenAmount:       "1000000",
+			},
+			setupMocks: func(mockQuerier *mocks.MockQuerier) {
+				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
+				
+				inactiveProduct := validProduct
+				inactiveProduct.Active = false
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(inactiveProduct, nil)
+			},
+			wantErr:     false,
+			wantSuccess: false,
+			errorString: "Cannot subscribe to a price of an inactive product",
+		},
+		{
+			name: "fails with invalid product token ID format",
+			params: params.SubscribeToProductByPriceIDParams{
+				PriceID:           priceID,
+				SubscriberAddress: "0xcustomer123",
+				ProductTokenID:    "invalid-uuid",
+				TokenAmount:       "1000000",
+			},
+			setupMocks: func(mockQuerier *mocks.MockQuerier) {
+				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
+			},
+			wantErr:     false,
+			wantSuccess: false,
+			errorString: "Invalid product token ID format",
+		},
+		{
+			name: "fails when product token doesn't belong to product",
+			params: params.SubscribeToProductByPriceIDParams{
+				PriceID:           priceID,
+				SubscriberAddress: "0xcustomer123",
+				ProductTokenID:    productTokenID.String(),
+				TokenAmount:       "1000000",
+			},
+			setupMocks: func(mockQuerier *mocks.MockQuerier) {
+				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
+				mockQuerier.EXPECT().GetWalletByID(gomock.Any(), gomock.Any()).Return(validWallet, nil)
+				
+				wrongProductToken := validProductToken
+				wrongProductToken.ProductID = uuid.New() // Different product
+				mockQuerier.EXPECT().GetProductToken(gomock.Any(), productTokenID).Return(wrongProductToken, nil)
+			},
+			wantErr:     false,
+			wantSuccess: false,
+			errorString: "Product token does not belong to the specified product",
+		},
+		{
+			name: "fails with invalid token amount format",
+			params: params.SubscribeToProductByPriceIDParams{
+				PriceID:           priceID,
+				SubscriberAddress: "0xcustomer123",
+				ProductTokenID:    productTokenID.String(),
+				TokenAmount:       "invalid-amount",
+			},
+			setupMocks: func(mockQuerier *mocks.MockQuerier) {
+				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
+				mockQuerier.EXPECT().GetWalletByID(gomock.Any(), gomock.Any()).Return(validWallet, nil)
+				mockQuerier.EXPECT().GetProductToken(gomock.Any(), productTokenID).Return(validProductToken, nil)
+				mockQuerier.EXPECT().GetToken(gomock.Any(), tokenID).Return(validToken, nil)
+				mockQuerier.EXPECT().GetNetwork(gomock.Any(), networkID).Return(validNetwork, nil)
+			},
+			wantErr:     false,
+			wantSuccess: false,
+			errorString: "Invalid token amount format",
+		},
+		{
+			name: "handles price not found error",
+			params: params.SubscribeToProductByPriceIDParams{
+				PriceID: priceID,
+			},
+			setupMocks: func(mockQuerier *mocks.MockQuerier) {
+				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(db.Price{}, errors.New("no rows"))
+			},
+			wantErr:     true,
+			errorString: "failed to get price",
+		},
+		{
+			name: "handles product not found error",
+			params: params.SubscribeToProductByPriceIDParams{
+				PriceID: priceID,
+			},
+			setupMocks: func(mockQuerier *mocks.MockQuerier) {
+				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(db.Product{}, errors.New("no rows"))
+			},
+			wantErr:     true,
+			errorString: "failed to get product",
+		},
+		{
+			name: "handles merchant wallet not found error",
+			params: params.SubscribeToProductByPriceIDParams{
+				PriceID:           priceID,
+				SubscriberAddress: "0xcustomer123",
+				ProductTokenID:    productTokenID.String(),
+				TokenAmount:       "1000000",
+			},
+			setupMocks: func(mockQuerier *mocks.MockQuerier) {
+				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
+				mockQuerier.EXPECT().GetWalletByID(gomock.Any(), gomock.Any()).Return(db.Wallet{}, errors.New("no rows"))
+			},
+			wantErr:     true,
+			errorString: "failed to get merchant wallet",
+		},
+		{
+			name: "handles subscription already exists error",
+			params: validParams,
+			setupMocks: func(mockQuerier *mocks.MockQuerier) {
+				// Setup all the initial mocks
+				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
+				mockQuerier.EXPECT().GetWalletByID(gomock.Any(), gomock.Any()).Return(validWallet, nil)
+				mockQuerier.EXPECT().GetProductToken(gomock.Any(), productTokenID).Return(validProductToken, nil)
+				mockQuerier.EXPECT().GetToken(gomock.Any(), tokenID).Return(validToken, nil)
+				mockQuerier.EXPECT().GetNetwork(gomock.Any(), networkID).Return(validNetwork, nil)
+				mockQuerier.EXPECT().GetCustomersByWalletAddress(gomock.Any(), "0xcustomer123").Return([]db.Customer{validCustomer}, nil)
+				mockQuerier.EXPECT().IsCustomerInWorkspace(gomock.Any(), gomock.Any()).Return(true, nil)
+				mockQuerier.EXPECT().ListCustomerWallets(gomock.Any(), customerID).Return([]db.CustomerWallet{validCustomerWallet}, nil)
+				mockQuerier.EXPECT().UpdateCustomerWalletUsageTime(gomock.Any(), customerWalletID).Return(validCustomerWallet, nil)
+				mockQuerier.EXPECT().CreateDelegationData(gomock.Any(), gomock.Any()).Return(validDelegationData, nil)
+				
+				// Mock existing subscription check - returns existing subscription
+				mockQuerier.EXPECT().ListSubscriptionsByCustomer(gomock.Any(), gomock.Any()).Return([]db.Subscription{validSubscription}, nil)
+			},
+			wantErr:     false,
+			wantSuccess: false,
+			errorString: "Subscription already exists for this customer and product",
+		},
+		{
+			name: "handles caveats marshaling error",
+			params: params.SubscribeToProductByPriceIDParams{
+				PriceID:           priceID,
+				SubscriberAddress: "0xcustomer123",
+				ProductTokenID:    productTokenID.String(),
+				TokenAmount:       "1000000",
+				DelegationData: params.DelegationParams{
+					Delegate:  "0xcyphera123",
+					Delegator: "0xcustomer123",
+					Authority: "0xauthority123",
+					Salt:      "0xsalt123",
+					Signature: "0xsignature123",
+					Caveats:   json.RawMessage(`{"invalid": make(chan int)}`), // Invalid JSON to trigger marshaling error
+				},
+			},
+			setupMocks: func(mockQuerier *mocks.MockQuerier) {
+				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
+				mockQuerier.EXPECT().GetWalletByID(gomock.Any(), gomock.Any()).Return(validWallet, nil)
+				mockQuerier.EXPECT().GetProductToken(gomock.Any(), productTokenID).Return(validProductToken, nil)
+				mockQuerier.EXPECT().GetToken(gomock.Any(), tokenID).Return(validToken, nil)
+				mockQuerier.EXPECT().GetNetwork(gomock.Any(), networkID).Return(validNetwork, nil)
+			},
+			wantErr:     true,
+			errorString: "failed to marshal caveats",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockQuerier := mocks.NewMockQuerier(ctrl)
+			paymentService := services.NewPaymentService(mockQuerier, "test-api-key")
+			customerService := services.NewCustomerService(mockQuerier)
+			service := services.NewSubscriptionService(mockQuerier, nil, paymentService, customerService)
+
+			tt.setupMocks(mockQuerier)
+
+			result, err := service.SubscribeToProductByPriceID(context.Background(), tt.params)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+				if tt.errorString != "" {
+					assert.Contains(t, err.Error(), tt.errorString)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+				assert.Equal(t, tt.wantSuccess, result.Success)
+				if !tt.wantSuccess && tt.errorString != "" {
+					assert.Equal(t, tt.errorString, result.ErrorMessage)
+				}
+				if tt.wantSuccess {
+					assert.NotNil(t, result.Subscription)
+				}
+			}
+		})
+	}
 }

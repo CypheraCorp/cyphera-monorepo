@@ -47,7 +47,7 @@ type SubscriptionService interface {
 	// New methods for subscription creation and processing
 	StoreDelegationData(ctx context.Context, tx pgx.Tx, params params.StoreDelegationDataParams) (*db.DelegationDatum, error)
 	CreateSubscriptionWithDelegation(ctx context.Context, tx pgx.Tx, params params.CreateSubscriptionWithDelegationParams) (*params.SubscriptionCreationResult, error)
-	ProcessInitialRedemption(ctx context.Context, params params.InitialRedemptionParams) (*db.Subscription, error)
+	ProcessInitialRedemption(ctx context.Context, tx pgx.Tx, params params.InitialRedemptionParams) (*db.Subscription, error)
 	ProcessDueSubscriptions(ctx context.Context) (*responses.ProcessDueSubscriptionsResult, error)
 	CreateSubscription(ctx context.Context, tx pgx.Tx, params params.CreateSubscriptionParams) (*db.Subscription, error)
 }
