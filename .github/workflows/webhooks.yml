@@ -10,7 +10,7 @@ on:
       - 'apps/webhook-receiver/**'
       - 'apps/webhook-processor/**'
       - 'apps/dlq-processor/**'
-      - 'deployment/template-webhook.yaml'
+      - 'infrastructure/aws-sam/template-webhook.yaml'
       - 'libs/go/client/payment_sync/**'
       - 'apps/api/handlers/payment_sync_handlers.go'
       - 'apps/api/handlers/error_recovery_handlers.go'
@@ -31,7 +31,7 @@ on:
       - 'apps/webhook-receiver/**'
       - 'apps/webhook-processor/**'
       - 'apps/dlq-processor/**'
-      - 'deployment/template-webhook.yaml'
+      - 'infrastructure/aws-sam/template-webhook.yaml'
       - 'libs/go/client/payment_sync/**'
       - 'apps/api/handlers/payment_sync_handlers.go'
       - 'apps/api/handlers/error_recovery_handlers.go'
@@ -67,7 +67,7 @@ env:
   GO_VERSION: '1.23'
   AWS_REGION: us-east-1
   STAGE: ${{ github.event.inputs.stage || (github.ref == 'refs/heads/main' && 'prod' || 'dev') }}
-  SAM_TEMPLATE: deployment/template-webhook.yaml
+  SAM_TEMPLATE: infrastructure/aws-sam/template-webhook.yaml
   SAM_STACK_NAME_PREFIX: cyphera-webhook
 
 jobs:
@@ -180,7 +180,7 @@ jobs:
         path: |
           .aws-sam/build
           .aws-sam/cache
-        key: sam-build-${{ runner.os }}-${{ hashFiles('apps/webhook-receiver/**', 'apps/webhook-processor/**', 'apps/dlq-processor/**', 'apps/webhook-receiver/go.mod', 'apps/webhook-receiver/go.sum', 'deployment/template-webhook.yaml') }}
+        key: sam-build-${{ runner.os }}-${{ hashFiles('apps/webhook-receiver/**', 'apps/webhook-processor/**', 'apps/dlq-processor/**', 'apps/webhook-receiver/go.mod', 'apps/webhook-receiver/go.sum', 'infrastructure/aws-sam/template-webhook.yaml') }}
         restore-keys: |
           sam-build-${{ runner.os }}-
 
@@ -216,7 +216,7 @@ jobs:
         
         # Build with optimizations
         sam build \
-          --template deployment/template-webhook.yaml \
+          --template infrastructure/aws-sam/template-webhook.yaml \
           --use-container \
           --parallel \
           --cached \
@@ -230,7 +230,7 @@ jobs:
         name: sam-build-artifacts
         path: |
           .aws-sam/build/
-          deployment/template-webhook.yaml
+          infrastructure/aws-sam/template-webhook.yaml
         retention-days: 1
 
   # ============================================================================
