@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/resend/resend-go/v2"
+	resend "github.com/resend/resend-go/v2"
 	"go.uber.org/zap"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
