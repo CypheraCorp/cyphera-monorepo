@@ -121,7 +121,7 @@ func TestBlockchainSyncHelper_EventValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Test the logic that determines if an event should be processed
 			hasValidTxHash := tt.event.TransactionHash.Valid && tt.event.TransactionHash.String != ""
-			
+
 			if tt.expectProcessed {
 				assert.True(t, hasValidTxHash, tt.description)
 			} else {
@@ -134,25 +134,25 @@ func TestBlockchainSyncHelper_EventValidation(t *testing.T) {
 // TestBlockchainSyncHelper_PendingTransactionSync tests pending transaction synchronization
 func TestBlockchainSyncHelper_PendingTransactionSync(t *testing.T) {
 	tests := []struct {
-		name         string
-		workspaceID  uuid.UUID
-		eventCount   int
-		expectError  bool
-		description  string
+		name        string
+		workspaceID uuid.UUID
+		eventCount  int
+		expectError bool
+		description string
 	}{
 		{
-			name:         "Sync with valid workspace",
-			workspaceID:  uuid.New(),
-			eventCount:   5,
-			expectError:  false,
-			description:  "Should handle multiple events for valid workspace",
+			name:        "Sync with valid workspace",
+			workspaceID: uuid.New(),
+			eventCount:  5,
+			expectError: false,
+			description: "Should handle multiple events for valid workspace",
 		},
 		{
-			name:         "Sync with no events",
-			workspaceID:  uuid.New(),
-			eventCount:   0,
-			expectError:  false,
-			description:  "Should handle workspace with no pending events",
+			name:        "Sync with no events",
+			workspaceID: uuid.New(),
+			eventCount:  0,
+			expectError: false,
+			description: "Should handle workspace with no pending events",
 		},
 	}
 
@@ -210,12 +210,12 @@ func TestBlockchainSyncHelper_WeiToUsdCentsLogic(t *testing.T) {
 			// Simulate the weiToUsdCents calculation logic
 			ethAmount := new(big.Float).SetInt(tt.weiAmount)
 			ethAmount.Quo(ethAmount, big.NewFloat(1e18))
-			
+
 			usdAmount := new(big.Float).Mul(ethAmount, big.NewFloat(tt.ethUsdPrice))
 			centsAmount := new(big.Float).Mul(usdAmount, big.NewFloat(100))
-			
+
 			cents, _ := centsAmount.Int64()
-			
+
 			assert.Equal(t, tt.expectedCents, cents, "Wei to USD cents conversion should be accurate")
 		})
 	}
@@ -256,7 +256,7 @@ func TestBlockchainSyncHelper_FloatToNumericConversion(t *testing.T) {
 			str := tt.floatValue
 			var num pgtype.Numeric
 			err := num.Scan(str)
-			
+
 			if tt.expectValid {
 				// For valid values, we expect no error and valid numeric
 				if err != nil {
@@ -312,7 +312,7 @@ func TestBlockchainSyncHelper_CacheLogic(t *testing.T) {
 			// Simulate cache validity check logic
 			cacheExpiry := 5 * time.Minute
 			isCacheValid := tt.cacheAge < cacheExpiry
-			
+
 			assert.Equal(t, tt.expectCacheHit, isCacheValid, tt.description)
 		})
 	}
@@ -349,7 +349,7 @@ func TestBlockchainSyncHelper_TransactionStatusHandling(t *testing.T) {
 			} else {
 				status = "completed"
 			}
-			
+
 			assert.Equal(t, tt.expectedStatus, status, tt.description)
 		})
 	}
@@ -358,36 +358,36 @@ func TestBlockchainSyncHelper_TransactionStatusHandling(t *testing.T) {
 // TestBlockchainSyncHelper_EIP1559GasHandling tests EIP-1559 gas fee calculations
 func TestBlockchainSyncHelper_EIP1559GasHandling(t *testing.T) {
 	tests := []struct {
-		name               string
-		baseFeePerGas      *big.Int
-		maxPriorityFeeGas  *big.Int
-		gasUsed            uint64
-		expectValidFields  bool
-		description        string
+		name              string
+		baseFeePerGas     *big.Int
+		maxPriorityFeeGas *big.Int
+		gasUsed           uint64
+		expectValidFields bool
+		description       string
 	}{
 		{
-			name:               "Valid EIP-1559 transaction",
-			baseFeePerGas:      big.NewInt(20e9), // 20 Gwei
-			maxPriorityFeeGas:  big.NewInt(2e9),  // 2 Gwei
-			gasUsed:            21000,
-			expectValidFields:  true,
-			description:        "EIP-1559 fields should be properly handled",
+			name:              "Valid EIP-1559 transaction",
+			baseFeePerGas:     big.NewInt(20e9), // 20 Gwei
+			maxPriorityFeeGas: big.NewInt(2e9),  // 2 Gwei
+			gasUsed:           21000,
+			expectValidFields: true,
+			description:       "EIP-1559 fields should be properly handled",
 		},
 		{
-			name:               "Legacy transaction (no EIP-1559)",
-			baseFeePerGas:      nil,
-			maxPriorityFeeGas:  nil,
-			gasUsed:            21000,
-			expectValidFields:  false,
-			description:        "Legacy transactions should handle nil EIP-1559 fields",
+			name:              "Legacy transaction (no EIP-1559)",
+			baseFeePerGas:     nil,
+			maxPriorityFeeGas: nil,
+			gasUsed:           21000,
+			expectValidFields: false,
+			description:       "Legacy transactions should handle nil EIP-1559 fields",
 		},
 		{
-			name:               "High gas usage",
-			baseFeePerGas:      big.NewInt(50e9), // 50 Gwei
-			maxPriorityFeeGas:  big.NewInt(5e9),  // 5 Gwei
-			gasUsed:            500000,
-			expectValidFields:  true,
-			description:        "High gas transactions should be handled correctly",
+			name:              "High gas usage",
+			baseFeePerGas:     big.NewInt(50e9), // 50 Gwei
+			maxPriorityFeeGas: big.NewInt(5e9),  // 5 Gwei
+			gasUsed:           500000,
+			expectValidFields: true,
+			description:       "High gas transactions should be handled correctly",
 		},
 	}
 
@@ -395,21 +395,21 @@ func TestBlockchainSyncHelper_EIP1559GasHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Test EIP-1559 field handling logic
 			var baseFeeGwei, priorityFeeGwei pgtype.Text
-			
+
 			if tt.baseFeePerGas != nil {
 				baseFeeGwei = pgtype.Text{
 					String: new(big.Int).Div(tt.baseFeePerGas, big.NewInt(1e9)).String(),
 					Valid:  true,
 				}
 			}
-			
+
 			if tt.maxPriorityFeeGas != nil {
 				priorityFeeGwei = pgtype.Text{
 					String: new(big.Int).Div(tt.maxPriorityFeeGas, big.NewInt(1e9)).String(),
 					Valid:  true,
 				}
 			}
-			
+
 			if tt.expectValidFields {
 				assert.True(t, baseFeeGwei.Valid, "Base fee should be valid for EIP-1559")
 				assert.True(t, priorityFeeGwei.Valid, "Priority fee should be valid for EIP-1559")
@@ -445,7 +445,7 @@ func TestBlockchainSyncHelper_GasSponsorshipLogic(t *testing.T) {
 			name:               "High fee above threshold",
 			gasFeeUsdCents:     1000, // $10.00
 			sponsorshipEnabled: true,
-			feeThreshold:       500,  // $5.00
+			feeThreshold:       500, // $5.00
 			expectSponsored:    false,
 			expectedType:       "customer",
 		},
@@ -472,11 +472,11 @@ func TestBlockchainSyncHelper_GasSponsorshipLogic(t *testing.T) {
 			// Simulate gas sponsorship logic
 			shouldSponsor := tt.sponsorshipEnabled && tt.gasFeeUsdCents <= tt.feeThreshold
 			sponsorType := "customer" // Default
-			
+
 			if shouldSponsor {
 				sponsorType = "workspace"
 			}
-			
+
 			assert.Equal(t, tt.expectSponsored, shouldSponsor, "Sponsorship decision should match expectation")
 			assert.Equal(t, tt.expectedType, sponsorType, "Sponsor type should match expectation")
 		})
@@ -486,34 +486,34 @@ func TestBlockchainSyncHelper_GasSponsorshipLogic(t *testing.T) {
 // TestBlockchainSyncHelper_ErrorHandling tests error handling patterns
 func TestBlockchainSyncHelper_ErrorHandling(t *testing.T) {
 	tests := []struct {
-		name          string
-		errorType     string
+		name           string
+		errorType      string
 		expectGraceful bool
-		description   string
+		description    string
 	}{
 		{
-			name:          "Price fetch failure",
-			errorType:     "price_fetch",
+			name:           "Price fetch failure",
+			errorType:      "price_fetch",
 			expectGraceful: true,
-			description:   "Should fall back to default price when CMC fails",
+			description:    "Should fall back to default price when CMC fails",
 		},
 		{
-			name:          "Database connection error",
-			errorType:     "database",
+			name:           "Database connection error",
+			errorType:      "database",
 			expectGraceful: false,
-			description:   "Database errors should be propagated",
+			description:    "Database errors should be propagated",
 		},
 		{
-			name:          "Blockchain RPC error",
-			errorType:     "rpc",
+			name:           "Blockchain RPC error",
+			errorType:      "rpc",
 			expectGraceful: false,
-			description:   "RPC errors should be propagated",
+			description:    "RPC errors should be propagated",
 		},
 		{
-			name:          "Invalid transaction data",
-			errorType:     "invalid_tx",
+			name:           "Invalid transaction data",
+			errorType:      "invalid_tx",
 			expectGraceful: false,
-			description:   "Invalid transaction should error",
+			description:    "Invalid transaction should error",
 		},
 	}
 
@@ -525,7 +525,7 @@ func TestBlockchainSyncHelper_ErrorHandling(t *testing.T) {
 				fallbackPrice := 2000.0
 				assert.Greater(t, fallbackPrice, 0.0, "Fallback price should be positive")
 			}
-			
+
 			// All error types should be properly logged
 			assert.NotEmpty(t, tt.description, "Error should have descriptive message")
 		})
@@ -565,7 +565,7 @@ func TestBlockchainSyncHelper_BatchProcessing(t *testing.T) {
 			// Test batch processing logic
 			syncedCount := 0
 			errorCount := 0
-			
+
 			for i := 0; i < tt.eventCount; i++ {
 				// Simulate some failures
 				if i < tt.expectedSync {
@@ -574,7 +574,7 @@ func TestBlockchainSyncHelper_BatchProcessing(t *testing.T) {
 					errorCount++
 				}
 			}
-			
+
 			assert.Equal(t, tt.expectedSync, syncedCount, "Synced count should match expectation")
 			assert.Equal(t, tt.expectedFail, errorCount, "Error count should match expectation")
 		})

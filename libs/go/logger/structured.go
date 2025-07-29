@@ -70,15 +70,15 @@ func (sl *StructuredLogger) WithContext(ctx LogContext) *StructuredLogger {
 		component: sl.component,
 		context:   ctx,
 	}
-	
+
 	// Ensure component is set
 	newLogger.context.Component = sl.component
-	
+
 	// Initialize fields map if nil
 	if newLogger.context.Fields == nil {
 		newLogger.context.Fields = make(map[string]interface{})
 	}
-	
+
 	return newLogger
 }
 
@@ -139,7 +139,7 @@ func (sl *StructuredLogger) clone() *StructuredLogger {
 	for k, v := range sl.context.Fields {
 		newFields[k] = v
 	}
-	
+
 	return &StructuredLogger{
 		logger:    sl.logger,
 		component: sl.component,
@@ -159,7 +159,7 @@ func (sl *StructuredLogger) clone() *StructuredLogger {
 // buildFields creates zap fields from the log context
 func (sl *StructuredLogger) buildFields() []zapcore.Field {
 	fields := make([]zapcore.Field, 0)
-	
+
 	// Add standard context fields
 	if sl.context.Component != "" {
 		fields = append(fields, zap.String("component", string(sl.context.Component)))
@@ -182,12 +182,12 @@ func (sl *StructuredLogger) buildFields() []zapcore.Field {
 	if sl.context.Duration > 0 {
 		fields = append(fields, zap.Duration("duration", sl.context.Duration))
 	}
-	
+
 	// Add custom fields
 	for key, value := range sl.context.Fields {
 		fields = append(fields, zap.Any(key, value))
 	}
-	
+
 	return fields
 }
 
@@ -228,30 +228,30 @@ func (sl *StructuredLogger) Fatal(msg string, err error) {
 func (sl *StructuredLogger) LogOperation(operation string, fn func() error) error {
 	start := time.Now()
 	opLogger := sl.WithOperation(operation)
-	
+
 	opLogger.Info("Operation started")
-	
+
 	err := fn()
 	duration := time.Since(start)
-	
+
 	finalLogger := opLogger.WithDuration(duration)
-	
+
 	if err != nil {
 		finalLogger.Error("Operation failed", err)
 	} else {
 		finalLogger.Info("Operation completed")
 	}
-	
+
 	return err
 }
 
 // LogHTTPRequest logs HTTP request details
 func (sl *StructuredLogger) LogHTTPRequest(method, path string, statusCode int, duration time.Duration) {
 	sl.WithFields(map[string]interface{}{
-		"http_method":     method,
-		"http_path":       path,
-		"http_status":     statusCode,
-		"response_time":   duration,
+		"http_method":   method,
+		"http_path":     path,
+		"http_status":   statusCode,
+		"response_time": duration,
 	}).WithDuration(duration).Info("HTTP request processed")
 }
 
@@ -270,12 +270,12 @@ func (sl *StructuredLogger) LogSubscriptionEvent(subscriptionID, eventType strin
 		"subscription_id": subscriptionID,
 		"event_type":      eventType,
 	}
-	
+
 	// Add metadata fields
 	for k, v := range metadata {
 		fields[k] = v
 	}
-	
+
 	sl.WithFields(fields).Info("Subscription event occurred")
 }
 
@@ -292,20 +292,20 @@ func (sl *StructuredLogger) LogPaymentEvent(paymentID, status string, amount int
 // LogWebhookEvent logs webhook-related events
 func (sl *StructuredLogger) LogWebhookEvent(provider, eventType string, processed bool, processingTime time.Duration) {
 	sl.WithFields(map[string]interface{}{
-		"webhook_provider":     provider,
-		"webhook_event_type":   eventType,
-		"processed":            processed,
-		"processing_duration":  processingTime,
+		"webhook_provider":    provider,
+		"webhook_event_type":  eventType,
+		"processed":           processed,
+		"processing_duration": processingTime,
 	}).WithDuration(processingTime).Info("Webhook event processed")
 }
 
 // LogAuthEvent logs authentication-related events
 func (sl *StructuredLogger) LogAuthEvent(action, userID string, success bool, reason string) {
 	sl.WithFields(map[string]interface{}{
-		"auth_action":  action,
-		"user_id":      userID,
-		"success":      success,
-		"reason":       reason,
+		"auth_action": action,
+		"user_id":     userID,
+		"success":     success,
+		"reason":      reason,
 	}).Info("Authentication event occurred")
 }
 
@@ -346,7 +346,7 @@ func (t *Timer) Stop() {
 func (t *Timer) StopWithResult(success bool, err error) {
 	duration := time.Since(t.start)
 	logger := t.logger.WithOperation(t.name).WithDuration(duration).WithField("success", success)
-	
+
 	if success {
 		logger.Info(fmt.Sprintf("%s completed successfully", t.name))
 	} else {

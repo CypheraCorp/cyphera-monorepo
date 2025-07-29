@@ -547,7 +547,7 @@ func TestProductService_ListProducts(t *testing.T) {
 					Offset:      0,
 				}).Return(products, nil)
 				mockQuerier.EXPECT().CountProducts(ctx, workspaceID).Return(int64(25), nil)
-				
+
 				// Mock ListPricesByProduct for any product ID
 				mockQuerier.EXPECT().ListPricesByProduct(ctx, gomock.Any()).Return([]db.Price{}, nil).AnyTimes()
 			},
@@ -569,7 +569,7 @@ func TestProductService_ListProducts(t *testing.T) {
 					Offset:      10,
 				}).Return(products, nil)
 				mockQuerier.EXPECT().CountProducts(ctx, workspaceID).Return(int64(12), nil)
-				
+
 				// Mock ListPricesByProduct for any product ID
 				mockQuerier.EXPECT().ListPricesByProduct(ctx, gomock.Any()).Return([]db.Price{}, nil).AnyTimes()
 			},
@@ -1030,6 +1030,7 @@ func TestProductService_GetPublicProductByPriceID(t *testing.T) {
 	validToken := db.Token{
 		ID:              tokenID,
 		ContractAddress: "0xtoken123",
+		NetworkID:       networkID,
 	}
 
 	tests := []struct {
@@ -1052,6 +1053,12 @@ func TestProductService_GetPublicProductByPriceID(t *testing.T) {
 				mockQuerier.EXPECT().GetWorkspace(ctx, workspaceID).Return(validWorkspace, nil)
 				mockQuerier.EXPECT().GetActiveProductTokensByProduct(ctx, productID).Return(validProductTokens, nil)
 				mockQuerier.EXPECT().GetToken(ctx, tokenID).Return(validToken, nil)
+				mockQuerier.EXPECT().GetNetwork(ctx, networkID).Return(db.Network{
+					ID:          networkID,
+					DisplayName: pgtype.Text{String: "Ethereum", Valid: true},
+					NetworkType: db.NetworkTypeEvm,
+					ChainID:     1,
+				}, nil)
 			},
 			wantErr: false,
 		},
@@ -1335,7 +1342,7 @@ func TestProductService_ValidateSubscriptionRequest(t *testing.T) {
 		{
 			name: "successfully validates subscription request",
 			params: params.ValidateSubscriptionParams{
-				SubscriberAddress:          "0x123456789abcdef",
+				SubscriberAddress:         "0x123456789abcdef",
 				PriceID:                   priceID.String(),
 				ProductTokenID:            productTokenID.String(),
 				TokenAmount:               "1000",
@@ -1424,7 +1431,7 @@ func TestProductService_ValidateSubscriptionRequest(t *testing.T) {
 		{
 			name: "fails with mismatched delegate address",
 			params: params.ValidateSubscriptionParams{
-				SubscriberAddress:          "0x123456789abcdef",
+				SubscriberAddress:         "0x123456789abcdef",
 				PriceID:                   priceID.String(),
 				ProductTokenID:            productTokenID.String(),
 				TokenAmount:               "1000",
@@ -1443,7 +1450,7 @@ func TestProductService_ValidateSubscriptionRequest(t *testing.T) {
 		{
 			name: "fails with incomplete delegation data",
 			params: params.ValidateSubscriptionParams{
-				SubscriberAddress:          "0x123456789abcdef",
+				SubscriberAddress:         "0x123456789abcdef",
 				PriceID:                   priceID.String(),
 				ProductTokenID:            productTokenID.String(),
 				TokenAmount:               "1000",
@@ -1709,12 +1716,12 @@ func TestProductService_GetProductTokenWithValidation(t *testing.T) {
 	}
 
 	tests := []struct {
-		name             string
-		productTokenID   uuid.UUID
-		productID        uuid.UUID
-		setupMocks       func()
-		wantErr          bool
-		errorString      string
+		name           string
+		productTokenID uuid.UUID
+		productID      uuid.UUID
+		setupMocks     func()
+		wantErr        bool
+		errorString    string
 	}{
 		{
 			name:           "successfully validates product token",

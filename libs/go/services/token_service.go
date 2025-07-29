@@ -166,7 +166,7 @@ func (s *TokenService) GetTokenQuote(ctx context.Context, quoteParams params.Tok
 		ExchangeRate:  exchangeRate,
 		TokenDecimals: token.Decimals,
 		QuotedAt:      "", // Would need current timestamp
-		ExpiresAt:     "", // Would need expiration timestamp  
+		ExpiresAt:     "", // Would need expiration timestamp
 		PriceSource:   "coinmarketcap",
 	}, nil
 }
@@ -252,26 +252,26 @@ func (s *TokenService) UpdateToken(ctx context.Context, params UpdateTokenParams
 	// Note: This assumes an UpdateToken query exists in the database layer
 	// If it doesn't, you'll need to add it to your SQL queries
 	/*
-	token, err := s.queries.UpdateToken(ctx, db.UpdateTokenParams{
-		ID:              params.ID,
-		Name:            params.Name,
-		Symbol:          params.Symbol,
-		ContractAddress: params.ContractAddress,
-		Decimals:        params.Decimals,
-		GasToken:        params.GasToken,
-		Active:          params.Active,
-	})
-	if err != nil {
-		s.logger.Error("Failed to update token",
-			zap.String("token_id", params.ID.String()),
-			zap.Error(err))
-		return nil, fmt.Errorf("failed to update token: %w", err)
-	}
+		token, err := s.queries.UpdateToken(ctx, db.UpdateTokenParams{
+			ID:              params.ID,
+			Name:            params.Name,
+			Symbol:          params.Symbol,
+			ContractAddress: params.ContractAddress,
+			Decimals:        params.Decimals,
+			GasToken:        params.GasToken,
+			Active:          params.Active,
+		})
+		if err != nil {
+			s.logger.Error("Failed to update token",
+				zap.String("token_id", params.ID.String()),
+				zap.Error(err))
+			return nil, fmt.Errorf("failed to update token: %w", err)
+		}
 
-	s.logger.Info("Token updated successfully",
-		zap.String("token_id", token.ID.String()))
+		s.logger.Info("Token updated successfully",
+			zap.String("token_id", token.ID.String()))
 
-	return &token, nil
+		return &token, nil
 	*/
 
 	// For now, return an error since the update query doesn't exist
@@ -289,16 +289,16 @@ func (s *TokenService) DeleteToken(ctx context.Context, tokenID uuid.UUID) error
 	// Delete the token
 	// Note: This assumes a DeleteToken query exists in the database layer
 	/*
-	err = s.queries.DeleteToken(ctx, tokenID)
-	if err != nil {
-		s.logger.Error("Failed to delete token",
-			zap.String("token_id", tokenID.String()),
-			zap.Error(err))
-		return fmt.Errorf("failed to delete token: %w", err)
-	}
+		err = s.queries.DeleteToken(ctx, tokenID)
+		if err != nil {
+			s.logger.Error("Failed to delete token",
+				zap.String("token_id", tokenID.String()),
+				zap.Error(err))
+			return fmt.Errorf("failed to delete token: %w", err)
+		}
 
-	s.logger.Info("Token deleted successfully",
-		zap.String("token_id", tokenID.String()))
+		s.logger.Info("Token deleted successfully",
+			zap.String("token_id", tokenID.String()))
 	*/
 
 	// For now, return an error since the delete query doesn't exist

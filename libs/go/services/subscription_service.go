@@ -806,7 +806,7 @@ func (s *SubscriptionService) ProcessDueSubscriptions(ctx context.Context) (*res
 // processSingleSubscription processes a single subscription for redemption
 func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx db.Querier, subscription db.ListSubscriptionsDueForRedemptionRow) error {
 	var subEvent db.SubscriptionEvent
-	
+
 	// Re-fetch subscription for idempotency check
 	currentSub, err := qtx.GetSubscription(ctx, subscription.ID)
 	if err != nil {
@@ -930,8 +930,8 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 				zap.String("subscription_id", subscription.ID.String()),
 				zap.Int32("current_redemptions", currentSub.TotalRedemptions),
 				zap.Int32("max_periods", price.TermLength))
-			
-			// Mark as completed - reached maximum periods  
+
+			// Mark as completed - reached maximum periods
 			_, err = qtx.UpdateSubscriptionStatus(ctx, db.UpdateSubscriptionStatusParams{
 				ID:     subscription.ID,
 				Status: db.SubscriptionStatusCompleted,
@@ -941,7 +941,7 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 					zap.Error(err),
 					zap.String("subscription_id", subscription.ID.String()))
 			}
-			
+
 			// No next redemption date - subscription is complete
 			nextRedemptionDate = pgtype.Timestamptz{Valid: false}
 		} else {
@@ -951,7 +951,7 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 				Time:  nextDate,
 				Valid: true,
 			}
-			
+
 			s.logger.Info("Subscription continuing to next period",
 				zap.String("subscription_id", subscription.ID.String()),
 				zap.Int32("current_redemptions", currentSub.TotalRedemptions),
@@ -969,7 +969,7 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 				zap.Error(err),
 				zap.String("subscription_id", subscription.ID.String()))
 		}
-		
+
 		// No next redemption date for one-time subscriptions
 		nextRedemptionDate = pgtype.Timestamptz{Valid: false}
 	}
@@ -1053,23 +1053,23 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 		if price.Type == db.PriceTypeOneOff {
 			completionReason = "one_time_purchase"
 		}
-		
+
 		completionMetadata := map[string]interface{}{
-			"product_id":         product.ID.String(),
-			"product_name":       product.Name,
-			"price_id":           price.ID.String(),
-			"total_redemptions":  updatedSub.TotalRedemptions,
-			"max_periods":        price.TermLength,
-			"completion_reason":  completionReason,
-			"final_tx_hash":      txHash,
+			"product_id":        product.ID.String(),
+			"product_name":      product.Name,
+			"price_id":          price.ID.String(),
+			"total_redemptions": updatedSub.TotalRedemptions,
+			"max_periods":       price.TermLength,
+			"completion_reason": completionReason,
+			"final_tx_hash":     txHash,
 		}
-		
+
 		completionMetadataBytes, err := json.Marshal(completionMetadata)
 		if err != nil {
 			s.logger.Error("Failed to marshal completion metadata", zap.Error(err))
 			completionMetadataBytes = []byte("{}")
 		}
-		
+
 		_, err = qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
 			SubscriptionID:  subscription.ID,
 			EventType:       db.SubscriptionEventTypeCompleted,

@@ -73,11 +73,11 @@ func TestPaymentFailureDetector_ConcurrentAccess(t *testing.T) {
 
 		for i := 0; i < 5; i++ {
 			go func() {
-				defer func() { 
+				defer func() {
 					if r := recover(); r != nil {
 						t.Errorf("Goroutine panicked during detector creation: %v", r)
 					}
-					done <- true 
+					done <- true
 				}()
 
 				detector := services.NewPaymentFailureDetector(nil, zap.NewNop(), nil)
@@ -96,11 +96,11 @@ func TestPaymentFailureDetector_ConcurrentAccess(t *testing.T) {
 func TestPaymentFailureDetector_TypeSystem(t *testing.T) {
 	t.Run("detector should implement expected interface", func(t *testing.T) {
 		detector := services.NewPaymentFailureDetector(nil, zap.NewNop(), nil)
-		
+
 		// Test that the detector has the expected methods by checking if we can call them
 		// (they will fail due to nil dependencies, but the methods should exist)
 		assert.NotNil(t, detector, "Detector should be created successfully")
-		
+
 		// We can't call the methods without proper dependencies, but we can verify
 		// the instance was created and has the expected type
 		assert.IsType(t, (*services.PaymentFailureDetector)(nil), detector)

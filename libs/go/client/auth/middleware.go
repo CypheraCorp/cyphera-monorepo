@@ -22,7 +22,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	pgx "github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
 )
@@ -354,12 +354,12 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, services interfaces.CommonS
 	// Handle admin API keys differently - they can operate without workspace context
 	var workspace db.Workspace
 	var account db.Account
-	
+
 	if key.AccessLevel == "admin" {
 		logger.Log.Debug("Admin API key detected - allowing cross-workspace access",
 			zap.String("key_id", key.ID.String()),
 		)
-		
+
 		// For admin keys, we still need to get the account info from the associated workspace
 		// but we won't restrict operations to that specific workspace
 		adminWorkspace, err := services.GetDB().GetWorkspace(c.Request.Context(), key.WorkspaceID)
@@ -371,7 +371,7 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, services interfaces.CommonS
 			)
 			return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid admin workspace")
 		}
-		
+
 		adminAccount, err := services.GetDB().GetAccount(c.Request.Context(), adminWorkspace.AccountID)
 		if err != nil {
 			logger.Log.Debug("Failed to get admin account for workspace",
@@ -381,7 +381,7 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, services interfaces.CommonS
 			)
 			return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid admin account")
 		}
-		
+
 		// Verify it's actually an admin account
 		if adminAccount.AccountType != "admin" {
 			logger.Log.Warn("Admin API key associated with non-admin account",
@@ -390,14 +390,14 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, services interfaces.CommonS
 			)
 			return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid admin privileges")
 		}
-		
+
 		workspace = adminWorkspace
 		account = adminAccount
-		
+
 		// Set admin context flags that can be used by handlers
 		c.Set("is_admin", true)
 		c.Set("admin_account_id", account.ID.String())
-		
+
 	} else {
 		// Regular API key - must be tied to a specific workspace
 		var err error
@@ -420,7 +420,7 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, services interfaces.CommonS
 			)
 			return db.Workspace{}, db.Account{}, db.ApiKey{}, fmt.Errorf("invalid account")
 		}
-		
+
 		// Set regular user context flags
 		c.Set("is_admin", false)
 	}

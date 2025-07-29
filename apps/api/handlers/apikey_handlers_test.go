@@ -701,8 +701,8 @@ func TestAPIKeyHandler_UpdateAPIKey(t *testing.T) {
 						// Validate the important fields
 						assert.Equal(t, workspaceID, params.WorkspaceID)
 						assert.Equal(t, apiKeyID, params.ID)
-						assert.Equal(t, validRequest.Name, params.Name)
-						assert.Equal(t, validRequest.Description, params.Description)
+						assert.Equal(t, &validRequest.Name, params.Name)
+						assert.Equal(t, &validRequest.Description, params.Description)
 						assert.Equal(t, validRequest.AccessLevel, params.AccessLevel)
 						// Check that the time is approximately correct (within 1 second)
 						if validRequest.ExpiresAt != nil && params.ExpiresAt != nil {

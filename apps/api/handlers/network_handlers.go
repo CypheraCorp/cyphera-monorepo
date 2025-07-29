@@ -283,10 +283,10 @@ func (h *NetworkHandler) ListNetworks(c *gin.Context) {
 // @Router /networks/chain/{chain_id} [get]
 func (h *NetworkHandler) GetNetworkByChainID(c *gin.Context) {
 	chainIdStr := c.Param("chain_id")
-	
+
 	var chainId int64
 	var err error
-	
+
 	// Check if it's a hex string (starts with 0x or 0X)
 	if len(chainIdStr) > 2 && (chainIdStr[:2] == "0x" || chainIdStr[:2] == "0X") {
 		// Parse as hex
@@ -295,7 +295,7 @@ func (h *NetworkHandler) GetNetworkByChainID(c *gin.Context) {
 		// Parse as decimal
 		chainId, err = strconv.ParseInt(chainIdStr, 10, 32)
 	}
-	
+
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid chain ID format", err)
 		return

@@ -33,11 +33,11 @@ type GetTokenQuoteResponse struct {
 
 // TokenQuoteResult represents the result of a token quote from services
 type TokenQuoteResult struct {
-	TokenAmount        string  `json:"token_amount"`        // Amount in token units
-	FiatAmount         float64 `json:"fiat_amount"`         // Amount in fiat
-	ExchangeRate       float64 `json:"exchange_rate"`       // Token price in fiat
-	TokenDecimals      int32   `json:"token_decimals"`
-	QuotedAt           string  `json:"quoted_at"`
-	ExpiresAt          string  `json:"expires_at"`
-	PriceSource        string  `json:"price_source"`        // "coingecko", "chainlink", etc
+	TokenAmount   string  `json:"token_amount"`  // Amount in token units
+	FiatAmount    float64 `json:"fiat_amount"`   // Amount in fiat
+	ExchangeRate  float64 `json:"exchange_rate"` // Token price in fiat
+	TokenDecimals int32   `json:"token_decimals"`
+	QuotedAt      string  `json:"quoted_at"`
+	ExpiresAt     string  `json:"expires_at"`
+	PriceSource   string  `json:"price_source"` // "coingecko", "chainlink", etc
 }

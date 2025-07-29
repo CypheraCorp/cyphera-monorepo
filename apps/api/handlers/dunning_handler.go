@@ -183,7 +183,7 @@ func (h *DunningHandler) ListCampaigns(c *gin.Context) {
 
 	// Parse filters - empty string will be treated as NULL in SQL
 	status := c.Query("status")
-	
+
 	// Parse customer ID - zero UUID will be treated as NULL in SQL
 	var customerID uuid.UUID
 	if cid := c.Query("customer_id"); cid != "" {

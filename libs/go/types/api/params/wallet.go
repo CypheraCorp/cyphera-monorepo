@@ -18,10 +18,10 @@ type CreateWalletParams struct {
 
 // UpdateWalletParams contains parameters for updating a wallet
 type UpdateWalletParams struct {
-	ID            uuid.UUID
-	Nickname      *string
-	ENS           *string
-	IsPrimary     *bool
-	Verified      *bool
-	Metadata      map[string]interface{}
+	ID        uuid.UUID
+	Nickname  *string
+	ENS       *string
+	IsPrimary *bool
+	Verified  *bool
+	Metadata  map[string]interface{}
 }

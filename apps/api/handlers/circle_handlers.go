@@ -2,12 +2,12 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"github.com/cyphera/cyphera-api/libs/go/client/circle"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"

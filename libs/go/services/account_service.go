@@ -228,7 +228,6 @@ func (s *AccountService) ValidateSignInRequest(metadata map[string]interface{}) 
 	return web3authId, email, nil
 }
 
-
 // SignInOrRegisterAccount handles both sign-in and registration logic
 func (s *AccountService) SignInOrRegisterAccount(ctx context.Context, createParams params.CreateAccountParams, web3authId, email string) (*business.SignInRegisterData, error) {
 	// Check if user already exists by Web3Auth ID

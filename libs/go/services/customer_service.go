@@ -48,7 +48,6 @@ func (s *CustomerService) GetCustomer(ctx context.Context, customerID uuid.UUID)
 	return &customer, nil
 }
 
-
 // CreateCustomer creates a new customer
 func (s *CustomerService) CreateCustomer(ctx context.Context, createParams params.CreateCustomerParams) (*db.Customer, error) {
 	metadataBytes, err := json.Marshal(createParams.Metadata)
@@ -93,7 +92,6 @@ func (s *CustomerService) CreateCustomer(ctx context.Context, createParams param
 
 	return &customer, nil
 }
-
 
 // UpdateCustomer updates an existing customer
 func (s *CustomerService) UpdateCustomer(ctx context.Context, updateParams params.UpdateCustomerParams) (*db.Customer, error) {
@@ -164,8 +162,6 @@ func (s *CustomerService) DeleteCustomer(ctx context.Context, customerID uuid.UU
 	return nil
 }
 
-
-
 // ListCustomers retrieves a paginated list of customers
 func (s *CustomerService) ListCustomers(ctx context.Context, listParams params.ListCustomersParams) (*responses.ListCustomersResult, error) {
 	customers, err := s.queries.ListCustomersWithPagination(ctx, db.ListCustomersWithPaginationParams{
@@ -194,8 +190,6 @@ func (s *CustomerService) ListCustomers(ctx context.Context, listParams params.L
 		Total:     totalCount,
 	}, nil
 }
-
-
 
 // ListWorkspaceCustomers retrieves a paginated list of customers for a workspace
 func (s *CustomerService) ListWorkspaceCustomers(ctx context.Context, listParams params.ListWorkspaceCustomersParams) (*responses.ListWorkspaceCustomersResult, error) {
@@ -291,7 +285,6 @@ func (s *CustomerService) GetCustomerByWeb3AuthID(ctx context.Context, web3authI
 	return &customer, nil
 }
 
-
 // CreateCustomerWithWeb3Auth creates a new customer with Web3Auth ID
 func (s *CustomerService) CreateCustomerWithWeb3Auth(ctx context.Context, createParams params.CreateCustomerWithWeb3AuthParams) (*db.Customer, error) {
 	metadataBytes, err := json.Marshal(createParams.Metadata)
@@ -342,7 +335,6 @@ func (s *CustomerService) ListCustomerWallets(ctx context.Context, customerID uu
 
 	return wallets, nil
 }
-
 
 // CreateCustomerWallet creates a new customer wallet
 func (s *CustomerService) CreateCustomerWallet(ctx context.Context, createParams params.CreateCustomerWalletParams) (*db.CustomerWallet, error) {
@@ -423,7 +415,7 @@ func (s *CustomerService) ProcessCustomerAndWallet(
 	} else {
 		qtx = s.queries
 	}
-	
+
 	customers, err := qtx.GetCustomersByWalletAddress(ctx, processParams.WalletAddress)
 	if err != nil {
 		s.logger.Error("Failed to check for existing customers",
@@ -500,7 +492,7 @@ func (s *CustomerService) CreateCustomerFromWallet(
 	} else {
 		qtx = s.queries
 	}
-	
+
 	s.logger.Info("Creating new customer for wallet address",
 		zap.String("wallet_address", params.WalletAddress),
 		zap.String("product_id", params.ProductID.String()))
@@ -510,14 +502,14 @@ func (s *CustomerService) CreateCustomerFromWallet(
 		"created_from_product_id": params.ProductID.String(),
 		"wallet_address":          params.WalletAddress,
 	}
-	
+
 	// Merge with provided metadata
 	if params.Metadata != nil {
 		for k, v := range params.Metadata {
 			metadata[k] = v
 		}
 	}
-	
+
 	metadataBytes, err := json.Marshal(metadata)
 	if err != nil {
 		return nil, nil, err
@@ -598,7 +590,7 @@ func (s *CustomerService) FindOrCreateCustomerWallet(
 	} else {
 		qtx = s.queries
 	}
-	
+
 	wallets, err := qtx.ListCustomerWallets(ctx, params.CustomerID)
 	if err != nil {
 		return nil, err

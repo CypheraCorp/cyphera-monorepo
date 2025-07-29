@@ -16,8 +16,8 @@ type DelegationClient interface {
 
 // ProcessPaymentParams contains parameters for processing a payment
 type ProcessPaymentParams struct {
-	DelegationID      string
-	RecipientAddress  string
+	DelegationID     string
+	RecipientAddress string
 	Amount           string
 	TokenAddress     string
 	NetworkID        uuid.UUID
@@ -26,17 +26,17 @@ type ProcessPaymentParams struct {
 // ProcessPaymentResponse contains the response from processing a payment
 type ProcessPaymentResponse struct {
 	TransactionHash string
-	Status         string
-	GasUsed        string
-	BlockNumber    uint64
+	Status          string
+	GasUsed         string
+	BlockNumber     uint64
 }
 
 // CreateDelegationParams contains parameters for creating a delegation
 type CreateDelegationParams struct {
 	DelegatorAddress string
-	NetworkID       uuid.UUID
-	TokenAddress    string
-	Amount          string
+	NetworkID        uuid.UUID
+	TokenAddress     string
+	Amount           string
 }
 
 // CreateDelegationResponse contains the response from creating a delegation
@@ -48,10 +48,10 @@ type CreateDelegationResponse struct {
 
 // DelegationStatus represents the status of a delegation
 type DelegationStatus struct {
-	DelegationID string
-	Status      string
+	DelegationID    string
+	Status          string
 	RemainingAmount string
-	UsedAmount     string
+	UsedAmount      string
 }
 
 // CircleClient handles Circle API operations

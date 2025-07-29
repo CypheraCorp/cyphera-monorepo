@@ -1,8 +1,8 @@
 package circle
 
 import (
-	"github.com/cyphera/cyphera-api/libs/go/client/http"
 	"fmt"
+	"github.com/cyphera/cyphera-api/libs/go/client/http"
 )
 
 const (

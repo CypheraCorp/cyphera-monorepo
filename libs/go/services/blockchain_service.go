@@ -24,7 +24,6 @@ type BlockchainService struct {
 	rpcAPIKey string
 }
 
-
 // NewBlockchainService creates a new blockchain service
 func NewBlockchainService(queries db.Querier, rpcAPIKey string) *BlockchainService {
 	return &BlockchainService{

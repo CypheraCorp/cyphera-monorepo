@@ -36,7 +36,6 @@ func NewErrorRecoveryService(
 	}
 }
 
-
 // ReplayWebhookEvent replays a failed webhook event
 func (ers *ErrorRecoveryService) ReplayWebhookEvent(ctx context.Context, req requests.WebhookReplayRequest) (*responses.WebhookReplayResponse, error) {
 	workspaceUUID, err := uuid.Parse(req.WorkspaceID)

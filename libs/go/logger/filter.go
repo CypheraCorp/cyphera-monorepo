@@ -10,14 +10,14 @@ import (
 
 // LogFilter provides filtering capabilities for logs
 type LogFilter struct {
-	MinLevel         LogLevel
-	Components       []LogComponent
+	MinLevel          LogLevel
+	Components        []LogComponent
 	ExcludeComponents []LogComponent
-	Operations       []string
+	Operations        []string
 	ExcludeOperations []string
-	UserIDs          []string
-	WorkspaceIDs     []string
-	TimeRange        TimeRange
+	UserIDs           []string
+	WorkspaceIDs      []string
+	TimeRange         TimeRange
 }
 
 // TimeRange represents a time range for log filtering
@@ -52,7 +52,7 @@ type FilteredLogger struct {
 func NewFilteredLogger(component LogComponent, filter LogFilter) *FilteredLogger {
 	return &FilteredLogger{
 		StructuredLogger: NewStructuredLogger(component),
-		filter:          filter,
+		filter:           filter,
 	}
 }
 
@@ -62,27 +62,27 @@ func (fl *FilteredLogger) shouldLog(level LogLevel, ctx LogContext) bool {
 	if !fl.isLevelEnabled(level) {
 		return false
 	}
-	
+
 	// Check component filters
 	if !fl.isComponentAllowed(ctx.Component) {
 		return false
 	}
-	
+
 	// Check operation filters
 	if !fl.isOperationAllowed(ctx.Operation) {
 		return false
 	}
-	
+
 	// Check user ID filters
 	if !fl.isUserAllowed(ctx.UserID) {
 		return false
 	}
-	
+
 	// Check workspace ID filters
 	if !fl.isWorkspaceAllowed(ctx.WorkspaceID) {
 		return false
 	}
-	
+
 	return true
 }
 
@@ -95,17 +95,17 @@ func (fl *FilteredLogger) isLevelEnabled(level LogLevel) bool {
 		ErrorLevel: 3,
 		FatalLevel: 4,
 	}
-	
+
 	currentLevel, exists := levelOrder[level]
 	if !exists {
 		return true // Allow unknown levels
 	}
-	
+
 	minLevel, exists := levelOrder[fl.filter.MinLevel]
 	if !exists {
 		return true // No minimum level set
 	}
-	
+
 	return currentLevel >= minLevel
 }
 
@@ -117,19 +117,19 @@ func (fl *FilteredLogger) isComponentAllowed(component LogComponent) bool {
 			return false
 		}
 	}
-	
+
 	// If no inclusions specified, allow all (except excluded)
 	if len(fl.filter.Components) == 0 {
 		return true
 	}
-	
+
 	// Check inclusions
 	for _, allowed := range fl.filter.Components {
 		if component == allowed {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -138,26 +138,26 @@ func (fl *FilteredLogger) isOperationAllowed(operation string) bool {
 	if operation == "" && len(fl.filter.Operations) == 0 && len(fl.filter.ExcludeOperations) == 0 {
 		return true
 	}
-	
+
 	// Check exclusions first
 	for _, excluded := range fl.filter.ExcludeOperations {
 		if strings.Contains(operation, excluded) {
 			return false
 		}
 	}
-	
+
 	// If no inclusions specified, allow all (except excluded)
 	if len(fl.filter.Operations) == 0 {
 		return true
 	}
-	
+
 	// Check inclusions
 	for _, allowed := range fl.filter.Operations {
 		if strings.Contains(operation, allowed) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -166,13 +166,13 @@ func (fl *FilteredLogger) isUserAllowed(userID string) bool {
 	if len(fl.filter.UserIDs) == 0 {
 		return true
 	}
-	
+
 	for _, allowed := range fl.filter.UserIDs {
 		if userID == allowed {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -181,13 +181,13 @@ func (fl *FilteredLogger) isWorkspaceAllowed(workspaceID string) bool {
 	if len(fl.filter.WorkspaceIDs) == 0 {
 		return true
 	}
-	
+
 	for _, allowed := range fl.filter.WorkspaceIDs {
 		if workspaceID == allowed {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -233,7 +233,7 @@ func (fl *FilteredLogger) Fatal(msg string, err error) {
 // SetGlobalLogLevel sets the global minimum log level
 func SetGlobalLogLevel(level LogLevel) {
 	var zapLevel zapcore.Level
-	
+
 	switch level {
 	case DebugLevel:
 		zapLevel = zapcore.DebugLevel
@@ -248,17 +248,17 @@ func SetGlobalLogLevel(level LogLevel) {
 	default:
 		zapLevel = zapcore.InfoLevel
 	}
-	
+
 	// Reconfigure the global logger with new level
 	config := zap.NewProductionConfig()
 	config.Level = zap.NewAtomicLevelAt(zapLevel)
-	
+
 	logger, err := config.Build()
 	if err != nil {
 		// Fallback to existing logger if rebuild fails
 		return
 	}
-	
+
 	Log = logger
 }
 
@@ -327,13 +327,13 @@ func CombineFilters(filters ...LogFilter) LogFilter {
 	if len(filters) == 0 {
 		return LogFilter{}
 	}
-	
+
 	if len(filters) == 1 {
 		return filters[0]
 	}
-	
+
 	combined := filters[0]
-	
+
 	for _, filter := range filters[1:] {
 		// Use the highest minimum level
 		if filter.MinLevel != "" {
@@ -347,13 +347,13 @@ func CombineFilters(filters ...LogFilter) LogFilter {
 					ErrorLevel: 3,
 					FatalLevel: 4,
 				}
-				
+
 				if levelOrder[filter.MinLevel] > levelOrder[combined.MinLevel] {
 					combined.MinLevel = filter.MinLevel
 				}
 			}
 		}
-		
+
 		// Combine component filters (intersection)
 		if len(filter.Components) > 0 {
 			if len(combined.Components) == 0 {
@@ -372,11 +372,11 @@ func CombineFilters(filters ...LogFilter) LogFilter {
 				combined.Components = intersection
 			}
 		}
-		
+
 		// Combine exclusions (union)
 		combined.ExcludeComponents = append(combined.ExcludeComponents, filter.ExcludeComponents...)
 		combined.ExcludeOperations = append(combined.ExcludeOperations, filter.ExcludeOperations...)
 	}
-	
+
 	return combined
 }

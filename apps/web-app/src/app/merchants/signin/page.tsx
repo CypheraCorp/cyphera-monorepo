@@ -363,10 +363,11 @@ export default function MerchantSignInPage() {
         error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.';
       logger.error('[MerchantSignin] Connection Error', error);
 
-      // Check if user cancelled the Web3Auth modal
+      // Check if user cancelled the Web3Auth modal or AbortError occurred
       if (
         error instanceof Error &&
-        (error.message.includes('User cancelled') ||
+        ((error as any).name === 'AbortError' ||
+          error.message.includes('User cancelled') ||
           error.message.includes('User closed') ||
           error.message.includes('User denied') ||
           error.message.includes('Modal closed') ||

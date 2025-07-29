@@ -144,8 +144,7 @@ jobs:
         TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/cyphera_test?sslmode=disable
       run: |
         # Run integration tests with database
-        cd apps/api
-        go test -tags=integration ./... -v -timeout=30m
+        go test -tags=integration ./tests/integration/... -v -timeout=30m
 
     - name: Run delegation server tests
       run: |

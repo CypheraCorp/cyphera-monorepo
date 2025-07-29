@@ -6,22 +6,34 @@
 help:
 	@echo "Cyphera Monorepo - Make Commands"
 	@echo ""
-	@echo "For standard development, use npm commands:"
-	@echo "  npm run dev:all     - Start all services"
-	@echo "  npm run build:all   - Build all projects"
-	@echo "  npm run test:all    - Run all tests"
+	@echo "🧪 TESTING COMMANDS (GitHub Actions Compatible):"
+	@echo "  make test-github-actions  - Run EXACT same tests as GitHub Actions"
+	@echo "  make test-all            - Complete test suite (unit + integration + builds)"
+	@echo "  make test-quick          - Fast tests only (no database/integration)"
+	@echo "  make test-handlers       - API handler tests (same as GitHub Actions unit tests)"
+	@echo "  make test-services       - Service layer tests"
+	@echo "  make test-integration    - Integration tests with database"
+	@echo "  make test-builds         - Verify all components build"
+	@echo "  make test-format         - Check code formatting"
 	@echo ""
-	@echo "Make is used for:"
-	@echo "  Protocol generation, database operations, Docker management"
+	@echo "🔧 DEVELOPMENT COMMANDS:"
+	@echo "  make gen                 - Generate SQLC database code"
+	@echo "  make generate-mocks      - Generate mocks for all interfaces"
+	@echo "  make proto-gen           - Generate all protobuf code"
+	@echo "  make swagger-gen         - Generate Swagger/OpenAPI docs"
 	@echo ""
-	@echo "Available make targets:"
-	@echo "  make gen            - Generate SQLC database code"
-	@echo "  make generate-mocks - Generate mocks for all interfaces"
-	@echo "  make proto-gen      - Generate all protobuf code"
-	@echo "  make swagger-gen    - Generate Swagger/OpenAPI docs"
-	@echo "  make db-reset       - Reset database to clean state"
-	@echo "  make docker-dev     - Run development environment in Docker"
-	@echo "  make sam-build      - Build AWS SAM applications"
+	@echo "🐳 INFRASTRUCTURE:"
+	@echo "  make db-reset            - Reset database to clean state"
+	@echo "  make docker-dev          - Run development environment in Docker"
+	@echo "  make sam-build           - Build AWS SAM applications"
+	@echo ""
+	@echo "🌐 DELEGATION SERVER:"
+	@echo "  make delegation-server-setup  - Install dependencies"
+	@echo "  make delegation-server-test   - Run TypeScript tests"
+	@echo "  make delegation-server-lint   - Run TypeScript linting"
+	@echo "  make delegation-server-build  - Build TypeScript"
+	@echo ""
+	@echo "💡 RECOMMENDED: Run 'make test-github-actions' before pushing to ensure CI passes!"
 	@echo ""
 
 # ==============================================================================
@@ -141,7 +153,7 @@ swagger-gen:
 	@echo "📚 Generating Swagger documentation..."
 	@swag init \
 		--dir ./apps/api/handlers \
-		--generalInfo ../../apps/api/cmd/main/main.go \
+		--generalInfo ../cmd/main/main.go \
 		--output ./docs/api \
 		--tags='!exclude'
 	@echo "✅ Swagger docs generated at docs/api/"
@@ -213,10 +225,37 @@ ci-validate:
 	@$(NX) format:check --all
 
 # ==============================================================================
+# Delegation Server Commands
+# ==============================================================================
+
+.PHONY: delegation-server-setup delegation-server-lint delegation-server-test delegation-server-build
+
+# Install delegation server dependencies
+delegation-server-setup:
+	@echo "📦 Setting up delegation server..."
+	@cd apps/delegation-server && npm ci
+
+# Run delegation server linting
+delegation-server-lint:
+	@echo "🔍 Linting delegation server..."
+	@cd apps/delegation-server && npm run lint
+
+# Run delegation server tests
+delegation-server-test:
+	@echo "🧪 Testing delegation server..."
+	@cd apps/delegation-server && npm test
+
+# Build delegation server
+delegation-server-build:
+	@echo "🔨 Building delegation server..."
+	@cd apps/delegation-server && npm run build
+
+# ==============================================================================
 # Testing Infrastructure
 # ==============================================================================
 
 .PHONY: test test-unit test-mock test-integration test-coverage test-coverage-html test-db-up test-db-down
+.PHONY: test-all test-github-actions test-handlers test-services test-quick test-ci
 
 # Load test configuration
 TEST_CONFIG := test.config.json
@@ -271,9 +310,97 @@ test-db-down:
 	@docker stop cyphera-test-db || true
 	@docker rm cyphera-test-db || true
 
-generate-mocks:
-	@echo "🔧 Generating Go mocks..."
-	@./scripts/generate-mocks.sh
+# ==============================================================================
+# Comprehensive Test Commands (GitHub Actions Compatible)
+# ==============================================================================
+
+# Run all tests exactly like GitHub Actions
+test-github-actions:
+	@echo "🚀 Running GitHub Actions Test Suite Locally"
+	@echo "============================================="
+	@echo ""
+	@echo "1️⃣ Running Unit Tests (Handler Tests)..."
+	@cd apps/api && go test ./handlers/... -v -race -timeout=30s
+	@echo ""
+	@echo "2️⃣ Running Integration Tests..."
+	@go test -tags=integration ./tests/integration/... -v -timeout=30m
+	@echo ""
+	@echo "3️⃣ Running Delegation Server Tests..."
+	@$(MAKE) delegation-server-test
+	@echo ""
+	@echo "4️⃣ Verifying Builds..."
+	@$(MAKE) test-builds
+	@echo ""
+	@echo "5️⃣ Checking Code Quality..."
+	@$(MAKE) test-format
+	@echo ""
+	@echo "✅ All GitHub Actions tests completed successfully!"
+
+# Run comprehensive test suite (includes everything)
+test-all: generate-mocks
+	@echo "🧪 Running Complete Test Suite"
+	@echo "=============================="
+	@$(MAKE) test-quick
+	@$(MAKE) test-integration
+	@$(MAKE) delegation-server-test
+	@$(MAKE) test-builds
+	@$(MAKE) test-format
+	@echo "✅ All tests completed successfully!"
+
+# Quick test suite (no database, no integration)
+test-quick:
+	@echo "⚡ Running Quick Test Suite"
+	@echo "=========================="
+	@echo "🧪 Handler tests..."
+	@cd apps/api && go test ./handlers/... -v -race -timeout=30s
+	@echo "🧪 Service tests..."
+	@$(MAKE) test-services
+	@echo "✅ Quick tests completed!"
+
+# Test all services
+test-services:
+	@echo "🔧 Testing Go services..."
+	@cd libs/go && go test ./services/... -v -race -timeout=30s
+
+# Test only handlers (GitHub Actions unit test equivalent)
+test-handlers:
+	@echo "🎯 Testing API handlers (GitHub Actions equivalent)..."
+	@cd apps/api && go test ./handlers/... -v -race -timeout=30s
+
+# Test build commands
+test-builds:
+	@echo "🔨 Testing builds..."
+	@echo "  → API build..."
+	@cd apps/api && go build ./... > /dev/null
+	@echo "  → Libraries build..."
+	@cd libs/go && go build ./... > /dev/null
+	@echo "  → Subscription processor build..."
+	@cd apps/subscription-processor && go build ./... > /dev/null
+	@echo "  → Delegation server build..."
+	@$(MAKE) delegation-server-build > /dev/null
+	@echo "✅ All builds successful!"
+
+# Test code formatting
+test-format:
+	@echo "📝 Checking code formatting..."
+	@echo "  → Go formatting..."
+	@FORMAT_ISSUES=$$(gofmt -s -l libs/go/ apps/api/ | grep -v "libs/go/mocks/helpers.go" | wc -l); \
+	if [ "$$FORMAT_ISSUES" -eq 0 ]; then \
+		echo "✅ Go code is properly formatted"; \
+	else \
+		echo "❌ Found $$FORMAT_ISSUES formatting issues:"; \
+		gofmt -s -l libs/go/ apps/api/ | grep -v "libs/go/mocks/helpers.go"; \
+		exit 1; \
+	fi
+
+# CI-friendly test command (no colors, structured output)
+test-ci:
+	@echo "Running CI Test Suite..."
+	@cd apps/api && go test ./handlers/... -race -timeout=30s
+	@go test -tags=integration ./tests/integration/... -timeout=30m
+	@cd apps/delegation-server && npm test
+	@echo "CI tests completed"
+
 
 # ==============================================================================
 # Advanced Operations (Use with caution)

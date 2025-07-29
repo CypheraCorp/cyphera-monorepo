@@ -223,15 +223,15 @@ func (h *TokenHandler) GetTokenQuote(c *gin.Context) {
 	// Convert TokenQuoteResult to GetTokenQuoteResponse
 	response := GetTokenQuoteResponse{
 		FiatSymbol:        req.ToCurrency,
-		TokenSymbol:       "", // We'll need to add this
+		TokenSymbol:       "",                  // We'll need to add this
 		TokenAmountInFiat: result.ExchangeRate, // Price per token in fiat
 	}
-	
+
 	// Get the token to get its symbol
 	token, err := h.tokenService.GetToken(c.Request.Context(), tokenID)
 	if err == nil {
 		response.TokenSymbol = token.Symbol
 	}
-	
+
 	sendSuccess(c, http.StatusOK, response)
 }

@@ -130,18 +130,19 @@ func (h *SubscriptionEventHandler) GetSubscriptionEventByTxHash(c *gin.Context) 
 }
 
 // ListSubscriptionEvents godoc
-// @Summary List subscription events
-// @Description Retrieves a paginated list of subscription events for the workspace
+// @Summary List subscription events transactions
+// @Description Retrieves a paginated list of subscription events for the workspace with full details including network and customer information
 // @Tags subscription-events
 // @Accept json
 // @Produce json
 // @Param X-Workspace-ID header string true "Workspace ID"
 // @Param limit query int false "Number of events to return (default 20, max 100)"
 // @Param page query int false "Page number (default 1)"
-// @Success 200 {object} handlers.PaginatedResponse
+// @Success 200 {object} responses.PaginatedResponse{data=[]responses.SubscriptionEventFullResponse} "Paginated list of subscription events with full network and customer details"
 // @Failure 400 {object} handlers.ErrorResponse "Invalid workspace ID format or pagination parameters"
 // @Failure 500 {object} handlers.ErrorResponse "Failed to retrieve or count subscription events"
-// @Router /subscription-events [get]
+// @Router /subscription-events/transactions [get]
+// @Security ApiKeyAuth
 func (h *SubscriptionEventHandler) ListSubscriptionEvents(c *gin.Context) {
 	workspaceID := c.GetHeader("X-Workspace-ID")
 	parsedWorkspaceID, err := uuid.Parse(workspaceID)

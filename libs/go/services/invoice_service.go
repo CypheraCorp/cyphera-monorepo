@@ -160,7 +160,7 @@ func (s *InvoiceService) CreateInvoice(ctx context.Context, invoiceParams params
 		if err := quantity.Scan("1"); err != nil {
 			return nil, fmt.Errorf("failed to convert discount quantity: %w", err)
 		}
-		
+
 		discountLineItem, err := s.queries.CreateInvoiceLineItem(ctx, db.CreateInvoiceLineItemParams{
 			InvoiceID:         invoice.ID,
 			Description:       fmt.Sprintf("Discount: %s", *invoiceParams.DiscountCode),
@@ -182,7 +182,7 @@ func (s *InvoiceService) CreateInvoice(ctx context.Context, invoiceParams params
 		if err := quantity.Scan("1"); err != nil {
 			return nil, fmt.Errorf("failed to convert tax quantity: %w", err)
 		}
-		
+
 		taxLineItem, err := s.queries.CreateInvoiceLineItem(ctx, db.CreateInvoiceLineItemParams{
 			InvoiceID:         invoice.ID,
 			Description:       fmt.Sprintf("Tax (%s)", taxDetail.Description),
@@ -218,7 +218,7 @@ func (s *InvoiceService) CreateInvoice(ctx context.Context, invoiceParams params
 		CustomerTotal:    totalAmount + gasFeesTotal - sponsoredGasFees,
 		TaxDetails:       convertTaxBreakdownToDetails(taxCalculation.TaxBreakdown),
 	}
-	
+
 	return convertToInvoiceResponse(invoiceDetails), nil
 }
 
@@ -272,7 +272,7 @@ func (s *InvoiceService) GetInvoiceWithDetails(ctx context.Context, workspaceID,
 		TaxDetails:       taxDetails,
 		CryptoAmounts:    convertCryptoAmounts(cryptoAmounts),
 	}
-	
+
 	return convertToInvoiceResponse(invoiceDetails), nil
 }
 
@@ -514,13 +514,13 @@ func convertToInvoiceResponse(details *business.InvoiceWithDetails) *responses.I
 	if details.Invoice.DueDate.Valid {
 		dueDate = &details.Invoice.DueDate.Time
 	}
-	
+
 	var subscriptionID *uuid.UUID
 	if details.Invoice.SubscriptionID.Valid {
 		id := uuid.UUID(details.Invoice.SubscriptionID.Bytes)
 		subscriptionID = &id
 	}
-	
+
 	// Convert line items
 	lineItems := make([]responses.InvoiceLineItemResponse, len(details.LineItems))
 	for i, item := range details.LineItems {
@@ -536,7 +536,7 @@ func convertToInvoiceResponse(details *business.InvoiceWithDetails) *responses.I
 			PriceID:         nil, // TODO: Add if available
 		}
 	}
-	
+
 	// Convert tax details
 	taxDetails := make([]responses.TaxDetail, len(details.TaxDetails))
 	for i, tax := range details.TaxDetails {
@@ -548,7 +548,7 @@ func convertToInvoiceResponse(details *business.InvoiceWithDetails) *responses.I
 			TaxType:          tax.TaxType,
 		}
 	}
-	
+
 	return &responses.InvoiceResponse{
 		ID:               details.Invoice.ID,
 		WorkspaceID:      details.Invoice.WorkspaceID,

@@ -850,11 +850,11 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 	h.common.GetLogger().Info("Creating comprehensive subscription response",
 		zap.String("subscription_id", subscriptionResult.Subscription.ID.String()),
 		zap.String("transaction_hash", subscriptionResult.TransactionHash))
-	
+
 	// Create a context with timeout to avoid indefinite hangs
 	responseCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	
+
 	comprehensiveResponse, err := helpers.ToComprehensiveSubscriptionResponse(responseCtx, h.common.db, *subscriptionResult.Subscription)
 	if err != nil {
 		logger.Error("Failed to create comprehensive subscription response",
@@ -863,7 +863,7 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		h.common.HandleError(c, err, "Failed to create subscription response", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}
-	
+
 	h.common.GetLogger().Info("Successfully created comprehensive subscription response",
 		zap.String("subscription_id", subscriptionResult.Subscription.ID.String()))
 

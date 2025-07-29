@@ -30,14 +30,14 @@ func InitLogger(stage string) {
 		EnableJSON:  stage == "prod",
 		EnableColor: stage != "prod",
 	}
-	
+
 	InitLoggerWithConfig(config)
 }
 
 // InitLoggerWithConfig initializes the logger with custom configuration
 func InitLoggerWithConfig(config LoggerConfig) {
 	var zapConfig zap.Config
-	
+
 	// Determine log level
 	level := zapcore.InfoLevel
 	switch strings.ToLower(config.Level) {
@@ -52,7 +52,7 @@ func InitLoggerWithConfig(config LoggerConfig) {
 	case "fatal":
 		level = zapcore.FatalLevel
 	}
-	
+
 	if config.Stage == "prod" || config.EnableJSON {
 		// Production config - JSON structured logging
 		zapConfig = zap.NewProductionConfig()
@@ -63,7 +63,7 @@ func InitLoggerWithConfig(config LoggerConfig) {
 		zapConfig.EncoderConfig.LevelKey = "level"
 		zapConfig.EncoderConfig.CallerKey = "caller"
 		zapConfig.EncoderConfig.StacktraceKey = "stacktrace"
-		
+
 		// Add custom fields for structured logging
 		zapConfig.InitialFields = map[string]interface{}{
 			"service": "cyphera-api",
@@ -73,28 +73,28 @@ func InitLoggerWithConfig(config LoggerConfig) {
 		// Development config - human-readable console logging
 		zapConfig = zap.NewDevelopmentConfig()
 		zapConfig.Level = zap.NewAtomicLevelAt(level)
-		
+
 		if config.EnableColor {
 			zapConfig.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 		} else {
 			zapConfig.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 		}
-		
+
 		zapConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 		zapConfig.EncoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
 	}
-	
+
 	// Enable caller information for debugging
 	zapConfig.DisableCaller = false
 	// Enable stacktraces for development and debug levels
 	zapConfig.DisableStacktrace = config.Stage == "prod" && level > zapcore.DebugLevel
-	
+
 	// Build the logger
 	logger, err := zapConfig.Build()
 	if err != nil {
 		panic("failed to initialize logger: " + err.Error())
 	}
-	
+
 	// Set global logger
 	Log = logger
 }

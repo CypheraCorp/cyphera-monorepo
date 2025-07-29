@@ -27,7 +27,7 @@ func NewAPIKeyHandler(common *CommonServices, logger *zap.Logger) *APIKeyHandler
 	if common != nil {
 		apiKeyService = common.GetAPIKeyService()
 	}
-	
+
 	return &APIKeyHandler{
 		common:        common,
 		logger:        logger,

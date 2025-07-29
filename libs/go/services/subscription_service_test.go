@@ -1567,10 +1567,10 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 
 	// Create valid subscription params
 	validParams := params.SubscribeToProductByPriceIDParams{
-		PriceID:                  priceID,
-		SubscriberAddress:        "0xcustomer123",
-		ProductTokenID:           productTokenID.String(),
-		TokenAmount:              "1000000",
+		PriceID:           priceID,
+		SubscriberAddress: "0xcustomer123",
+		ProductTokenID:    productTokenID.String(),
+		TokenAmount:       "1000000",
 		DelegationData: params.DelegationParams{
 			Delegate:  "0xcyphera123",
 			Delegator: "0xcustomer123",
@@ -1669,7 +1669,7 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 			},
 			setupMocks: func(mockQuerier *mocks.MockQuerier) {
 				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
-				
+
 				inactiveProduct := validProduct
 				inactiveProduct.Active = false
 				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(inactiveProduct, nil)
@@ -1706,7 +1706,7 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
 				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
 				mockQuerier.EXPECT().GetWalletByID(gomock.Any(), gomock.Any()).Return(validWallet, nil)
-				
+
 				wrongProductToken := validProductToken
 				wrongProductToken.ProductID = uuid.New() // Different product
 				mockQuerier.EXPECT().GetProductToken(gomock.Any(), productTokenID).Return(wrongProductToken, nil)
@@ -1775,7 +1775,7 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 			errorString: "failed to get merchant wallet",
 		},
 		{
-			name: "handles subscription already exists error",
+			name:   "handles subscription already exists error",
 			params: validParams,
 			setupMocks: func(mockQuerier *mocks.MockQuerier) {
 				// Setup all the initial mocks
@@ -1790,7 +1790,7 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 				mockQuerier.EXPECT().ListCustomerWallets(gomock.Any(), customerID).Return([]db.CustomerWallet{validCustomerWallet}, nil)
 				mockQuerier.EXPECT().UpdateCustomerWalletUsageTime(gomock.Any(), customerWalletID).Return(validCustomerWallet, nil)
 				mockQuerier.EXPECT().CreateDelegationData(gomock.Any(), gomock.Any()).Return(validDelegationData, nil)
-				
+
 				// Mock existing subscription check - returns existing subscription
 				mockQuerier.EXPECT().ListSubscriptionsByCustomer(gomock.Any(), gomock.Any()).Return([]db.Subscription{validSubscription}, nil)
 			},

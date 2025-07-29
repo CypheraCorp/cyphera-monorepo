@@ -578,9 +578,9 @@ var CreateInvoiceValidation = ValidationConfig{
 			Pattern:  `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$`, // ISO 8601
 		},
 		{
-			Field:    "discount_code",
-			Type:     "string",
-			Required: false,
+			Field:     "discount_code",
+			Type:      "string",
+			Required:  false,
 			MaxLength: 50,
 		},
 		{

@@ -5,7 +5,6 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 )
 
-
 // Helper functions to convert database models to API responses
 func toBasicProductTokenResponse(pt db.ProductsToken) responses.ProductTokenResponse {
 	return responses.ProductTokenResponse{

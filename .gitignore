@@ -66,9 +66,21 @@ cmd/delegation-integration-test/integration-test
 bootstrap
 .aws-sam/
 
-# Test results
+# Test results and coverage files
 *.xml
 coverage.txt
+coverage.out
+coverage.html
+*.coverage
+test-results/
+test-artifacts/
+
+# Test output logs
+/tmp/*_test_output.log
+/tmp/unit_test_output.log
+/tmp/integration_test_output.log
+/tmp/delegation_test_output.log
+/tmp/api_start.log
 
 .mcp.json
 
@@ -89,3 +101,4 @@ apps/*/.env.local
 dist/
 tmp/
 bootstrap
+apps/delegation-server/coverage/

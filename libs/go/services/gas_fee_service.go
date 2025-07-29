@@ -281,10 +281,10 @@ func (s *GasFeeService) GetCurrentGasPrice(ctx context.Context, networkID uuid.U
 
 	// Get current gas price estimate
 	gasPriceWei, _ := s.estimateGasPrice(ctx, network)
-	
+
 	// Convert Wei to Gwei for return (divide by 1e9)
 	gasPriceGwei := new(big.Int).Div(gasPriceWei, big.NewInt(1e9))
-	
+
 	// Convert to int (assuming it fits in int range)
 	return int(gasPriceGwei.Int64()), nil
 }

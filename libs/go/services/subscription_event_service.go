@@ -94,7 +94,6 @@ func (s *SubscriptionEventService) GetSubscriptionEventByTxHash(ctx context.Cont
 	return &event, nil
 }
 
-
 // ListSubscriptionEvents retrieves a paginated list of subscription events for a workspace
 func (s *SubscriptionEventService) ListSubscriptionEvents(ctx context.Context, params params.ListSubscriptionEventsParams) (*responses.ListSubscriptionEventsResult, error) {
 	// Validate pagination parameters
@@ -110,7 +109,7 @@ func (s *SubscriptionEventService) ListSubscriptionEvents(ctx context.Context, p
 		zap.String("workspace_id", params.WorkspaceID.String()),
 		zap.Int32("limit", params.Limit),
 		zap.Int32("offset", params.Offset))
-	
+
 	events, err := s.queries.ListSubscriptionEventDetailsWithPagination(ctx, db.ListSubscriptionEventDetailsWithPaginationParams{
 		WorkspaceID: params.WorkspaceID,
 		Limit:       params.Limit,
@@ -129,9 +128,9 @@ func (s *SubscriptionEventService) ListSubscriptionEvents(ctx context.Context, p
 		zap.Any("first_event_sample", func() interface{} {
 			if len(events) > 0 {
 				return map[string]interface{}{
-					"id": events[0].SubscriptionEventID.String(),
+					"id":         events[0].SubscriptionEventID.String(),
 					"event_type": events[0].EventType,
-					"tx_hash": events[0].TransactionHash,
+					"tx_hash":    events[0].TransactionHash,
 				}
 			}
 			return nil
@@ -158,21 +157,21 @@ func (s *SubscriptionEventService) ListSubscriptionEvents(ctx context.Context, p
 		}
 		responseEvents[i] = fullResponse
 	}
-	
+
 	s.logger.Info("Converted events to response format",
 		zap.String("workspace_id", params.WorkspaceID.String()),
 		zap.Int("response_events_count", len(responseEvents)),
 		zap.Any("first_response_sample", func() interface{} {
 			if len(responseEvents) > 0 {
 				return map[string]interface{}{
-					"id": responseEvents[0].ID.String(),
+					"id":         responseEvents[0].ID.String(),
 					"event_type": responseEvents[0].EventType,
-					"tx_hash": responseEvents[0].TransactionHash,
+					"tx_hash":    responseEvents[0].TransactionHash,
 				}
 			}
 			return nil
 		}()))
-	
+
 	return &responses.ListSubscriptionEventsResult{
 		Events: responseEvents,
 		Total:  totalCount,
@@ -225,20 +224,32 @@ func (s *SubscriptionEventService) CreateSubscriptionEvent(ctx context.Context, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
 	}
-	
+
 	// Create the event
 	event, err := s.queries.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
 		SubscriptionID: params.SubscriptionID,
 		EventType:      params.EventType,
 		TransactionHash: pgtype.Text{
-			String: func() string { if params.TransactionHash != nil { return *params.TransactionHash } else { return "" } }(),
-			Valid:  params.TransactionHash != nil && *params.TransactionHash != "",
+			String: func() string {
+				if params.TransactionHash != nil {
+					return *params.TransactionHash
+				} else {
+					return ""
+				}
+			}(),
+			Valid: params.TransactionHash != nil && *params.TransactionHash != "",
 		},
 		AmountInCents: params.AmountInCents,
 		OccurredAt:    pgtype.Timestamptz{Time: time.Now(), Valid: true}, // Use current time
 		ErrorMessage: pgtype.Text{
-			String: func() string { if params.FailureReason != nil { return *params.FailureReason } else { return "" } }(),
-			Valid:  params.FailureReason != nil,
+			String: func() string {
+				if params.FailureReason != nil {
+					return *params.FailureReason
+				} else {
+					return ""
+				}
+			}(),
+			Valid: params.FailureReason != nil,
 		},
 		Metadata: metadataJSON,
 	})

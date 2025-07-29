@@ -39,12 +39,12 @@ type CustomerDetailsResponse struct {
 
 // ListCustomersResult represents the result of listing customers
 type ListCustomersResult struct {
-	Customers   []CustomerResponse `json:"customers"`
-	Total       int64              `json:"total"`
+	Customers []CustomerResponse `json:"customers"`
+	Total     int64              `json:"total"`
 }
 
 // ListWorkspaceCustomersResult represents the result of listing workspace customers
 type ListWorkspaceCustomersResult struct {
-	Customers   []CustomerResponse `json:"customers"`
-	Total       int64              `json:"total"`
+	Customers []CustomerResponse `json:"customers"`
+	Total     int64              `json:"total"`
 }

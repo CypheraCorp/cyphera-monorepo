@@ -449,10 +449,10 @@ func TestDunningService_CreateCampaign(t *testing.T) {
 			setupMocks: func() {
 				// Check for existing active campaign
 				mockQuerier.EXPECT().GetActiveDunningCampaignForSubscription(ctx, pgtype.UUID{Bytes: subscriptionID, Valid: true}).Return(db.DunningCampaign{}, pgx.ErrNoRows)
-				
+
 				// Get configuration
 				mockQuerier.EXPECT().GetDunningConfiguration(ctx, configID).Return(config, nil)
-				
+
 				// Get subscription to extract workspace and customer
 				subscription := db.Subscription{
 					ID:          subscriptionID,
@@ -460,7 +460,7 @@ func TestDunningService_CreateCampaign(t *testing.T) {
 					CustomerID:  customerID,
 				}
 				mockQuerier.EXPECT().GetSubscription(ctx, subscriptionID).Return(subscription, nil)
-				
+
 				// Fail on campaign creation
 				mockQuerier.EXPECT().CreateDunningCampaign(ctx, gomock.Any()).Return(db.DunningCampaign{}, errors.New("creation error"))
 			},
@@ -1433,7 +1433,7 @@ func TestDunningService_HelperFunctions(t *testing.T) {
 			OutstandingAmount: 1000,
 			Currency:          "USD",
 		})
-		
+
 		// Should fail because workspace and customer ID are required when subscription ID is nil
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "workspace and customer ID required")
@@ -1456,7 +1456,7 @@ func TestDunningService_HelperFunctions(t *testing.T) {
 			WorkspaceID: uuid.New(),
 			CustomerID:  uuid.New(),
 		}
-		
+
 		// Check for existing campaigns
 		mockQuerier.EXPECT().GetActiveDunningCampaignForSubscription(ctx, gomock.Any()).Return(
 			db.DunningCampaign{ID: uuid.Nil}, nil)

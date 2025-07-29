@@ -78,7 +78,7 @@ func (rl *RateLimiter) getLimiter(key string) *rate.Limiter {
 		limiter:    limiter,
 		lastAccess: time.Now(),
 	}
-	
+
 	// Store it (handle race condition where another goroutine created it)
 	actual, _ := rl.limiters.LoadOrStore(key, entry)
 	return actual.(*limiterEntry).limiter
@@ -105,7 +105,7 @@ func getClientIdentifier(c *gin.Context) string {
 	if forwardedFor := c.GetHeader("X-Forwarded-For"); forwardedFor != "" {
 		return fmt.Sprintf("ip:%s", forwardedFor)
 	}
-	
+
 	clientIP := c.ClientIP()
 	if clientIP == "" {
 		clientIP = "unknown"
@@ -124,7 +124,7 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 
 		// Get client identifier
 		clientID := getClientIdentifier(c)
-		
+
 		// Get the limiter for this client
 		limiter := rl.getLimiter(clientID)
 
@@ -146,7 +146,7 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 			c.Header("Retry-After", "1")
 
 			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": "Too many requests. Please try again later.",
+				"error":       "Too many requests. Please try again later.",
 				"retry_after": 1,
 			})
 			c.Abort()
@@ -181,10 +181,10 @@ func (rl *RateLimiter) MiddlewareWithConfig(customRate, customBurst int) gin.Han
 var (
 	// DefaultRateLimiter for general API endpoints (100 requests per second, burst of 200)
 	DefaultRateLimiter = NewRateLimiter(100, 200)
-	
+
 	// StrictRateLimiter for sensitive endpoints like auth (10 requests per second, burst of 20)
 	StrictRateLimiter = NewRateLimiter(10, 20)
-	
+
 	// RelaxedRateLimiter for read-heavy endpoints (500 requests per second, burst of 1000)
 	RelaxedRateLimiter = NewRateLimiter(500, 1000)
 )

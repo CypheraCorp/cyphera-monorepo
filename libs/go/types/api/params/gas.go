@@ -31,10 +31,10 @@ type EstimateGasFeeParams struct {
 
 // SponsorshipCheckParams contains parameters for checking gas sponsorship eligibility
 type SponsorshipCheckParams struct {
-	WorkspaceID      uuid.UUID
-	CustomerID       uuid.UUID
-	ProductID        uuid.UUID
-	GasCostUSDCents  int64
-	TransactionType  string // e.g., "subscription", "one_time", "refund"
-	CustomerTier     string // e.g., "free", "pro", "enterprise"
+	WorkspaceID     uuid.UUID
+	CustomerID      uuid.UUID
+	ProductID       uuid.UUID
+	GasCostUSDCents int64
+	TransactionType string // e.g., "subscription", "one_time", "refund"
+	CustomerTier    string // e.g., "free", "pro", "enterprise"
 }

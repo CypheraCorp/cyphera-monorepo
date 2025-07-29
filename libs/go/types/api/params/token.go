@@ -27,10 +27,10 @@ type CreateTokenParams struct {
 
 // UpdateTokenParams contains parameters for updating a token
 type UpdateTokenParams struct {
-	ID              uuid.UUID
-	IconURL         *string
-	PriceUSD        *float64
-	CoingeckoID     *string
-	IsActive        *bool
-	Metadata        map[string]interface{}
+	ID          uuid.UUID
+	IconURL     *string
+	PriceUSD    *float64
+	CoingeckoID *string
+	IsActive    *bool
+	Metadata    map[string]interface{}
 }

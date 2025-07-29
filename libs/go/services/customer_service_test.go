@@ -456,21 +456,21 @@ func TestCustomerService_DeleteCustomer(t *testing.T) {
 func TestCustomerService_ListCustomers(t *testing.T) {
 	dbCustomers := []db.Customer{
 		{
-			ID: uuid.New(), 
-			Email: pgtype.Text{String: "user1@example.com", Valid: true},
-			Metadata: []byte("{}"),
+			ID:        uuid.New(),
+			Email:     pgtype.Text{String: "user1@example.com", Valid: true},
+			Metadata:  []byte("{}"),
 			CreatedAt: pgtype.Timestamptz{},
 			UpdatedAt: pgtype.Timestamptz{},
 		},
 		{
-			ID: uuid.New(), 
-			Email: pgtype.Text{String: "user2@example.com", Valid: true},
-			Metadata: []byte("{}"),
+			ID:        uuid.New(),
+			Email:     pgtype.Text{String: "user2@example.com", Valid: true},
+			Metadata:  []byte("{}"),
 			CreatedAt: pgtype.Timestamptz{},
 			UpdatedAt: pgtype.Timestamptz{},
 		},
 	}
-	
+
 	// Convert to response format for expected result using the actual helper function
 	customerResponses := make([]responses.CustomerResponse, len(dbCustomers))
 	for i, c := range dbCustomers {
@@ -563,21 +563,21 @@ func TestCustomerService_ListWorkspaceCustomers(t *testing.T) {
 	workspaceID := uuid.New()
 	dbCustomers := []db.Customer{
 		{
-			ID: uuid.New(), 
-			Email: pgtype.Text{String: "user1@example.com", Valid: true},
-			Metadata: []byte("{}"),
+			ID:        uuid.New(),
+			Email:     pgtype.Text{String: "user1@example.com", Valid: true},
+			Metadata:  []byte("{}"),
 			CreatedAt: pgtype.Timestamptz{},
 			UpdatedAt: pgtype.Timestamptz{},
 		},
 		{
-			ID: uuid.New(), 
-			Email: pgtype.Text{String: "user2@example.com", Valid: true},
-			Metadata: []byte("{}"),
+			ID:        uuid.New(),
+			Email:     pgtype.Text{String: "user2@example.com", Valid: true},
+			Metadata:  []byte("{}"),
 			CreatedAt: pgtype.Timestamptz{},
 			UpdatedAt: pgtype.Timestamptz{},
 		},
 	}
-	
+
 	// Convert to response format for expected result using the actual helper function
 	customerResponses := make([]responses.CustomerResponse, len(dbCustomers))
 	for i, c := range dbCustomers {
@@ -1507,7 +1507,7 @@ func TestCustomerService_ParseNetworkType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := services.NewCustomerService(&mocks.MockQuerier{})
-			
+
 			// Test the parseNetworkType function indirectly through CreateCustomerWallet
 			// since parseNetworkType is not exported
 			walletParams := params.CreateCustomerWalletParams{
@@ -1518,12 +1518,12 @@ func TestCustomerService_ParseNetworkType(t *testing.T) {
 				Verified:      true,
 				Metadata:      map[string]interface{}{},
 			}
-			
+
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			mockQuerier := mocks.NewMockQuerier(ctrl)
 			service = services.NewCustomerService(mockQuerier)
-			
+
 			if tt.wantErr {
 				// Don't set up any mocks - should fail at parseNetworkType
 				_, err := service.CreateCustomerWallet(context.Background(), walletParams)
@@ -1547,5 +1547,5 @@ func TestCustomerService_ParseNetworkType(t *testing.T) {
 
 // TODO: Add integration tests for:
 // - ProcessCustomerAndWallet
-// - CreateCustomerFromWallet  
+// - CreateCustomerFromWallet
 // - FindOrCreateCustomerWallet

@@ -2,10 +2,10 @@ package circle
 
 import (
 	"context"
-	httpClient "github.com/cyphera/cyphera-api/libs/go/client/http"
 	"encoding/json"
 	"errors"
 	"fmt"
+	httpClient "github.com/cyphera/cyphera-api/libs/go/client/http"
 	"io"
 	"net/http"
 	"time"

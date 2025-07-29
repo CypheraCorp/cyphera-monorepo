@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	
+
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
@@ -42,8 +42,6 @@ func (s *PaymentLinkService) GetBaseURL() string {
 	return s.baseURL
 }
 
-
-
 // CreatePaymentLink creates a new payment link
 func (s *PaymentLinkService) CreatePaymentLink(ctx context.Context, params params.PaymentLinkCreateParams) (*responses.PaymentLinkResponse, error) {
 	// Generate unique slug
@@ -60,22 +58,22 @@ func (s *PaymentLinkService) CreatePaymentLink(ctx context.Context, params param
 
 	// Create payment link
 	link, err := s.queries.CreatePaymentLink(ctx, db.CreatePaymentLinkParams{
-		WorkspaceID:      params.WorkspaceID,
-		Slug:             slug,
-		Status:           "active",
-		ProductID:        uuidToPgtypePaymentLink(params.ProductID),
-		PriceID:          uuidToPgtypePaymentLink(params.PriceID),
-		AmountInCents:    int64ToPgtype(&params.AmountCents),
-		Currency:         pgtype.Text{String: params.Currency, Valid: params.Currency != ""},
-		PaymentType:      pgtype.Text{String: "one_time", Valid: true}, // Default payment type
-		CollectEmail:     pgtype.Bool{Bool: params.RequireCustomerInfo, Valid: true},
-		CollectShipping:  pgtype.Bool{Bool: false, Valid: true},
-		CollectName:      pgtype.Bool{Bool: params.RequireCustomerInfo, Valid: true},
-		ExpiresAt:        stringToPgtypeTimestamp(params.ExpiresAt),
-		MaxUses:          int32ToPgtype(params.MaxRedemptions),
-		RedirectUrl:      stringToPgtype(params.RedirectURL),
-		QrCodeUrl:        pgtype.Text{Valid: false}, // Will be set after QR code generation
-		Metadata:         metadataJSON,
+		WorkspaceID:     params.WorkspaceID,
+		Slug:            slug,
+		Status:          "active",
+		ProductID:       uuidToPgtypePaymentLink(params.ProductID),
+		PriceID:         uuidToPgtypePaymentLink(params.PriceID),
+		AmountInCents:   int64ToPgtype(&params.AmountCents),
+		Currency:        pgtype.Text{String: params.Currency, Valid: params.Currency != ""},
+		PaymentType:     pgtype.Text{String: "one_time", Valid: true}, // Default payment type
+		CollectEmail:    pgtype.Bool{Bool: params.RequireCustomerInfo, Valid: true},
+		CollectShipping: pgtype.Bool{Bool: false, Valid: true},
+		CollectName:     pgtype.Bool{Bool: params.RequireCustomerInfo, Valid: true},
+		ExpiresAt:       stringToPgtypeTimestamp(params.ExpiresAt),
+		MaxUses:         int32ToPgtype(params.MaxRedemptions),
+		RedirectUrl:     stringToPgtype(params.RedirectURL),
+		QrCodeUrl:       pgtype.Text{Valid: false}, // Will be set after QR code generation
+		Metadata:        metadataJSON,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create payment link: %w", err)
@@ -222,7 +220,7 @@ func (s *PaymentLinkService) GenerateQRCode(ctx context.Context, paymentURL stri
 
 	// Encode as base64 data URL
 	dataURL := fmt.Sprintf("data:image/png;base64,%s", base64.StdEncoding.EncodeToString(pngBytes))
-	
+
 	return dataURL, nil
 }
 
@@ -230,7 +228,7 @@ func (s *PaymentLinkService) GenerateQRCode(ctx context.Context, paymentURL stri
 func (s *PaymentLinkService) CreatePaymentLinkForInvoice(ctx context.Context, invoice db.Invoice) (*responses.PaymentLinkResponse, error) {
 	// Extract amount and currency from invoice
 	amountCents := int64(invoice.AmountDue)
-	
+
 	// Create payment link with invoice metadata
 	return s.CreatePaymentLink(ctx, params.PaymentLinkCreateParams{
 		WorkspaceID:         invoice.WorkspaceID,
@@ -249,30 +247,30 @@ func (s *PaymentLinkService) CreatePaymentLinkForInvoice(ctx context.Context, in
 
 func (s *PaymentLinkService) generateUniqueSlug(ctx context.Context) (string, error) {
 	const maxAttempts = 10
-	
+
 	for i := 0; i < maxAttempts; i++ {
 		// Generate random bytes
 		b := make([]byte, 8)
 		if _, err := rand.Read(b); err != nil {
 			return "", fmt.Errorf("failed to generate random bytes: %w", err)
 		}
-		
+
 		// Convert to URL-safe base64
 		slug := base64.URLEncoding.EncodeToString(b)
 		slug = strings.TrimRight(slug, "=") // Remove padding
 		slug = strings.ToLower(slug)
-		
+
 		// Check if slug exists
 		exists, err := s.queries.CheckSlugExists(ctx, slug)
 		if err != nil {
 			return "", fmt.Errorf("failed to check slug existence: %w", err)
 		}
-		
+
 		if !exists {
 			return slug, nil
 		}
 	}
-	
+
 	return "", fmt.Errorf("failed to generate unique slug after %d attempts", maxAttempts)
 }
 

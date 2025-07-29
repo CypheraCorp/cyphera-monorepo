@@ -153,10 +153,15 @@ make delegation-server        # Run delegation server only
 make subscription-processor   # Run subscription processor
 
 # Testing
-make test                     # Run unit tests
+make test-github-actions     # Run EXACT same tests as GitHub Actions
 make test-all                # Run all tests including integration
+make test-quick              # Fast tests (no database/integration)
 make test-integration        # Run integration tests
 make delegation-server-test  # Test delegation server
+
+# Alternative: Standalone test runner script
+./scripts/run-tests.sh       # Interactive test runner with colored output
+./scripts/run-tests.sh quick # Quick test suite
 
 # Building
 make build                   # Build main API binary

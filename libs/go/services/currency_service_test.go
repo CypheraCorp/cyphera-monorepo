@@ -62,13 +62,13 @@ func TestCurrencyService_FormatAmount(t *testing.T) {
 			currencyCode: "USD",
 			setupMock: func() {
 				mockQueries.EXPECT().GetFiatCurrency(ctx, "USD").Return(db.FiatCurrency{
-					ID:            uuid.New(),
-					Code:          "USD",
-					Name:          "US Dollar",
-					Symbol:        "$",
-					DecimalPlaces: 2,
-					IsActive:      pgtype.Bool{Bool: true, Valid: true},
-					SymbolPosition: pgtype.Text{String: "before", Valid: true},
+					ID:                uuid.New(),
+					Code:              "USD",
+					Name:              "US Dollar",
+					Symbol:            "$",
+					DecimalPlaces:     2,
+					IsActive:          pgtype.Bool{Bool: true, Valid: true},
+					SymbolPosition:    pgtype.Text{String: "before", Valid: true},
 					ThousandSeparator: pgtype.Text{String: ",", Valid: true},
 					DecimalSeparator:  pgtype.Text{String: ".", Valid: true},
 				}, nil)
@@ -82,13 +82,13 @@ func TestCurrencyService_FormatAmount(t *testing.T) {
 			currencyCode: "EUR",
 			setupMock: func() {
 				mockQueries.EXPECT().GetFiatCurrency(ctx, "EUR").Return(db.FiatCurrency{
-					ID:            uuid.New(),
-					Code:          "EUR",
-					Name:          "Euro",
-					Symbol:        "€",
-					DecimalPlaces: 2,
-					IsActive:      pgtype.Bool{Bool: true, Valid: true},
-					SymbolPosition: pgtype.Text{String: "after", Valid: true},
+					ID:                uuid.New(),
+					Code:              "EUR",
+					Name:              "Euro",
+					Symbol:            "€",
+					DecimalPlaces:     2,
+					IsActive:          pgtype.Bool{Bool: true, Valid: true},
+					SymbolPosition:    pgtype.Text{String: "after", Valid: true},
 					ThousandSeparator: pgtype.Text{String: ",", Valid: true},
 					DecimalSeparator:  pgtype.Text{String: ".", Valid: true},
 				}, nil)
@@ -147,10 +147,10 @@ func TestCurrencyService_ParseAmount(t *testing.T) {
 			currencyCode: "USD",
 			setupMock: func() {
 				mockQueries.EXPECT().GetFiatCurrency(ctx, "USD").Return(db.FiatCurrency{
-					ID:            uuid.New(),
-					Code:          "USD",
-					Symbol:        "$",
-					DecimalPlaces: 2,
+					ID:                uuid.New(),
+					Code:              "USD",
+					Symbol:            "$",
+					DecimalPlaces:     2,
 					ThousandSeparator: pgtype.Text{String: ",", Valid: true},
 					DecimalSeparator:  pgtype.Text{String: ".", Valid: true},
 				}, nil)
@@ -164,10 +164,10 @@ func TestCurrencyService_ParseAmount(t *testing.T) {
 			currencyCode: "USD",
 			setupMock: func() {
 				mockQueries.EXPECT().GetFiatCurrency(ctx, "USD").Return(db.FiatCurrency{
-					ID:            uuid.New(),
-					Code:          "USD",
-					Symbol:        "$",
-					DecimalPlaces: 2,
+					ID:                uuid.New(),
+					Code:              "USD",
+					Symbol:            "$",
+					DecimalPlaces:     2,
 					ThousandSeparator: pgtype.Text{String: ",", Valid: true},
 					DecimalSeparator:  pgtype.Text{String: ".", Valid: true},
 				}, nil)
@@ -351,9 +351,9 @@ func TestCurrencyService_FormatCurrencyAmount(t *testing.T) {
 			name:        "USD with before symbol position",
 			amountCents: 12345,
 			currency: &db.FiatCurrency{
-				Symbol:        "$",
-				DecimalPlaces: 2,
-				SymbolPosition: pgtype.Text{String: "before", Valid: true},
+				Symbol:            "$",
+				DecimalPlaces:     2,
+				SymbolPosition:    pgtype.Text{String: "before", Valid: true},
 				ThousandSeparator: pgtype.Text{String: ",", Valid: true},
 				DecimalSeparator:  pgtype.Text{String: ".", Valid: true},
 			},
@@ -363,9 +363,9 @@ func TestCurrencyService_FormatCurrencyAmount(t *testing.T) {
 			name:        "EUR with after symbol position",
 			amountCents: 98765,
 			currency: &db.FiatCurrency{
-				Symbol:        "€",
-				DecimalPlaces: 2,
-				SymbolPosition: pgtype.Text{String: "after", Valid: true},
+				Symbol:            "€",
+				DecimalPlaces:     2,
+				SymbolPosition:    pgtype.Text{String: "after", Valid: true},
 				ThousandSeparator: pgtype.Text{String: ",", Valid: true},
 				DecimalSeparator:  pgtype.Text{String: ".", Valid: true},
 			},

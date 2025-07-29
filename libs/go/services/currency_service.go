@@ -376,8 +376,6 @@ func (s *CurrencyService) ListWorkspaceSupportedCurrencies(ctx context.Context, 
 	return response, nil
 }
 
-
-
 // ValidateAmount validates if an amount is valid for a currency
 func (s *CurrencyService) ValidateAmount(ctx context.Context, amountCents int64, currencyCode string) error {
 	if amountCents < 0 {

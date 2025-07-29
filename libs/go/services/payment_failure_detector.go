@@ -55,8 +55,8 @@ func (d *PaymentFailureDetector) DetectAndCreateCampaigns(ctx context.Context, l
 		Valid: true,
 	}
 	failedEvents, err := d.queries.ListRecentSubscriptionEventsByType(ctx, db.ListRecentSubscriptionEventsByTypeParams{
-		EventType:   db.SubscriptionEventTypeFailed,
-		OccurredAt:  sincePgTime,
+		EventType:  db.SubscriptionEventTypeFailed,
+		OccurredAt: sincePgTime,
 	})
 	if err != nil {
 		return result, fmt.Errorf("failed to get recent failed events: %w", err)
@@ -116,9 +116,9 @@ func (d *PaymentFailureDetector) processFailedEvent(ctx context.Context, event d
 		if err != nil {
 			continue
 		}
-		
-		if campaignSubID == subscription.ID && 
-		   (campaign.Status == "active" || campaign.Status == "paused") {
+
+		if campaignSubID == subscription.ID &&
+			(campaign.Status == "active" || campaign.Status == "paused") {
 			d.logger.Info("Skipping campaign creation - active campaign exists",
 				zap.String("subscription_id", subscription.ID.String()),
 				zap.String("existing_campaign_id", campaign.ID.String()),
@@ -170,7 +170,7 @@ func (d *PaymentFailureDetector) processFailedEvent(ctx context.Context, event d
 	if customer.Email.Valid {
 		customerEmail = customer.Email.String
 	}
-	
+
 	d.logger.Info("Created dunning campaign for failed payment",
 		zap.String("campaign_id", campaign.ID.String()),
 		zap.String("subscription_id", subscription.ID.String()),
@@ -202,7 +202,7 @@ func (d *PaymentFailureDetector) getOrCreateDefaultConfiguration(ctx context.Con
 	// Create default configuration if none exists
 	desc := "Automatically created configuration for failed payment recovery"
 	config, err := d.dunningService.CreateConfiguration(ctx, params.DunningConfigParams{
-		WorkspaceID:        workspaceID,
+		WorkspaceID:       workspaceID,
 		Name:              "Default Auto-Created Configuration",
 		Description:       &desc,
 		MaxRetryAttempts:  4,
@@ -288,9 +288,9 @@ func (d *PaymentFailureDetector) ProcessFailedPaymentWebhook(ctx context.Context
 	// Create the failed event
 	eventDataJSON, _ := json.Marshal(eventData)
 	event, err := d.queries.CreateFailedRedemptionEvent(ctx, db.CreateFailedRedemptionEventParams{
-		SubscriptionID:  subscriptionID,
-		AmountInCents:   int32(price.UnitAmountInPennies),
-		Metadata:        eventDataJSON,
+		SubscriptionID: subscriptionID,
+		AmountInCents:  int32(price.UnitAmountInPennies),
+		Metadata:       eventDataJSON,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create failed event: %w", err)

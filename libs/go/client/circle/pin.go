@@ -2,8 +2,8 @@ package circle
 
 import (
 	"context"
-	httpClient "github.com/cyphera/cyphera-api/libs/go/client/http"
 	"fmt"
+	httpClient "github.com/cyphera/cyphera-api/libs/go/client/http"
 )
 
 // PinChallengeResponse represents the response when creating a PIN setup challenge
