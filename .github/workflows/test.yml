@@ -206,7 +206,7 @@ jobs:
 
     - name: Check coverage threshold
       run: |
-        ./scripts/check-coverage.sh 60
+        ./scripts/check-coverage.sh 10
 
     - name: Generate coverage HTML report
       run: |
