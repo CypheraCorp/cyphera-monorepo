@@ -85,6 +85,7 @@ func (s *MetricsScheduler) runHourlySchedule() {
 	// Wait for initial delay
 	select {
 	case <-time.After(initialDelay):
+		// Proceed after delay
 	case <-s.stopCh:
 		return
 	}
@@ -115,6 +116,7 @@ func (s *MetricsScheduler) runDailySchedule() {
 	// Wait for initial delay
 	select {
 	case <-time.After(initialDelay):
+		// Proceed after delay
 	case <-s.stopCh:
 		return
 	}
