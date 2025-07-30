@@ -286,7 +286,7 @@ jobs:
     - name: Build other components
       run: |
         cd apps/subscription-processor
-        go build -v ./...
+        go build -v -o subscription-processor ./cmd/main.go
         cd ../webhook-receiver
         go build -v ./...
         cd ../webhook-processor  
