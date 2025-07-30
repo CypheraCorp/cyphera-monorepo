@@ -1,14 +1,15 @@
 package business
 
 // DelegationStruct represents the delegation data structure
-// This structure matches the format used by MetaMask delegation toolkit and the working integration test
+// This structure matches the format used by MetaMask delegation toolkit
+// Reference: https://docs.metamask.io/delegation-toolkit/how-to/create-delegation/
 type DelegationStruct struct {
-	Delegate  string          `json:"delegate"`
-	Delegator string          `json:"delegator"`
-	Authority AuthorityStruct `json:"authority"`
-	Caveats   []CaveatStruct  `json:"caveats"`
-	Salt      string          `json:"salt"`
-	Signature string          `json:"signature"`
+	Delegate  string         `json:"delegate"`  // The address being delegated to
+	Delegator string         `json:"delegator"` // The address creating the delegation
+	Authority string         `json:"authority"` // Hex-encoded authority (typically the delegator)
+	Caveats   []CaveatStruct `json:"caveats"`  // Restrictions on the delegation
+	Salt      string         `json:"salt"`      // Random value for uniqueness
+	Signature string         `json:"signature"` // The delegation signature
 }
 
 // AuthorityStruct represents the authority information in a delegation

@@ -7,7 +7,10 @@ import {
 import { 
   type ExecutionStruct,
   type Call,
-  type Delegation
+  type Delegation,
+  type ExecutionMode,
+  DelegationFramework,
+  SINGLE_DEFAULT_MODE
 } from '@metamask/delegation-toolkit';
 import { RedemptionError, RedemptionErrorType } from './types';
 import { erc20Abi } from './constants';
@@ -28,29 +31,40 @@ export function prepareRedemptionUserOperationPayload(
   tokenContractAddress: string,
   tokenAmount: number | bigint,
   tokenDecimals: number,
-  _redeemerAddress: Address
+  redeemerAddress: Address
 ): Call[] {
   try {
     // Convert token amount to bigint if needed
     const tokenAmountBigInt = prepareTokenAmount(tokenAmount, tokenDecimals);
 
-    // Encode the ERC20 transfer
+    // Encode the ERC20 transfer that will be executed by the delegator
     const transferCalldata = encodeERC20Transfer(
       merchantAddress as Address,
       tokenAmountBigInt
     );
     
-    // Build execution struct for the token transfer (for future use)
-    // const executions = buildExecutionStruct(
-    //   tokenContractAddress as Address,
-    //   transferCalldata
-    // );
+    // Build execution struct for the token transfer
+    const executions: ExecutionStruct[] = [{
+      target: tokenContractAddress as Address,
+      value: 0n,
+      callData: transferCalldata
+    }];
 
-    // For the actual implementation, we'll return the token transfer directly
-    // The delegation validation would happen on-chain
+    // Create delegation chain (array of delegations)
+    const delegationChain = [delegation];
+
+    // Use DelegationFramework to encode the redemption
+    // This will execute the transfer from the delegator's account
+    const redeemDelegationCalldata = DelegationFramework.encode.redeemDelegations({
+      delegations: [delegationChain],
+      modes: [SINGLE_DEFAULT_MODE],
+      executions: [executions]
+    });
+
+    // Return the call to the redeemer's account with the redemption data
     return [{
-      to: tokenContractAddress as Address,
-      data: transferCalldata,
+      to: redeemerAddress,
+      data: redeemDelegationCalldata,
     }];
   } catch (error) {
     throw new RedemptionError(
@@ -129,10 +143,7 @@ export function buildExecutionStruct(
 }
 
 /**
- * Encodes a delegation redemption call
- * Since DelegationFramework.encode is not available in this implementation,
- * we return a placeholder that represents the encoded data
- * In a real implementation, this would use the actual encoding method
+ * Encodes a delegation redemption call using the MetaMask DelegationFramework
  * @param delegations Array of delegations (usually just one)
  * @param executions Array of execution structs
  * @param modes Optional modes array (defaults to SINGLE_DEFAULT_MODE)
@@ -141,16 +152,17 @@ export function buildExecutionStruct(
 export function encodeDelegationRedemption(
   delegations: Delegation[],
   executions: ExecutionStruct[],
-  _modes?: string[]
+  modes?: ExecutionMode[]
 ): Hex {
-  // For now, we'll return the execution calldata directly
-  // In a real implementation, this would properly encode the delegation redemption
-  if (executions.length > 0 && executions[0].callData) {
-    return executions[0].callData;
-  }
+  // Create delegation chains (each delegation is wrapped in an array)
+  const delegationChains = delegations.map(d => [d]);
   
-  // Return a placeholder hex string
-  return '0x' as Hex;
+  // Use DelegationFramework to properly encode the redemption
+  return DelegationFramework.encode.redeemDelegations({
+    delegations: delegationChains,
+    modes: modes || [SINGLE_DEFAULT_MODE],
+    executions: [executions]
+  });
 }
 
 /**

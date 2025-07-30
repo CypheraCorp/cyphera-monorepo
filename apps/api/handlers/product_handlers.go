@@ -706,9 +706,8 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		return
 	}
 
-	// Extract the signer field from authority for delegation server compatibility
-	// The delegation server expects authority as a hex string (the signer address)
-	authorityHex := request.Delegation.Authority.Signer
+	// The authority field is already a hex string in MetaMask delegation format
+	authorityHex := request.Delegation.Authority
 
 	// Use product service to validate subscription request
 	if err := h.productService.ValidateSubscriptionRequest(ctx, params.ValidateSubscriptionParams{

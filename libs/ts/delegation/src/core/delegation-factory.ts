@@ -90,21 +90,14 @@ export async function createAndSignDelegation(
       delegation,
     })) as Hex;
 
-    // Transform the delegation to match backend expectations
-    // The MetaMask delegation toolkit returns authority as a hex string,
-    // but our backend expects an AuthorityStruct object
-    const transformedDelegation = {
+    // Create the final signed delegation in standard MetaMask format
+    const signedDelegation = {
       ...delegation,
-      authority: {
-        scheme: 'native',
-        signature: '0x',
-        signer: delegation.authority as string
-      },
       signature,
     };
 
-    // Return the transformed delegation
-    return transformedDelegation as unknown as Delegation;
+    // Return the signed delegation as-is
+    return signedDelegation;
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Failed to create delegation');
   }

@@ -10,32 +10,8 @@ linters:
     # - bodyclose
     - goconst
     - goimports
-  # Add linter-specific settings (nested under linters)
   settings:
     goconst:
-      # Minimum number of occurrences for goconst to report
       min-occurrences: 6
 run:
   timeout: 5m
-
-# Restore top-level issues block
-issues:
-  # Restore nested exclude-rules with careful indentation
-  exclude-rules:
-    - path: _test\.go$ # Regex matching files ending with _test.go (4 spaces indent)
-      linters: # (6 spaces indent)
-        # List linters to disable for test files
-        - gocyclo  # Ignore complexity warnings in tests (8 spaces indent)
-        - funlen   # Ignore function length warnings in tests
-        - goconst  # Ignore constant string duplication warnings in tests
-        - unused  # Ignore unused variables in tests
-        - errcheck # Ignore errors in tests
-        # - errcheck # Example: Uncomment if you want to ignore unchecked errors in tests
-        # Add any other linters you want to ignore specifically for test files
-    # Exclude specific issues that cannot be located
-    - linters:
-        - gosimple
-      text: "S1009: should omit nil check; len\\(\\) for nil slices is defined as zero"
-    - linters:
-        - staticcheck
-      text: "SA9003: empty branch"

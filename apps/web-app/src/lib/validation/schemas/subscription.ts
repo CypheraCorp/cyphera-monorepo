@@ -6,15 +6,6 @@ import { z } from 'zod';
 export const subscriptionStatusSchema = z.enum(['active', 'canceled', 'past_due', 'expired']);
 
 /**
- * Schema for authority object in delegation
- */
-export const authoritySchema = z.object({
-  scheme: z.string(),
-  signature: z.string(),
-  signer: z.string(),
-});
-
-/**
  * Schema for caveat object in delegation
  */
 export const caveatSchema = z.object({
@@ -24,16 +15,16 @@ export const caveatSchema = z.object({
 
 /**
  * Schema for delegation object (MetaMask Delegation Toolkit)
- * Updated to match backend DelegationStruct format
+ * Matches the standard MetaMask delegation format
+ * Reference: https://docs.metamask.io/delegation-toolkit/how-to/create-delegation/
  */
 export const delegationSchema = z.object({
-  delegate: z.string(),
-  delegator: z.string(),
-  authority: authoritySchema,
+  delegate: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address'),
+  delegator: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address'),
+  authority: z.string().regex(/^0x[a-fA-F0-9]*$/, 'Invalid hex string'), // Hex-encoded authority
   caveats: z.array(caveatSchema),
-  salt: z.string(),
-  signature: z.string(),
-  // Add other delegation fields as needed
+  salt: z.string().regex(/^0x[a-fA-F0-9]*$/, 'Invalid hex string'),
+  signature: z.string().regex(/^0x[a-fA-F0-9]*$/, 'Invalid hex string'),
 }).passthrough(); // Allow additional properties
 
 /**
