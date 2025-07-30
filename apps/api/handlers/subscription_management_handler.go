@@ -414,7 +414,7 @@ func (h *SubscriptionManagementHandler) GetSubscriptionHistory(c *gin.Context) {
 		}
 	}
 
-	history, err := h.service.GetSubscriptionHistory(ctx, subscriptionID, int32(limit)) // limit is already validated to be <= 100
+	history, err := h.service.GetSubscriptionHistory(ctx, subscriptionID, int32(limit)) // #nosec G115 -- limit is already validated to be <= 100
 	if err != nil {
 		h.logger.Error("Failed to get subscription history",
 			zap.String("subscription_id", subscriptionID.String()),

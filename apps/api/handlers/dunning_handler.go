@@ -195,8 +195,8 @@ func (h *DunningHandler) ListCampaigns(c *gin.Context) {
 
 	params := db.ListDunningCampaignsParams{
 		WorkspaceID: workspaceID,
-		Limit:       int32(limit),  // ParsePaginationParamsAsInt validates limit <= 100
-		Offset:      int32(offset), // ParsePaginationParamsAsInt validates offset >= 0
+		Limit:       int32(limit),  // #nosec G115 -- ParsePaginationParamsAsInt validates limit <= 100
+		Offset:      int32(offset), // #nosec G115 -- ParsePaginationParamsAsInt validates offset >= 0
 		Status:      status,
 		CustomerID:  customerID,
 	}
@@ -534,7 +534,7 @@ func (h *DunningHandler) ProcessDueCampaigns(c *gin.Context) {
 	if h.retryEngine != nil {
 		go func() {
 			ctx := context.Background()
-			if err := h.retryEngine.ProcessDueCampaigns(ctx, int32(limit)); err != nil {
+			if err := h.retryEngine.ProcessDueCampaigns(ctx, int32(limit)); err != nil { // #nosec G115 -- limit capped at 1000
 				h.common.logger.Error("failed to process due campaigns", zap.Error(err))
 			}
 		}()

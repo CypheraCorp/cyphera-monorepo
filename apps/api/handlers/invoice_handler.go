@@ -335,23 +335,23 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 		invoices, err = h.common.db.ListInvoicesByCustomer(ctx, db.ListInvoicesByCustomerParams{
 			WorkspaceID: workspaceID,
 			CustomerID:  pgtype.UUID{Bytes: customerID, Valid: true},
-			Limit:       int32(limit),  // ParsePaginationParamsAsInt validates limit <= 100
-			Offset:      int32(offset), // ParsePaginationParamsAsInt validates offset >= 0
+			Limit:       int32(limit),  // #nosec G115 -- ParsePaginationParamsAsInt validates limit <= 100
+			Offset:      int32(offset), // #nosec G115 -- ParsePaginationParamsAsInt validates offset >= 0
 		})
 	} else if status != "" {
 		// Filter by status
 		invoices, err = h.common.db.ListInvoicesByStatus(ctx, db.ListInvoicesByStatusParams{
 			WorkspaceID: workspaceID,
 			Status:      status,
-			Limit:       int32(limit),  // ParsePaginationParamsAsInt validates limit <= 100
-			Offset:      int32(offset), // ParsePaginationParamsAsInt validates offset >= 0
+			Limit:       int32(limit),  // #nosec G115 -- ParsePaginationParamsAsInt validates limit <= 100
+			Offset:      int32(offset), // #nosec G115 -- ParsePaginationParamsAsInt validates offset >= 0
 		})
 	} else {
 		// Get all invoices
 		invoices, err = h.common.db.ListInvoicesByWorkspace(ctx, db.ListInvoicesByWorkspaceParams{
 			WorkspaceID: workspaceID,
-			Limit:       int32(limit),  // ParsePaginationParamsAsInt validates limit <= 100
-			Offset:      int32(offset), // ParsePaginationParamsAsInt validates offset >= 0
+			Limit:       int32(limit),  // #nosec G115 -- ParsePaginationParamsAsInt validates limit <= 100
+			Offset:      int32(offset), // #nosec G115 -- ParsePaginationParamsAsInt validates offset >= 0
 		})
 	}
 
