@@ -181,7 +181,7 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 
 		// Mark attempt as failed with explanation
 		errorMsg := "payment retry requires delegation server integration (not yet implemented)"
-		_, err = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, "failed", &errorMsg)
+		_, err = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, constants.FailedStatus, &errorMsg)
 		if err != nil {
 			e.logger.Error("failed to update attempt status", zap.Error(err))
 		}
@@ -195,7 +195,7 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 		subscription, err := e.queries.GetSubscription(ctx, campaign.SubscriptionID.Bytes)
 		if err != nil {
 			errorMsg := fmt.Sprintf("failed to get subscription: %v", err)
-			_, _ = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, "failed", &errorMsg)
+			_, _ = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, constants.FailedStatus, &errorMsg)
 			return fmt.Errorf("failed to get subscription: %w", err)
 		}
 
@@ -203,7 +203,7 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 		delegationData, err := e.queries.GetDelegationData(ctx, subscription.DelegationID)
 		if err != nil {
 			errorMsg := fmt.Sprintf("failed to get delegation data: %v", err)
-			_, _ = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, "failed", &errorMsg)
+			_, _ = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, constants.FailedStatus, &errorMsg)
 			return fmt.Errorf("failed to get delegation data: %w", err)
 		}
 
@@ -211,7 +211,7 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 		productToken, err := e.queries.GetProductToken(ctx, subscription.ProductTokenID)
 		if err != nil {
 			errorMsg := fmt.Sprintf("failed to get product token: %v", err)
-			_, _ = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, "failed", &errorMsg)
+			_, _ = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, constants.FailedStatus, &errorMsg)
 			return fmt.Errorf("failed to get product token: %w", err)
 		}
 
@@ -219,7 +219,7 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 		workspaceWallets, err := e.queries.ListWalletsByWorkspaceID(ctx, campaign.WorkspaceID)
 		if err != nil || len(workspaceWallets) == 0 {
 			errorMsg := "no workspace wallet found"
-			_, _ = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, "failed", &errorMsg)
+			_, _ = e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, constants.FailedStatus, &errorMsg)
 			return fmt.Errorf("no workspace wallet found")
 		}
 
@@ -251,7 +251,7 @@ func (e *DunningRetryEngine) retryPayment(ctx context.Context, campaign *db.Dunn
 		if err != nil {
 			// Payment failed
 			errorMsg := fmt.Sprintf("payment retry failed: %v", err)
-			_, updateErr := e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, "failed", &errorMsg)
+			_, updateErr := e.dunningService.UpdateAttemptStatus(ctx, attempt.ID, constants.FailedStatus, &errorMsg)
 			if updateErr != nil {
 				e.logger.Error("failed to update attempt status", zap.Error(updateErr))
 			}
@@ -370,7 +370,7 @@ func (e *DunningRetryEngine) sendEmail(ctx context.Context, campaign *db.Dunning
 			// Update attempt as failed
 			_, updateErr := e.queries.UpdateDunningAttempt(ctx, db.UpdateDunningAttemptParams{
 				ID:                 attempt.ID,
-				Status:             "failed",
+				Status:             constants.FailedStatus,
 				CompletedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},
 				CommunicationSent:  pgtype.Bool{Bool: false, Valid: true},
 				CommunicationError: pgtype.Text{String: err.Error(), Valid: true},

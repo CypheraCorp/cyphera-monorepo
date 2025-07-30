@@ -611,7 +611,7 @@ func (sms *SubscriptionManagementService) ProcessScheduledChanges(ctx context.Co
 
 			_, err = sms.db.UpdateScheduleChangeStatus(ctx, db.UpdateScheduleChangeStatusParams{
 				ID:           change.ID,
-				Status:       "failed",
+				Status:       constants.FailedStatus,
 				ErrorMessage: pgtype.Text{String: processErr.Error(), Valid: true},
 			})
 		} else {

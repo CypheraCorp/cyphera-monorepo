@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/client/coinmarketcap"
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/types/business"
@@ -95,7 +96,7 @@ func (h *BlockchainSyncHelper) updatePaymentWithBlockchainData(ctx context.Conte
 	// Check if transaction was successful
 	status := "completed"
 	if txData.Status == 0 {
-		status = "failed"
+		status = constants.FailedStatus
 	}
 
 	// Update payment record
