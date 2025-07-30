@@ -82,13 +82,7 @@ func (h *ErrorRecoveryHandlers) ReplayWebhook(c *gin.Context) {
 		zap.Bool("force_replay", req.ForceReplay))
 
 	// Convert to services type
-	serviceReq := requests.WebhookReplayRequest{
-		WorkspaceID:    req.WorkspaceID,
-		ProviderName:   req.ProviderName,
-		WebhookEventID: req.WebhookEventID,
-		ForceReplay:    req.ForceReplay,
-		ReplayReason:   req.ReplayReason,
-	}
+	serviceReq := requests.WebhookReplayRequest(req)
 
 	response, err := h.errorRecoveryService.ReplayWebhookEvent(c.Request.Context(), serviceReq)
 	if err != nil {
@@ -155,12 +149,7 @@ func (h *ErrorRecoveryHandlers) RecoverSyncSession(c *gin.Context) {
 		zap.String("recovery_mode", req.RecoveryMode))
 
 	// Convert to services type
-	serviceReq := requests.SyncRecoveryRequest{
-		WorkspaceID:  req.WorkspaceID,
-		SessionID:    req.SessionID,
-		RecoveryMode: req.RecoveryMode,
-		EntityTypes:  req.EntityTypes,
-	}
+	serviceReq := requests.SyncRecoveryRequest(req)
 
 	response, err := h.errorRecoveryService.RecoverSyncSession(c.Request.Context(), serviceReq)
 	if err != nil {

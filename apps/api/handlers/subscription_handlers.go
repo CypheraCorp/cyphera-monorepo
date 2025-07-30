@@ -11,6 +11,7 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
+
 	// "github.com/cyphera/cyphera-api/libs/go/logger" // Commented out: unused after commenting out logAndValidateEventCreation
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
@@ -30,12 +31,12 @@ type (
 
 // SubscriptionHandler manages subscription-related HTTP endpoints
 type SubscriptionHandler struct {
-	common               *CommonServices
-	delegationClient     *dsClient.DelegationClient
-	subscriptionService  interfaces.SubscriptionService
-	paymentService       interfaces.PaymentService
-	logger               *zap.Logger
-	lastRedemptionTxHash string // Stores the transaction hash from the last successful redemption
+	common              *CommonServices
+	delegationClient    *dsClient.DelegationClient
+	subscriptionService interfaces.SubscriptionService
+	paymentService      interfaces.PaymentService
+	logger              *zap.Logger
+	// lastRedemptionTxHash string // Commented out: unused field - Stores the transaction hash from the last successful redemption
 }
 
 // NewSubscriptionHandler creates a handler with interface dependencies

@@ -906,7 +906,12 @@ func (h *PaymentSyncHandlers) GetProviderAccounts(c *gin.Context) {
 func (h *PaymentSyncHandlers) mapProviderAccountToResponse(account db.WorkspaceProviderAccount) ProviderAccountResponse {
 	var metadata map[string]interface{}
 	if len(account.Metadata) > 0 {
-		json.Unmarshal(account.Metadata, &metadata)
+		if err := json.Unmarshal(account.Metadata, &metadata); err != nil {
+			logger.Log.Warn("Failed to unmarshal account metadata",
+				zap.String("account_id", account.ID.String()),
+				zap.Error(err))
+			metadata = make(map[string]interface{})
+		}
 	}
 
 	response := ProviderAccountResponse{
