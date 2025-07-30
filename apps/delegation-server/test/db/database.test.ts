@@ -18,11 +18,13 @@ jest.mock('pg', () => {
 
 describe('Database Module', () => {
   let mockPool: any;
+  let poolCallCount = 0;
   
   beforeEach(() => {
     jest.clearAllMocks();
     // Get the mocked pool instance
     mockPool = new (Pool as any)();
+    poolCallCount = (Pool as jest.Mock).mock.calls.length;
     // Reset environment variables
     delete process.env.DATABASE_URL;
     delete process.env.DATABASE_CONNECTION_STRING;
@@ -73,7 +75,7 @@ describe('Database Module', () => {
       const pool2 = initializeDatabase();
       
       expect(pool1).toBe(pool2);
-      expect(Pool).toHaveBeenCalledTimes(1);
+      expect(Pool).toHaveBeenCalledTimes(poolCallCount + 1);
     });
   });
 
@@ -180,7 +182,7 @@ describe('Database Module', () => {
       await closeDatabase();
       
       const newPool = initializeDatabase();
-      expect(Pool).toHaveBeenCalledTimes(2);
+      expect(Pool).toHaveBeenCalledTimes(poolCallCount + 2);
       expect(newPool).toBe(mockPool);
     });
   });

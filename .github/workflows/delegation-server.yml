@@ -35,6 +35,8 @@ jobs:
         run: |
           # Install delegation library dependencies first
           cd libs/ts/delegation && npm install --legacy-peer-deps
+          # Build delegation library so it can be imported
+          npm run build
           cd ../../../
           make delegation-server-setup # Runs npm install/ci via setup script
       - name: Run linter
@@ -61,6 +63,8 @@ jobs:
         run: |
           # Install delegation library dependencies first
           cd libs/ts/delegation && npm install --legacy-peer-deps
+          # Build delegation library so it can be imported
+          npm run build
           cd ../../../
           make delegation-server-setup
       - name: Run tests

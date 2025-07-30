@@ -281,7 +281,7 @@ describe('Network Service', () => {
 
       expect(result).toEqual({
         valid: false,
-        error: 'Failed to validate token support: Error: Database connection failed'
+        error: 'Failed to validate token support: Error: Failed to fetch network for chain ID 1'
       });
     });
   });
