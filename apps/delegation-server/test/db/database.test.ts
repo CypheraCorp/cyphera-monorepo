@@ -24,7 +24,7 @@ describe('Database Module', () => {
     jest.clearAllMocks();
     // Get the mocked pool instance
     mockPool = new (Pool as any)();
-    poolCallCount = (Pool as jest.Mock).mock.calls.length;
+    poolCallCount = (Pool as any).mock.calls.length;
     // Reset environment variables
     delete process.env.DATABASE_URL;
     delete process.env.DATABASE_CONNECTION_STRING;

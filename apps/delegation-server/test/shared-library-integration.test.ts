@@ -9,9 +9,9 @@ import { describe, expect, it, jest, beforeEach } from '@jest/globals';
 
 // Mock the shared library before importing delegation helpers
 jest.mock('@cyphera/delegation', () => ({
-  isValidEthereumAddress: jest.fn(),
-  parseDelegation: jest.fn(),
-  validateDelegation: jest.fn(),
+  isValidEthereumAddress: jest.fn((address: string) => true),
+  parseDelegation: jest.fn((data: any) => ({})),
+  validateDelegation: jest.fn((delegation: any, client: any) => true),
 }));
 
 // Mock the local utils logger
