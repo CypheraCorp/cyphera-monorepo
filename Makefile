@@ -168,6 +168,7 @@ swagger-serve:
 # ==============================================================================
 
 .PHONY: sam-build sam-build-api sam-build-webhooks sam-build-processor sam-build-dunning
+.PHONY: build-WebhookReceiverFunction build-WebhookProcessorFunction build-DLQProcessorFunction
 
 sam-build: sam-build-api sam-build-webhooks sam-build-processor sam-build-dunning
 	@echo "✅ All SAM applications built"
@@ -193,6 +194,22 @@ sam-build-dunning:
 	@echo "🔨 Building dunning processor for SAM..."
 	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
 		$(GO) build -o ./apps/dunning-processor/bin/bootstrap ./apps/dunning-processor/cmd/main.go
+
+# Individual Lambda function build targets for GitHub Actions
+build-WebhookReceiverFunction:
+	@echo "🔨 Building WebhookReceiverFunction for SAM..."
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+		$(GO) build -o ./apps/webhook-receiver/bootstrap ./apps/webhook-receiver/cmd/main.go
+
+build-WebhookProcessorFunction:
+	@echo "🔨 Building WebhookProcessorFunction for SAM..."
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+		$(GO) build -o ./apps/webhook-processor/bootstrap ./apps/webhook-processor/cmd/main.go
+
+build-DLQProcessorFunction:
+	@echo "🔨 Building DLQProcessorFunction for SAM..."
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+		$(GO) build -o ./apps/dlq-processor/bootstrap ./apps/dlq-processor/cmd/main.go
 
 # ==============================================================================
 # Local Development Utilities
