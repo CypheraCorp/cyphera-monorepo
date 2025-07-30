@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
+	// "net/url" // Commented out: unused after commenting out validateProductUpdate
 	"strconv"
 	"strings"
 	"time"
@@ -51,16 +51,17 @@ func (e *SubscriptionExistsError) Error() string {
 
 // ProductHandler handles product-related operations
 type ProductHandler struct {
-	common                *CommonServices
-	delegationClient      *dsClient.DelegationClient
-	productService        interfaces.ProductService
-	subscriptionService   interfaces.SubscriptionService
-	customerService       interfaces.CustomerService
-	workspaceService      interfaces.WorkspaceService
-	walletService         interfaces.WalletService
-	tokenService          interfaces.TokenService
-	networkService        interfaces.NetworkService
-	gasSponsorshipService interfaces.GasSponsorshipService
+	common              *CommonServices
+	delegationClient    *dsClient.DelegationClient
+	productService      interfaces.ProductService
+	subscriptionService interfaces.SubscriptionService
+	customerService     interfaces.CustomerService
+	// Commented out: unused fields
+	// workspaceService      interfaces.WorkspaceService
+	// walletService         interfaces.WalletService
+	// tokenService          interfaces.TokenService
+	// networkService        interfaces.NetworkService
+	// gasSponsorshipService interfaces.GasSponsorshipService
 }
 
 // NewProductHandler creates a handler with interface dependencies
@@ -179,6 +180,8 @@ func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
 
 // validatePaginationParams is defined in common.go
 
+// Commented out: unused function
+/*
 // validateProductUpdate validates core product update parameters
 func (h *ProductHandler) validateProductUpdate(c *gin.Context, req UpdateProductRequest, existingProduct db.Product) error {
 	if req.Name != "" {
@@ -217,6 +220,7 @@ func (h *ProductHandler) validateProductUpdate(c *gin.Context, req UpdateProduct
 	}
 	return nil
 }
+*/
 
 // ListProducts godoc
 // @Summary List products
@@ -310,6 +314,8 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 	c.JSON(http.StatusOK, listProductsResponse)
 }
 
+// Commented out: unused function
+/*
 // validateWallet validates the wallet exists and belongs to the workspace's account
 func (h *ProductHandler) validateWallet(ctx *gin.Context, walletID uuid.UUID, workspaceID uuid.UUID) error {
 	wallet, err := h.common.db.GetWalletByID(ctx.Request.Context(), db.GetWalletByIDParams{
@@ -331,6 +337,7 @@ func (h *ProductHandler) validateWallet(ctx *gin.Context, walletID uuid.UUID, wo
 
 	return nil
 }
+*/
 
 // CreateProduct godoc
 // @Summary Create product

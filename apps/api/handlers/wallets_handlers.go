@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/cyphera/cyphera-api/apps/api/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
@@ -78,6 +79,8 @@ func toWalletResponse(w db.Wallet) WalletResponse {
 	}
 }
 
+// Commented out: unused function
+/*
 func toWalletResponseFromWalletRow(w db.GetWalletByAddressAndCircleNetworkTypeRow) WalletResponse {
 	var metadata map[string]interface{}
 	if err := json.Unmarshal(w.Metadata, &metadata); err != nil {
@@ -114,7 +117,10 @@ func toWalletResponseFromWalletRow(w db.GetWalletByAddressAndCircleNetworkTypeRo
 		UpdatedAt:     w.UpdatedAt.Time.Unix(),
 	}
 }
+*/
 
+// Commented out: unused function
+/*
 // Helper function for GetWalletWithCircleDataByID results
 func toWalletWithCircleDataByIDResponse(w db.GetWalletWithCircleDataByIDRow) WalletResponse {
 	response := toWalletResponse(db.Wallet{
@@ -146,6 +152,7 @@ func toWalletWithCircleDataByIDResponse(w db.GetWalletWithCircleDataByIDRow) Wal
 
 	return response
 }
+*/
 
 // Helper function for ListWalletsWithCircleDataByWorkspaceID results
 func toListWalletsWithCircleDataResponse(w db.ListWalletsWithCircleDataByWorkspaceIDRow) WalletResponse {
@@ -303,12 +310,12 @@ func (h *WalletHandler) GetWallet(c *gin.Context) {
 	}
 
 	// Check if Circle data should be included
-	includeCircleData := c.Query("include_circle_data") == "true"
+	includeCircleData := c.Query("include_circle_data") == constants.TrueString
 
 	if includeCircleData {
 		walletData, err := h.walletService.GetWalletWithCircleData(c.Request.Context(), parsedUUID, parsedWorkspaceID)
 		if err != nil {
-			if err.Error() == "wallet not found" {
+			if err.Error() == constants.WalletNotFound {
 				sendError(c, http.StatusNotFound, "Wallet not found", nil)
 				return
 			}
@@ -333,7 +340,7 @@ func (h *WalletHandler) GetWallet(c *gin.Context) {
 
 	wallet, err := h.walletService.GetWallet(c.Request.Context(), parsedUUID, parsedWorkspaceID)
 	if err != nil {
-		if err.Error() == "wallet not found" {
+		if err.Error() == constants.WalletNotFound {
 			sendError(c, http.StatusNotFound, "Wallet not found", nil)
 			return
 		}
@@ -396,7 +403,7 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 	}
 
 	// Check if Circle data should be included
-	includeCircleData := c.Query("include_circle_data") == "true"
+	includeCircleData := c.Query("include_circle_data") == constants.TrueString
 	walletType := c.Query("wallet_type")
 
 	// Build response based on params
@@ -506,7 +513,7 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 
 	wallet, err := h.walletService.UpdateWallet(c.Request.Context(), parsedWorkspaceID, updateParams)
 	if err != nil {
-		if err.Error() == "wallet not found" {
+		if err.Error() == constants.WalletNotFound {
 			sendError(c, http.StatusNotFound, "Wallet not found", nil)
 			return
 		}
@@ -548,7 +555,7 @@ func (h *WalletHandler) DeleteWallet(c *gin.Context) {
 	// Delete wallet using the service
 	err = h.walletService.DeleteWallet(c.Request.Context(), parsedUUID, parsedWorkspaceID)
 	if err != nil {
-		if err.Error() == "wallet not found" {
+		if err.Error() == constants.WalletNotFound {
 			sendError(c, http.StatusNotFound, "Wallet not found", nil)
 			return
 		}

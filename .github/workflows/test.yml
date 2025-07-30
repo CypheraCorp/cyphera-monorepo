@@ -238,12 +238,14 @@ jobs:
       with:
         version: v1.64.8
         working-directory: libs/go
+        args: --config=../../.golangci.yml
 
     - name: Run golangci-lint for API
       uses: golangci/golangci-lint-action@v3
       with:
         version: v1.64.8
         working-directory: apps/api
+        args: --config=../../.golangci.yml
 
     - name: Check Go formatting
       run: |

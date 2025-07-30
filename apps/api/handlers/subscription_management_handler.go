@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"context"
+	// "context" // Commented out: unused after commenting out verifySubscriptionOwnership
 	"net/http"
 	"strconv"
 	"time"
@@ -429,9 +429,12 @@ func (h *SubscriptionManagementHandler) GetSubscriptionHistory(c *gin.Context) {
 	})
 }
 
+// Commented out: unused function
+/*
 // Helper method to verify subscription ownership
 func (h *SubscriptionManagementHandler) verifySubscriptionOwnership(ctx context.Context, subscriptionID uuid.UUID, userID string) bool {
 	// In a real implementation, this would check if the user owns the subscription
 	// through their workspace or customer record
 	return true
 }
+*/

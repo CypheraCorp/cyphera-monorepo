@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"context"
+	// "context" // Commented out: unused after commenting out logAndValidateEventCreation
 	"errors"
-	"fmt"
+	// "fmt" // Commented out: unused after commenting out logAndValidateEventCreation
 	"net/http"
 	"time"
 
@@ -11,7 +11,7 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
-	"github.com/cyphera/cyphera-api/libs/go/logger"
+	// "github.com/cyphera/cyphera-api/libs/go/logger" // Commented out: unused after commenting out logAndValidateEventCreation
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 
@@ -615,6 +615,8 @@ func toSubscriptionResponseFromDBSubscription(sub db.Subscription) (responses.Su
 	return resp, nil
 }
 
+// Commented out: unused function
+/*
 // logAndValidateEventCreation helps debug event creation issues by logging details and optionally validating the event was created
 func (h *SubscriptionHandler) logAndValidateEventCreation(ctx context.Context, queries db.Querier, subscriptionID uuid.UUID, eventType db.SubscriptionEventType, txHash string) error {
 	// Get the latest event for this subscription to validate it was created properly
@@ -640,3 +642,4 @@ func (h *SubscriptionHandler) logAndValidateEventCreation(ctx context.Context, q
 
 	return nil
 }
+*/

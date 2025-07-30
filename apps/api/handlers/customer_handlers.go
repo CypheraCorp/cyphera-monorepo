@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/cyphera/cyphera-api/apps/api/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
@@ -67,7 +68,7 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 
 	customer, err := h.customerService.GetCustomer(c.Request.Context(), parsedUUID)
 	if err != nil {
-		if err.Error() == "customer not found" {
+		if err.Error() == constants.CustomerNotFound {
 			sendError(c, http.StatusNotFound, "Customer not found", nil)
 			return
 		}
@@ -252,7 +253,7 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 		Metadata:           req.Metadata,
 	})
 	if err != nil {
-		if err.Error() == "customer not found" {
+		if err.Error() == constants.CustomerNotFound {
 			sendError(c, http.StatusNotFound, "Customer not found", nil)
 			return
 		}
@@ -280,7 +281,7 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 
 	err = h.customerService.DeleteCustomer(c.Request.Context(), parsedUUID)
 	if err != nil {
-		if err.Error() == "customer not found" {
+		if err.Error() == constants.CustomerNotFound {
 			sendError(c, http.StatusNotFound, "Customer not found", nil)
 			return
 		}
@@ -320,7 +321,7 @@ func (h *CustomerHandler) UpdateCustomerOnboardingStatus(c *gin.Context) {
 
 	customer, err := h.customerService.UpdateCustomerOnboardingStatus(c.Request.Context(), parsedUUID, req.FinishedOnboarding)
 	if err != nil {
-		if err.Error() == "customer not found" {
+		if err.Error() == constants.CustomerNotFound {
 			sendError(c, http.StatusNotFound, "Customer not found", nil)
 			return
 		}
@@ -361,7 +362,7 @@ func (h *CustomerHandler) SignInRegisterCustomer(c *gin.Context) {
 	}
 
 	var response *CustomerDetailsResponse
-	if err != nil && err.Error() == "customer not found" {
+	if err != nil && err.Error() == constants.CustomerNotFound {
 		// Customer doesn't exist, create new customer and wallet
 		response, err = h.createNewCustomerWithWallet(c, req, web3authId, email, metadata)
 		if err != nil {

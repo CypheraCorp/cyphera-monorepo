@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/cyphera/cyphera-api/apps/api/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
@@ -314,6 +315,8 @@ func (h *AccountHandler) createWalletsForActiveNetworks(ctx *gin.Context, worksp
 	return nil
 }
 
+// Commented out: unused function
+/*
 func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAccountRequest, web3authId string, email string, metadata []byte) (*helpers.AccountDetailsResponse, error) {
 	// Extract verifier and verifierId from metadata
 	var metadataMap map[string]interface{}
@@ -395,6 +398,7 @@ func (h *AccountHandler) createNewAccountWithUser(ctx *gin.Context, req CreateAc
 		User:            helpers.ToUserResponse(user),
 	}, nil
 }
+*/
 
 // SignInRegisterAccount godoc
 // @Summary Sign in to an account
@@ -517,7 +521,7 @@ func HandleAccountAccessError(c *gin.Context, err error) bool {
 	switch err.Error() {
 	case "invalid account ID format", "invalid user ID format":
 		sendError(c, http.StatusBadRequest, err.Error(), err)
-	case "account not found", "user not found":
+	case "account not found", constants.UserNotFound:
 		sendError(c, http.StatusNotFound, err.Error(), err)
 	case "user does not have access to this account":
 		sendError(c, http.StatusForbidden, err.Error(), err)

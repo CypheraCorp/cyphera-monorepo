@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/cyphera/cyphera-api/apps/api/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
@@ -60,7 +61,7 @@ func (h *WorkspaceHandler) GetWorkspace(c *gin.Context) {
 
 	workspace, err := h.workspaceService.GetWorkspace(c.Request.Context(), parsedUUID)
 	if err != nil {
-		if err.Error() == "workspace not found" {
+		if err.Error() == constants.WorkspaceNotFound {
 			sendError(c, http.StatusNotFound, "Workspace not found", nil)
 			return
 		}
@@ -231,7 +232,7 @@ func (h *WorkspaceHandler) UpdateWorkspace(c *gin.Context) {
 	// Update workspace using service
 	workspace, err := h.workspaceService.UpdateWorkspace(c.Request.Context(), updateParams)
 	if err != nil {
-		if err.Error() == "workspace not found" {
+		if err.Error() == constants.WorkspaceNotFound {
 			sendError(c, http.StatusNotFound, "Workspace not found", nil)
 			return
 		}
@@ -260,7 +261,7 @@ func (h *WorkspaceHandler) DeleteWorkspace(c *gin.Context) {
 	// Delete workspace using service
 	err = h.workspaceService.DeleteWorkspace(c.Request.Context(), parsedUUID)
 	if err != nil {
-		if err.Error() == "workspace not found" {
+		if err.Error() == constants.WorkspaceNotFound {
 			sendError(c, http.StatusNotFound, "Workspace not found", nil)
 			return
 		}
