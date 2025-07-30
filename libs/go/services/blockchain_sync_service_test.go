@@ -262,8 +262,8 @@ func TestBlockchainSyncHelper_FloatToNumericConversion(t *testing.T) {
 				if err != nil {
 					// If scan fails with float, try with string
 					strValue := "2000.123456"
-					err = num.Scan(strValue)
-					assert.NoError(t, err, "String scan should work for valid float")
+					strErr := num.Scan(strValue)
+					assert.NoError(t, strErr, "String scan should work for valid float")
 					assert.True(t, num.Valid, "Numeric should be valid")
 				} else {
 					assert.True(t, num.Valid, "Numeric should be valid for float input")

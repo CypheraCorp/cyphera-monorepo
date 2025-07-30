@@ -140,9 +140,9 @@ func TestEmailService_SendDunningEmail(t *testing.T) {
 				}
 
 				if tt.template.BodyText.Valid {
-					_, err = template.New("test").Parse(tt.template.BodyText.String)
+					_, parseErr := template.New("test").Parse(tt.template.BodyText.String)
 					if tt.errorString == "failed to parse text template" {
-						assert.Error(t, err)
+						assert.Error(t, parseErr)
 						return
 					}
 				}

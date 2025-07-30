@@ -328,7 +328,7 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, services interfaces.CommonS
 
 	// Update last used timestamp
 	go func() {
-		if err := services.GetDB().UpdateAPIKeyLastUsed(context.Background(), key.ID); err != nil {
+		if err := services.GetDB().UpdateAPIKeyLastUsed(c.Request.Context(), key.ID); err != nil {
 			logger.Log.Warn("Failed to update API key last used timestamp",
 				zap.String("key_id", key.ID.String()),
 				zap.Error(err),
