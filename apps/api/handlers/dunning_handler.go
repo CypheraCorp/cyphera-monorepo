@@ -534,7 +534,8 @@ func (h *DunningHandler) ProcessDueCampaigns(c *gin.Context) {
 	if h.retryEngine != nil {
 		go func() {
 			ctx := context.Background()
-			if err := h.retryEngine.ProcessDueCampaigns(ctx, int32(limit)); err != nil { // #nosec G115 -- limit capped at 1000
+			// #nosec G115 -- limit capped at 1000
+			if err := h.retryEngine.ProcessDueCampaigns(ctx, int32(limit)); err != nil {
 				h.common.logger.Error("failed to process due campaigns", zap.Error(err))
 			}
 		}()
