@@ -354,11 +354,11 @@ func (c *DelegationClient) ProcessPayment(ctx context.Context, paymentParams par
 	// TODO: This method needs proper implementation to map LocalProcessPaymentParams to delegation redemption
 	// The current LocalProcessPaymentParams structure doesn't have all fields needed for delegation redemption
 	// This is a placeholder to satisfy the interface until the proper implementation is done
-	
+
 	// For now, return an error indicating this method needs to be implemented with proper parameter mapping
 	return &responses.LocalProcessPaymentResponse{
-		Success:      false,
-		ErrorMessage: fmt.Sprintf("ProcessPayment method needs implementation - received params: DelegationID=%s, RecipientAddress=%s, Amount=%s, TokenAddress=%s, NetworkID=%s", 
+		Success: false,
+		ErrorMessage: fmt.Sprintf("ProcessPayment method needs implementation - received params: DelegationID=%s, RecipientAddress=%s, Amount=%s, TokenAddress=%s, NetworkID=%s",
 			paymentParams.DelegationID, paymentParams.RecipientAddress, paymentParams.Amount, paymentParams.TokenAddress, paymentParams.NetworkID.String()),
 	}, fmt.Errorf("ProcessPayment method needs proper implementation to map LocalProcessPaymentParams to delegation redemption parameters")
 }

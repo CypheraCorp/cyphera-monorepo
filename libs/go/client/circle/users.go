@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	httpClient "github.com/cyphera/cyphera-api/libs/go/client/http"
 	"io"
 	"net/http"
 	"time"
+
+	httpClient "github.com/cyphera/cyphera-api/libs/go/client/http"
 )
 
 // ErrUserAlreadyExists is returned when Circle API indicates the user already exists (409 Conflict with code 155101)

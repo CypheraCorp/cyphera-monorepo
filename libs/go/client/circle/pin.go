@@ -3,6 +3,7 @@ package circle
 import (
 	"context"
 	"fmt"
+
 	httpClient "github.com/cyphera/cyphera-api/libs/go/client/http"
 )
 

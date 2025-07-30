@@ -5,7 +5,32 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 )
 
-// Helper functions to convert database models to API responses
+// ToActiveProductTokenByProductResponse converts database model to API response
+// This is the only function currently in use
+func ToActiveProductTokenByProductResponse(pt db.GetActiveProductTokensByProductRow) responses.ProductTokenResponse {
+	return responses.ProductTokenResponse{
+		ID:              pt.ID.String(),
+		ProductID:       pt.ProductID.String(),
+		NetworkID:       pt.NetworkID.String(),
+		TokenID:         pt.TokenID.String(),
+		TokenName:       pt.TokenName,
+		TokenSymbol:     pt.TokenSymbol,
+		ContractAddress: pt.ContractAddress,
+		GasToken:        pt.GasToken,
+		ChainID:         pt.ChainID,
+		TokenDecimals:   int32(pt.Decimals),
+		NetworkName:     pt.NetworkName,
+		NetworkType:     pt.NetworkType,
+		Active:          pt.Active,
+		CreatedAt:       pt.CreatedAt.Time.Unix(),
+		UpdatedAt:       pt.UpdatedAt.Time.Unix(),
+	}
+}
+
+// The following functions are commented out as they are currently unused
+// They can be uncommented when needed
+
+/*
 func toBasicProductTokenResponse(pt db.ProductsToken) responses.ProductTokenResponse {
 	return responses.ProductTokenResponse{
 		ID:        pt.ID.String(),
@@ -85,26 +110,6 @@ func toActiveProductTokenByNetworkResponse(pt db.GetActiveProductTokensByNetwork
 	}
 }
 
-func ToActiveProductTokenByProductResponse(pt db.GetActiveProductTokensByProductRow) responses.ProductTokenResponse {
-	return responses.ProductTokenResponse{
-		ID:              pt.ID.String(),
-		ProductID:       pt.ProductID.String(),
-		NetworkID:       pt.NetworkID.String(),
-		TokenID:         pt.TokenID.String(),
-		TokenName:       pt.TokenName,
-		TokenSymbol:     pt.TokenSymbol,
-		ContractAddress: pt.ContractAddress,
-		GasToken:        pt.GasToken,
-		ChainID:         pt.ChainID,
-		TokenDecimals:   int32(pt.Decimals),
-		NetworkName:     pt.NetworkName,
-		NetworkType:     pt.NetworkType,
-		Active:          pt.Active,
-		CreatedAt:       pt.CreatedAt.Time.Unix(),
-		UpdatedAt:       pt.UpdatedAt.Time.Unix(),
-	}
-}
-
 func toProductTokensByProductResponse(pt db.GetProductTokensByProductRow) responses.ProductTokenResponse {
 	return responses.ProductTokenResponse{
 		ID:              pt.ID.String(),
@@ -123,3 +128,4 @@ func toProductTokensByProductResponse(pt db.GetProductTokensByProductRow) respon
 		UpdatedAt:       pt.UpdatedAt.Time.Unix(),
 	}
 }
+*/

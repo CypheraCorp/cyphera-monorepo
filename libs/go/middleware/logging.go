@@ -66,7 +66,7 @@ func EnhancedLoggingMiddleware(isDevelopment bool) gin.HandlerFunc {
 		// Parse request body for logging (only for JSON content)
 		var requestJSON interface{}
 		if c.GetHeader("Content-Type") == "application/json" && len(requestBody) > 0 {
-			json.Unmarshal(requestBody, &requestJSON)
+			_ = json.Unmarshal(requestBody, &requestJSON)
 		}
 
 		// Log detailed request

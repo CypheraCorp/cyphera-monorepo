@@ -422,7 +422,7 @@ func (s *DashboardMetricsService) calculateGasFeeMetrics(ctx context.Context, me
 	}
 	if sponsorshipRate.Valid {
 		metrics.GasSponsorshipRate = pgtype.Numeric{}
-		metrics.GasSponsorshipRate.Scan(sponsorshipRate.Float64)
+		_ = metrics.GasSponsorshipRate.Scan(sponsorshipRate.Float64)
 	}
 
 	return nil
@@ -534,7 +534,7 @@ func (s *DashboardMetricsService) calculateDerivedMetrics(metrics *db.CreateDash
 	if metrics.TotalCustomers.Valid && metrics.TotalCustomers.Int32 > 0 {
 		churnRate := float64(metrics.ChurnedCustomers.Int32) / float64(metrics.TotalCustomers.Int32)
 		metrics.ChurnRate = pgtype.Numeric{}
-		metrics.ChurnRate.Scan(churnRate)
+		_ = metrics.ChurnRate.Scan(churnRate)
 	}
 
 	// Growth rate
@@ -549,7 +549,7 @@ func (s *DashboardMetricsService) calculateDerivedMetrics(metrics *db.CreateDash
 		}
 		growthRate := float64(newCount-churnedCount) / float64(metrics.TotalCustomers.Int32)
 		metrics.GrowthRate = pgtype.Numeric{}
-		metrics.GrowthRate.Scan(growthRate)
+		_ = metrics.GrowthRate.Scan(growthRate)
 	}
 
 	// Payment success rate
@@ -563,7 +563,7 @@ func (s *DashboardMetricsService) calculateDerivedMetrics(metrics *db.CreateDash
 	if totalPayments > 0 && metrics.SuccessfulPayments.Valid {
 		successRate := float64(metrics.SuccessfulPayments.Int32) / float64(totalPayments)
 		metrics.PaymentSuccessRate = pgtype.Numeric{}
-		metrics.PaymentSuccessRate.Scan(successRate)
+		_ = metrics.PaymentSuccessRate.Scan(successRate)
 	}
 
 	// Calculate LTV if we have enough data

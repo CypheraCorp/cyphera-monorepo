@@ -141,7 +141,7 @@ func (ers *ErrorRecoveryService) ReplayWebhookEvent(ctx context.Context, req req
 		ers.logger.Error("Failed to process replayed webhook", zap.Error(err))
 
 		// Update the replay event with failure
-		ers.db.UpdateWebhookProcessingStatus(ctx, db.UpdateWebhookProcessingStatusParams{
+		_, _ = ers.db.UpdateWebhookProcessingStatus(ctx, db.UpdateWebhookProcessingStatusParams{
 			ID:           replayEvent.ID,
 			EventType:    "webhook_replay_failed",
 			EventMessage: pgtype.Text{String: fmt.Sprintf("Replay failed: %v", err), Valid: true},
@@ -158,7 +158,7 @@ func (ers *ErrorRecoveryService) ReplayWebhookEvent(ctx context.Context, req req
 	}
 
 	// Update the replay event with success
-	ers.db.UpdateWebhookProcessingStatus(ctx, db.UpdateWebhookProcessingStatusParams{
+	_, _ = ers.db.UpdateWebhookProcessingStatus(ctx, db.UpdateWebhookProcessingStatusParams{
 		ID:           replayEvent.ID,
 		EventType:    "webhook_replay_success",
 		EventMessage: pgtype.Text{String: "Webhook replay completed successfully", Valid: true},
@@ -316,7 +316,7 @@ func (ers *ErrorRecoveryService) resumeSyncSession(ctx context.Context, session 
 	// Parse current progress
 	var progress map[string]interface{}
 	if len(resumedSession.Progress) > 0 {
-		json.Unmarshal(resumedSession.Progress, &progress)
+		_ = json.Unmarshal(resumedSession.Progress, &progress)
 	}
 
 	ers.logger.Info("Sync session resumed successfully",
@@ -342,7 +342,7 @@ func (ers *ErrorRecoveryService) restartSyncSession(ctx context.Context, session
 	// Parse the original config
 	var config map[string]interface{}
 	if len(session.Config) > 0 {
-		json.Unmarshal(session.Config, &config)
+		_ = json.Unmarshal(session.Config, &config)
 	}
 
 	// Create new sync session
@@ -365,7 +365,7 @@ func (ers *ErrorRecoveryService) restartSyncSession(ctx context.Context, session
 	}
 
 	// Mark the old session as superseded
-	ers.db.UpdateSyncSessionStatus(ctx, db.UpdateSyncSessionStatusParams{
+	_, _ = ers.db.UpdateSyncSessionStatus(ctx, db.UpdateSyncSessionStatusParams{
 		ID:     session.ID,
 		Status: "superseded",
 	})

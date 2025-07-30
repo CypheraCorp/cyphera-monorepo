@@ -2,6 +2,7 @@ package circle
 
 import (
 	"fmt"
+
 	"github.com/cyphera/cyphera-api/libs/go/client/http"
 )
 
