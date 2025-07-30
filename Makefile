@@ -288,8 +288,8 @@ test-integration: test-db-up
 test-coverage:
 	@echo "📊 Running tests with coverage..."
 	@$(GO) test -race -timeout=30s -coverprofile=coverage.out \
-		-coverpkg=./apps/api/...,./libs/go/... \
-		./apps/api/... ./libs/go/...
+		-coverpkg=./apps/...,github.com/cyphera/cyphera-api/libs/go/... \
+		./apps/... github.com/cyphera/cyphera-api/libs/go/...
 	@$(GO) tool cover -func=coverage.out | grep total:
 	@echo "Checking coverage threshold ($(COVERAGE_THRESHOLD)%)..."
 	@./scripts/check-coverage.sh $(COVERAGE_THRESHOLD)
