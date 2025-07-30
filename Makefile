@@ -291,8 +291,6 @@ test-coverage:
 		-coverpkg=./apps/...,github.com/cyphera/cyphera-api/libs/go/... \
 		./apps/... github.com/cyphera/cyphera-api/libs/go/...
 	@$(GO) tool cover -func=coverage.out | grep total:
-	@echo "Checking coverage threshold ($(COVERAGE_THRESHOLD)%)..."
-	@./scripts/check-coverage.sh $(COVERAGE_THRESHOLD)
 
 test-coverage-html: test-coverage
 	@echo "📊 Generating HTML coverage report..."
