@@ -97,7 +97,9 @@ jobs:
         run: |
           # Build delegation library
           echo "Building delegation library..."
-          cd libs/ts/delegation && npm run build
+          cd libs/ts/delegation
+          npm install --legacy-peer-deps
+          npm run build
           cd ../../../
           # Build delegation server
           echo "Building delegation server..."
