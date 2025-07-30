@@ -326,9 +326,9 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 
 	// Filter by customer if provided
 	if customerIDStr != "" {
-		customerID, err := uuid.Parse(customerIDStr)
-		if err != nil {
-			h.common.HandleError(c, err, "Invalid customer ID", http.StatusBadRequest, h.common.logger)
+		customerID, parseErr := uuid.Parse(customerIDStr)
+		if parseErr != nil {
+			h.common.HandleError(c, parseErr, "Invalid customer ID", http.StatusBadRequest, h.common.logger)
 			return
 		}
 
