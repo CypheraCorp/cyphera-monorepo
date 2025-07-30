@@ -114,7 +114,7 @@ jobs:
       run: |
         # Install delegation library dependencies
         cd libs/ts/delegation
-        npm ci
+        npm install --legacy-peer-deps
         # Install delegation server dependencies
         cd ../../../apps/delegation-server
         npm ci

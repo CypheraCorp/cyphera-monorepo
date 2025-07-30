@@ -34,7 +34,7 @@ jobs:
       - name: Install dependencies
         run: |
           # Install delegation library dependencies first
-          cd libs/ts/delegation && npm ci
+          cd libs/ts/delegation && npm install --legacy-peer-deps
           cd ../../../
           make delegation-server-setup # Runs npm install/ci via setup script
       - name: Run linter
@@ -58,7 +58,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: apps/delegation-server/package-lock.json
       - name: Install dependencies
-        run: make delegation-server-setup
+        run: |
+          # Install delegation library dependencies first
+          cd libs/ts/delegation && npm install --legacy-peer-deps
+          cd ../../../
+          make delegation-server-setup
       - name: Run tests
         run: |
           # Test delegation library

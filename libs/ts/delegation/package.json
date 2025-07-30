@@ -9,7 +9,7 @@
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
     "test": "jest",
-    "lint": "eslint src --ext .ts,.tsx"
+    "lint": "eslint src --ext .ts"
   },
   "dependencies": {
     "node-fetch": "^2.7.0"
@@ -32,5 +32,12 @@
     "@metamask/delegation-toolkit": "^0.10.0",
     "permissionless": "0.2.36",
     "viem": "^2.0.0"
+  },
+  "overrides": {
+    "ox": "0.6.9",
+    "viem": "2.33.1"
+  },
+  "resolutions": {
+    "viem": "2.33.1"
   }
 }
