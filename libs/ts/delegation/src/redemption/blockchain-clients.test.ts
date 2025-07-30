@@ -115,10 +115,13 @@ describe('Blockchain Clients', () => {
       const chain = chains.mainnet;
 
       // Mock the fetch response
+      const jsonMock = jest.fn() as any;
+      jsonMock.mockResolvedValue({ result: '0x1' });
+      
       const mockFetch = jest.fn();
-      mockFetch.mockResolvedValue({
+      (mockFetch as any).mockResolvedValue({
         ok: true,
-        json: jest.fn().mockResolvedValue({ result: '0x1' })
+        json: jsonMock
       });
       (global as any).fetch = mockFetch;
 

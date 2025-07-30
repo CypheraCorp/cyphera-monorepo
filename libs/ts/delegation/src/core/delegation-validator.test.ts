@@ -81,10 +81,10 @@ describe('Delegation Validator', () => {
     it('should detect invalid delegator address', () => {
       const delegation = {
         ...validDelegation,
-        delegator: 'invalid-address'
+        delegator: 'invalid-address' as any
       };
       
-      const result = validateDelegationStructure(delegation);
+      const result = validateDelegationStructure(delegation as any);
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain('Invalid delegator address format');
     });
@@ -92,22 +92,22 @@ describe('Delegation Validator', () => {
     it('should detect invalid delegate address', () => {
       const delegation = {
         ...validDelegation,
-        delegate: 'invalid-address'
+        delegate: 'invalid-address' as any
       };
       
-      const result = validateDelegationStructure(delegation);
+      const result = validateDelegationStructure(delegation as any);
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain('Invalid delegate address format');
     });
 
     it('should collect multiple errors', () => {
       const delegation = {
-        delegator: 'invalid-delegator',
-        delegate: 'invalid-delegate',
+        delegator: 'invalid-delegator' as any,
+        delegate: 'invalid-delegate' as any,
         // missing signature
       };
       
-      const result = validateDelegationStructure(delegation);
+      const result = validateDelegationStructure(delegation as any);
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain('Missing signature');
       expect(result.errors).toContain('Invalid delegator address format');

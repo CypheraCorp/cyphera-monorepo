@@ -26,7 +26,7 @@ describe('Redemption Validation', () => {
     it('should throw error for empty delegation data', () => {
       const params = { ...validParams, delegationData: new Uint8Array() };
       expect(() => validateRedemptionInputs(params))
-        .toThrow('Delegation data cannot be empty');
+        .toThrow('Delegation data is required');
     });
 
     it('should throw error for invalid merchant address', () => {
@@ -38,7 +38,7 @@ describe('Redemption Validation', () => {
     it('should throw error for invalid chain ID', () => {
       const params = { ...validParams, chainId: 0 };
       expect(() => validateRedemptionInputs(params))
-        .toThrow('Invalid chain ID');
+        .toThrow('Valid chain ID is required (must be positive)');
     });
   });
 
@@ -50,12 +50,12 @@ describe('Redemption Validation', () => {
 
     it('should throw error for zero amount', () => {
       expect(() => validateTokenAmount(0))
-        .toThrow('Token amount must be greater than 0');
+        .toThrow('Token amount must be greater than zero');
     });
 
     it('should throw error for negative amount', () => {
       expect(() => validateTokenAmount(-1000))
-        .toThrow('Token amount must be greater than 0');
+        .toThrow('Token amount must be greater than zero');
     });
   });
 

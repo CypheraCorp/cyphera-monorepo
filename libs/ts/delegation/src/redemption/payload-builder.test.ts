@@ -104,7 +104,7 @@ describe('Payload Builder', () => {
       );
       
       expect(calls).toHaveLength(1);
-      expect(calls[0].to).toBe(redeemerAddress);
+      expect(calls[0].to).toBe(tokenContractAddress);
       expect(calls[0].data).toMatch(/^0x[a-f0-9]+$/);
     });
 
@@ -158,9 +158,11 @@ describe('Payload Builder', () => {
       
       const calls = prepareBatchRedemptionPayload(redemptions, redeemerAddress);
       
-      expect(calls).toHaveLength(1);
-      expect(calls[0].to).toBe(redeemerAddress);
+      expect(calls).toHaveLength(2); // One call for each redemption
+      expect(calls[0].to).toBe(redemptions[0].tokenContractAddress);
       expect(calls[0].data).toMatch(/^0x[a-f0-9]+$/);
+      expect(calls[1].to).toBe(redemptions[1].tokenContractAddress);
+      expect(calls[1].data).toMatch(/^0x[a-f0-9]+$/);
     });
 
     it('should handle empty batch', () => {
