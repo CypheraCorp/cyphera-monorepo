@@ -198,18 +198,21 @@ sam-build-dunning:
 # Individual Lambda function build targets for GitHub Actions
 build-WebhookReceiverFunction:
 	@echo "🔨 Building WebhookReceiverFunction for SAM..."
+	@mkdir -p $(ARTIFACTS_DIR)
 	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-		$(GO) build -o ./apps/webhook-receiver/bootstrap ./apps/webhook-receiver/cmd/main.go
+		$(GO) build -o $(ARTIFACTS_DIR)/bootstrap ./apps/webhook-receiver/cmd/main.go
 
 build-WebhookProcessorFunction:
 	@echo "🔨 Building WebhookProcessorFunction for SAM..."
+	@mkdir -p $(ARTIFACTS_DIR)
 	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-		$(GO) build -o ./apps/webhook-processor/bootstrap ./apps/webhook-processor/cmd/main.go
+		$(GO) build -o $(ARTIFACTS_DIR)/bootstrap ./apps/webhook-processor/cmd/main.go
 
 build-DLQProcessorFunction:
 	@echo "🔨 Building DLQProcessorFunction for SAM..."
+	@mkdir -p $(ARTIFACTS_DIR)
 	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-		$(GO) build -o ./apps/dlq-processor/bootstrap ./apps/dlq-processor/cmd/main.go
+		$(GO) build -o $(ARTIFACTS_DIR)/bootstrap ./apps/dlq-processor/cmd/main.go
 
 # ==============================================================================
 # Local Development Utilities
