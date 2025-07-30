@@ -351,13 +351,16 @@ func (c *DelegationClient) HealthCheck(ctx context.Context) error {
 
 // ProcessPayment processes a payment using delegation - adapter method for dunning retry engine
 func (c *DelegationClient) ProcessPayment(ctx context.Context, paymentParams params.LocalProcessPaymentParams) (*responses.LocalProcessPaymentResponse, error) {
-	// This is a placeholder implementation to satisfy the interface
-	// The actual implementation would need to map the params to the appropriate delegation redemption
-	// For now, return an error indicating this method needs proper implementation
+	// TODO: This method needs proper implementation to map LocalProcessPaymentParams to delegation redemption
+	// The current LocalProcessPaymentParams structure doesn't have all fields needed for delegation redemption
+	// This is a placeholder to satisfy the interface until the proper implementation is done
+	
+	// For now, return an error indicating this method needs to be implemented with proper parameter mapping
 	return &responses.LocalProcessPaymentResponse{
 		Success:      false,
-		ErrorMessage: "ProcessPayment method not yet implemented - needs delegation redemption logic",
-	}, fmt.Errorf("ProcessPayment method not yet implemented - needs delegation redemption logic")
+		ErrorMessage: fmt.Sprintf("ProcessPayment method needs implementation - received params: DelegationID=%s, RecipientAddress=%s, Amount=%s, TokenAddress=%s, NetworkID=%s", 
+			paymentParams.DelegationID, paymentParams.RecipientAddress, paymentParams.Amount, paymentParams.TokenAddress, paymentParams.NetworkID.String()),
+	}, fmt.Errorf("ProcessPayment method needs proper implementation to map LocalProcessPaymentParams to delegation redemption parameters")
 }
 
 // Close closes the gRPC connection. This should be called when the client

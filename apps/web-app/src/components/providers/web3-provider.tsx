@@ -81,6 +81,32 @@ export function Web3Provider({ children }: Web3ProviderProps) {
             }),
             // Set default chain to first available network
             defaultChainId: `0x${Array.from(networkConfigs.keys())[0]?.toString(16) || '1'}`,
+            // Configure UI to prioritize non-MetaMask login methods for seamless signing
+            uiConfig: {
+              appName: 'Cyphera',
+              loginMethodsOrder: [
+                'google',
+                'facebook', 
+                'twitter',
+                'discord',
+                'email_passwordless',
+                'sms_passwordless',
+                'apple',
+                'github',
+                'linkedin',
+                'reddit',
+                'twitch',
+                // Put external wallets last to encourage embedded wallet usage
+                'metamask',
+                'wallet_connect_v2'
+              ],
+              defaultLanguage: 'en',
+              modalZIndex: '2147483647',
+              // Customize the modal appearance
+              theme: {
+                primary: '#4F46E5', // Indigo color to match your branding
+              }
+            },
           },
         };
 

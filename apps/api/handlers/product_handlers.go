@@ -699,6 +699,10 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		return
 	}
 
+	// Extract the signer field from authority for delegation server compatibility
+	// The delegation server expects authority as a hex string (the signer address)
+	authorityHex := request.Delegation.Authority.Signer
+
 	// Use product service to validate subscription request
 	if err := h.productService.ValidateSubscriptionRequest(ctx, params.ValidateSubscriptionParams{
 		SubscriberAddress: request.SubscriberAddress,
@@ -709,7 +713,7 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		Delegation: params.DelegationParams{
 			Delegate:  request.Delegation.Delegate,
 			Delegator: request.Delegation.Delegator,
-			Authority: request.Delegation.Authority,
+			Authority: authorityHex,
 			Salt:      request.Delegation.Salt,
 			Signature: request.Delegation.Signature,
 			Caveats:   caveatsJSON,
@@ -728,6 +732,9 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 	}
 
 	var subscriptionResult *params.SubscriptionCreationResult
+	
+	// Capture authorityHex for use inside transaction
+	capturedAuthorityHex := authorityHex
 
 	// Execute within transaction
 	err = helpers.WithTransaction(ctx, pool, func(tx pgx.Tx) error {
@@ -795,7 +802,7 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		delegationParams := params.StoreDelegationDataParams{
 			Delegate:  request.Delegation.Delegate,
 			Delegator: request.Delegation.Delegator,
-			Authority: request.Delegation.Authority,
+			Authority: capturedAuthorityHex, // Use the extracted hex string
 			Caveats:   caveatsJSON,
 			Salt:      request.Delegation.Salt,
 			Signature: request.Delegation.Signature,

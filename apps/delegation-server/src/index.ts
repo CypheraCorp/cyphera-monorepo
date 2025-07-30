@@ -6,6 +6,7 @@ import { HealthImplementation, ServingStatusMap } from 'grpc-health-check'
 import { delegationService } from './services/service'
 import { logger } from './utils/utils'
 import config from './config'
+import { initializeDatabase, closeDatabase } from './db/database'
 
 // Debug environment variables on startup
 function logEnvironmentVariables() {
@@ -28,6 +29,7 @@ function logEnvironmentVariables() {
   logger.info(`MOCK_MODE: ${envVars.MOCK_MODE || 'not set'}`);
   logger.info(`GRPC_HOST: ${envVars.GRPC_HOST || 'not set'}`);
   logger.info(`GRPC_PORT: ${envVars.GRPC_PORT || 'not set'}`);
+  logger.info(`DATABASE_URL: ${redactUrl(envVars.DATABASE_URL)}`);
   logger.info(`RPC_URL: ${redactUrl(envVars.RPC_URL)}`);
   logger.info(`INFURA_API_KEY_ARN: ${envVars.INFURA_API_KEY_ARN || 'not set'}`);
   logger.info(`INFURA_API_KEY: ${redactPrivateKey(envVars.INFURA_API_KEY || 'not set')}`);
@@ -105,9 +107,15 @@ export function startServer() {
   )
 
   // Handle graceful shutdown
-  process.on('SIGINT', () => {
+  process.on('SIGINT', async () => {
     logger.info('Received SIGINT. Shutting down gracefully...')
-    server.tryShutdown(() => {
+    server.tryShutdown(async () => {
+      try {
+        await closeDatabase();
+        logger.info('Database connection closed');
+      } catch (error) {
+        logger.error('Error closing database connection:', error);
+      }
       logger.info('Server shut down successfully')
       process.exit(0)
     })
@@ -117,5 +125,15 @@ export function startServer() {
 // Start the server directly when the file is executed
 if (require.main === module) {
   logEnvironmentVariables();
-  startServer()
+  
+  // Initialize database connection before starting server
+  try {
+    initializeDatabase();
+    logger.info('Database connection initialized');
+  } catch (error) {
+    logger.error('Failed to initialize database connection:', error);
+    process.exit(1);
+  }
+  
+  startServer();
 } 

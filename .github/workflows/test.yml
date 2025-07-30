@@ -112,7 +112,11 @@ jobs:
 
     - name: Install Node.js dependencies
       run: |
-        cd apps/delegation-server
+        # Install delegation library dependencies
+        cd libs/ts/delegation
+        npm ci
+        # Install delegation server dependencies
+        cd ../../../apps/delegation-server
         npm ci
 
     - name: Install additional tools
@@ -146,9 +150,13 @@ jobs:
         # Run integration tests with database
         go test -tags=integration ./tests/integration/... -v -timeout=30m
 
-    - name: Run delegation server tests
+    - name: Run TypeScript tests
       run: |
-        cd apps/delegation-server
+        echo "Running delegation library tests..."
+        cd libs/ts/delegation
+        npm test
+        echo "Running delegation server tests..."
+        cd ../../../apps/delegation-server
         npm test
 
   coverage:
