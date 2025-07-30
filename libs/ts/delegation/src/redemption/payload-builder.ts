@@ -5,12 +5,9 @@ import {
   parseUnits
 } from 'viem';
 import { 
-  SINGLE_DEFAULT_MODE,
-  DelegationFramework,
   type ExecutionStruct,
   type Call,
-  type Delegation,
-  type ExecutionMode
+  type Delegation
 } from '@metamask/delegation-toolkit';
 import { RedemptionError, RedemptionErrorType } from './types';
 import { erc20Abi } from './constants';
@@ -31,7 +28,7 @@ export function prepareRedemptionUserOperationPayload(
   tokenContractAddress: string,
   tokenAmount: number | bigint,
   tokenDecimals: number,
-  redeemerAddress: Address
+  _redeemerAddress: Address
 ): Call[] {
   try {
     // Convert token amount to bigint if needed
@@ -43,11 +40,11 @@ export function prepareRedemptionUserOperationPayload(
       tokenAmountBigInt
     );
     
-    // Build execution struct for the token transfer
-    const executions = buildExecutionStruct(
-      tokenContractAddress as Address,
-      transferCalldata
-    );
+    // Build execution struct for the token transfer (for future use)
+    // const executions = buildExecutionStruct(
+    //   tokenContractAddress as Address,
+    //   transferCalldata
+    // );
 
     // For the actual implementation, we'll return the token transfer directly
     // The delegation validation would happen on-chain
@@ -144,7 +141,7 @@ export function buildExecutionStruct(
 export function encodeDelegationRedemption(
   delegations: Delegation[],
   executions: ExecutionStruct[],
-  modes?: string[]
+  _modes?: string[]
 ): Hex {
   // For now, we'll return the execution calldata directly
   // In a real implementation, this would properly encode the delegation redemption
@@ -173,13 +170,13 @@ export interface BatchRedemptionDetails {
 
 export function prepareBatchRedemptionPayload(
   redemptions: BatchRedemptionDetails[],
-  redeemerAddress: Address
+  _redeemerAddress: Address
 ): Call[] {
   // Handle empty batch
   if (redemptions.length === 0) {
     // Return a placeholder call for empty batch
     return [{
-      to: redeemerAddress,
+      to: _redeemerAddress,
       data: '0x' as Hex
     }];
   }

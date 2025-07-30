@@ -1,7 +1,5 @@
 import { type Address, type Hex, type PublicClient, type Chain, type Transport } from 'viem';
-import { type BundlerClient } from 'viem/account-abstraction';
-import { type PimlicoClient } from 'permissionless/clients/pimlico';
-import { type MetaMaskSmartAccount, type Implementation } from '@metamask/delegation-toolkit';
+import { type Implementation } from '@metamask/delegation-toolkit';
 
 /**
  * Parameters required for redeeming a delegation
@@ -60,9 +58,9 @@ export interface BlockchainClients {
   /** Public client for reading blockchain state */
   publicClient: PublicClient<Transport, Chain>;
   /** Bundler client for sending UserOperations */
-  bundlerClient: any; // BundlerClient with version compatibility issues
+  bundlerClient: unknown; // BundlerClient with version compatibility issues
   /** Pimlico client for gas estimation and utilities */
-  pimlicoClient: any; // PimlicoClient with version compatibility issues
+  pimlicoClient: unknown; // PimlicoClient with version compatibility issues
 }
 
 /**
@@ -96,7 +94,7 @@ export class RedemptionError extends Error {
   constructor(
     message: string,
     public readonly type: RedemptionErrorType,
-    public readonly details?: any
+    public readonly details?: unknown
   ) {
     super(message);
     this.name = 'RedemptionError';

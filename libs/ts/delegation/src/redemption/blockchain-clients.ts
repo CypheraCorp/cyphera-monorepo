@@ -7,10 +7,9 @@ import {
 } from 'viem';
 import { 
   createBundlerClient, 
-  createPaymasterClient,
-  type BundlerClient
+  createPaymasterClient
 } from 'viem/account-abstraction';
-import { createPimlicoClient, type PimlicoClient } from 'permissionless/clients/pimlico';
+import { createPimlicoClient } from 'permissionless/clients/pimlico';
 import * as allChains from 'viem/chains';
 import { BlockchainClients, RedemptionError, RedemptionErrorType } from './types';
 import { NetworkConfig } from '../types/delegation';
@@ -89,7 +88,7 @@ export function createFetchTransport(url: string | undefined): Transport {
         );
       }
 
-      const data = await response.json() as any;
+      const data = await response.json() as { result?: unknown; error?: { code: number; message: string } };
       if (data.error) {
         throw new RedemptionError(
           `RPC error: ${data.error.message}`,
@@ -130,13 +129,13 @@ export async function initializeBlockchainClients(
       transport: createFetchTransport(networkConfig.bundlerUrl),
       chain,
       paymaster: paymasterClient,
-    }) as any;
+    });
 
     // Create Pimlico client for gas estimation and utilities
     const pimlicoClient = createPimlicoClient({
       chain,
       transport: createFetchTransport(networkConfig.bundlerUrl),
-    }) as any;
+    });
 
     return { publicClient, bundlerClient, pimlicoClient };
   } catch (error) {

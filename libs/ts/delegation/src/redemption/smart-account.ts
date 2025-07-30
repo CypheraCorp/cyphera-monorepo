@@ -4,7 +4,7 @@ import {
   type Hex,
   isAddressEqual
 } from 'viem';
-import { privateKeyToAccount, type Account } from 'viem/accounts';
+import { privateKeyToAccount } from 'viem/accounts';
 import { 
   toMetaMaskSmartAccount,
   Implementation,
@@ -141,7 +141,7 @@ export interface DeterministicDeploymentConfig {
  * @returns The predicted smart account address
  */
 export async function calculateSmartAccountAddress(
-  config: DeterministicDeploymentConfig
+  _config: DeterministicDeploymentConfig
 ): Promise<Address> {
   // This would require the MetaMask delegation toolkit to expose
   // address calculation functionality. For now, we'll throw an error

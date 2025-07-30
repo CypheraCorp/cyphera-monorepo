@@ -104,7 +104,7 @@ export async function createAndSignDelegation(
     };
 
     // Return the transformed delegation
-    return transformedDelegation as any;
+    return transformedDelegation as unknown as Delegation;
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Failed to create delegation');
   }

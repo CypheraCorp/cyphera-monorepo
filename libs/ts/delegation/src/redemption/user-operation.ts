@@ -5,11 +5,9 @@ import {
   formatEther
 } from 'viem';
 import { 
-  type BundlerClient,
   type UserOperationReceipt,
   UserOperationExecutionError
 } from 'viem/account-abstraction';
-import { type PimlicoClient } from 'permissionless/clients/pimlico';
 import { type MetaMaskSmartAccount, type Implementation, type Call } from '@metamask/delegation-toolkit';
 import { 
   RedemptionError, 
@@ -28,9 +26,9 @@ import {
  * @param pimlicoClient The Pimlico client
  * @returns Gas prices for the UserOperation
  */
-export async function fetchGasPrices(pimlicoClient: PimlicoClient<any, any>): Promise<GasPrices> {
+export async function fetchGasPrices(pimlicoClient: unknown): Promise<GasPrices> {
   try {
-    const { fast: gasPrices } = await pimlicoClient.getUserOperationGasPrice();
+    const { fast: gasPrices } = await (pimlicoClient as { getUserOperationGasPrice: () => Promise<{ fast: { maxFeePerGas?: bigint; maxPriorityFeePerGas?: bigint } }> }).getUserOperationGasPrice();
     
     if (!gasPrices || !gasPrices.maxFeePerGas || !gasPrices.maxPriorityFeePerGas) {
       throw new RedemptionError(
@@ -74,8 +72,8 @@ export interface SendUserOperationOptions {
 }
 
 export async function sendAndConfirmUserOperation(
-  bundlerClient: BundlerClient<any, any>,
-  pimlicoClient: PimlicoClient<any, any>,
+  bundlerClient: unknown,
+  pimlicoClient: unknown,
   redeemer: MetaMaskSmartAccount<Implementation>,
   calls: Call[],
   publicClient: PublicClient,
@@ -84,7 +82,7 @@ export async function sendAndConfirmUserOperation(
   const {
     timeout = DEFAULT_USER_OPERATION_TIMEOUT,
     retryOnFailure = true,
-    onStatusUpdate = () => {}
+    onStatusUpdate = () => { /* Empty callback */ }
   } = options;
 
   let userOpHash: Address | undefined;
@@ -101,7 +99,7 @@ export async function sendAndConfirmUserOperation(
       onStatusUpdate('Sending UserOperation...');
       const startTime = Date.now();
       
-      userOpHash = await bundlerClient.sendUserOperation({
+      userOpHash = await (bundlerClient as { sendUserOperation: (params: { account: MetaMaskSmartAccount<Implementation>; calls: Call[]; maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }) => Promise<Address> }).sendUserOperation({
         account: redeemer,
         calls,
         maxFeePerGas: gasPrices.maxFeePerGas,
@@ -175,11 +173,11 @@ export async function sendAndConfirmUserOperation(
  * @returns The UserOperation receipt
  */
 async function waitForUserOperationReceipt(
-  bundlerClient: BundlerClient<any, any>,
+  bundlerClient: unknown,
   userOpHash: Address,
   timeout: number
 ): Promise<UserOperationReceiptInfo> {
-  const receipt = await bundlerClient.waitForUserOperationReceipt({ 
+  const receipt = await (bundlerClient as { waitForUserOperationReceipt: (params: { hash: Address; timeout: number }) => Promise<UserOperationReceipt> }).waitForUserOperationReceipt({ 
     hash: userOpHash, 
     timeout 
   }) as UserOperationReceipt;
@@ -226,7 +224,7 @@ async function verifySmartAccountDeployment(
  * @param userOpHash The UserOperation hash if available
  * @returns Formatted error message
  */
-function formatUserOperationError(error: any, userOpHash?: Address): string {
+function formatUserOperationError(error: unknown, userOpHash?: Address): string {
   let errorMsg = `Error during UserOperation (hash: ${userOpHash || 'N/A'})`;
 
   if (error instanceof UserOperationExecutionError) {
@@ -258,11 +256,11 @@ function delay(ms: number): Promise<void> {
  * @returns Estimated gas cost in wei
  */
 export async function estimateUserOperationGasCost(
-  pimlicoClient: PimlicoClient<any, any>,
-  userOp: any
+  pimlicoClient: unknown,
+  userOp: unknown
 ): Promise<bigint> {
   try {
-    const estimation = await pimlicoClient.estimateUserOperationGas(
+    const estimation = await (pimlicoClient as { estimateUserOperationGas: (userOp: unknown) => Promise<{ callGasLimit?: bigint; verificationGasLimit?: bigint; preVerificationGas?: bigint }> }).estimateUserOperationGas(
       userOp
     );
 
