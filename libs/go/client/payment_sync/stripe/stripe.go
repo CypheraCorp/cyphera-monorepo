@@ -197,10 +197,12 @@ func (s *StripeService) StartInitialSync(ctx context.Context, workspaceID string
 			})
 
 			// Update session with error
-			s.db.UpdateSyncSessionError(syncCtx, db.UpdateSyncSessionErrorParams{
+			if _, updateErr := s.db.UpdateSyncSessionError(syncCtx, db.UpdateSyncSessionErrorParams{
 				ID:           updatedSession.ID,
 				ErrorSummary: errorJSON,
-			})
+			}); updateErr != nil {
+				s.logger.Error("Failed to update sync session error", zap.Error(updateErr))
+			}
 		}
 	}()
 
@@ -222,13 +224,13 @@ func (s *StripeService) mapDBSessionToPSSession(dbSession db.PaymentSyncSession)
 
 	// Parse JSON fields
 	if len(dbSession.Config) > 0 {
-		json.Unmarshal(dbSession.Config, &session.Config)
+		_ = json.Unmarshal(dbSession.Config, &session.Config)
 	}
 	if len(dbSession.Progress) > 0 {
-		json.Unmarshal(dbSession.Progress, &session.Progress)
+		_ = json.Unmarshal(dbSession.Progress, &session.Progress)
 	}
 	if len(dbSession.ErrorSummary) > 0 {
-		json.Unmarshal(dbSession.ErrorSummary, &session.ErrorSummary)
+		_ = json.Unmarshal(dbSession.ErrorSummary, &session.ErrorSummary)
 	}
 
 	// Handle nullable timestamps

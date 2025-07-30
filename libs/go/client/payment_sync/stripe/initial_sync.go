@@ -41,10 +41,12 @@ func (s *StripeService) runSyncProcess(ctx context.Context, session *db.PaymentS
 
 		// Marshal progress to JSON
 		progressJSON, _ := json.Marshal(progress)
-		s.db.UpdateSyncSessionProgress(ctx, db.UpdateSyncSessionProgressParams{
+		if _, err := s.db.UpdateSyncSessionProgress(ctx, db.UpdateSyncSessionProgressParams{
 			ID:       session.ID,
 			Progress: progressJSON,
-		})
+		}); err != nil {
+			s.logger.Error("Failed to update sync session progress", zap.Error(err))
+		}
 
 		var processed int
 		var err error
@@ -103,10 +105,12 @@ func (s *StripeService) runSyncProcess(ctx context.Context, session *db.PaymentS
 
 	// Marshal final progress
 	progressJSON, _ := json.Marshal(progress)
-	s.db.UpdateSyncSessionProgress(ctx, db.UpdateSyncSessionProgressParams{
+	if _, err := s.db.UpdateSyncSessionProgress(ctx, db.UpdateSyncSessionProgressParams{
 		ID:       session.ID,
 		Progress: progressJSON,
-	})
+	}); err != nil {
+		s.logger.Error("Failed to update final sync session progress", zap.Error(err))
+	}
 
 	s.logger.Info("Initial sync completed",
 		zap.String("session_id", session.ID.String()),

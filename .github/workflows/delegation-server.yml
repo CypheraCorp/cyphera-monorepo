@@ -92,16 +92,20 @@ jobs:
       - name: Install dependencies
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: make delegation-server-setup
-      - name: Build application
         run: |
-          # Build delegation library
-          echo "Building delegation library..."
+          # Install and build delegation library first
+          echo "Installing delegation library dependencies..."
           cd libs/ts/delegation
           npm install --legacy-peer-deps
+          echo "Building delegation library..."
           npm run build
           cd ../../../
-          # Build delegation server
+          # Now setup delegation server
+          echo "Setting up delegation server..."
+          make delegation-server-setup
+      - name: Build application
+        run: |
+          # Build delegation server (library is already built)
           echo "Building delegation server..."
           make delegation-server-build
       - name: Archive build artifacts

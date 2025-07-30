@@ -233,6 +233,9 @@ ci-validate:
 # Install delegation server dependencies
 delegation-server-setup:
 	@echo "📦 Setting up delegation server..."
+	@echo "📚 Building delegation library first..."
+	@cd libs/ts/delegation && npm install --legacy-peer-deps && npm run build
+	@echo "📦 Installing delegation server dependencies..."
 	@cd apps/delegation-server && npm ci
 
 # Run delegation server linting
