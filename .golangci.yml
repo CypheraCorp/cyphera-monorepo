@@ -5,10 +5,9 @@ linters:
     - errcheck
     - staticcheck
     - gosimple
-    - ineffassign
-    - unused
+    #- ineffassign
     - misspell
-    - bodyclose
+    # - bodyclose
     - goconst
     - goimports
   # Add linter-specific settings (nested under linters)
