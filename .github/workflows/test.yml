@@ -288,9 +288,9 @@ jobs:
         cd apps/subscription-processor
         go build -v -o subscription-processor ./cmd/main.go
         cd ../webhook-receiver
-        go build -v ./...
+        go build -v -o webhook-receiver ./cmd/main.go
         cd ../webhook-processor  
-        go build -v ./...
+        go build -v -o webhook-processor ./cmd/main.go
 
   security:
     name: Security Scan
