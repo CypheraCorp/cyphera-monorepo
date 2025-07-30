@@ -101,7 +101,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "cyphera-webhook-receiver-${Stage}"
-      CodeUri: ../ # Point to project root relative to template location
+      CodeUri: ../../ # Point to project root relative to template location
       Handler: bootstrap # Standard handler for Go custom runtime
       Environment:
         Variables:
@@ -151,7 +151,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "cyphera-webhook-processor-${Stage}"
-      CodeUri: ../ # Point to project root relative to template location
+      CodeUri: ../../ # Point to project root relative to template location
       Handler: bootstrap # Standard handler for Go custom runtime
       Timeout: 30 # Reduced to work with SQS visibility timeout
       MemorySize: 1024 # More memory for processing complex webhooks
@@ -203,7 +203,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "cyphera-dlq-processor-${Stage}"
-      CodeUri: ../ # Point to project root relative to template location
+      CodeUri: ../../ # Point to project root relative to template location
       Handler: bootstrap # Standard handler for Go custom runtime
       Timeout: 30 # Reduced to work with SQS visibility timeout
       MemorySize: 1024 # More memory for complex retry logic

@@ -93,7 +93,7 @@ func mapStripeInvoiceToPSInvoice(stripeInv *stripe.Invoice) ps.Invoice {
 	}
 
 	var lines []ps.InvoiceLineItem
-	if stripeInv.Lines != nil && len(stripeInv.Lines.Data) > 0 {
+	if len(stripeInv.Lines.Data) > 0 {
 		lines = make([]ps.InvoiceLineItem, len(stripeInv.Lines.Data))
 		for i, line := range stripeInv.Lines.Data {
 			lines[i] = mapStripeInvoiceLineToPSInvoiceLineItem(line)

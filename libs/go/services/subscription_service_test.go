@@ -1244,7 +1244,7 @@ func TestSubscriptionService_EdgeCases(t *testing.T) {
 			operation: func() error {
 				// The service will still try to make the database call even with nil context
 				mockQuerier.EXPECT().GetSubscriptionWithWorkspace(gomock.Any(), gomock.Any()).Return(db.Subscription{}, errors.New("context error"))
-				_, err := service.GetSubscription(nil, uuid.New(), uuid.New())
+				_, err := service.GetSubscription(context.TODO(), uuid.New(), uuid.New())
 				return err
 			},
 			expectError: true,

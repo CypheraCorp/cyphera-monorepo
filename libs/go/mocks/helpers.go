@@ -2,7 +2,7 @@ package mocks
 
 import (
 	"testing"
-	
+
 	"go.uber.org/mock/gomock"
 )
 
@@ -13,7 +13,7 @@ func NewMockPaymentSyncServiceForTest(t *testing.T) *MockPaymentSyncService {
 	return NewMockPaymentSyncService(ctrl)
 }
 
-// NewMockMetricsCollectorForTest creates a new mock MetricsCollector for testing  
+// NewMockMetricsCollectorForTest creates a new mock MetricsCollector for testing
 func NewMockMetricsCollectorForTest(t *testing.T) *MockMetricsCollector {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)

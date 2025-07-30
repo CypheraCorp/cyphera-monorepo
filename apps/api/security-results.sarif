@@ -1,0 +1,1040 @@
+{
+	"runs": [
+		{
+			"results": [
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/subscription_management_handler.go"
+								},
+								"region": {
+									"endColumn": 77,
+									"endLine": 417,
+									"snippet": {
+										"text": "history, err := h.service.GetSubscriptionHistory(ctx, subscriptionID, int32(limit)) // limit is already validated to be \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 77,
+									"startLine": 417
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 21,
+									"endLine": 883,
+									"snippet": {
+										"text": "Offset:      int32(offset), // offset validated to be \u003e= 0"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 21,
+									"startLine": 883
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 21,
+									"endLine": 882,
+									"snippet": {
+										"text": "Limit:       int32(limit),  // limit validated to be \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 21,
+									"startLine": 882
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 22,
+									"endLine": 620,
+									"snippet": {
+										"text": "Offset:      int32(offset), // offset validated to be \u003e= 0"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 22,
+									"startLine": 620
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 22,
+									"endLine": 619,
+									"snippet": {
+										"text": "Limit:       int32(limit), // limit validated to be \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 22,
+									"startLine": 619
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 22,
+									"endLine": 614,
+									"snippet": {
+										"text": "Offset:      int32(offset), // offset validated to be \u003e= 0"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 22,
+									"startLine": 614
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 22,
+									"endLine": 613,
+									"snippet": {
+										"text": "Limit:       int32(limit), // limit validated to be \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 22,
+									"startLine": 613
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 23,
+									"endLine": 601,
+									"snippet": {
+										"text": "Offset:       int32(offset), // offset validated to be \u003e= 0"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 23,
+									"startLine": 601
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 23,
+									"endLine": 600,
+									"snippet": {
+										"text": "Limit:        int32(limit), // limit validated to be \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 23,
+									"startLine": 600
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_link_handler.go"
+								},
+								"region": {
+									"endColumn": 22,
+									"endLine": 356,
+									"snippet": {
+										"text": "Offset:      int32(offset), // ParsePaginationParamsAsInt validates offset \u003e= 0"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 22,
+									"startLine": 356
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_link_handler.go"
+								},
+								"region": {
+									"endColumn": 22,
+									"endLine": 355,
+									"snippet": {
+										"text": "Limit:       int32(limit),  // ParsePaginationParamsAsInt validates limit \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 22,
+									"startLine": 355
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/invoice_handler.go"
+								},
+								"region": {
+									"endColumn": 22,
+									"endLine": 354,
+									"snippet": {
+										"text": "Offset:      int32(offset), // ParsePaginationParamsAsInt validates offset \u003e= 0"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 22,
+									"startLine": 354
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/invoice_handler.go"
+								},
+								"region": {
+									"endColumn": 22,
+									"endLine": 353,
+									"snippet": {
+										"text": "Limit:       int32(limit),  // ParsePaginationParamsAsInt validates limit \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 22,
+									"startLine": 353
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/invoice_handler.go"
+								},
+								"region": {
+									"endColumn": 22,
+									"endLine": 347,
+									"snippet": {
+										"text": "Offset:      int32(offset), // ParsePaginationParamsAsInt validates offset \u003e= 0"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 22,
+									"startLine": 347
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/invoice_handler.go"
+								},
+								"region": {
+									"endColumn": 22,
+									"endLine": 346,
+									"snippet": {
+										"text": "Limit:       int32(limit),  // ParsePaginationParamsAsInt validates limit \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 22,
+									"startLine": 346
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/invoice_handler.go"
+								},
+								"region": {
+									"endColumn": 22,
+									"endLine": 339,
+									"snippet": {
+										"text": "Offset:      int32(offset), // ParsePaginationParamsAsInt validates offset \u003e= 0"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 22,
+									"startLine": 339
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/invoice_handler.go"
+								},
+								"region": {
+									"endColumn": 22,
+									"endLine": 338,
+									"snippet": {
+										"text": "Limit:       int32(limit),  // ParsePaginationParamsAsInt validates limit \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 22,
+									"startLine": 338
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/dunning_handler.go"
+								},
+								"region": {
+									"endColumn": 58,
+									"endLine": 537,
+									"snippet": {
+										"text": "if err := h.retryEngine.ProcessDueCampaigns(ctx, int32(limit)); err != nil {"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 58,
+									"startLine": 537
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/dunning_handler.go"
+								},
+								"region": {
+									"endColumn": 21,
+									"endLine": 199,
+									"snippet": {
+										"text": "Offset:      int32(offset), // ParsePaginationParamsAsInt validates offset \u003e= 0"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 21,
+									"startLine": 199
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/dunning_handler.go"
+								},
+								"region": {
+									"endColumn": 21,
+									"endLine": 198,
+									"snippet": {
+										"text": "Limit:       int32(limit),  // ParsePaginationParamsAsInt validates limit \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 21,
+									"startLine": 198
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "integer overflow conversion int -\u003e int32"
+					},
+					"ruleId": "G115"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 16,
+									"endLine": 883,
+									"snippet": {
+										"text": "Offset:      int32(offset), // offset validated to be \u003e= 0"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 16,
+									"startLine": 883
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "Potential Integer overflow made by strconv.Atoi result conversion to int16/32"
+					},
+					"ruleId": "G109"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 16,
+									"endLine": 882,
+									"snippet": {
+										"text": "Limit:       int32(limit),  // limit validated to be \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 16,
+									"startLine": 882
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "Potential Integer overflow made by strconv.Atoi result conversion to int16/32"
+					},
+					"ruleId": "G109"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 17,
+									"endLine": 620,
+									"snippet": {
+										"text": "Offset:      int32(offset), // offset validated to be \u003e= 0"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 17,
+									"startLine": 620
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "Potential Integer overflow made by strconv.Atoi result conversion to int16/32"
+					},
+					"ruleId": "G109"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 17,
+									"endLine": 619,
+									"snippet": {
+										"text": "Limit:       int32(limit), // limit validated to be \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 17,
+									"startLine": 619
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "Potential Integer overflow made by strconv.Atoi result conversion to int16/32"
+					},
+					"ruleId": "G109"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 17,
+									"endLine": 614,
+									"snippet": {
+										"text": "Offset:      int32(offset), // offset validated to be \u003e= 0"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 17,
+									"startLine": 614
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "Potential Integer overflow made by strconv.Atoi result conversion to int16/32"
+					},
+					"ruleId": "G109"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 17,
+									"endLine": 613,
+									"snippet": {
+										"text": "Limit:       int32(limit), // limit validated to be \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 17,
+									"startLine": 613
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "Potential Integer overflow made by strconv.Atoi result conversion to int16/32"
+					},
+					"ruleId": "G109"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 18,
+									"endLine": 601,
+									"snippet": {
+										"text": "Offset:       int32(offset), // offset validated to be \u003e= 0"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 18,
+									"startLine": 601
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "Potential Integer overflow made by strconv.Atoi result conversion to int16/32"
+					},
+					"ruleId": "G109"
+				},
+				{
+					"level": "error",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 18,
+									"endLine": 600,
+									"snippet": {
+										"text": "Limit:        int32(limit), // limit validated to be \u003c= 100"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 18,
+									"startLine": 600
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "Potential Integer overflow made by strconv.Atoi result conversion to int16/32"
+					},
+					"ruleId": "G109"
+				},
+				{
+					"level": "warning",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "server/server.go"
+								},
+								"region": {
+									"endColumn": 2,
+									"endLine": 187,
+									"snippet": {
+										"text": "os.Setenv(\"WEB3AUTH_AUDIENCE\", web3AuthAudience)"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 2,
+									"startLine": 187
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "Errors unhandled"
+					},
+					"ruleId": "G104"
+				},
+				{
+					"level": "warning",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "server/server.go"
+								},
+								"region": {
+									"endColumn": 2,
+									"endLine": 186,
+									"snippet": {
+										"text": "os.Setenv(\"WEB3AUTH_ISSUER\", web3AuthIssuer)"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 2,
+									"startLine": 186
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "Errors unhandled"
+					},
+					"ruleId": "G104"
+				},
+				{
+					"level": "warning",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "server/server.go"
+								},
+								"region": {
+									"endColumn": 2,
+									"endLine": 185,
+									"snippet": {
+										"text": "os.Setenv(\"WEB3AUTH_JWKS_ENDPOINT\", web3AuthJWKSEndpoint)"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 2,
+									"startLine": 185
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "Errors unhandled"
+					},
+					"ruleId": "G104"
+				},
+				{
+					"level": "warning",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "server/server.go"
+								},
+								"region": {
+									"endColumn": 2,
+									"endLine": 184,
+									"snippet": {
+										"text": "os.Setenv(\"WEB3AUTH_CLIENT_ID\", web3AuthClientID)"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 2,
+									"startLine": 184
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "Errors unhandled"
+					},
+					"ruleId": "G104"
+				},
+				{
+					"level": "warning",
+					"locations": [
+						{
+							"physicalLocation": {
+								"artifactLocation": {
+									"uri": "handlers/payment_sync_handlers.go"
+								},
+								"region": {
+									"endColumn": 3,
+									"endLine": 909,
+									"snippet": {
+										"text": "json.Unmarshal(account.Metadata, \u0026metadata)"
+									},
+									"sourceLanguage": "go",
+									"startColumn": 3,
+									"startLine": 909
+								}
+							}
+						}
+					],
+					"message": {
+						"text": "Errors unhandled"
+					},
+					"ruleId": "G104"
+				}
+			],
+			"taxonomies": [
+				{
+					"downloadUri": "https://cwe.mitre.org/data/xml/cwec_v4.4.xml.zip",
+					"guid": "f2856fc0-85b7-373f-83e7-6f8582243547",
+					"informationUri": "https://cwe.mitre.org/data/published/cwe_v4.4.pdf/",
+					"isComprehensive": true,
+					"language": "en",
+					"minimumRequiredLocalizedDataSemanticVersion": "4.4",
+					"name": "CWE",
+					"organization": "MITRE",
+					"releaseDateUtc": "2021-03-15",
+					"shortDescription": {
+						"text": "The MITRE Common Weakness Enumeration"
+					},
+					"taxa": [
+						{
+							"fullDescription": {
+								"text": "The software performs a calculation that can produce an integer overflow or wraparound, when the logic assumes that the resulting value will always be larger than the original value. This can introduce other weaknesses when the calculation is used for resource management or execution control."
+							},
+							"guid": "c71e4fa0-720e-3e82-8b67-b2d44d0c604b",
+							"helpUri": "https://cwe.mitre.org/data/definitions/190.html",
+							"id": "190",
+							"shortDescription": {
+								"text": "Integer Overflow or Wraparound"
+							}
+						},
+						{
+							"fullDescription": {
+								"text": "The software does not properly anticipate or handle exceptional conditions that rarely occur during normal operation of the software."
+							},
+							"guid": "7df38d1d-038e-3ced-8601-8d9265b90a25",
+							"helpUri": "https://cwe.mitre.org/data/definitions/703.html",
+							"id": "703",
+							"shortDescription": {
+								"text": "Improper Check or Handling of Exceptional Conditions"
+							}
+						}
+					],
+					"version": "4.4"
+				}
+			],
+			"tool": {
+				"driver": {
+					"guid": "8b518d5f-906d-39f9-894b-d327b1a421c5",
+					"informationUri": "https://github.com/securego/gosec/",
+					"name": "gosec",
+					"rules": [
+						{
+							"defaultConfiguration": {
+								"level": "warning"
+							},
+							"fullDescription": {
+								"text": "Errors unhandled"
+							},
+							"help": {
+								"text": "Errors unhandled\nSeverity: LOW\nConfidence: HIGH\n"
+							},
+							"id": "G104",
+							"name": "Improper Check or Handling of Exceptional Conditions",
+							"properties": {
+								"precision": "high",
+								"tags": [
+									"security",
+									"LOW"
+								]
+							},
+							"relationships": [
+								{
+									"kinds": [
+										"superset"
+									],
+									"target": {
+										"guid": "7df38d1d-038e-3ced-8601-8d9265b90a25",
+										"id": "703",
+										"toolComponent": {
+											"guid": "f2856fc0-85b7-373f-83e7-6f8582243547",
+											"name": "CWE"
+										}
+									}
+								}
+							],
+							"shortDescription": {
+								"text": "Errors unhandled"
+							}
+						},
+						{
+							"defaultConfiguration": {
+								"level": "error"
+							},
+							"fullDescription": {
+								"text": "Potential Integer overflow made by strconv.Atoi result conversion to int16/32"
+							},
+							"help": {
+								"text": "Potential Integer overflow made by strconv.Atoi result conversion to int16/32\nSeverity: HIGH\nConfidence: MEDIUM\n"
+							},
+							"id": "G109",
+							"name": "Integer Overflow or Wraparound",
+							"properties": {
+								"precision": "medium",
+								"tags": [
+									"security",
+									"HIGH"
+								]
+							},
+							"relationships": [
+								{
+									"kinds": [
+										"superset"
+									],
+									"target": {
+										"guid": "c71e4fa0-720e-3e82-8b67-b2d44d0c604b",
+										"id": "190",
+										"toolComponent": {
+											"guid": "f2856fc0-85b7-373f-83e7-6f8582243547",
+											"name": "CWE"
+										}
+									}
+								}
+							],
+							"shortDescription": {
+								"text": "Potential Integer overflow made by strconv.Atoi result conversion to int16/32"
+							}
+						},
+						{
+							"defaultConfiguration": {
+								"level": "error"
+							},
+							"fullDescription": {
+								"text": "integer overflow conversion int -\u003e int32"
+							},
+							"help": {
+								"text": "integer overflow conversion int -\u003e int32\nSeverity: HIGH\nConfidence: MEDIUM\n"
+							},
+							"id": "G115",
+							"name": "Integer Overflow or Wraparound",
+							"properties": {
+								"precision": "medium",
+								"tags": [
+									"security",
+									"HIGH"
+								]
+							},
+							"relationships": [
+								{
+									"kinds": [
+										"superset"
+									],
+									"target": {
+										"guid": "c71e4fa0-720e-3e82-8b67-b2d44d0c604b",
+										"id": "190",
+										"toolComponent": {
+											"guid": "f2856fc0-85b7-373f-83e7-6f8582243547",
+											"name": "CWE"
+										}
+									}
+								}
+							],
+							"shortDescription": {
+								"text": "integer overflow conversion int -\u003e int32"
+							}
+						}
+					],
+					"semanticVersion": "dev",
+					"supportedTaxonomies": [
+						{
+							"guid": "f2856fc0-85b7-373f-83e7-6f8582243547",
+							"name": "CWE"
+						}
+					],
+					"version": "dev"
+				}
+			}
+		}
+	],
+	"$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+	"version": "2.1.0"
+}

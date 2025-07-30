@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // PaymentPageHandler handles public payment page requests
@@ -112,9 +114,18 @@ func (h *PaymentPageHandler) GetPaymentPageData(c *gin.Context) {
 	if link.PriceID != nil && link.AmountCents != nil {
 		// TODO: Implement price retrieval
 		// For now, use data from payment link
+		// Safely convert int64 to int32 with bounds checking
+		amountInt32 := int32(0)
+		if *link.AmountCents <= math.MaxInt32 && *link.AmountCents >= math.MinInt32 {
+			amountInt32 = int32(*link.AmountCents)
+		} else {
+			// Log warning for overflow
+			h.common.logger.Warn("Amount overflow when converting to int32",
+				zap.Int64("amount", *link.AmountCents))
+		}
 		response.Price = &PriceData{
 			ID:                  link.PriceID.String(),
-			UnitAmountInPennies: int32(*link.AmountCents),
+			UnitAmountInPennies: amountInt32,
 			Currency:            link.Currency,
 			Type:                link.PaymentType,
 			IntervalType:        "",

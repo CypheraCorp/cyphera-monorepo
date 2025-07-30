@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
+
+	// "net/url" // Commented out: unused after commenting out validateProductUpdate
 	"strconv"
 	"strings"
 	"time"
@@ -51,16 +52,17 @@ func (e *SubscriptionExistsError) Error() string {
 
 // ProductHandler handles product-related operations
 type ProductHandler struct {
-	common                *CommonServices
-	delegationClient      *dsClient.DelegationClient
-	productService        interfaces.ProductService
-	subscriptionService   interfaces.SubscriptionService
-	customerService       interfaces.CustomerService
-	workspaceService      interfaces.WorkspaceService
-	walletService         interfaces.WalletService
-	tokenService          interfaces.TokenService
-	networkService        interfaces.NetworkService
-	gasSponsorshipService interfaces.GasSponsorshipService
+	common              *CommonServices
+	delegationClient    *dsClient.DelegationClient
+	productService      interfaces.ProductService
+	subscriptionService interfaces.SubscriptionService
+	customerService     interfaces.CustomerService
+	// Commented out: unused fields
+	// workspaceService      interfaces.WorkspaceService
+	// walletService         interfaces.WalletService
+	// tokenService          interfaces.TokenService
+	// networkService        interfaces.NetworkService
+	// gasSponsorshipService interfaces.GasSponsorshipService
 }
 
 // NewProductHandler creates a handler with interface dependencies
@@ -72,9 +74,8 @@ func NewProductHandler(
 	customerService interfaces.CustomerService,
 	logger *zap.Logger,
 ) *ProductHandler {
-	if logger == nil {
-		logger = zap.L()
-	}
+	// Ensure logger is initialized even if not currently used
+	_ = logger // Suppress ineffassign warning - logger parameter kept for consistency
 	return &ProductHandler{
 		common:              common,
 		delegationClient:    delegationClient,
@@ -179,6 +180,8 @@ func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
 
 // validatePaginationParams is defined in common.go
 
+// Commented out: unused function
+/*
 // validateProductUpdate validates core product update parameters
 func (h *ProductHandler) validateProductUpdate(c *gin.Context, req UpdateProductRequest, existingProduct db.Product) error {
 	if req.Name != "" {
@@ -217,6 +220,7 @@ func (h *ProductHandler) validateProductUpdate(c *gin.Context, req UpdateProduct
 	}
 	return nil
 }
+*/
 
 // ListProducts godoc
 // @Summary List products
@@ -310,6 +314,8 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 	c.JSON(http.StatusOK, listProductsResponse)
 }
 
+// Commented out: unused function
+/*
 // validateWallet validates the wallet exists and belongs to the workspace's account
 func (h *ProductHandler) validateWallet(ctx *gin.Context, walletID uuid.UUID, workspaceID uuid.UUID) error {
 	wallet, err := h.common.db.GetWalletByID(ctx.Request.Context(), db.GetWalletByIDParams{
@@ -331,6 +337,7 @@ func (h *ProductHandler) validateWallet(ctx *gin.Context, walletID uuid.UUID, wo
 
 	return nil
 }
+*/
 
 // CreateProduct godoc
 // @Summary Create product
@@ -699,6 +706,10 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		return
 	}
 
+	// Extract the signer field from authority for delegation server compatibility
+	// The delegation server expects authority as a hex string (the signer address)
+	authorityHex := request.Delegation.Authority.Signer
+
 	// Use product service to validate subscription request
 	if err := h.productService.ValidateSubscriptionRequest(ctx, params.ValidateSubscriptionParams{
 		SubscriberAddress: request.SubscriberAddress,
@@ -709,7 +720,7 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		Delegation: params.DelegationParams{
 			Delegate:  request.Delegation.Delegate,
 			Delegator: request.Delegation.Delegator,
-			Authority: request.Delegation.Authority,
+			Authority: authorityHex,
 			Salt:      request.Delegation.Salt,
 			Signature: request.Delegation.Signature,
 			Caveats:   caveatsJSON,
@@ -728,6 +739,9 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 	}
 
 	var subscriptionResult *params.SubscriptionCreationResult
+
+	// Capture authorityHex for use inside transaction
+	capturedAuthorityHex := authorityHex
 
 	// Execute within transaction
 	err = helpers.WithTransaction(ctx, pool, func(tx pgx.Tx) error {
@@ -795,7 +809,7 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		delegationParams := params.StoreDelegationDataParams{
 			Delegate:  request.Delegation.Delegate,
 			Delegator: request.Delegation.Delegator,
-			Authority: request.Delegation.Authority,
+			Authority: capturedAuthorityHex, // Use the extracted hex string
 			Caveats:   caveatsJSON,
 			Salt:      request.Delegation.Salt,
 			Signature: request.Delegation.Signature,

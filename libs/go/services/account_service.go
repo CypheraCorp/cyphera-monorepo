@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
@@ -41,7 +42,7 @@ func (s *AccountService) CreateAccount(ctx context.Context, createParams params.
 	}
 
 	// Validate account type
-	if createParams.AccountType != "admin" && createParams.AccountType != "merchant" {
+	if createParams.AccountType != constants.AdminRole && createParams.AccountType != constants.MerchantRole {
 		return nil, fmt.Errorf("invalid account type: %s. Must be 'admin' or 'merchant'", createParams.AccountType)
 	}
 
@@ -132,7 +133,7 @@ func (s *AccountService) UpdateAccount(ctx context.Context, updateParams params.
 
 	accountType := existingAccount.AccountType
 	if updateParams.AccountType != nil {
-		if *updateParams.AccountType != "admin" && *updateParams.AccountType != "merchant" {
+		if *updateParams.AccountType != constants.AdminRole && *updateParams.AccountType != constants.MerchantRole {
 			return nil, fmt.Errorf("invalid account type: %s", *updateParams.AccountType)
 		}
 		accountType = db.AccountType(*updateParams.AccountType)

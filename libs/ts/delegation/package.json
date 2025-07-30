@@ -1,0 +1,39 @@
+{
+  "name": "@cyphera/delegation",
+  "version": "1.0.0",
+  "description": "Shared delegation utilities for Cyphera platform",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "test": "jest",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "@metamask/delegation-toolkit": "^0.10.2",
+    "@types/node": "^20.11.24",
+    "node-fetch": "^2.7.0",
+    "permissionless": "0.2.36",
+    "viem": "2.33.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node-fetch": "^2.6.4",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "@metamask/delegation-toolkit": "^0.10.0",
+    "permissionless": "0.2.36",
+    "viem": "^2.0.0"
+  },
+  "overrides": {
+    "ox": "0.6.9"
+  }
+}

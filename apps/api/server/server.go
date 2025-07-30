@@ -65,10 +65,10 @@ var (
 	authClient *auth.AuthClient
 
 	// Services
-	commonServices     *handlers.CommonServices
-	cmcApiKey          string
-	dunningRetryEngine *services.DunningRetryEngine
-	handlerFactory     *handlers.HandlerFactory
+	commonServices *handlers.CommonServices
+	cmcApiKey      string
+	// dunningRetryEngine *services.DunningRetryEngine // Commented out: unused variable
+	handlerFactory *handlers.HandlerFactory
 )
 
 func InitializeHandlers() {

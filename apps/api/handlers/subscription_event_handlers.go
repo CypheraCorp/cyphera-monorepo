@@ -170,10 +170,7 @@ func (h *SubscriptionEventHandler) ListSubscriptionEvents(c *gin.Context) {
 	}
 
 	// Pre-allocate slice with capacity for better memory efficiency
-	eventsResponse := make([]responses.SubscriptionEventFullResponse, 0, len(result.Events))
-	for _, event := range result.Events {
-		eventsResponse = append(eventsResponse, event)
-	}
+	eventsResponse := append([]responses.SubscriptionEventFullResponse(nil), result.Events...)
 
 	response := sendPaginatedSuccess(c, http.StatusOK, eventsResponse, int(page), int(limit), int(result.Total))
 	c.JSON(http.StatusOK, response)

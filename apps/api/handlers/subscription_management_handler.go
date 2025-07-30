@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"context"
+	// "context" // Commented out: unused after commenting out verifySubscriptionOwnership
 	"net/http"
 	"strconv"
 	"time"
@@ -414,7 +414,7 @@ func (h *SubscriptionManagementHandler) GetSubscriptionHistory(c *gin.Context) {
 		}
 	}
 
-	history, err := h.service.GetSubscriptionHistory(ctx, subscriptionID, int32(limit))
+	history, err := h.service.GetSubscriptionHistory(ctx, subscriptionID, int32(limit)) // #nosec G115 -- limit is already validated to be <= 100
 	if err != nil {
 		h.logger.Error("Failed to get subscription history",
 			zap.String("subscription_id", subscriptionID.String()),
@@ -429,9 +429,12 @@ func (h *SubscriptionManagementHandler) GetSubscriptionHistory(c *gin.Context) {
 	})
 }
 
+// Commented out: unused function
+/*
 // Helper method to verify subscription ownership
 func (h *SubscriptionManagementHandler) verifySubscriptionOwnership(ctx context.Context, subscriptionID uuid.UUID, userID string) bool {
 	// In a real implementation, this would check if the user owns the subscription
 	// through their workspace or customer record
 	return true
 }
+*/

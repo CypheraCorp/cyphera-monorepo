@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -276,7 +277,7 @@ func LogLevelFromString(level string) LogLevel {
 		return InfoLevel
 	case "warn", "warning":
 		return WarnLevel
-	case "error":
+	case constants.ErrorLevel:
 		return ErrorLevel
 	case "fatal":
 		return FatalLevel

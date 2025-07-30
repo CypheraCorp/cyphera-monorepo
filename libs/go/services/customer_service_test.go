@@ -1506,8 +1506,6 @@ func TestCustomerService_ParseNetworkType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service := services.NewCustomerService(&mocks.MockQuerier{})
-
 			// Test the parseNetworkType function indirectly through CreateCustomerWallet
 			// since parseNetworkType is not exported
 			walletParams := params.CreateCustomerWalletParams{
@@ -1522,7 +1520,7 @@ func TestCustomerService_ParseNetworkType(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			mockQuerier := mocks.NewMockQuerier(ctrl)
-			service = services.NewCustomerService(mockQuerier)
+			service := services.NewCustomerService(mockQuerier)
 
 			if tt.wantErr {
 				// Don't set up any mocks - should fail at parseNetworkType

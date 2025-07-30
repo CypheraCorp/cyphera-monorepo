@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/cyphera/cyphera-api/apps/api/constants"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
@@ -64,7 +65,7 @@ func (h *NetworkHandler) GetNetwork(c *gin.Context) {
 
 	network, err := h.networkService.GetNetwork(c.Request.Context(), parsedUUID)
 	if err != nil {
-		if err.Error() == "network not found" {
+		if err.Error() == constants.NetworkNotFound {
 			sendError(c, http.StatusNotFound, "Network not found", nil)
 			return
 		}
@@ -180,7 +181,7 @@ func (h *NetworkHandler) UpdateNetwork(c *gin.Context) {
 
 	network, err := h.networkService.UpdateNetwork(c.Request.Context(), networkUpdateParams)
 	if err != nil {
-		if err.Error() == "network not found" {
+		if err.Error() == constants.NetworkNotFound {
 			sendError(c, http.StatusNotFound, "Network not found", nil)
 			return
 		}
@@ -208,7 +209,7 @@ func (h *NetworkHandler) DeleteNetwork(c *gin.Context) {
 
 	err = h.networkService.DeleteNetwork(c.Request.Context(), parsedUUID)
 	if err != nil {
-		if err.Error() == "network not found" {
+		if err.Error() == constants.NetworkNotFound {
 			sendError(c, http.StatusNotFound, "Network not found", nil)
 			return
 		}
@@ -240,11 +241,11 @@ func (h *NetworkHandler) ListNetworks(c *gin.Context) {
 	listNetworkParams := params.ListNetworksParams{}
 
 	if testnetStr != "" {
-		testnet := testnetStr == "true"
+		testnet := testnetStr == constants.TrueString
 		listNetworkParams.IsTestnet = &testnet
 	}
 	if activeStr != "" {
-		active := activeStr == "true"
+		active := activeStr == constants.TrueString
 		listNetworkParams.IsActive = &active
 	}
 
@@ -303,7 +304,7 @@ func (h *NetworkHandler) GetNetworkByChainID(c *gin.Context) {
 
 	network, err := h.networkService.GetNetworkByChainID(c.Request.Context(), int32(chainId))
 	if err != nil {
-		if err.Error() == "network not found" {
+		if err.Error() == constants.NetworkNotFound {
 			sendError(c, http.StatusNotFound, "Network not found", nil)
 			return
 		}

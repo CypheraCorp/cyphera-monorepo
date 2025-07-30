@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
@@ -365,7 +366,7 @@ func (s *PaymentService) CreateComprehensivePayment(ctx context.Context, payment
 			WorkspaceID:     paymentParams.WorkspaceID,
 			PaymentID:       payment.ID,
 			GasCostUSDCents: gasCostCents,
-			SponsorType:     "merchant",
+			SponsorType:     constants.MerchantSponsorType,
 			SponsorID:       *sponsorID,
 		}
 

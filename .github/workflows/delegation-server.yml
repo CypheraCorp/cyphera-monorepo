@@ -3,13 +3,15 @@ name: Delegation Server CI/CD
 on:
   push:
     branches: [ dev, main ]
-    paths: # Only trigger on changes within delegation-server or this workflow file
+    paths: # Trigger on changes within delegation-server, delegation library, or this workflow file
       - 'apps/delegation-server/**'
+      - 'libs/ts/delegation/**'
       - '.github/workflows/delegation-server.yml'
   pull_request:
     branches: [ dev, main ]
     paths:
       - 'apps/delegation-server/**'
+      - 'libs/ts/delegation/**'
       - '.github/workflows/delegation-server.yml'
 
 env:
@@ -30,7 +32,13 @@ jobs:
           cache: 'npm'
           cache-dependency-path: apps/delegation-server/package-lock.json # Adjust if using yarn or pnpm
       - name: Install dependencies
-        run: make delegation-server-setup # Runs npm install/ci via setup script
+        run: |
+          # Install delegation library dependencies first
+          cd libs/ts/delegation && npm install --legacy-peer-deps
+          # Build delegation library so it can be imported
+          npm run build
+          cd ../../../
+          make delegation-server-setup # Runs npm install/ci via setup script
       - name: Run linter
         run: make delegation-server-lint
 
@@ -52,9 +60,22 @@ jobs:
           cache: 'npm'
           cache-dependency-path: apps/delegation-server/package-lock.json
       - name: Install dependencies
-        run: make delegation-server-setup
+        run: |
+          # Install delegation library dependencies first
+          cd libs/ts/delegation && npm install --legacy-peer-deps
+          # Build delegation library so it can be imported
+          npm run build
+          cd ../../../
+          make delegation-server-setup
       - name: Run tests
-        run: make delegation-server-test
+        run: |
+          # Test delegation library
+          echo "Testing delegation library..."
+          cd libs/ts/delegation && npm test
+          cd ../../../
+          # Test delegation server
+          echo "Testing delegation server..."
+          make delegation-server-test
 
   build:
     name: Build Delegation Server
@@ -71,9 +92,22 @@ jobs:
       - name: Install dependencies
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: make delegation-server-setup
+        run: |
+          # Install and build delegation library first
+          echo "Installing delegation library dependencies..."
+          cd libs/ts/delegation
+          npm install --legacy-peer-deps
+          echo "Building delegation library..."
+          npm run build
+          cd ../../../
+          # Now setup delegation server
+          echo "Setting up delegation server..."
+          make delegation-server-setup
       - name: Build application
-        run: make delegation-server-build
+        run: |
+          # Build delegation server (library is already built)
+          echo "Building delegation server..."
+          make delegation-server-build
       - name: Archive build artifacts
         uses: actions/upload-artifact@v4
         with:

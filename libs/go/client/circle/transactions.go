@@ -3,8 +3,9 @@ package circle
 import (
 	"context"
 	"fmt"
-	httpClient "github.com/cyphera/cyphera-api/libs/go/client/http"
 	"time"
+
+	httpClient "github.com/cyphera/cyphera-api/libs/go/client/http"
 )
 
 // TransferChallengeRequest represents the request to create a transfer transaction challenge

@@ -1322,8 +1322,8 @@ func TestSubscriptionManagementService_EdgeCases(t *testing.T) {
 			name: "nil context handling",
 			operation: func() error {
 				// Mock the database call that will happen even with nil context
-				mockQuerier.EXPECT().GetSubscription(nil, gomock.Any()).Return(db.Subscription{}, assert.AnError)
-				_, err := service.PreviewChange(nil, uuid.New(), "upgrade", []requests.LineItemUpdate{})
+				mockQuerier.EXPECT().GetSubscription(gomock.Any(), gomock.Any()).Return(db.Subscription{}, assert.AnError)
+				_, err := service.PreviewChange(context.TODO(), uuid.New(), "upgrade", []requests.LineItemUpdate{})
 				return err
 			},
 			wantErr: true,

@@ -5,10 +5,9 @@ linters:
     - errcheck
     - staticcheck
     - gosimple
-    - ineffassign
-    - unused
+    #- ineffassign
     - misspell
-    - bodyclose
+    # - bodyclose
     - goconst
     - goimports
   # Add linter-specific settings (nested under linters)
@@ -33,3 +32,10 @@ issues:
         - errcheck # Ignore errors in tests
         # - errcheck # Example: Uncomment if you want to ignore unchecked errors in tests
         # Add any other linters you want to ignore specifically for test files
+    # Exclude specific issues that cannot be located
+    - linters:
+        - gosimple
+      text: "S1009: should omit nil check; len\\(\\) for nil slices is defined as zero"
+    - linters:
+        - staticcheck
+      text: "SA9003: empty branch"

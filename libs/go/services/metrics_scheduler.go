@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/google/uuid"
@@ -84,6 +85,7 @@ func (s *MetricsScheduler) runHourlySchedule() {
 	// Wait for initial delay
 	select {
 	case <-time.After(initialDelay):
+		// Proceed after delay
 	case <-s.stopCh:
 		return
 	}
@@ -114,6 +116,7 @@ func (s *MetricsScheduler) runDailySchedule() {
 	// Wait for initial delay
 	select {
 	case <-time.After(initialDelay):
+		// Proceed after delay
 	case <-s.stopCh:
 		return
 	}
@@ -156,7 +159,7 @@ func (s *MetricsScheduler) calculateHourlyMetrics() {
 		var currency string
 		if err != nil {
 			// Fallback to USD if no default currency is set
-			currency = "USD"
+			currency = constants.USDCurrency
 		} else {
 			currency = defaultCurrency.Code
 		}

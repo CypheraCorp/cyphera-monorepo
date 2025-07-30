@@ -261,6 +261,6 @@ func nullableNumeric(f float64) pgtype.Numeric {
 	n := pgtype.Numeric{}
 	// Convert float to string and scan it
 	strVal := fmt.Sprintf("%f", f)
-	n.Scan(strVal)
+	_ = n.Scan(strVal)
 	return n
 }

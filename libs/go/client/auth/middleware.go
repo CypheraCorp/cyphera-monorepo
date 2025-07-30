@@ -328,7 +328,7 @@ func (ac *AuthClient) validateAPIKey(c *gin.Context, services interfaces.CommonS
 
 	// Update last used timestamp
 	go func() {
-		if err := services.GetDB().UpdateAPIKeyLastUsed(context.Background(), key.ID); err != nil {
+		if err := services.GetDB().UpdateAPIKeyLastUsed(c.Request.Context(), key.ID); err != nil {
 			logger.Log.Warn("Failed to update API key last used timestamp",
 				zap.String("key_id", key.ID.String()),
 				zap.Error(err),
@@ -563,7 +563,7 @@ func (ac *AuthClient) validateWeb3AuthToken(tokenString string) (*Web3AuthClaims
 	tokenString = strings.TrimPrefix(tokenString, "Bearer ")
 
 	// Create safe token preview for logging
-	tokenPreview := tokenString
+	var tokenPreview string
 	if len(tokenString) > 20 {
 		tokenPreview = tokenString[:20] + "..."
 	} else if len(tokenString) > 0 {

@@ -597,8 +597,8 @@ func (h *PaymentSyncHandlers) ListSyncSessions(c *gin.Context) {
 		sessions, err = h.common.db.ListSyncSessionsByProvider(ctx, db.ListSyncSessionsByProviderParams{
 			WorkspaceID:  wsID,
 			ProviderName: provider,
-			Limit:        int32(limit),
-			Offset:       int32(offset),
+			Limit:        int32(limit),  // #nosec G109,G115 -- strconv.Atoi result validated to be <= 100
+			Offset:       int32(offset), // #nosec G109,G115 -- strconv.Atoi result validated to be >= 0
 		})
 		if err == nil {
 			total, _ = h.common.db.CountSyncSessionsByProvider(ctx, db.CountSyncSessionsByProviderParams{
@@ -610,14 +610,14 @@ func (h *PaymentSyncHandlers) ListSyncSessions(c *gin.Context) {
 		sessions, err = h.common.db.ListSyncSessionsByStatus(ctx, db.ListSyncSessionsByStatusParams{
 			WorkspaceID: wsID,
 			Status:      status,
-			Limit:       int32(limit),
-			Offset:      int32(offset),
+			Limit:       int32(limit),  // #nosec G109,G115 -- strconv.Atoi result validated to be <= 100
+			Offset:      int32(offset), // #nosec G109,G115 -- strconv.Atoi result validated to be >= 0
 		})
 	} else {
 		sessions, err = h.common.db.ListSyncSessions(ctx, db.ListSyncSessionsParams{
 			WorkspaceID: wsID,
-			Limit:       int32(limit),
-			Offset:      int32(offset),
+			Limit:       int32(limit),  // #nosec G109,G115 -- strconv.Atoi result validated to be <= 100
+			Offset:      int32(offset), // #nosec G109,G115 -- strconv.Atoi result validated to be >= 0
 		})
 		if err == nil {
 			total, _ = h.common.db.CountSyncSessions(ctx, wsID)
@@ -879,8 +879,8 @@ func (h *PaymentSyncHandlers) GetProviderAccounts(c *gin.Context) {
 	// Get provider accounts
 	accounts, err := h.common.db.ListProviderAccountsByWorkspace(c.Request.Context(), db.ListProviderAccountsByWorkspaceParams{
 		WorkspaceID: wsID,
-		Limit:       int32(limit),
-		Offset:      int32(offset),
+		Limit:       int32(limit),  // #nosec G109,G115 -- strconv.Atoi result validated to be <= 100
+		Offset:      int32(offset), // #nosec G109,G115 -- strconv.Atoi result validated to be >= 0
 	})
 	if err != nil {
 		logger.Log.Error("Failed to list provider accounts", zap.Error(err))
@@ -906,7 +906,12 @@ func (h *PaymentSyncHandlers) GetProviderAccounts(c *gin.Context) {
 func (h *PaymentSyncHandlers) mapProviderAccountToResponse(account db.WorkspaceProviderAccount) ProviderAccountResponse {
 	var metadata map[string]interface{}
 	if len(account.Metadata) > 0 {
-		json.Unmarshal(account.Metadata, &metadata)
+		if err := json.Unmarshal(account.Metadata, &metadata); err != nil {
+			logger.Log.Warn("Failed to unmarshal account metadata",
+				zap.String("account_id", account.ID.String()),
+				zap.Error(err))
+			metadata = make(map[string]interface{})
+		}
 	}
 
 	response := ProviderAccountResponse{

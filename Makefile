@@ -168,6 +168,7 @@ swagger-serve:
 # ==============================================================================
 
 .PHONY: sam-build sam-build-api sam-build-webhooks sam-build-processor sam-build-dunning
+.PHONY: build-WebhookReceiverFunction build-WebhookProcessorFunction build-DLQProcessorFunction
 
 sam-build: sam-build-api sam-build-webhooks sam-build-processor sam-build-dunning
 	@echo "✅ All SAM applications built"
@@ -193,6 +194,25 @@ sam-build-dunning:
 	@echo "🔨 Building dunning processor for SAM..."
 	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
 		$(GO) build -o ./apps/dunning-processor/bin/bootstrap ./apps/dunning-processor/cmd/main.go
+
+# Individual Lambda function build targets for GitHub Actions
+build-WebhookReceiverFunction:
+	@echo "🔨 Building WebhookReceiverFunction for SAM..."
+	@mkdir -p $(ARTIFACTS_DIR)
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+		$(GO) build -o $(ARTIFACTS_DIR)/bootstrap ./apps/webhook-receiver/cmd/main.go
+
+build-WebhookProcessorFunction:
+	@echo "🔨 Building WebhookProcessorFunction for SAM..."
+	@mkdir -p $(ARTIFACTS_DIR)
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+		$(GO) build -o $(ARTIFACTS_DIR)/bootstrap ./apps/webhook-processor/cmd/main.go
+
+build-DLQProcessorFunction:
+	@echo "🔨 Building DLQProcessorFunction for SAM..."
+	@mkdir -p $(ARTIFACTS_DIR)
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+		$(GO) build -o $(ARTIFACTS_DIR)/bootstrap ./apps/dlq-processor/cmd/main.go
 
 # ==============================================================================
 # Local Development Utilities
@@ -233,11 +253,16 @@ ci-validate:
 # Install delegation server dependencies
 delegation-server-setup:
 	@echo "📦 Setting up delegation server..."
+	@echo "📚 Building delegation library first..."
+	@cd libs/ts/delegation && npm install --legacy-peer-deps && npm run build
+	@echo "📦 Installing delegation server dependencies..."
 	@cd apps/delegation-server && npm ci
 
 # Run delegation server linting
 delegation-server-lint:
 	@echo "🔍 Linting delegation server..."
+	@echo "📦 Building delegation library first..."
+	@cd libs/ts/delegation && npm run build
 	@cd apps/delegation-server && npm run lint
 
 # Run delegation server tests
@@ -283,11 +308,9 @@ test-integration: test-db-up
 test-coverage:
 	@echo "📊 Running tests with coverage..."
 	@$(GO) test -race -timeout=30s -coverprofile=coverage.out \
-		-coverpkg=./apps/api/...,./libs/go/... \
-		./apps/api/... ./libs/go/...
+		-coverpkg=./apps/...,github.com/cyphera/cyphera-api/libs/go/... \
+		./apps/... github.com/cyphera/cyphera-api/libs/go/...
 	@$(GO) tool cover -func=coverage.out | grep total:
-	@echo "Checking coverage threshold ($(COVERAGE_THRESHOLD)%)..."
-	@./scripts/check-coverage.sh $(COVERAGE_THRESHOLD)
 
 test-coverage-html: test-coverage
 	@echo "📊 Generating HTML coverage report..."

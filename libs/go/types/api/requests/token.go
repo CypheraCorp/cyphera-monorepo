@@ -16,7 +16,7 @@ type UpdateTokenRequest struct {
 	Name            string `json:"name,omitempty"`
 	Symbol          string `json:"symbol,omitempty"`
 	ContractAddress string `json:"contract_address,omitempty"`
-	Decimals        *int32 `json:"decimals,omitempty,gte=0"`
+	Decimals        *int32 `json:"decimals,omitempty"`
 	GasToken        *bool  `json:"gas_token,omitempty"`
 	Active          *bool  `json:"active,omitempty"`
 }

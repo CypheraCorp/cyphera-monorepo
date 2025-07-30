@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/types/business"
@@ -36,7 +37,7 @@ func (s *AnalyticsService) GetDashboardSummary(ctx context.Context, workspaceID 
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
 		if err != nil {
 			// Fallback to USD if no default currency is set
-			currency = "USD"
+			currency = constants.USDCurrency
 		} else {
 			currency = defaultCurrency.Code
 		}
@@ -110,7 +111,7 @@ func (s *AnalyticsService) GetRevenueChart(ctx context.Context, workspaceID uuid
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
 		if err != nil {
 			// Fallback to USD if no default currency is set
-			currency = "USD"
+			currency = constants.USDCurrency
 		} else {
 			currency = defaultCurrency.Code
 		}
@@ -156,7 +157,7 @@ func (s *AnalyticsService) GetCustomerChart(ctx context.Context, workspaceID uui
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
 		if err != nil {
 			// Fallback to USD if no default currency is set
-			currency = "USD"
+			currency = constants.USDCurrency
 		} else {
 			currency = defaultCurrency.Code
 		}
@@ -219,7 +220,7 @@ func (s *AnalyticsService) GetPaymentMetrics(ctx context.Context, workspaceID uu
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
 		if err != nil {
 			// Fallback to USD if no default currency is set
-			currency = "USD"
+			currency = constants.USDCurrency
 		} else {
 			currency = defaultCurrency.Code
 		}
@@ -272,7 +273,7 @@ func (s *AnalyticsService) GetNetworkBreakdown(ctx context.Context, workspaceID 
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
 		if err != nil {
 			// Fallback to USD if no default currency is set
-			currency = "USD"
+			currency = constants.USDCurrency
 		} else {
 			currency = defaultCurrency.Code
 		}
@@ -315,7 +316,7 @@ func (s *AnalyticsService) GetSubscriptionChart(ctx context.Context, workspaceID
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
 		if err != nil {
 			// Fallback to USD if no default currency is set
-			currency = "USD"
+			currency = constants.USDCurrency
 		} else {
 			currency = defaultCurrency.Code
 		}
@@ -378,7 +379,7 @@ func (s *AnalyticsService) GetMRRChart(ctx context.Context, workspaceID uuid.UUI
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
 		if err != nil {
 			// Fallback to USD if no default currency is set
-			currency = "USD"
+			currency = constants.USDCurrency
 		} else {
 			currency = defaultCurrency.Code
 		}
@@ -436,7 +437,7 @@ func (s *AnalyticsService) GetGasFeePieChart(ctx context.Context, workspaceID uu
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
 		if err != nil {
 			// Fallback to USD if no default currency is set
-			currency = "USD"
+			currency = constants.USDCurrency
 		} else {
 			currency = defaultCurrency.Code
 		}
@@ -490,7 +491,7 @@ func (s *AnalyticsService) GetHourlyMetrics(ctx context.Context, workspaceID uui
 		defaultCurrency, err := s.currencyService.GetWorkspaceDefaultCurrency(ctx, workspaceID)
 		if err != nil {
 			// Fallback to USD if no default currency is set
-			currency = "USD"
+			currency = constants.USDCurrency
 		} else {
 			currency = defaultCurrency.Code
 		}

@@ -6,13 +6,31 @@ import { z } from 'zod';
 export const subscriptionStatusSchema = z.enum(['active', 'canceled', 'past_due', 'expired']);
 
 /**
+ * Schema for authority object in delegation
+ */
+export const authoritySchema = z.object({
+  scheme: z.string(),
+  signature: z.string(),
+  signer: z.string(),
+});
+
+/**
+ * Schema for caveat object in delegation
+ */
+export const caveatSchema = z.object({
+  enforcer: z.string(),
+  terms: z.string(),
+});
+
+/**
  * Schema for delegation object (MetaMask Delegation Toolkit)
+ * Updated to match backend DelegationStruct format
  */
 export const delegationSchema = z.object({
   delegate: z.string(),
   delegator: z.string(),
-  authority: z.string(),
-  caveats: z.array(z.any()),
+  authority: authoritySchema,
+  caveats: z.array(caveatSchema),
   salt: z.string(),
   signature: z.string(),
   // Add other delegation fields as needed

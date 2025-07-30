@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/cyphera/cyphera-api/libs/go/types/business"
@@ -66,7 +67,7 @@ func (h *GasSponsorshipHelper) ApplySponsorshipToPayment(
 		return false, nil, err
 	}
 
-	if shouldSponsor && sponsorType == "merchant" {
+	if shouldSponsor && sponsorType == constants.MerchantSponsorType {
 		return true, &workspaceID, nil
 	}
 
@@ -84,7 +85,7 @@ func (h *GasSponsorshipHelper) RecordSponsorship(
 		WorkspaceID:     workspaceID,
 		PaymentID:       paymentID,
 		GasCostUSDCents: gasCostCents,
-		SponsorType:     "merchant",
+		SponsorType:     constants.MerchantSponsorType,
 		SponsorID:       workspaceID,
 	}
 

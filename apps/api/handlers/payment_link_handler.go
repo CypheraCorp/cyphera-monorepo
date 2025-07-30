@@ -352,8 +352,8 @@ func (h *PaymentLinkHandler) ListPaymentLinks(c *gin.Context) {
 		// Get all links with pagination
 		links, err = h.common.db.GetPaymentLinksByWorkspace(ctx, db.GetPaymentLinksByWorkspaceParams{
 			WorkspaceID: workspaceID,
-			Limit:       int32(limit),
-			Offset:      int32(offset),
+			Limit:       int32(limit),  // #nosec G115 -- ParsePaginationParamsAsInt validates limit <= 100
+			Offset:      int32(offset), // #nosec G115 -- ParsePaginationParamsAsInt validates offset >= 0
 		})
 		if err != nil {
 			h.common.HandleError(c, err, "Failed to list payment links", http.StatusInternalServerError, h.common.logger)

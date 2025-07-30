@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Hex, type Address, formatUnits } from 'viem';
+import { type Address, formatUnits } from 'viem';
 import { useWeb3AuthSmartAccount } from '@/hooks/auth';
 import { useWeb3AuthInitialization } from '@/hooks/auth';
 import { useWeb3Auth } from '@web3auth/modal/react';
 import { formatDelegation } from '@/lib/web3/utils/delegation';
-import { createDelegation, MetaMaskSmartAccount } from '@metamask/delegation-toolkit';
+import { MetaMaskSmartAccount } from '@metamask/delegation-toolkit';
+import { createAndSignDelegation } from '@cyphera/delegation';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { useEnvConfig } from '@/components/env/client';
@@ -391,30 +392,10 @@ export function Web3AuthDelegationButton({
       // Cast the Web3Auth smart account to MetaMaskSmartAccount to access signDelegation method
       const smartAccount = web3Auth.accountAbstractionProvider.smartAccount as MetaMaskSmartAccount;
 
-      //TODO: update code for specific caveat enforcers
-      // Create delegation using the MetaMask delegation toolkit
-      const delegation = createDelegation({
-        from: smartAccountAddress as `0x${string}`, // The subscriber's smart account address
-        to: delegateAddress, // The Cyphera delegate address
-        caveats: [], // No caveats for this implementation
-      });
+      // Use the delegation factory to create and sign the delegation with proper transformation
+      const signedDelegation = await createAndSignDelegation(smartAccount, delegateAddress);
 
-      logger.log('🔐 Delegation created:', delegation);
-
-      // Sign the delegation using the smart account's signDelegation method
-      const signature = (await smartAccount.signDelegation({
-        delegation,
-      })) as Hex;
-
-      logger.log('🔐 Delegation signed:', signature);
-
-      // Create the final signed delegation
-      const signedDelegation = {
-        ...delegation,
-        signature,
-      };
-
-      logger.log('🔐 Final signed delegation:', signedDelegation);
+      logger.log('🔐 Final signed delegation with transformed authority:', signedDelegation);
 
       // Step 4: Create subscription
       setStatus('subscribing');

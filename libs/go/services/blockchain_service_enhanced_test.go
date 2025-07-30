@@ -190,18 +190,10 @@ func TestBlockchainService_WithRealisticTransactionData(t *testing.T) {
 
 				// Validate gas price relationships
 				maxFee := parseHexToInt(data["maxFeePerGas"].(string))
-				maxPriority := parseHexToInt(data["maxPriorityFeePerGas"].(string))
-				baseFee := parseHexToInt(data["baseFeePerGas"].(string))
 				effectivePrice := parseHexToInt(data["effectiveGasPrice"].(string))
 
 				// effective gas price should be <= max fee per gas
 				assert.True(t, effectivePrice.Cmp(maxFee) <= 0)
-
-				// For this test case, effective price should be base fee + priority fee
-				expectedEffective := new(big.Int).Add(baseFee, maxPriority)
-				if expectedEffective.Cmp(maxFee) > 0 {
-					expectedEffective = maxFee
-				}
 
 				// The effective price calculation mimics real EIP-1559 behavior
 				assert.True(t, effectivePrice.Uint64() > 0)

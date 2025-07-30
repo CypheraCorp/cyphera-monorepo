@@ -801,13 +801,13 @@ func TestAnalyticsService_EdgeCases(t *testing.T) {
 		{
 			name: "nil context handling",
 			operation: func() error {
-				_, err := service.GetDashboardSummary(nil, workspaceID, "USD")
+				_, err := service.GetDashboardSummary(context.TODO(), workspaceID, "USD")
 				return err
 			},
 			setupMock: func() {
 				// Mock the database calls that happen even with nil context
 				mockQuerier.EXPECT().
-					GetLatestDashboardMetrics(nil, gomock.Any()).
+					GetLatestDashboardMetrics(gomock.Any(), gomock.Any()).
 					Return(db.DashboardMetric{}, errors.New("context error")).
 					Times(1)
 			},

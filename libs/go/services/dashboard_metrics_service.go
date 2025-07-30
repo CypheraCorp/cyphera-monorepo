@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/types/business"
@@ -16,6 +17,8 @@ import (
 )
 
 // Internal types for dashboard metrics calculation
+// Commented out: unused types
+/*
 type networkMetrics struct {
 	Payments    int   `json:"payments"`
 	VolumeCents int64 `json:"volume_cents"`
@@ -27,6 +30,7 @@ type tokenMetrics struct {
 	VolumeCents   int64 `json:"volume_cents"`
 	AvgPriceCents int64 `json:"avg_price_cents"`
 }
+*/
 
 // DashboardMetricsService handles calculation and storage of dashboard metrics
 type DashboardMetricsService struct {
@@ -422,7 +426,7 @@ func (s *DashboardMetricsService) calculateGasFeeMetrics(ctx context.Context, me
 	}
 	if sponsorshipRate.Valid {
 		metrics.GasSponsorshipRate = pgtype.Numeric{}
-		metrics.GasSponsorshipRate.Scan(sponsorshipRate.Float64)
+		_ = metrics.GasSponsorshipRate.Scan(sponsorshipRate.Float64)
 	}
 
 	return nil
@@ -534,7 +538,7 @@ func (s *DashboardMetricsService) calculateDerivedMetrics(metrics *db.CreateDash
 	if metrics.TotalCustomers.Valid && metrics.TotalCustomers.Int32 > 0 {
 		churnRate := float64(metrics.ChurnedCustomers.Int32) / float64(metrics.TotalCustomers.Int32)
 		metrics.ChurnRate = pgtype.Numeric{}
-		metrics.ChurnRate.Scan(churnRate)
+		_ = metrics.ChurnRate.Scan(churnRate)
 	}
 
 	// Growth rate
@@ -549,7 +553,7 @@ func (s *DashboardMetricsService) calculateDerivedMetrics(metrics *db.CreateDash
 		}
 		growthRate := float64(newCount-churnedCount) / float64(metrics.TotalCustomers.Int32)
 		metrics.GrowthRate = pgtype.Numeric{}
-		metrics.GrowthRate.Scan(growthRate)
+		_ = metrics.GrowthRate.Scan(growthRate)
 	}
 
 	// Payment success rate
@@ -563,7 +567,7 @@ func (s *DashboardMetricsService) calculateDerivedMetrics(metrics *db.CreateDash
 	if totalPayments > 0 && metrics.SuccessfulPayments.Valid {
 		successRate := float64(metrics.SuccessfulPayments.Int32) / float64(totalPayments)
 		metrics.PaymentSuccessRate = pgtype.Numeric{}
-		metrics.PaymentSuccessRate.Scan(successRate)
+		_ = metrics.PaymentSuccessRate.Scan(successRate)
 	}
 
 	// Calculate LTV if we have enough data
@@ -620,7 +624,7 @@ func (s *DashboardMetricsService) CalculateAllMetricsForWorkspace(ctx context.Co
 	var currency string
 	if err != nil {
 		// Fallback to USD if no default currency is set
-		currency = "USD"
+		currency = constants.USDCurrency
 	} else {
 		currency = defaultCurrency.Code
 	}

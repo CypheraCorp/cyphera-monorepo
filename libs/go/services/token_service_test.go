@@ -742,8 +742,8 @@ func TestTokenService_EdgeCases(t *testing.T) {
 			name: "nil context handling",
 			operation: func() error {
 				// Mock the database call that will happen even with nil context
-				mockQuerier.EXPECT().GetToken(nil, gomock.Any()).Return(db.Token{}, assert.AnError)
-				_, err := service.GetToken(nil, uuid.New())
+				mockQuerier.EXPECT().GetToken(gomock.Any(), gomock.Any()).Return(db.Token{}, assert.AnError)
+				_, err := service.GetToken(context.TODO(), uuid.New())
 				return err
 			},
 			expectError: true,

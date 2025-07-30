@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/cyphera/cyphera-api/apps/api/constants"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
@@ -136,7 +137,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		Metadata:         req.Metadata,
 	})
 	if err != nil {
-		if err.Error() == "user not found" {
+		if err.Error() == constants.UserNotFound {
 			sendError(c, http.StatusNotFound, "User not found", nil)
 			return
 		}
@@ -164,7 +165,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 
 	err = h.userService.DeleteUser(c.Request.Context(), parsedUUID)
 	if err != nil {
-		if err.Error() == "user not found" {
+		if err.Error() == constants.UserNotFound {
 			sendError(c, http.StatusNotFound, "User not found", nil)
 			return
 		}
@@ -192,7 +193,7 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 
 	userAccount, err := h.userService.GetUserAccount(c.Request.Context(), parsedUUID)
 	if err != nil {
-		if err.Error() == "user not found" {
+		if err.Error() == constants.UserNotFound {
 			sendError(c, http.StatusNotFound, "User not found", nil)
 			return
 		}
