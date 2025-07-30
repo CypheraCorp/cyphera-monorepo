@@ -238,6 +238,8 @@ delegation-server-setup:
 # Run delegation server linting
 delegation-server-lint:
 	@echo "🔍 Linting delegation server..."
+	@echo "📦 Building delegation library first..."
+	@cd libs/ts/delegation && npm run build
 	@cd apps/delegation-server && npm run lint
 
 # Run delegation server tests
