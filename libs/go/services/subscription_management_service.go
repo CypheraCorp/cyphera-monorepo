@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
@@ -218,7 +219,7 @@ func (sms *SubscriptionManagementService) DowngradeSubscription(
 	}
 
 	// Schedule for end of period
-	scheduleResult := sms.calculator.ScheduleDowngrade(sub.CurrentPeriodEnd.Time, "downgrade")
+	scheduleResult := sms.calculator.ScheduleDowngrade(sub.CurrentPeriodEnd.Time, constants.DowngradeAction)
 
 	// Create schedule change record
 	fromLineItems, _ := json.Marshal(map[string]interface{}{
@@ -230,7 +231,7 @@ func (sms *SubscriptionManagementService) DowngradeSubscription(
 
 	_, err = sms.db.CreateScheduleChange(ctx, db.CreateScheduleChangeParams{
 		SubscriptionID:       subscriptionID,
-		ChangeType:           "downgrade",
+		ChangeType:           constants.DowngradeAction,
 		ScheduledFor:         pgtype.Timestamptz{Time: scheduleResult.ScheduledFor, Valid: true},
 		FromLineItems:        fromLineItems,
 		ToLineItems:          toLineItems,
@@ -249,7 +250,7 @@ func (sms *SubscriptionManagementService) DowngradeSubscription(
 	if sms.emailService != nil {
 		// Calculate new total for email
 		newTotal := sms.calculateNewTotal(ctx, newLineItems)
-		if err := sms.sendSubscriptionChangeEmail(ctx, sub, "downgrade", int64(sub.TotalAmountInCents), newTotal, 0); err != nil {
+		if err := sms.sendSubscriptionChangeEmail(ctx, sub, constants.DowngradeAction, int64(sub.TotalAmountInCents), newTotal, 0); err != nil {
 			sms.logger.Error("Failed to send downgrade email", zap.Error(err))
 		}
 	}
@@ -296,7 +297,7 @@ func (sms *SubscriptionManagementService) CancelSubscription(
 	metadata, _ := json.Marshal(map[string]string{"feedback": feedback})
 	_, err = sms.db.CreateScheduleChange(ctx, db.CreateScheduleChangeParams{
 		SubscriptionID:       subscriptionID,
-		ChangeType:           "cancel",
+		ChangeType:           constants.CancelAction,
 		ScheduledFor:         pgtype.Timestamptz{Time: cancelDate, Valid: true},
 		FromLineItems:        []byte("{}"),
 		ToLineItems:          []byte("{}"),
@@ -313,7 +314,7 @@ func (sms *SubscriptionManagementService) CancelSubscription(
 
 	// Send confirmation email
 	if sms.emailService != nil {
-		if err := sms.sendSubscriptionChangeEmail(ctx, sub, "cancel", int64(sub.TotalAmountInCents), 0, 0); err != nil {
+		if err := sms.sendSubscriptionChangeEmail(ctx, sub, constants.CancelAction, int64(sub.TotalAmountInCents), 0, 0); err != nil {
 			sms.logger.Error("Failed to send cancellation email", zap.Error(err))
 		}
 	}
@@ -368,7 +369,7 @@ func (sms *SubscriptionManagementService) PauseSubscription(
 	if pauseUntil != nil {
 		_, err = sms.db.CreateScheduleChange(ctx, db.CreateScheduleChangeParams{
 			SubscriptionID:       subscriptionID,
-			ChangeType:           "resume",
+			ChangeType:           constants.ResumeAction,
 			ScheduledFor:         pgtype.Timestamptz{Time: *pauseUntil, Valid: true},
 			FromLineItems:        []byte("{}"),
 			ToLineItems:          []byte("{}"),
@@ -467,7 +468,7 @@ func (sms *SubscriptionManagementService) ResumeSubscription(
 
 	// Send confirmation email
 	if sms.emailService != nil {
-		if err := sms.sendSubscriptionChangeEmail(ctx, sub, "resume", 0, int64(sub.TotalAmountInCents), 0); err != nil {
+		if err := sms.sendSubscriptionChangeEmail(ctx, sub, constants.ResumeAction, 0, int64(sub.TotalAmountInCents), 0); err != nil {
 			sms.logger.Error("Failed to send resume email", zap.Error(err))
 		}
 	}
@@ -497,7 +498,7 @@ func (sms *SubscriptionManagementService) ReactivateCancelledSubscription(
 	changes, err := sms.db.GetSubscriptionScheduledChanges(ctx, subscriptionID)
 	if err == nil {
 		for _, change := range changes {
-			if change.ChangeType == "cancel" && change.Status == "scheduled" {
+			if change.ChangeType == constants.CancelAction && change.Status == "scheduled" {
 				_, err = sms.db.CancelScheduledChange(ctx, change.ID)
 				if err != nil {
 					sms.logger.Error("Failed to cancel scheduled change", zap.Error(err))
@@ -558,11 +559,11 @@ func (sms *SubscriptionManagementService) PreviewChange(
 		preview.ProrationDetails = proration
 		preview.Message = sms.calculator.FormatProrationExplanation(proration)
 
-	case "downgrade":
+	case constants.DowngradeAction:
 		preview.EffectiveDate = sub.CurrentPeriodEnd.Time
 		preview.Message = "Downgrade will take effect at the end of your current billing period. You'll continue with your current plan until then."
 
-	case "cancel":
+	case constants.CancelAction:
 		preview.EffectiveDate = sub.CurrentPeriodEnd.Time
 		preview.Message = "Your subscription will be cancelled at the end of your current billing period. You'll have access until then."
 	}
@@ -593,11 +594,11 @@ func (sms *SubscriptionManagementService) ProcessScheduledChanges(ctx context.Co
 		// Process based on change type
 		var processErr error
 		switch change.ChangeType {
-		case "downgrade":
+		case constants.DowngradeAction:
 			processErr = sms.executeDowngrade(ctx, change)
-		case "cancel":
+		case constants.CancelAction:
 			processErr = sms.executeCancellation(ctx, change)
-		case "resume":
+		case constants.ResumeAction:
 			processErr = sms.executeResume(ctx, change)
 		}
 
@@ -742,7 +743,7 @@ func (sms *SubscriptionManagementService) sendSubscriptionChangeEmail(ctx contex
 			}(),
 			workspace.Name)
 
-	case "downgrade":
+	case constants.DowngradeAction:
 		subject = fmt.Sprintf("Subscription Downgrade Scheduled - %s", product.Name)
 		htmlBody = fmt.Sprintf(`
 <!DOCTYPE html>
@@ -779,7 +780,7 @@ func (sms *SubscriptionManagementService) sendSubscriptionChangeEmail(ctx contex
 </html>`,
 			customer.Name.String, product.Name, formatAmount(oldAmount), formatAmount(newAmount), workspace.Name)
 
-	case "cancel":
+	case constants.CancelAction:
 		subject = fmt.Sprintf("Subscription Cancellation Scheduled - %s", product.Name)
 		htmlBody = fmt.Sprintf(`
 <!DOCTYPE html>

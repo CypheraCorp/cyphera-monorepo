@@ -392,7 +392,7 @@ func (la *LogAggregator) GetErrorsForUser(userID string, timeRange TimeRange) []
 			continue
 		}
 
-		if entry.UserID == userID && entry.Level == "error" {
+		if entry.UserID == userID && entry.Level == constants.ErrorLevel {
 			errors = append(errors, entry)
 		}
 	}

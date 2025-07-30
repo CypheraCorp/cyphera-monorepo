@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -27,8 +28,8 @@ func InitLogger(stage string) {
 	config := LoggerConfig{
 		Level:       getEnvWithDefault("LOG_LEVEL", "info"),
 		Stage:       stage,
-		EnableJSON:  stage == "prod",
-		EnableColor: stage != "prod",
+		EnableJSON:  stage == constants.ProdEnvironment,
+		EnableColor: stage != constants.ProdEnvironment,
 	}
 
 	InitLoggerWithConfig(config)
@@ -47,13 +48,13 @@ func InitLoggerWithConfig(config LoggerConfig) {
 		level = zapcore.InfoLevel
 	case "warn", "warning":
 		level = zapcore.WarnLevel
-	case "error":
+	case constants.ErrorLevel:
 		level = zapcore.ErrorLevel
 	case "fatal":
 		level = zapcore.FatalLevel
 	}
 
-	if config.Stage == "prod" || config.EnableJSON {
+	if config.Stage == constants.ProdEnvironment || config.EnableJSON {
 		// Production config - JSON structured logging
 		zapConfig = zap.NewProductionConfig()
 		zapConfig.Level = zap.NewAtomicLevelAt(level)
@@ -87,7 +88,7 @@ func InitLoggerWithConfig(config LoggerConfig) {
 	// Enable caller information for debugging
 	zapConfig.DisableCaller = false
 	// Enable stacktraces for development and debug levels
-	zapConfig.DisableStacktrace = config.Stage == "prod" && level > zapcore.DebugLevel
+	zapConfig.DisableStacktrace = config.Stage == constants.ProdEnvironment && level > zapcore.DebugLevel
 
 	// Build the logger
 	logger, err := zapConfig.Build()

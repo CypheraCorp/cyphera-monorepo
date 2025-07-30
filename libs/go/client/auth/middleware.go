@@ -563,7 +563,7 @@ func (ac *AuthClient) validateWeb3AuthToken(tokenString string) (*Web3AuthClaims
 	tokenString = strings.TrimPrefix(tokenString, "Bearer ")
 
 	// Create safe token preview for logging
-	tokenPreview := tokenString
+	var tokenPreview string
 	if len(tokenString) > 20 {
 		tokenPreview = tokenString[:20] + "..."
 	} else if len(tokenString) > 0 {

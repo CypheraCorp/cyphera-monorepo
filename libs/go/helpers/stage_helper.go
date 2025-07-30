@@ -1,8 +1,10 @@
 package helpers
 
+import "github.com/cyphera/cyphera-api/libs/go/constants"
+
 // Stage constants define the possible deployment/runtime environments.
 const (
-	StageProd  = "prod"
+	StageProd  = constants.ProdEnvironment
 	StageDev   = "dev"
 	StageLocal = "local"
 )

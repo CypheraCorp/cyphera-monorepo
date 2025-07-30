@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 )
@@ -266,7 +267,7 @@ func (s *DunningService) executeFinalAction(ctx context.Context, campaign *db.Du
 	case "pause":
 		// TODO: Pause subscription
 		return nil
-	case "downgrade":
+	case constants.DowngradeAction:
 		// TODO: Downgrade subscription based on config
 		return nil
 	default:
