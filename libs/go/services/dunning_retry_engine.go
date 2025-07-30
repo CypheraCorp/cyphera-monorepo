@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
@@ -472,9 +473,12 @@ type AttemptAction struct {
 	EmailTemplateID *uuid.UUID `json:"email_template_id,omitempty"`
 }
 
+// Commented out: unused function
+/*
 func stringPtr(s string) *string {
 	return &s
 }
+*/
 
 // formatAmount formats cents to a human-readable amount string
 func formatAmount(cents int64, currency string) string {
@@ -483,7 +487,7 @@ func formatAmount(cents int64, currency string) string {
 
 	// Format based on currency
 	switch currency {
-	case "USD":
+	case constants.USDCurrency:
 		return fmt.Sprintf("$%.2f", amount)
 	case "EUR":
 		return fmt.Sprintf("€%.2f", amount)

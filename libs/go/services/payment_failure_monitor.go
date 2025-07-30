@@ -5,9 +5,10 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
+	// "github.com/jackc/pgx/v5/pgtype" // Commented out: unused after commenting out paymentMonitorUuidToPgtype
 	"go.uber.org/zap"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 )
@@ -174,7 +175,7 @@ func (m *PaymentFailureMonitor) createDunningCampaignForSubscription(ctx context
 		ConfigurationID:   config.ID,
 		TriggerReason:     getEventFailureReason(event),
 		OutstandingAmount: int64(event.AmountInCents),
-		Currency:          "USD", // TODO: Get currency from price
+		Currency:          constants.USDCurrency, // TODO: Get currency from price
 		InitialPaymentID:  nil,
 	})
 	if err != nil {
@@ -204,9 +205,12 @@ func getEventFailureReason(event *db.SubscriptionEvent) string {
 	return fmt.Sprintf("Subscription event failed: %s", event.EventType)
 }
 
+// Commented out: unused function
+/*
 func paymentMonitorUuidToPgtype(u *uuid.UUID) pgtype.UUID {
 	if u == nil {
 		return pgtype.UUID{Valid: false}
 	}
 	return pgtype.UUID{Bytes: *u, Valid: true}
 }
+*/

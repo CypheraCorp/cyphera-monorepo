@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 )
 
 // LogAggregator provides functionality to aggregate and analyze log data
@@ -101,7 +103,7 @@ func (la *LogAggregator) GetErrorSummary(timeRange TimeRange) ErrorSummary {
 		}
 
 		// Only process error-level logs
-		if entry.Level != "error" {
+		if entry.Level != constants.ErrorLevel {
 			continue
 		}
 
@@ -200,13 +202,13 @@ func (la *LogAggregator) GetPerformanceSummary(timeRange TimeRange) PerformanceS
 				}
 
 				// Track success rate (assuming error level indicates failure)
-				if entry.Level != "error" {
+				if entry.Level != constants.ErrorLevel {
 					metrics.SuccessRate = float64(metrics.Count-1) / float64(metrics.Count) * metrics.SuccessRate
 					metrics.SuccessRate += 1.0 / float64(metrics.Count)
 				}
 			} else {
 				successRate := 1.0
-				if entry.Level == "error" {
+				if entry.Level == constants.ErrorLevel {
 					successRate = 0.0
 				}
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	ps "github.com/cyphera/cyphera-api/libs/go/client/payment_sync"
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 
 	"github.com/google/uuid"
@@ -38,7 +39,7 @@ func NewStripeService(logger *zap.Logger, dbQueries *db.Queries) *StripeService 
 
 // GetServiceName returns the name of the service.
 func (s *StripeService) GetServiceName() string {
-	return "stripe"
+	return constants.StripeProvider
 }
 
 // Configure initializes the Stripe service with API key and webhook secret.

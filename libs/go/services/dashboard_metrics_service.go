@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/types/business"
@@ -16,6 +17,8 @@ import (
 )
 
 // Internal types for dashboard metrics calculation
+// Commented out: unused types
+/*
 type networkMetrics struct {
 	Payments    int   `json:"payments"`
 	VolumeCents int64 `json:"volume_cents"`
@@ -27,6 +30,7 @@ type tokenMetrics struct {
 	VolumeCents   int64 `json:"volume_cents"`
 	AvgPriceCents int64 `json:"avg_price_cents"`
 }
+*/
 
 // DashboardMetricsService handles calculation and storage of dashboard metrics
 type DashboardMetricsService struct {
@@ -620,7 +624,7 @@ func (s *DashboardMetricsService) CalculateAllMetricsForWorkspace(ctx context.Co
 	var currency string
 	if err != nil {
 		// Fallback to USD if no default currency is set
-		currency = "USD"
+		currency = constants.USDCurrency
 	} else {
 		currency = defaultCurrency.Code
 	}

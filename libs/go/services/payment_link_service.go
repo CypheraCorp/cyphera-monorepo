@@ -358,12 +358,15 @@ func int64ToPgtype(i *int64) pgtype.Int8 {
 	return pgtype.Int8{Int64: *i, Valid: true}
 }
 
+// Commented out: unused function
+/*
 func timeToPgtypePaymentLink(t *time.Time) pgtype.Timestamptz {
 	if t == nil {
 		return pgtype.Timestamptz{Valid: false}
 	}
 	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
+*/
 
 func stringToPgtypeTimestamp(s *string) pgtype.Timestamptz {
 	if s == nil || *s == "" {

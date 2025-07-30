@@ -732,7 +732,7 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 	}
 
 	var subscriptionResult *params.SubscriptionCreationResult
-	
+
 	// Capture authorityHex for use inside transaction
 	capturedAuthorityHex := authorityHex
 

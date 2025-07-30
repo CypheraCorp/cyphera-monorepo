@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/client/coinmarketcap"
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
@@ -347,7 +348,7 @@ func (s *ExchangeRateService) GetSupportedTokens() []string {
 // GetSupportedCurrencies returns a list of fiat currencies supported
 func (s *ExchangeRateService) GetSupportedCurrencies() []string {
 	return []string{
-		"USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY", "INR", "KRW",
+		constants.USDCurrency, "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY", "INR", "KRW",
 	}
 }
 
