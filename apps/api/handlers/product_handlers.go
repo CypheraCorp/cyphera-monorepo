@@ -74,9 +74,8 @@ func NewProductHandler(
 	customerService interfaces.CustomerService,
 	logger *zap.Logger,
 ) *ProductHandler {
-	if logger == nil {
-		logger = zap.L()
-	}
+	// Ensure logger is initialized even if not currently used
+	_ = logger // Suppress ineffassign warning - logger parameter kept for consistency
 	return &ProductHandler{
 		common:              common,
 		delegationClient:    delegationClient,

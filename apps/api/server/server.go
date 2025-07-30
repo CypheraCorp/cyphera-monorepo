@@ -67,7 +67,7 @@ var (
 	// Services
 	commonServices     *handlers.CommonServices
 	cmcApiKey          string
-	dunningRetryEngine *services.DunningRetryEngine
+	// dunningRetryEngine *services.DunningRetryEngine // Commented out: unused variable
 	handlerFactory     *handlers.HandlerFactory
 )
 
