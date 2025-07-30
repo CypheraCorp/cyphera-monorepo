@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
@@ -172,7 +173,7 @@ func (s *GasFeeService) CreateGasFeePaymentRecord(ctx context.Context, paymentID
 	}
 
 	if isSponsored && sponsorID != nil {
-		params.SponsorType = "merchant"
+		params.SponsorType = constants.MerchantSponsorType
 		params.SponsorID = pgtype.UUID{Bytes: *sponsorID, Valid: true}
 	}
 
@@ -290,8 +291,8 @@ func (s *GasFeeService) GetCurrentGasPrice(ctx context.Context, networkID uuid.U
 }
 
 // parseNetworkBreakdown parses JSON network breakdown from database
-func parseNetworkBreakdown(data []byte) map[string]business.NetworkGasStats {
-	// This would parse JSON data from the database
-	// For now, return empty map as placeholder
-	return make(map[string]business.NetworkGasStats)
-}
+// func parseNetworkBreakdown(data []byte) map[string]business.NetworkGasStats {
+// 	// This would parse JSON data from the database
+// 	// For now, return empty map as placeholder
+// 	return make(map[string]business.NetworkGasStats)
+// }

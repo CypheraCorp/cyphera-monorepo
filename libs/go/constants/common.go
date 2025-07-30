@@ -12,7 +12,8 @@ const (
 	StripeProvider = "stripe"
 
 	// User roles
-	AdminRole = "admin"
+	AdminRole    = "admin"
+	MerchantRole = "merchant"
 
 	// Status values
 	FailedStatus = "failed"
@@ -24,4 +25,7 @@ const (
 
 	// Currencies
 	USDCurrency = "USD"
+
+	// Sponsor types
+	MerchantSponsorType = "merchant"
 )

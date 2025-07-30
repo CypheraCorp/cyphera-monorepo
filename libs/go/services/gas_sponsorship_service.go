@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
@@ -136,7 +137,7 @@ func (s *GasSponsorshipService) ShouldSponsorGas(ctx context.Context, params par
 
 	// All checks passed - approve sponsorship
 	decision.ShouldSponsor = true
-	decision.SponsorType = "merchant"
+	decision.SponsorType = constants.MerchantSponsorType
 	decision.SponsorID = params.WorkspaceID
 	decision.Reason = "Sponsorship approved"
 	decision.RemainingBudget = config.MonthlyBudgetUsdCents.Int64 - config.CurrentMonthSpentCents.Int64
@@ -339,9 +340,9 @@ func (s *GasSponsorshipService) GetSponsorshipAnalytics(ctx context.Context, wor
 // Helper functions
 
 // calculateSavingsPercentage calculates the percentage of gas costs that were sponsored
-func calculateSavingsPercentage(sponsoredCents, totalCents int64) float64 {
-	if totalCents == 0 {
-		return 0.0
-	}
-	return (float64(sponsoredCents) / float64(totalCents)) * 100.0
-}
+// func calculateSavingsPercentage(sponsoredCents, totalCents int64) float64 {
+// 	if totalCents == 0 {
+// 		return 0.0
+// 	}
+// 	return (float64(sponsoredCents) / float64(totalCents)) * 100.0
+// }

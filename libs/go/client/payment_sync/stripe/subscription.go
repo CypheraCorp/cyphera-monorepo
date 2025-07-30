@@ -46,7 +46,7 @@ func mapStripeSubscriptionToPSSubscription(stripeSub *stripe.Subscription) ps.Su
 	var primaryCurrentPeriodStart int64
 	var primaryCurrentPeriodEnd int64
 
-	if stripeSub.Items != nil && len(stripeSub.Items.Data) > 0 {
+	if len(stripeSub.Items.Data) > 0 {
 		items = make([]ps.SubscriptionItem, len(stripeSub.Items.Data))
 		for i, item := range stripeSub.Items.Data {
 			items[i] = mapStripeSubscriptionItemToPSSubscriptionItem(item)
