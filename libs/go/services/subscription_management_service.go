@@ -465,6 +465,11 @@ func (sms *SubscriptionManagementService) ResumeSubscription(
 		ScheduleChangeID:  pgtype.UUID{Valid: false},
 		InitiatedBy:       pgtype.Text{String: "customer", Valid: true},
 	})
+	if err != nil {
+		sms.logger.Error("Failed to record state change for resume",
+			zap.String("subscription_id", subscriptionID.String()),
+			zap.Error(err))
+	}
 
 	// Send confirmation email
 	if sms.emailService != nil {
@@ -609,17 +614,27 @@ func (sms *SubscriptionManagementService) ProcessScheduledChanges(ctx context.Co
 				zap.String("change_type", change.ChangeType),
 				zap.Error(processErr))
 
-			_, err = sms.db.UpdateScheduleChangeStatus(ctx, db.UpdateScheduleChangeStatusParams{
+			_, updateErr := sms.db.UpdateScheduleChangeStatus(ctx, db.UpdateScheduleChangeStatusParams{
 				ID:           change.ID,
 				Status:       constants.FailedStatus,
 				ErrorMessage: pgtype.Text{String: processErr.Error(), Valid: true},
 			})
+			if updateErr != nil {
+				sms.logger.Error("Failed to update schedule change status to failed",
+					zap.String("change_id", change.ID.String()),
+					zap.Error(updateErr))
+			}
 		} else {
-			_, err = sms.db.UpdateScheduleChangeStatus(ctx, db.UpdateScheduleChangeStatusParams{
+			_, updateErr := sms.db.UpdateScheduleChangeStatus(ctx, db.UpdateScheduleChangeStatusParams{
 				ID:           change.ID,
 				Status:       "completed",
 				ErrorMessage: pgtype.Text{Valid: false},
 			})
+			if updateErr != nil {
+				sms.logger.Error("Failed to update schedule change status to completed",
+					zap.String("change_id", change.ID.String()),
+					zap.Error(updateErr))
+			}
 		}
 	}
 

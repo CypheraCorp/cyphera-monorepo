@@ -718,7 +718,7 @@ func TestAPIKeyService_EdgeCases(t *testing.T) {
 			operation: func() error {
 				// Even with nil context, the mock expectation is needed
 				mockQuerier.EXPECT().GetAPIKey(gomock.Any(), gomock.Any()).Return(db.ApiKey{}, errors.New("context error"))
-				_, err := service.GetAPIKey(nil, uuid.New(), uuid.New())
+				_, err := service.GetAPIKey(context.TODO(), uuid.New(), uuid.New())
 				return err
 			},
 			wantErr: true,
