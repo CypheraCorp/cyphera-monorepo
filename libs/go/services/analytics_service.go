@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/constants"
@@ -531,11 +532,20 @@ func (s *AnalyticsService) GetHourlyMetrics(ctx context.Context, workspaceID uui
 
 // TriggerMetricsRefresh triggers async metrics recalculation
 func (s *AnalyticsService) TriggerMetricsRefresh(ctx context.Context, workspaceID uuid.UUID, date time.Time) error {
-	// TODO: Implement metrics refresh using background job system
-	// This should be handled by a separate background worker service that:
-	// 1. Gets a connection from the database pool
-	// 2. Creates a DashboardMetricsService instance
-	// 3. Calls CalculateAllMetricsForWorkspace
-	// For now, return nil to avoid circular dependencies
+	// Get a connection from the pool
+	conn, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to acquire connection: %w", err)
+	}
+	defer conn.Release()
+
+	// Create a DashboardMetricsService instance
+	metricsService := NewDashboardMetricsService(s.queries, conn.Conn())
+	
+	// Calculate all metrics for the workspace
+	if err := metricsService.CalculateAllMetricsForWorkspace(ctx, workspaceID, date); err != nil {
+		return fmt.Errorf("failed to calculate metrics: %w", err)
+	}
+	
 	return nil
 }

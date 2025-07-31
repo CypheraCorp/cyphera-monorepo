@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useSubscriptions } from '@/hooks/data';
 import { Suspense } from 'react';
 import { TableSkeleton } from '@/components/ui/loading-states';
+import { formatBillingInterval } from '@/lib/utils/format/billing';
 import dynamic from 'next/dynamic';
 
 // Dynamically import lucide-react icons
@@ -213,6 +214,7 @@ export default function SubscriptionsPage() {
                   <TableHead>Product</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Amount</TableHead>
+                  <TableHead>Billing</TableHead>
                   <TableHead>Current Period</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
@@ -220,7 +222,7 @@ export default function SubscriptionsPage() {
               <TableBody>
                 {subscriptions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       <div className="text-muted-foreground">No subscriptions found</div>
                     </TableCell>
                   </TableRow>
@@ -263,6 +265,21 @@ export default function SubscriptionsPage() {
                           <span className="text-sm text-muted-foreground">
                             {subscription.price.currency?.toUpperCase() || 'USD'}
                           </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium">
+                            {formatBillingInterval(
+                              subscription.price.interval_type,
+                              subscription.price.interval_count
+                            )}
+                          </span>
+                          {subscription.price.term_length && (
+                            <span className="text-sm text-muted-foreground">
+                              {subscription.price.term_length} term{subscription.price.term_length > 1 ? 's' : ''}
+                            </span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>

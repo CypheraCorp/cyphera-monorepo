@@ -227,7 +227,9 @@ export default function MerchantCustomersPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <span className="text-sm text-muted-foreground">$0.00</span>
+                      <span className="text-sm text-muted-foreground">
+                        ${((customer.total_revenue || 0) / 100).toFixed(2)}
+                      </span>
                     </TableCell>
                     <TableCell>
                       <Suspense

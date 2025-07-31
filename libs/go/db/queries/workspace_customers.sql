@@ -70,4 +70,23 @@ FROM customers c
 INNER JOIN workspace_customers wc ON c.id = wc.customer_id
 INNER JOIN workspaces w ON wc.workspace_id = w.id
 WHERE wc.workspace_id = $1 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL AND w.deleted_at IS NULL
-ORDER BY c.created_at DESC; 
+ORDER BY c.created_at DESC;
+
+-- name: ListWorkspaceCustomersWithRevenue :many
+SELECT 
+    c.*,
+    COALESCE(SUM(p.amount_in_cents), 0) as total_revenue
+FROM customers c
+INNER JOIN workspace_customers wc ON c.id = wc.customer_id
+LEFT JOIN payments p ON c.id = p.customer_id 
+    AND p.workspace_id = $1 
+    AND p.status = 'completed'
+WHERE wc.workspace_id = $1 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL
+GROUP BY c.id, c.external_id, c.web3auth_id, c.email, c.name, c.phone, c.description, 
+         c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, 
+         c.payment_sync_version, c.payment_provider, c.tax_jurisdiction_id, c.tax_id, 
+         c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, 
+         c.business_name, c.billing_country, c.billing_state, c.billing_city, 
+         c.billing_postal_code, c.created_at, c.updated_at, c.deleted_at
+ORDER BY c.created_at DESC
+LIMIT $2 OFFSET $3; 

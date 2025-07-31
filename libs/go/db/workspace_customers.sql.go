@@ -371,6 +371,112 @@ func (q *Queries) ListWorkspaceCustomersWithPagination(ctx context.Context, arg 
 	return items, nil
 }
 
+const listWorkspaceCustomersWithRevenue = `-- name: ListWorkspaceCustomersWithRevenue :many
+SELECT 
+    c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at, c.tax_jurisdiction_id, c.tax_id, c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, c.business_name, c.billing_country, c.billing_state, c.billing_city, c.billing_postal_code,
+    COALESCE(SUM(p.amount_in_cents), 0) as total_revenue
+FROM customers c
+INNER JOIN workspace_customers wc ON c.id = wc.customer_id
+LEFT JOIN payments p ON c.id = p.customer_id 
+    AND p.workspace_id = $1 
+    AND p.status = 'completed'
+WHERE wc.workspace_id = $1 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL
+GROUP BY c.id, c.external_id, c.web3auth_id, c.email, c.name, c.phone, c.description, 
+         c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, 
+         c.payment_sync_version, c.payment_provider, c.tax_jurisdiction_id, c.tax_id, 
+         c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, 
+         c.business_name, c.billing_country, c.billing_state, c.billing_city, 
+         c.billing_postal_code, c.created_at, c.updated_at, c.deleted_at
+ORDER BY c.created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListWorkspaceCustomersWithRevenueParams struct {
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+	Limit       int32     `json:"limit"`
+	Offset      int32     `json:"offset"`
+}
+
+type ListWorkspaceCustomersWithRevenueRow struct {
+	ID                 uuid.UUID          `json:"id"`
+	Web3authID         pgtype.Text        `json:"web3auth_id"`
+	ExternalID         pgtype.Text        `json:"external_id"`
+	Email              pgtype.Text        `json:"email"`
+	Name               pgtype.Text        `json:"name"`
+	Phone              pgtype.Text        `json:"phone"`
+	Description        pgtype.Text        `json:"description"`
+	Metadata           []byte             `json:"metadata"`
+	FinishedOnboarding pgtype.Bool        `json:"finished_onboarding"`
+	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider    pgtype.Text        `json:"payment_provider"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	TaxJurisdictionID  pgtype.UUID        `json:"tax_jurisdiction_id"`
+	TaxID              pgtype.Text        `json:"tax_id"`
+	TaxIDType          pgtype.Text        `json:"tax_id_type"`
+	TaxIDVerified      pgtype.Bool        `json:"tax_id_verified"`
+	TaxIDVerifiedAt    pgtype.Timestamptz `json:"tax_id_verified_at"`
+	IsBusiness         pgtype.Bool        `json:"is_business"`
+	BusinessName       pgtype.Text        `json:"business_name"`
+	BillingCountry     pgtype.Text        `json:"billing_country"`
+	BillingState       pgtype.Text        `json:"billing_state"`
+	BillingCity        pgtype.Text        `json:"billing_city"`
+	BillingPostalCode  pgtype.Text        `json:"billing_postal_code"`
+	TotalRevenue       interface{}        `json:"total_revenue"`
+}
+
+func (q *Queries) ListWorkspaceCustomersWithRevenue(ctx context.Context, arg ListWorkspaceCustomersWithRevenueParams) ([]ListWorkspaceCustomersWithRevenueRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceCustomersWithRevenue, arg.WorkspaceID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspaceCustomersWithRevenueRow{}
+	for rows.Next() {
+		var i ListWorkspaceCustomersWithRevenueRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Web3authID,
+			&i.ExternalID,
+			&i.Email,
+			&i.Name,
+			&i.Phone,
+			&i.Description,
+			&i.Metadata,
+			&i.FinishedOnboarding,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.TaxJurisdictionID,
+			&i.TaxID,
+			&i.TaxIDType,
+			&i.TaxIDVerified,
+			&i.TaxIDVerifiedAt,
+			&i.IsBusiness,
+			&i.BusinessName,
+			&i.BillingCountry,
+			&i.BillingState,
+			&i.BillingCity,
+			&i.BillingPostalCode,
+			&i.TotalRevenue,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeCustomerFromWorkspace = `-- name: RemoveCustomerFromWorkspace :exec
 UPDATE workspace_customers 
 SET deleted_at = CURRENT_TIMESTAMP

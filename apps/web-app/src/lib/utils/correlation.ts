@@ -58,3 +58,10 @@ export function createHeadersWithCorrelationId(
   
   return headers;
 }
+
+/**
+ * Get or generate a correlation ID
+ */
+export function getCorrelationId(): string {
+  return generateCorrelationId();
+}

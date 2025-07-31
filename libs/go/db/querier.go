@@ -549,6 +549,7 @@ type Querier interface {
 	ListWorkspaceCustomers(ctx context.Context, workspaceID uuid.UUID) ([]Customer, error)
 	ListWorkspaceCustomersWithInfo(ctx context.Context, workspaceID uuid.UUID) ([]ListWorkspaceCustomersWithInfoRow, error)
 	ListWorkspaceCustomersWithPagination(ctx context.Context, arg ListWorkspaceCustomersWithPaginationParams) ([]Customer, error)
+	ListWorkspaceCustomersWithRevenue(ctx context.Context, arg ListWorkspaceCustomersWithRevenueParams) ([]ListWorkspaceCustomersWithRevenueRow, error)
 	ListWorkspacePaymentConfigurations(ctx context.Context, arg ListWorkspacePaymentConfigurationsParams) ([]WorkspacePaymentConfiguration, error)
 	ListWorkspacePaymentConfigurationsByProvider(ctx context.Context, providerName string) ([]WorkspacePaymentConfiguration, error)
 	ListWorkspaceSupportedCurrencies(ctx context.Context, id uuid.UUID) ([]FiatCurrency, error)

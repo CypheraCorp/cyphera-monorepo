@@ -12,7 +12,7 @@ CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkado
 -- Currency enum removed - using fiat_currencies table instead
 CREATE TYPE wallet_type AS ENUM ('wallet', 'circle_wallet', 'web3auth');
 CREATE TYPE circle_network_type AS ENUM ('ARB', 'ARB-SEPOLIA', 'ETH', 'ETH-SEPOLIA', 'MATIC', 'MATIC-AMOY', 'OP', 'OP-SEPOLIA', 'BASE', 'BASE-SEPOLIA', 'UNI', 'UNI-SEPOLIA');
-CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'overdue', 'suspended', 'failed', 'completed');
+CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'overdue', 'suspended', 'failed', 'completed', 'trial');
 CREATE TYPE subscription_event_type AS ENUM (
     'created', 
     'redeemed', 

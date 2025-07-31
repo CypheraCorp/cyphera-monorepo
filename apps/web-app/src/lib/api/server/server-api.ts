@@ -93,14 +93,14 @@ export async function getAPIContext(request: NextRequest) {
 
   // Extract context headers that were injected by middleware
   const accountId = headers.get('x-account-id');
-  const userId = headers.get('x-user-id');
+  // const userId = headers.get('x-user-id');
   const workspaceId = headers.get('x-workspace-id');
 
   // Create user context
   const userContext: UserRequestContext = {
     access_token: accessToken,
     account_id: accountId || undefined,
-    user_id: userId || undefined,
+    // user_id: userId || undefined,
     workspace_id: workspaceId || undefined,
   };
 

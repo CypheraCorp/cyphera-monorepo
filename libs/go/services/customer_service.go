@@ -193,7 +193,7 @@ func (s *CustomerService) ListCustomers(ctx context.Context, listParams params.L
 
 // ListWorkspaceCustomers retrieves a paginated list of customers for a workspace
 func (s *CustomerService) ListWorkspaceCustomers(ctx context.Context, listParams params.ListWorkspaceCustomersParams) (*responses.ListWorkspaceCustomersResult, error) {
-	customers, err := s.queries.ListWorkspaceCustomersWithPagination(ctx, db.ListWorkspaceCustomersWithPaginationParams{
+	customers, err := s.queries.ListWorkspaceCustomersWithRevenue(ctx, db.ListWorkspaceCustomersWithRevenueParams{
 		WorkspaceID: listParams.WorkspaceID,
 		Limit:       listParams.Limit,
 		Offset:      listParams.Offset,
@@ -216,7 +216,7 @@ func (s *CustomerService) ListWorkspaceCustomers(ctx context.Context, listParams
 	// Convert customers to response format
 	customerResponses := make([]responses.CustomerResponse, len(customers))
 	for i, customer := range customers {
-		customerResponses[i] = helpers.ToCustomerResponse(customer)
+		customerResponses[i] = helpers.ToCustomerResponseWithRevenue(customer)
 	}
 
 	return &responses.ListWorkspaceCustomersResult{

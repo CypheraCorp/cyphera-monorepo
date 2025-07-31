@@ -110,3 +110,4 @@ tmp/
 bootstrap
 apps/delegation-server/coverage/
 apps/api/main
+main
