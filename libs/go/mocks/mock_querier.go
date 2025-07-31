@@ -7339,6 +7339,21 @@ func (mr *MockQuerierMockRecorder) ListWorkspaceCustomersWithPagination(ctx, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListWorkspaceCustomersWithPagination", reflect.TypeOf((*MockQuerier)(nil).ListWorkspaceCustomersWithPagination), ctx, arg)
 }
 
+// ListWorkspaceCustomersWithRevenue mocks base method.
+func (m *MockQuerier) ListWorkspaceCustomersWithRevenue(ctx context.Context, arg db.ListWorkspaceCustomersWithRevenueParams) ([]db.ListWorkspaceCustomersWithRevenueRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListWorkspaceCustomersWithRevenue", ctx, arg)
+	ret0, _ := ret[0].([]db.ListWorkspaceCustomersWithRevenueRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListWorkspaceCustomersWithRevenue indicates an expected call of ListWorkspaceCustomersWithRevenue.
+func (mr *MockQuerierMockRecorder) ListWorkspaceCustomersWithRevenue(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListWorkspaceCustomersWithRevenue", reflect.TypeOf((*MockQuerier)(nil).ListWorkspaceCustomersWithRevenue), ctx, arg)
+}
+
 // ListWorkspacePaymentConfigurations mocks base method.
 func (m *MockQuerier) ListWorkspacePaymentConfigurations(ctx context.Context, arg db.ListWorkspacePaymentConfigurationsParams) ([]db.WorkspacePaymentConfiguration, error) {
 	m.ctrl.T.Helper()
