@@ -163,7 +163,11 @@ export const SidebarLink = ({
   if (link.component) {
     return (
       <div
-        className={cn('flex items-center justify-start gap-2 group/sidebar py-2 px-3', className)}
+        className={cn(
+          'flex items-center group/sidebar py-2 px-3',
+          open ? 'justify-start gap-2' : 'justify-center',
+          className
+        )}
       >
         {link.icon}
         <motion.div
@@ -183,7 +187,11 @@ export const SidebarLink = ({
   return (
     <Link
       href={link.href || '#'}
-      className={cn('flex items-center justify-start gap-2 group/sidebar py-2', className)}
+      className={cn(
+        'flex items-center group/sidebar py-2 px-3',
+        open ? 'justify-start gap-2' : 'justify-center',
+        className
+      )}
       onClick={link.onClick}
       {...props}
     >
