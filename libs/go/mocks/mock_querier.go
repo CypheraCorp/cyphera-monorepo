@@ -4563,6 +4563,21 @@ func (mr *MockQuerierMockRecorder) GetPaymentsBySubscription(ctx, arg any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPaymentsBySubscription", reflect.TypeOf((*MockQuerier)(nil).GetPaymentsBySubscription), ctx, arg)
 }
 
+// GetPaymentsByTransactionHash mocks base method.
+func (m *MockQuerier) GetPaymentsByTransactionHash(ctx context.Context, transactionHash pgtype.Text) ([]db.Payment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPaymentsByTransactionHash", ctx, transactionHash)
+	ret0, _ := ret[0].([]db.Payment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPaymentsByTransactionHash indicates an expected call of GetPaymentsByTransactionHash.
+func (mr *MockQuerierMockRecorder) GetPaymentsByTransactionHash(ctx, transactionHash any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPaymentsByTransactionHash", reflect.TypeOf((*MockQuerier)(nil).GetPaymentsByTransactionHash), ctx, transactionHash)
+}
+
 // GetPaymentsByWorkspace mocks base method.
 func (m *MockQuerier) GetPaymentsByWorkspace(ctx context.Context, arg db.GetPaymentsByWorkspaceParams) ([]db.Payment, error) {
 	m.ctrl.T.Helper()
@@ -8631,6 +8646,21 @@ func (m *MockQuerier) UpdateInvoiceLineItem(ctx context.Context, arg db.UpdateIn
 func (mr *MockQuerierMockRecorder) UpdateInvoiceLineItem(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateInvoiceLineItem", reflect.TypeOf((*MockQuerier)(nil).UpdateInvoiceLineItem), ctx, arg)
+}
+
+// UpdateInvoiceNotes mocks base method.
+func (m *MockQuerier) UpdateInvoiceNotes(ctx context.Context, arg db.UpdateInvoiceNotesParams) (db.Invoice, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateInvoiceNotes", ctx, arg)
+	ret0, _ := ret[0].(db.Invoice)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateInvoiceNotes indicates an expected call of UpdateInvoiceNotes.
+func (mr *MockQuerierMockRecorder) UpdateInvoiceNotes(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateInvoiceNotes", reflect.TypeOf((*MockQuerier)(nil).UpdateInvoiceNotes), ctx, arg)
 }
 
 // UpdateInvoiceNumber mocks base method.

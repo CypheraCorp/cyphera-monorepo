@@ -263,6 +263,20 @@ func (m *MockSubscriptionService) EXPECT() *MockSubscriptionServiceMockRecorder 
 	return m.recorder
 }
 
+// CreateInvoiceForSubscriptionPayment mocks base method.
+func (m *MockSubscriptionService) CreateInvoiceForSubscriptionPayment(ctx context.Context, subscriptionID, paymentID uuid.UUID, periodStart, periodEnd time.Time, transactionHash string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateInvoiceForSubscriptionPayment", ctx, subscriptionID, paymentID, periodStart, periodEnd, transactionHash)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateInvoiceForSubscriptionPayment indicates an expected call of CreateInvoiceForSubscriptionPayment.
+func (mr *MockSubscriptionServiceMockRecorder) CreateInvoiceForSubscriptionPayment(ctx, subscriptionID, paymentID, periodStart, periodEnd, transactionHash any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateInvoiceForSubscriptionPayment", reflect.TypeOf((*MockSubscriptionService)(nil).CreateInvoiceForSubscriptionPayment), ctx, subscriptionID, paymentID, periodStart, periodEnd, transactionHash)
+}
+
 // CreateSubscription mocks base method.
 func (m *MockSubscriptionService) CreateSubscription(ctx context.Context, tx pgx.Tx, arg2 params.CreateSubscriptionParams) (*db.Subscription, error) {
 	m.ctrl.T.Helper()
@@ -305,6 +319,21 @@ func (m *MockSubscriptionService) DeleteSubscription(ctx context.Context, worksp
 func (mr *MockSubscriptionServiceMockRecorder) DeleteSubscription(ctx, workspaceID, subscriptionID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSubscription", reflect.TypeOf((*MockSubscriptionService)(nil).DeleteSubscription), ctx, workspaceID, subscriptionID)
+}
+
+// GenerateNextPeriodInvoice mocks base method.
+func (m *MockSubscriptionService) GenerateNextPeriodInvoice(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time) (*responses.InvoiceResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GenerateNextPeriodInvoice", ctx, subscriptionID, periodStart, periodEnd)
+	ret0, _ := ret[0].(*responses.InvoiceResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GenerateNextPeriodInvoice indicates an expected call of GenerateNextPeriodInvoice.
+func (mr *MockSubscriptionServiceMockRecorder) GenerateNextPeriodInvoice(ctx, subscriptionID, periodStart, periodEnd any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateNextPeriodInvoice", reflect.TypeOf((*MockSubscriptionService)(nil).GenerateNextPeriodInvoice), ctx, subscriptionID, periodStart, periodEnd)
 }
 
 // GetSubscription mocks base method.
@@ -525,6 +554,21 @@ func (m *MockInvoiceService) GenerateInvoiceFromSubscription(ctx context.Context
 func (mr *MockInvoiceServiceMockRecorder) GenerateInvoiceFromSubscription(ctx, subscriptionID, periodStart, periodEnd, isDraft any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateInvoiceFromSubscription", reflect.TypeOf((*MockInvoiceService)(nil).GenerateInvoiceFromSubscription), ctx, subscriptionID, periodStart, periodEnd, isDraft)
+}
+
+// GenerateInvoiceFromSubscriptionWithNotes mocks base method.
+func (m *MockInvoiceService) GenerateInvoiceFromSubscriptionWithNotes(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool, notes string) (*responses.InvoiceResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GenerateInvoiceFromSubscriptionWithNotes", ctx, subscriptionID, periodStart, periodEnd, isDraft, notes)
+	ret0, _ := ret[0].(*responses.InvoiceResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GenerateInvoiceFromSubscriptionWithNotes indicates an expected call of GenerateInvoiceFromSubscriptionWithNotes.
+func (mr *MockInvoiceServiceMockRecorder) GenerateInvoiceFromSubscriptionWithNotes(ctx, subscriptionID, periodStart, periodEnd, isDraft, notes any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateInvoiceFromSubscriptionWithNotes", reflect.TypeOf((*MockInvoiceService)(nil).GenerateInvoiceFromSubscriptionWithNotes), ctx, subscriptionID, periodStart, periodEnd, isDraft, notes)
 }
 
 // GetInvoiceActivity mocks base method.
