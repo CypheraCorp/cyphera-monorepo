@@ -140,10 +140,13 @@ func (d *PaymentFailureDetector) processFailedEvent(ctx context.Context, event d
 		return fmt.Errorf("failed to get customer: %w", err)
 	}
 
-	// Get price details for the amount
-	price, err := d.queries.GetPrice(ctx, subscription.PriceID)
+	// Get product details for the amount
+	product, err := d.queries.GetProduct(ctx, db.GetProductParams{
+		ID:          subscription.ProductID,
+		WorkspaceID: subscription.WorkspaceID,
+	})
 	if err != nil {
-		return fmt.Errorf("failed to get price: %w", err)
+		return fmt.Errorf("failed to get product: %w", err)
 	}
 
 	// Create campaign parameters
@@ -151,13 +154,13 @@ func (d *PaymentFailureDetector) processFailedEvent(ctx context.Context, event d
 		SubscriptionID:    subscription.ID,
 		ConfigurationID:   config.ID,
 		TriggerReason:     "Payment failed - subscription event",
-		OutstandingAmount: int64(price.UnitAmountInPennies) * 100, // Convert pennies to cents
-		Currency:          price.Currency,
+		OutstandingAmount: int64(product.UnitAmountInPennies) * 100, // Convert pennies to cents
+		Currency:          string(product.Currency),
 		InitialPaymentID:  nil,
 	}
 
 	// Determine campaign strategy based on customer history
-	strategy := d.determineCampaignStrategy(ctx, &customer, &subscription, int64(price.UnitAmountInPennies)*100)
+	strategy := d.determineCampaignStrategy(ctx, &customer, &subscription, int64(product.UnitAmountInPennies)*100)
 
 	// Create the campaign
 	campaign, err := d.dunningService.CreateCampaign(ctx, campaignParams)
@@ -176,7 +179,7 @@ func (d *PaymentFailureDetector) processFailedEvent(ctx context.Context, event d
 		zap.String("subscription_id", subscription.ID.String()),
 		zap.String("customer_email", customerEmail),
 		zap.String("strategy", strategy),
-		zap.Int64("amount_cents", int64(price.UnitAmountInPennies)*100),
+		zap.Int64("amount_cents", int64(product.UnitAmountInPennies)*100),
 	)
 
 	result.NewCampaigns++
@@ -280,16 +283,19 @@ func (d *PaymentFailureDetector) ProcessFailedPaymentWebhook(ctx context.Context
 		return fmt.Errorf("failed to get subscription: %w", err)
 	}
 
-	price, err := d.queries.GetPrice(ctx, subscription.PriceID)
+	product, err := d.queries.GetProduct(ctx, db.GetProductParams{
+		ID:          subscription.ProductID,
+		WorkspaceID: subscription.WorkspaceID,
+	})
 	if err != nil {
-		return fmt.Errorf("failed to get price: %w", err)
+		return fmt.Errorf("failed to get product: %w", err)
 	}
 
 	// Create the failed event
 	eventDataJSON, _ := json.Marshal(eventData)
 	event, err := d.queries.CreateFailedRedemptionEvent(ctx, db.CreateFailedRedemptionEventParams{
 		SubscriptionID: subscriptionID,
-		AmountInCents:  int32(price.UnitAmountInPennies),
+		AmountInCents:  int32(product.UnitAmountInPennies),
 		Metadata:       eventDataJSON,
 	})
 	if err != nil {

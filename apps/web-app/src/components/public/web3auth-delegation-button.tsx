@@ -97,7 +97,7 @@ async function switchToNetwork(
 }
 
 interface Web3AuthDelegationButtonProps {
-  priceId: string;
+  productId: string; // Product ID for the subscription
   productTokenId?: string;
   disabled?: boolean;
   requiredChainId?: number;
@@ -114,7 +114,7 @@ interface Web3AuthDelegationButtonProps {
 }
 
 export function Web3AuthDelegationButton({
-  priceId,
+  productId,
   productTokenId,
   disabled = false,
   tokenAmount,
@@ -417,7 +417,7 @@ export function Web3AuthDelegationButton({
       console.log('Formatted delegation for display:', formattedDelegation);
       console.log('Raw delegation object being sent:', signedDelegation);
 
-      const response = await fetch('/api/public/prices/' + priceId + '/subscribe', {
+      const response = await fetch('/api/pay/' + productId + '/subscribe', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

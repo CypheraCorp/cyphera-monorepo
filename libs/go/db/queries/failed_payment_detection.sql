@@ -5,7 +5,6 @@ SELECT DISTINCT ON (se.subscription_id)
     s.workspace_id,
     s.customer_id,
     s.product_id,
-    s.price_id,
     s.status as subscription_status
 FROM subscription_events se
 JOIN subscriptions s ON se.subscription_id = s.id

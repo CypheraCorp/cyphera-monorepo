@@ -32,8 +32,7 @@ func (e *SubscriptionExistsError) Error() string {
 // ProcessSubscriptionParams represents parameters for processing a subscription
 type ProcessSubscriptionParams struct {
 	Subscription         db.Subscription
-	Price                db.Price
-	Product              db.Product
+	Product              db.Product // Product now contains pricing info
 	Customer             db.Customer
 	MerchantWallet       db.Wallet
 	CustomerWallet       db.Wallet

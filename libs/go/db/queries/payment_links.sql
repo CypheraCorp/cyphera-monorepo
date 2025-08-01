@@ -4,7 +4,6 @@ INSERT INTO payment_links (
     slug,
     status,
     product_id,
-    price_id,
     amount_in_cents,
     currency,
     payment_type,
@@ -17,7 +16,7 @@ INSERT INTO payment_links (
     qr_code_url,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
 )
 RETURNING *;
 
@@ -114,10 +113,9 @@ WHERE workspace_id = $1 AND deleted_at IS NULL;
 SELECT 
     pl.*,
     p.name as product_name,
-    pr.unit_amount_in_pennies as price_amount
+    p.unit_amount_in_pennies as price_amount
 FROM payment_links pl
 LEFT JOIN products p ON pl.product_id = p.id
-LEFT JOIN prices pr ON pl.price_id = pr.id
 WHERE pl.workspace_id = $1 
     AND pl.deleted_at IS NULL
 ORDER BY pl.used_count DESC

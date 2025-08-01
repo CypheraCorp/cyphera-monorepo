@@ -72,7 +72,7 @@ export async function middleware(request: NextRequest) {
   const hasCustomerSession = session && isCustomerSession(session);
 
   // Check route types
-  const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/public/prices');
+  const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/public/prices') || pathname.startsWith('/pay/');
   const isMerchantProtectedRoute = merchantProtectedRoutes.some((route) =>
     pathname.startsWith(route)
   );

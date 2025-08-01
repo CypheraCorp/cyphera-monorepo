@@ -56,17 +56,16 @@ SELECT
     c.name as customer_name,
     c.email as customer_email,
     p.name as product_name,
-    pr.unit_amount_in_pennies as price_amount
+    p.unit_amount_in_pennies as price_amount
 FROM subscriptions s
 JOIN customers c ON s.customer_id = c.id
 JOIN products p ON s.product_id = p.id
-JOIN prices pr ON s.price_id = pr.id
 WHERE s.id = $1;
 
 -- name: UpdateSubscriptionForUpgrade :one
 UPDATE subscriptions
 SET 
-    price_id = COALESCE($2, price_id),
+    product_id = COALESCE($2, product_id),
     total_amount_in_cents = COALESCE($3, total_amount_in_cents),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1

@@ -40,7 +40,7 @@ type SubscriptionCustomerResponse struct {
 	UpdatedAt          time.Time              `json:"updated_at"`
 }
 
-// SubscriptionResponse represents a subscription along with its associated price and product details.
+// SubscriptionResponse represents a subscription along with its associated product details.
 type SubscriptionResponse struct {
 	ID                     uuid.UUID                     `json:"id"`
 	NumID                  int64                         `json:"num_id"`
@@ -67,7 +67,6 @@ type SubscriptionResponse struct {
 	Metadata               map[string]interface{}        `json:"metadata,omitempty"`
 	CreatedAt              time.Time                     `json:"created_at"`
 	UpdatedAt              time.Time                     `json:"updated_at"`
-	Price                  PriceResponse                 `json:"price"`
 	Product                ProductResponse               `json:"product"`
 	ProductToken           ProductTokenResponse          `json:"product_token"`
 }
@@ -85,9 +84,9 @@ type GetRedemptionStatusResponse struct {
 	FailureReason    string     `json:"failure_reason,omitempty"`
 }
 
-// SubscribeToProductByPriceIDParams contains all parameters for creating a subscription by price ID
-type SubscribeToProductByPriceIDParams struct {
-	PriceID                   uuid.UUID
+// SubscribeToProductParams contains all parameters for creating a subscription
+type SubscribeToProductParams struct {
+	ProductID                 uuid.UUID
 	SubscriberAddress         string
 	ProductTokenID            string
 	TokenAmount               string
@@ -95,9 +94,15 @@ type SubscribeToProductByPriceIDParams struct {
 	CypheraSmartWalletAddress string
 }
 
-// SubscribeToProductByPriceIDResult contains the result of subscription creation
-type SubscribeToProductByPriceIDResult struct {
+// SubscribeToProductResult contains the result of subscription creation
+type SubscribeToProductResult struct {
 	Subscription *db.Subscription
 	Success      bool
 	ErrorMessage string
 }
+
+// Deprecated: Use SubscribeToProductParams instead
+type SubscribeToProductByPriceIDParams = SubscribeToProductParams
+
+// Deprecated: Use SubscribeToProductResult instead
+type SubscribeToProductByPriceIDResult = SubscribeToProductResult

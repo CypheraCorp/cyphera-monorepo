@@ -7,22 +7,23 @@ import Link from 'next/link';
 import { ProductPaymentCard } from '@/components/public/product-payment-card';
 import { PublicHeader } from '@/components/public/public-header';
 import { USDCBalanceCard } from '@/components/public/usdc-balance-card';
-import { GetPublicProductByPriceIdParams, PublicProductResponse } from '@/types/product';
+import { PublicProductResponse } from '@/types/product';
 import { useWeb3AuthInitialization } from '@/hooks/auth';
 import { logger } from '@/lib/core/logger/logger-utils';
 import { ProductCardSkeleton, BalanceCardSkeleton } from '@/components/ui/loading-states';
 import { Skeleton } from '@/components/ui/skeleton';
 
-interface ProductByPriceIdPageProps {
-  params: Promise<GetPublicProductByPriceIdParams>;
+// Component displays a product page using the productId route parameter
+interface PayProductPageProps {
+  params: Promise<{ productId: string }>;
 }
 
-export default function ProductByPriceIdPage({ params }: ProductByPriceIdPageProps) {
+export default function PayProductPage({ params }: PayProductPageProps) {
   const [product, setProduct] = useState<PublicProductResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [resolvedParams, setResolvedParams] = useState<GetPublicProductByPriceIdParams | null>(
+  const [resolvedParams, setResolvedParams] = useState<{ productId: string } | null>(
     null
   );
 
@@ -46,7 +47,7 @@ export default function ProductByPriceIdPage({ params }: ProductByPriceIdPagePro
 
   // Fetch product data once params are resolved
   useEffect(() => {
-    if (!resolvedParams?.priceId) return;
+    if (!resolvedParams?.productId) return;
 
     async function fetchProduct() {
       try {
@@ -56,9 +57,9 @@ export default function ProductByPriceIdPage({ params }: ProductByPriceIdPagePro
         // Type guard to ensure resolvedParams is not null
         if (!resolvedParams) return;
 
-        logger.debug('Fetching product for priceId:', { priceId: resolvedParams.priceId });
+        logger.debug('Fetching product for productId:', { productId: resolvedParams.productId });
 
-        const response = await fetch(`/api/public/prices/${resolvedParams.priceId}`);
+        const response = await fetch(`/api/pay/${resolvedParams.productId}`);
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.error || 'Failed to fetch product');

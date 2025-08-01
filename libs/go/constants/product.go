@@ -3,7 +3,7 @@ package constants
 // Product Types
 const (
 	ProductTypeRecurring = "recurring"
-	ProductTypeOneOff    = "one_off"
+	ProductTypeOneTime   = "one_time"
 )
 
 // Product Interval Types

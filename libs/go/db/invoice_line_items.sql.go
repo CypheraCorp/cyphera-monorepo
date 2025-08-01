@@ -22,7 +22,6 @@ INSERT INTO invoice_line_items (
     fiat_currency,
     subscription_id,
     product_id,
-    price_id,
     network_id,
     token_id,
     crypto_amount,
@@ -39,9 +38,9 @@ INSERT INTO invoice_line_items (
     gas_sponsor_name,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
 )
-RETURNING id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, price_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at
+RETURNING id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at
 `
 
 type CreateInvoiceLineItemParams struct {
@@ -53,7 +52,6 @@ type CreateInvoiceLineItemParams struct {
 	FiatCurrency      string             `json:"fiat_currency"`
 	SubscriptionID    pgtype.UUID        `json:"subscription_id"`
 	ProductID         pgtype.UUID        `json:"product_id"`
-	PriceID           pgtype.UUID        `json:"price_id"`
 	NetworkID         pgtype.UUID        `json:"network_id"`
 	TokenID           pgtype.UUID        `json:"token_id"`
 	CryptoAmount      pgtype.Numeric     `json:"crypto_amount"`
@@ -81,7 +79,6 @@ func (q *Queries) CreateInvoiceLineItem(ctx context.Context, arg CreateInvoiceLi
 		arg.FiatCurrency,
 		arg.SubscriptionID,
 		arg.ProductID,
-		arg.PriceID,
 		arg.NetworkID,
 		arg.TokenID,
 		arg.CryptoAmount,
@@ -109,7 +106,6 @@ func (q *Queries) CreateInvoiceLineItem(ctx context.Context, arg CreateInvoiceLi
 		&i.FiatCurrency,
 		&i.SubscriptionID,
 		&i.ProductID,
-		&i.PriceID,
 		&i.NetworkID,
 		&i.TokenID,
 		&i.CryptoAmount,
@@ -139,7 +135,6 @@ type CreateInvoiceLineItemBatchParams struct {
 	AmountInCents     int64          `json:"amount_in_cents"`
 	FiatCurrency      string         `json:"fiat_currency"`
 	ProductID         pgtype.UUID    `json:"product_id"`
-	PriceID           pgtype.UUID    `json:"price_id"`
 	LineItemType      pgtype.Text    `json:"line_item_type"`
 }
 
@@ -165,7 +160,7 @@ func (q *Queries) DeleteInvoiceLineItems(ctx context.Context, invoiceID uuid.UUI
 
 const getGasLineItemsByInvoice = `-- name: GetGasLineItemsByInvoice :many
 SELECT 
-    ili.id, ili.invoice_id, ili.description, ili.quantity, ili.unit_amount_in_cents, ili.amount_in_cents, ili.fiat_currency, ili.subscription_id, ili.product_id, ili.price_id, ili.network_id, ili.token_id, ili.crypto_amount, ili.exchange_rate, ili.tax_rate, ili.tax_amount_in_cents, ili.tax_crypto_amount, ili.period_start, ili.period_end, ili.line_item_type, ili.gas_fee_payment_id, ili.is_gas_sponsored, ili.gas_sponsor_type, ili.gas_sponsor_name, ili.metadata, ili.created_at, ili.updated_at,
+    ili.id, ili.invoice_id, ili.description, ili.quantity, ili.unit_amount_in_cents, ili.amount_in_cents, ili.fiat_currency, ili.subscription_id, ili.product_id, ili.network_id, ili.token_id, ili.crypto_amount, ili.exchange_rate, ili.tax_rate, ili.tax_amount_in_cents, ili.tax_crypto_amount, ili.period_start, ili.period_end, ili.line_item_type, ili.gas_fee_payment_id, ili.is_gas_sponsored, ili.gas_sponsor_type, ili.gas_sponsor_name, ili.metadata, ili.created_at, ili.updated_at,
     gfp.gas_fee_wei,
     gfp.gas_price_gwei,
     gfp.gas_units_used,
@@ -188,7 +183,6 @@ type GetGasLineItemsByInvoiceRow struct {
 	FiatCurrency      string             `json:"fiat_currency"`
 	SubscriptionID    pgtype.UUID        `json:"subscription_id"`
 	ProductID         pgtype.UUID        `json:"product_id"`
-	PriceID           pgtype.UUID        `json:"price_id"`
 	NetworkID         pgtype.UUID        `json:"network_id"`
 	TokenID           pgtype.UUID        `json:"token_id"`
 	CryptoAmount      pgtype.Numeric     `json:"crypto_amount"`
@@ -231,7 +225,6 @@ func (q *Queries) GetGasLineItemsByInvoice(ctx context.Context, invoiceID uuid.U
 			&i.FiatCurrency,
 			&i.SubscriptionID,
 			&i.ProductID,
-			&i.PriceID,
 			&i.NetworkID,
 			&i.TokenID,
 			&i.CryptoAmount,
@@ -309,7 +302,7 @@ func (q *Queries) GetInvoiceCryptoAmounts(ctx context.Context, invoiceID uuid.UU
 }
 
 const getInvoiceLineItem = `-- name: GetInvoiceLineItem :one
-SELECT id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, price_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at FROM invoice_line_items
+SELECT id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at FROM invoice_line_items
 WHERE id = $1
 `
 
@@ -326,7 +319,6 @@ func (q *Queries) GetInvoiceLineItem(ctx context.Context, id uuid.UUID) (Invoice
 		&i.FiatCurrency,
 		&i.SubscriptionID,
 		&i.ProductID,
-		&i.PriceID,
 		&i.NetworkID,
 		&i.TokenID,
 		&i.CryptoAmount,
@@ -349,7 +341,7 @@ func (q *Queries) GetInvoiceLineItem(ctx context.Context, id uuid.UUID) (Invoice
 }
 
 const getInvoiceLineItems = `-- name: GetInvoiceLineItems :many
-SELECT id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, price_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at FROM invoice_line_items
+SELECT id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at FROM invoice_line_items
 WHERE invoice_id = $1
 ORDER BY created_at ASC
 `
@@ -373,7 +365,6 @@ func (q *Queries) GetInvoiceLineItems(ctx context.Context, invoiceID uuid.UUID) 
 			&i.FiatCurrency,
 			&i.SubscriptionID,
 			&i.ProductID,
-			&i.PriceID,
 			&i.NetworkID,
 			&i.TokenID,
 			&i.CryptoAmount,
@@ -403,7 +394,7 @@ func (q *Queries) GetInvoiceLineItems(ctx context.Context, invoiceID uuid.UUID) 
 }
 
 const getInvoiceLineItemsByType = `-- name: GetInvoiceLineItemsByType :many
-SELECT id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, price_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at FROM invoice_line_items
+SELECT id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at FROM invoice_line_items
 WHERE invoice_id = $1 AND line_item_type = $2
 ORDER BY created_at ASC
 `
@@ -432,7 +423,6 @@ func (q *Queries) GetInvoiceLineItemsByType(ctx context.Context, arg GetInvoiceL
 			&i.FiatCurrency,
 			&i.SubscriptionID,
 			&i.ProductID,
-			&i.PriceID,
 			&i.NetworkID,
 			&i.TokenID,
 			&i.CryptoAmount,
@@ -497,7 +487,7 @@ func (q *Queries) GetInvoiceSubtotal(ctx context.Context, invoiceID uuid.UUID) (
 }
 
 const getLineItemsByCurrency = `-- name: GetLineItemsByCurrency :many
-SELECT id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, price_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at FROM invoice_line_items
+SELECT id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at FROM invoice_line_items
 WHERE invoice_id = $1 AND fiat_currency = $2
 ORDER BY created_at ASC
 `
@@ -526,7 +516,6 @@ func (q *Queries) GetLineItemsByCurrency(ctx context.Context, arg GetLineItemsBy
 			&i.FiatCurrency,
 			&i.SubscriptionID,
 			&i.ProductID,
-			&i.PriceID,
 			&i.NetworkID,
 			&i.TokenID,
 			&i.CryptoAmount,
@@ -556,7 +545,7 @@ func (q *Queries) GetLineItemsByCurrency(ctx context.Context, arg GetLineItemsBy
 }
 
 const getLineItemsByProduct = `-- name: GetLineItemsByProduct :many
-SELECT id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, price_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at FROM invoice_line_items
+SELECT id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at FROM invoice_line_items
 WHERE product_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -587,7 +576,6 @@ func (q *Queries) GetLineItemsByProduct(ctx context.Context, arg GetLineItemsByP
 			&i.FiatCurrency,
 			&i.SubscriptionID,
 			&i.ProductID,
-			&i.PriceID,
 			&i.NetworkID,
 			&i.TokenID,
 			&i.CryptoAmount,
@@ -618,13 +606,12 @@ func (q *Queries) GetLineItemsByProduct(ctx context.Context, arg GetLineItemsByP
 
 const getProductLineItemsByInvoice = `-- name: GetProductLineItemsByInvoice :many
 SELECT 
-    ili.id, ili.invoice_id, ili.description, ili.quantity, ili.unit_amount_in_cents, ili.amount_in_cents, ili.fiat_currency, ili.subscription_id, ili.product_id, ili.price_id, ili.network_id, ili.token_id, ili.crypto_amount, ili.exchange_rate, ili.tax_rate, ili.tax_amount_in_cents, ili.tax_crypto_amount, ili.period_start, ili.period_end, ili.line_item_type, ili.gas_fee_payment_id, ili.is_gas_sponsored, ili.gas_sponsor_type, ili.gas_sponsor_name, ili.metadata, ili.created_at, ili.updated_at,
+    ili.id, ili.invoice_id, ili.description, ili.quantity, ili.unit_amount_in_cents, ili.amount_in_cents, ili.fiat_currency, ili.subscription_id, ili.product_id, ili.network_id, ili.token_id, ili.crypto_amount, ili.exchange_rate, ili.tax_rate, ili.tax_amount_in_cents, ili.tax_crypto_amount, ili.period_start, ili.period_end, ili.line_item_type, ili.gas_fee_payment_id, ili.is_gas_sponsored, ili.gas_sponsor_type, ili.gas_sponsor_name, ili.metadata, ili.created_at, ili.updated_at,
     p.name as product_name,
-    pr.interval_type,
-    pr.term_length
+    p.interval_type,
+    p.term_length
 FROM invoice_line_items ili
 LEFT JOIN products p ON ili.product_id = p.id
-LEFT JOIN prices pr ON ili.price_id = pr.id
 WHERE ili.invoice_id = $1
     AND ili.line_item_type = 'product'
 ORDER BY ili.created_at ASC
@@ -640,7 +627,6 @@ type GetProductLineItemsByInvoiceRow struct {
 	FiatCurrency      string             `json:"fiat_currency"`
 	SubscriptionID    pgtype.UUID        `json:"subscription_id"`
 	ProductID         pgtype.UUID        `json:"product_id"`
-	PriceID           pgtype.UUID        `json:"price_id"`
 	NetworkID         pgtype.UUID        `json:"network_id"`
 	TokenID           pgtype.UUID        `json:"token_id"`
 	CryptoAmount      pgtype.Numeric     `json:"crypto_amount"`
@@ -682,7 +668,6 @@ func (q *Queries) GetProductLineItemsByInvoice(ctx context.Context, invoiceID uu
 			&i.FiatCurrency,
 			&i.SubscriptionID,
 			&i.ProductID,
-			&i.PriceID,
 			&i.NetworkID,
 			&i.TokenID,
 			&i.CryptoAmount,
@@ -727,7 +712,7 @@ SET
     metadata = $9,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, price_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at
+RETURNING id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at
 `
 
 type UpdateInvoiceLineItemParams struct {
@@ -765,7 +750,6 @@ func (q *Queries) UpdateInvoiceLineItem(ctx context.Context, arg UpdateInvoiceLi
 		&i.FiatCurrency,
 		&i.SubscriptionID,
 		&i.ProductID,
-		&i.PriceID,
 		&i.NetworkID,
 		&i.TokenID,
 		&i.CryptoAmount,
@@ -795,7 +779,7 @@ SET
     gas_sponsor_name = $4,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, price_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at
+RETURNING id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at
 `
 
 type UpdateLineItemGasSponsorshipParams struct {
@@ -823,7 +807,6 @@ func (q *Queries) UpdateLineItemGasSponsorship(ctx context.Context, arg UpdateLi
 		&i.FiatCurrency,
 		&i.SubscriptionID,
 		&i.ProductID,
-		&i.PriceID,
 		&i.NetworkID,
 		&i.TokenID,
 		&i.CryptoAmount,

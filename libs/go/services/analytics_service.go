@@ -541,11 +541,11 @@ func (s *AnalyticsService) TriggerMetricsRefresh(ctx context.Context, workspaceI
 
 	// Create a DashboardMetricsService instance
 	metricsService := NewDashboardMetricsService(s.queries, conn.Conn())
-	
+
 	// Calculate all metrics for the workspace
 	if err := metricsService.CalculateAllMetricsForWorkspace(ctx, workspaceID, date); err != nil {
 		return fmt.Errorf("failed to calculate metrics: %w", err)
 	}
-	
+
 	return nil
 }

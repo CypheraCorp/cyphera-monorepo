@@ -245,7 +245,7 @@ type PriceType string
 
 const (
 	PriceTypeRecurring PriceType = "recurring"
-	PriceTypeOneOff    PriceType = "one_off"
+	PriceTypeOneTime   PriceType = "one_time"
 )
 
 func (e *PriceType) Scan(src interface{}) error {
@@ -913,7 +913,6 @@ type InvoiceLineItem struct {
 	FiatCurrency      string             `json:"fiat_currency"`
 	SubscriptionID    pgtype.UUID        `json:"subscription_id"`
 	ProductID         pgtype.UUID        `json:"product_id"`
-	PriceID           pgtype.UUID        `json:"price_id"`
 	NetworkID         pgtype.UUID        `json:"network_id"`
 	TokenID           pgtype.UUID        `json:"token_id"`
 	CryptoAmount      pgtype.Numeric     `json:"crypto_amount"`
@@ -1002,7 +1001,6 @@ type PaymentLink struct {
 	Slug            string             `json:"slug"`
 	Status          string             `json:"status"`
 	ProductID       pgtype.UUID        `json:"product_id"`
-	PriceID         pgtype.UUID        `json:"price_id"`
 	AmountInCents   pgtype.Int8        `json:"amount_in_cents"`
 	Currency        pgtype.Text        `json:"currency"`
 	PaymentType     pgtype.Text        `json:"payment_type"`
@@ -1056,17 +1054,25 @@ type PaymentSyncSession struct {
 	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
 }
 
-type Price struct {
+type Product struct {
 	ID                  uuid.UUID          `json:"id"`
-	ProductID           uuid.UUID          `json:"product_id"`
+	WorkspaceID         uuid.UUID          `json:"workspace_id"`
+	WalletID            uuid.UUID          `json:"wallet_id"`
 	ExternalID          pgtype.Text        `json:"external_id"`
+	Name                string             `json:"name"`
+	Description         pgtype.Text        `json:"description"`
+	ImageUrl            pgtype.Text        `json:"image_url"`
+	Url                 pgtype.Text        `json:"url"`
 	Active              bool               `json:"active"`
-	Type                PriceType          `json:"type"`
-	Nickname            pgtype.Text        `json:"nickname"`
+	ProductType         pgtype.Text        `json:"product_type"`
+	ProductGroup        pgtype.Text        `json:"product_group"`
+	PriceType           PriceType          `json:"price_type"`
 	Currency            string             `json:"currency"`
 	UnitAmountInPennies int32              `json:"unit_amount_in_pennies"`
-	IntervalType        IntervalType       `json:"interval_type"`
-	TermLength          int32              `json:"term_length"`
+	IntervalType        NullIntervalType   `json:"interval_type"`
+	TermLength          pgtype.Int4        `json:"term_length"`
+	PriceNickname       pgtype.Text        `json:"price_nickname"`
+	PriceExternalID     pgtype.Text        `json:"price_external_id"`
 	Metadata            []byte             `json:"metadata"`
 	PaymentSyncStatus   pgtype.Text        `json:"payment_sync_status"`
 	PaymentSyncedAt     pgtype.Timestamptz `json:"payment_synced_at"`
@@ -1075,26 +1081,6 @@ type Price struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
-}
-
-type Product struct {
-	ID                 uuid.UUID          `json:"id"`
-	WorkspaceID        uuid.UUID          `json:"workspace_id"`
-	WalletID           uuid.UUID          `json:"wallet_id"`
-	ExternalID         pgtype.Text        `json:"external_id"`
-	Name               string             `json:"name"`
-	Description        pgtype.Text        `json:"description"`
-	ImageUrl           pgtype.Text        `json:"image_url"`
-	Url                pgtype.Text        `json:"url"`
-	Active             bool               `json:"active"`
-	Metadata           []byte             `json:"metadata"`
-	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
-	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
-	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`
-	PaymentProvider    pgtype.Text        `json:"payment_provider"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type ProductsToken struct {
@@ -1114,7 +1100,6 @@ type Subscription struct {
 	CustomerID         uuid.UUID          `json:"customer_id"`
 	ProductID          uuid.UUID          `json:"product_id"`
 	WorkspaceID        uuid.UUID          `json:"workspace_id"`
-	PriceID            uuid.UUID          `json:"price_id"`
 	ProductTokenID     uuid.UUID          `json:"product_token_id"`
 	ExternalID         pgtype.Text        `json:"external_id"`
 	TokenAmount        int32              `json:"token_amount"`

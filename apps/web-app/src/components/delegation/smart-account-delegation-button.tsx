@@ -243,7 +243,7 @@ export function SmartAccountDelegationButton({
           delegation: signedDelegation,
         };
 
-        const response = await fetch(`/api/public/prices/${priceId}/subscribe`, {
+        const response = await fetch(`/api/pay/${priceId}/subscribe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(subscriptionPayload),

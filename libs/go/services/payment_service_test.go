@@ -61,9 +61,7 @@ func TestPaymentService_CreatePaymentFromSubscriptionEvent(t *testing.T) {
 					WorkspaceID: workspaceID,
 				},
 				Product: &db.Product{
-					ID: productID,
-				},
-				Price: &db.Price{
+					ID:       productID,
 					Currency: "USD",
 				},
 				Customer: &db.Customer{
@@ -154,7 +152,8 @@ func TestPaymentService_CreatePaymentFromSubscriptionEvent(t *testing.T) {
 					ID:          subscriptionID,
 					WorkspaceID: workspaceID,
 				},
-				Price: &db.Price{
+				Product: &db.Product{
+					ID:       productID,
 					Currency: "USD",
 				},
 				Customer: &db.Customer{

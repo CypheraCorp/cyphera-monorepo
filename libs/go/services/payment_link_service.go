@@ -62,7 +62,6 @@ func (s *PaymentLinkService) CreatePaymentLink(ctx context.Context, params param
 		Slug:            slug,
 		Status:          "active",
 		ProductID:       uuidToPgtypePaymentLink(params.ProductID),
-		PriceID:         uuidToPgtypePaymentLink(params.PriceID),
 		AmountInCents:   int64ToPgtype(&params.AmountCents),
 		Currency:        pgtype.Text{String: params.Currency, Valid: params.Currency != ""},
 		PaymentType:     pgtype.Text{String: "one_time", Valid: true}, // Default payment type
@@ -295,10 +294,6 @@ func (s *PaymentLinkService) convertToResponse(link db.PaymentLink, paymentURL s
 	if link.ProductID.Valid {
 		id := uuid.UUID(link.ProductID.Bytes)
 		response.ProductID = &id
-	}
-	if link.PriceID.Valid {
-		id := uuid.UUID(link.PriceID.Bytes)
-		response.PriceID = &id
 	}
 	if link.AmountInCents.Valid {
 		response.AmountCents = &link.AmountInCents.Int64

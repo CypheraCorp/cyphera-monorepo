@@ -2,16 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PublicAPI } from '@/services/cyphera-api/public';
 import logger from '@/lib/core/logger/logger';
 
-// This route handles product fetching using the priceId route parameter for URL structure
+// This route handles product fetching using the productId route parameter
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ priceId: string }> }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
-    const { priceId: productId } = await params;
+    const { productId } = await params;
 
     const publicAPI = new PublicAPI();
-    const product = await publicAPI.getPublicProduct(productId);
+    // Call the backend API directly to avoid circular reference
+    const product = await publicAPI.getPublicProductById(productId);
 
     // Return response with no-cache headers
     const response = NextResponse.json(product);

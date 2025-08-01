@@ -1,5 +1,5 @@
 import type { Delegation } from '@metamask/delegation-toolkit';
-import type { PriceResponse, ProductResponse, ProductTokenResponse } from './product';
+import type { ProductResponse, ProductTokenResponse } from './product';
 
 /**
  * Subscription status types
@@ -11,7 +11,7 @@ export type SubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'expired';
  */
 export interface SubscribeRequest {
   subscriber_address: string;
-  price_id: string;
+  product_id: string;
   product_token_id: string;
   token_amount: string;
   delegation: Delegation;
@@ -60,7 +60,6 @@ export interface SubscriptionResponse {
     wallet_address?: string;
     [key: string]: unknown;
   };
-  price: PriceResponse;
   product: ProductResponse;
   product_token: ProductTokenResponse;
 }

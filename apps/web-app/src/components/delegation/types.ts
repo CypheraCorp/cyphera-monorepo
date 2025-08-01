@@ -46,7 +46,7 @@ export interface SmartAccountProvider extends SmartAccountState, SmartAccountAct
 }
 
 export interface SubscriptionParams {
-  priceId: string;
+  priceId: string; // Product ID (named priceId for prop compatibility)
   productTokenId?: string;
   tokenAmount?: bigint | null;
   productName?: string;

@@ -36,7 +36,6 @@ func (r iteratorForCreateInvoiceLineItemBatch) Values() ([]interface{}, error) {
 		r.rows[0].AmountInCents,
 		r.rows[0].FiatCurrency,
 		r.rows[0].ProductID,
-		r.rows[0].PriceID,
 		r.rows[0].LineItemType,
 	}, nil
 }
@@ -46,7 +45,7 @@ func (r iteratorForCreateInvoiceLineItemBatch) Err() error {
 }
 
 func (q *Queries) CreateInvoiceLineItemBatch(ctx context.Context, arg []CreateInvoiceLineItemBatchParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"invoice_line_items"}, []string{"invoice_id", "description", "quantity", "unit_amount_in_cents", "amount_in_cents", "fiat_currency", "product_id", "price_id", "line_item_type"}, &iteratorForCreateInvoiceLineItemBatch{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"invoice_line_items"}, []string{"invoice_id", "description", "quantity", "unit_amount_in_cents", "amount_in_cents", "fiat_currency", "product_id", "line_item_type"}, &iteratorForCreateInvoiceLineItemBatch{rows: arg})
 }
 
 // iteratorForCreatePaymentBatch implements pgx.CopyFromSource.

@@ -22,6 +22,15 @@ func init() {
 	logger.InitLogger("test")
 }
 
+// Helper functions for creating pointers
+func ptrString(s string) *string {
+	return &s
+}
+
+func ptrBool(b bool) *bool {
+	return &b
+}
+
 func TestProductService_CreateProduct(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -33,12 +42,10 @@ func TestProductService_CreateProduct(t *testing.T) {
 	workspaceID := uuid.New()
 	walletID := uuid.New()
 	productID := uuid.New()
-	priceID := uuid.New()
 	networkID := uuid.New()
 	tokenID := uuid.New()
 
 	metadata := json.RawMessage(`{"key": "value"}`)
-	priceMetadata := json.RawMessage(`{"tier": "premium"}`)
 
 	validWallet := db.Wallet{
 		ID:          walletID,
@@ -63,16 +70,11 @@ func TestProductService_CreateProduct(t *testing.T) {
 				URL:         "https://example.com/product",
 				Active:      true,
 				Metadata:    metadata,
-				Prices: []params.CreatePriceParams{
-					{
-						Active:              true,
-						Type:                "one_off",
-						Nickname:            "Standard Price",
-						Currency:            "USD",
-						UnitAmountInPennies: 1000,
-						Metadata:            priceMetadata,
-					},
-				},
+				// Embedded price fields
+				PriceType:           "one_time",
+				Currency:            "USD",
+				UnitAmountInPennies: 1000,
+				PriceNickname:       "Standard Price",
 				ProductTokens: []params.CreateProductTokenParams{
 					{
 						NetworkID: networkID,
@@ -88,7 +90,7 @@ func TestProductService_CreateProduct(t *testing.T) {
 					WorkspaceID: workspaceID,
 				}).Return(validWallet, nil)
 
-				// Create product
+				// Create product with embedded price fields
 				expectedProduct := db.Product{
 					ID:          productID,
 					WorkspaceID: workspaceID,
@@ -99,33 +101,22 @@ func TestProductService_CreateProduct(t *testing.T) {
 					Url:         pgtype.Text{String: "https://example.com/product", Valid: true},
 					Active:      true,
 					Metadata:    metadata,
+					// Embedded price fields
+					PriceType:           "one_time",
+					Currency:            "USD",
+					UnitAmountInPennies: 1000,
+					PriceNickname:       pgtype.Text{String: "Standard Price", Valid: true},
 				}
 				mockQuerier.EXPECT().CreateProduct(ctx, gomock.Any()).Return(expectedProduct, nil)
 
-				// Create price
-				expectedPrice := db.Price{
-					ID:                  priceID,
-					ProductID:           productID,
-					Active:              true,
-					Type:                "one_time",
-					Nickname:            pgtype.Text{String: "Standard Price", Valid: true},
-					Currency:            "USD",
-					UnitAmountInPennies: 1000,
-					IntervalType:        "month",
-					TermLength:          12,
-					Metadata:            priceMetadata,
-				}
-				mockQuerier.EXPECT().CreatePrice(ctx, gomock.Any()).Return(expectedPrice, nil)
-
 				// Create product token
-				expectedProductToken := db.ProductsToken{
+				mockQuerier.EXPECT().CreateProductToken(ctx, gomock.Any()).Return(db.ProductsToken{
 					ID:        uuid.New(),
 					ProductID: productID,
 					NetworkID: networkID,
 					TokenID:   tokenID,
 					Active:    true,
-				}
-				mockQuerier.EXPECT().CreateProductToken(ctx, gomock.Any()).Return(expectedProductToken, nil)
+				}, nil)
 			},
 			wantErr: false,
 		},
@@ -135,74 +126,143 @@ func TestProductService_CreateProduct(t *testing.T) {
 				WorkspaceID: workspaceID,
 				WalletID:    walletID,
 				Name:        "Minimal Product",
-				Active:      false,
+				Active:      true,
+				// Required embedded price fields
+				PriceType:           "one_time",
+				Currency:            "USD",
+				UnitAmountInPennies: 500,
 			},
 			setupMocks: func() {
-				// Validate wallet ownership
 				mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
 					ID:          walletID,
 					WorkspaceID: workspaceID,
 				}).Return(validWallet, nil)
 
-				// Create product
 				expectedProduct := db.Product{
-					ID:          productID,
-					WorkspaceID: workspaceID,
-					WalletID:    walletID,
-					Name:        "Minimal Product",
-					Active:      false,
+					ID:                  productID,
+					WorkspaceID:         workspaceID,
+					WalletID:            walletID,
+					Name:                "Minimal Product",
+					Active:              true,
+					PriceType:           "one_time",
+					Currency:            "USD",
+					UnitAmountInPennies: 500,
 				}
 				mockQuerier.EXPECT().CreateProduct(ctx, gomock.Any()).Return(expectedProduct, nil)
 			},
 			wantErr: false,
 		},
 		{
-			name: "fails with empty product name",
+			name: "successfully creates recurring product",
 			params: params.CreateProductParams{
 				WorkspaceID: workspaceID,
 				WalletID:    walletID,
+				Name:        "Subscription Product",
+				Active:      true,
+				// Recurring price fields
+				PriceType:           "recurring",
+				Currency:            "USD",
+				UnitAmountInPennies: 1999,
+				IntervalType:        "month",
+				TermLength:          12,
+			},
+			setupMocks: func() {
+				mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
+					ID:          walletID,
+					WorkspaceID: workspaceID,
+				}).Return(validWallet, nil)
+
+				expectedProduct := db.Product{
+					ID:                  productID,
+					WorkspaceID:         workspaceID,
+					WalletID:            walletID,
+					Name:                "Subscription Product",
+					Active:              true,
+					PriceType:           "recurring",
+					Currency:            "USD",
+					UnitAmountInPennies: 1999,
+					IntervalType:        db.NullIntervalType{IntervalType: db.IntervalTypeMonth, Valid: true},
+					TermLength:          pgtype.Int4{Int32: 12, Valid: true},
+				}
+				mockQuerier.EXPECT().CreateProduct(ctx, gomock.Any()).Return(expectedProduct, nil)
+			},
+			wantErr: false,
+		},
+		{
+			name: "fails with missing product name",
+			params: params.CreateProductParams{
+				WorkspaceID:         workspaceID,
+				WalletID:            walletID,
+				Name:                "",
+				PriceType:           "one_time",
+				Currency:            "USD",
+				UnitAmountInPennies: 1000,
 			},
 			setupMocks:  func() {},
 			wantErr:     true,
 			errorString: "product name is required",
 		},
 		{
-			name: "fails with empty workspace ID",
+			name: "fails with missing workspace ID",
 			params: params.CreateProductParams{
-				WalletID: walletID,
-				Name:     "Test Product",
+				WalletID:            walletID,
+				Name:                "Test Product",
+				PriceType:           "one_time",
+				Currency:            "USD",
+				UnitAmountInPennies: 1000,
 			},
 			setupMocks:  func() {},
 			wantErr:     true,
 			errorString: "workspace ID is required",
 		},
 		{
-			name: "fails with empty wallet ID",
+			name: "fails with missing wallet ID",
 			params: params.CreateProductParams{
-				WorkspaceID: workspaceID,
-				Name:        "Test Product",
+				WorkspaceID:         workspaceID,
+				Name:                "Test Product",
+				PriceType:           "one_time",
+				Currency:            "USD",
+				UnitAmountInPennies: 1000,
 			},
 			setupMocks:  func() {},
 			wantErr:     true,
 			errorString: "wallet ID is required",
 		},
 		{
-			name: "fails with invalid product name (too long)",
+			name: "fails with missing price type",
 			params: params.CreateProductParams{
-				WorkspaceID: workspaceID,
-				WalletID:    walletID,
-				Name:        string(make([]byte, 300)), // Too long name
+				WorkspaceID:         workspaceID,
+				WalletID:            walletID,
+				Name:                "Test Product",
+				Currency:            "USD",
+				UnitAmountInPennies: 1000,
 			},
 			setupMocks:  func() {},
 			wantErr:     true,
-			errorString: "name must be less than 255 characters",
+			errorString: "price type is required",
 		},
 		{
-			name: "fails with wallet not found",
+			name: "fails with missing currency",
 			params: params.CreateProductParams{
-				WorkspaceID: workspaceID,
-				WalletID:    walletID,
-				Name:        "Test Product",
+				WorkspaceID:         workspaceID,
+				WalletID:            walletID,
+				Name:                "Test Product",
+				PriceType:           "one_time",
+				UnitAmountInPennies: 1000,
+			},
+			setupMocks:  func() {},
+			wantErr:     true,
+			errorString: "currency is required",
+		},
+		{
+			name: "fails with invalid wallet ownership",
+			params: params.CreateProductParams{
+				WorkspaceID:         workspaceID,
+				WalletID:            walletID,
+				Name:                "Test Product",
+				PriceType:           "one_time",
+				Currency:            "USD",
+				UnitAmountInPennies: 1000,
 			},
 			setupMocks: func() {
 				mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
@@ -211,81 +271,17 @@ func TestProductService_CreateProduct(t *testing.T) {
 				}).Return(db.Wallet{}, pgx.ErrNoRows)
 			},
 			wantErr:     true,
-			errorString: "wallet not found or not accessible",
-		},
-		{
-			name: "fails with wallet not belonging to workspace",
-			params: params.CreateProductParams{
-				WorkspaceID: workspaceID,
-				WalletID:    walletID,
-				Name:        "Test Product",
-			},
-			setupMocks: func() {
-				invalidWallet := db.Wallet{
-					ID:          walletID,
-					WorkspaceID: uuid.New(), // Different workspace
-				}
-				mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
-					ID:          walletID,
-					WorkspaceID: workspaceID,
-				}).Return(invalidWallet, nil)
-			},
-			wantErr:     true,
-			errorString: "wallet does not belong to workspace",
-		},
-		{
-			name: "fails with invalid price validation",
-			params: params.CreateProductParams{
-				WorkspaceID: workspaceID,
-				WalletID:    walletID,
-				Name:        "Test Product",
-				Prices: []params.CreatePriceParams{
-					{
-						Type:                "invalid_type",
-						UnitAmountInPennies: -100, // Negative price
-					},
-				},
-			},
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
-					ID:          walletID,
-					WorkspaceID: workspaceID,
-				}).Return(validWallet, nil)
-			},
-			wantErr:     true,
-			errorString: "price 1 validation failed",
+			errorString: "wallet not found",
 		},
 		{
 			name: "handles database error during product creation",
 			params: params.CreateProductParams{
-				WorkspaceID: workspaceID,
-				WalletID:    walletID,
-				Name:        "Test Product",
-			},
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
-					ID:          walletID,
-					WorkspaceID: workspaceID,
-				}).Return(validWallet, nil)
-				mockQuerier.EXPECT().CreateProduct(ctx, gomock.Any()).Return(db.Product{}, errors.New("database error"))
-			},
-			wantErr:     true,
-			errorString: "failed to create product",
-		},
-		{
-			name: "handles database error during price creation",
-			params: params.CreateProductParams{
-				WorkspaceID: workspaceID,
-				WalletID:    walletID,
-				Name:        "Test Product",
-				Prices: []params.CreatePriceParams{
-					{
-						Active:              true,
-						Type:                "one_off",
-						Currency:            "USD",
-						UnitAmountInPennies: 1000,
-					},
-				},
+				WorkspaceID:         workspaceID,
+				WalletID:            walletID,
+				Name:                "Test Product",
+				PriceType:           "one_time",
+				Currency:            "USD",
+				UnitAmountInPennies: 1000,
 			},
 			setupMocks: func() {
 				mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
@@ -293,24 +289,20 @@ func TestProductService_CreateProduct(t *testing.T) {
 					WorkspaceID: workspaceID,
 				}).Return(validWallet, nil)
 
-				expectedProduct := db.Product{
-					ID:          productID,
-					WorkspaceID: workspaceID,
-					WalletID:    walletID,
-					Name:        "Test Product",
-				}
-				mockQuerier.EXPECT().CreateProduct(ctx, gomock.Any()).Return(expectedProduct, nil)
-				mockQuerier.EXPECT().CreatePrice(ctx, gomock.Any()).Return(db.Price{}, errors.New("price creation error"))
+				mockQuerier.EXPECT().CreateProduct(ctx, gomock.Any()).Return(db.Product{}, errors.New("database error"))
 			},
 			wantErr:     true,
-			errorString: "failed to create price 1",
+			errorString: "failed to create product",
 		},
 		{
 			name: "handles database error during product token creation",
 			params: params.CreateProductParams{
-				WorkspaceID: workspaceID,
-				WalletID:    walletID,
-				Name:        "Test Product",
+				WorkspaceID:         workspaceID,
+				WalletID:            walletID,
+				Name:                "Test Product",
+				PriceType:           "one_time",
+				Currency:            "USD",
+				UnitAmountInPennies: 1000,
 				ProductTokens: []params.CreateProductTokenParams{
 					{
 						NetworkID: networkID,
@@ -343,23 +335,20 @@ func TestProductService_CreateProduct(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMocks()
 
-			product, prices, err := service.CreateProduct(ctx, tt.params)
+			product, err := service.CreateProduct(ctx, tt.params)
 
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, product)
-				assert.Nil(t, prices)
 				if tt.errorString != "" {
 					assert.Contains(t, err.Error(), tt.errorString)
 				}
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, product)
-				assert.NotNil(t, prices)
 				assert.Equal(t, tt.params.Name, product.Name)
 				assert.Equal(t, tt.params.WorkspaceID, product.WorkspaceID)
 				assert.Equal(t, tt.params.WalletID, product.WalletID)
-				assert.Equal(t, len(tt.params.Prices), len(prices))
 			}
 		})
 	}
@@ -378,114 +367,71 @@ func TestProductService_GetProduct(t *testing.T) {
 	otherWorkspaceID := uuid.New()
 
 	expectedProduct := db.Product{
-		ID:          productID,
-		WorkspaceID: workspaceID,
-		Name:        "Test Product",
-	}
-
-	expectedPrices := []db.Price{
-		{
-			ID:        uuid.New(),
-			ProductID: productID,
-			Active:    true,
-		},
+		ID:                  productID,
+		WorkspaceID:         workspaceID,
+		Name:                "Test Product",
+		PriceType:           "one_time",
+		Currency:            "USD",
+		UnitAmountInPennies: 1000,
 	}
 
 	tests := []struct {
 		name        string
-		params      params.GetProductParams
+		productID   uuid.UUID
+		workspaceID uuid.UUID
 		setupMocks  func()
+		wantProduct *db.Product
 		wantErr     bool
 		errorString string
 	}{
 		{
-			name: "successfully gets product with prices",
-			params: params.GetProductParams{
-				ProductID:   productID,
-				WorkspaceID: workspaceID,
-			},
+			name:        "successfully retrieves product",
+			productID:   productID,
+			workspaceID: workspaceID,
 			setupMocks: func() {
 				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
 					ID:          productID,
 					WorkspaceID: workspaceID,
 				}).Return(expectedProduct, nil)
-				mockQuerier.EXPECT().ListPricesByProduct(ctx, productID).Return(expectedPrices, nil)
 			},
-			wantErr: false,
+			wantProduct: &expectedProduct,
+			wantErr:     false,
 		},
 		{
-			name: "successfully gets product without workspace validation",
-			params: params.GetProductParams{
-				ProductID: productID,
-			},
+			name:        "fails when product not found",
+			productID:   uuid.New(),
+			workspaceID: workspaceID,
 			setupMocks: func() {
-				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
-					ID:          productID,
-					WorkspaceID: uuid.Nil,
-				}).Return(expectedProduct, nil)
-				mockQuerier.EXPECT().ListPricesByProduct(ctx, productID).Return(expectedPrices, nil)
+				mockQuerier.EXPECT().GetProduct(ctx, gomock.Any()).Return(db.Product{}, pgx.ErrNoRows)
 			},
-			wantErr: false,
-		},
-		{
-			name: "fails with empty product ID",
-			params: params.GetProductParams{
-				WorkspaceID: workspaceID,
-			},
-			setupMocks:  func() {},
-			wantErr:     true,
-			errorString: "product ID is required",
-		},
-		{
-			name: "product not found",
-			params: params.GetProductParams{
-				ProductID:   productID,
-				WorkspaceID: workspaceID,
-			},
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
-					ID:          productID,
-					WorkspaceID: workspaceID,
-				}).Return(db.Product{}, pgx.ErrNoRows)
-			},
+			wantProduct: nil,
 			wantErr:     true,
 			errorString: "product not found",
 		},
 		{
-			name: "product not found in workspace",
-			params: params.GetProductParams{
-				ProductID:   productID,
-				WorkspaceID: otherWorkspaceID,
-			},
+			name:        "fails when product belongs to different workspace",
+			productID:   productID,
+			workspaceID: otherWorkspaceID,
 			setupMocks: func() {
-				productInDifferentWorkspace := db.Product{
-					ID:          productID,
-					WorkspaceID: workspaceID, // Different workspace than requested
-					Name:        "Test Product",
-				}
 				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
 					ID:          productID,
 					WorkspaceID: otherWorkspaceID,
-				}).Return(productInDifferentWorkspace, nil)
+				}).Return(db.Product{}, pgx.ErrNoRows)
 			},
+			wantProduct: nil,
 			wantErr:     true,
-			errorString: "product not found in workspace",
+			errorString: "product not found",
 		},
 		{
-			name: "database error getting prices",
-			params: params.GetProductParams{
-				ProductID:   productID,
-				WorkspaceID: workspaceID,
-			},
+			name:        "handles database error",
+			productID:   productID,
+			workspaceID: workspaceID,
 			setupMocks: func() {
-				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
-					ID:          productID,
-					WorkspaceID: workspaceID,
-				}).Return(expectedProduct, nil)
-				mockQuerier.EXPECT().ListPricesByProduct(ctx, productID).Return(nil, errors.New("database error"))
+				mockQuerier.EXPECT().GetProduct(ctx, gomock.Any()).Return(db.Product{}, errors.New("database error"))
 			},
+			wantProduct: nil,
 			wantErr:     true,
-			errorString: "failed to retrieve product prices",
+			errorString: "product not found",
 		},
 	}
 
@@ -493,162 +439,22 @@ func TestProductService_GetProduct(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMocks()
 
-			product, prices, err := service.GetProduct(ctx, tt.params)
+			product, err := service.GetProduct(ctx, params.GetProductParams{
+				ProductID:   tt.productID,
+				WorkspaceID: tt.workspaceID,
+			})
 
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, product)
-				assert.Nil(t, prices)
 				if tt.errorString != "" {
 					assert.Contains(t, err.Error(), tt.errorString)
 				}
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, product)
-				assert.NotNil(t, prices)
-				assert.Equal(t, productID, product.ID)
-			}
-		})
-	}
-}
-
-func TestProductService_ListProducts(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockQuerier := mocks.NewMockQuerier(ctrl)
-	service := services.NewProductService(mockQuerier)
-	ctx := context.Background()
-
-	workspaceID := uuid.New()
-	products := []db.Product{
-		{ID: uuid.New(), Name: "Product 1", WorkspaceID: workspaceID},
-		{ID: uuid.New(), Name: "Product 2", WorkspaceID: workspaceID},
-	}
-
-	tests := []struct {
-		name        string
-		params      params.ListProductsParams
-		setupMocks  func()
-		wantErr     bool
-		errorString string
-		wantCount   int
-		wantHasMore bool
-	}{
-		{
-			name: "successfully lists products with default pagination",
-			params: params.ListProductsParams{
-				WorkspaceID: workspaceID,
-			},
-			setupMocks: func() {
-				mockQuerier.EXPECT().ListProductsWithPagination(ctx, db.ListProductsWithPaginationParams{
-					WorkspaceID: workspaceID,
-					Limit:       10, // Default limit
-					Offset:      0,
-				}).Return(products, nil)
-				mockQuerier.EXPECT().CountProducts(ctx, workspaceID).Return(int64(25), nil)
-
-				// Mock ListPricesByProduct for any product ID
-				mockQuerier.EXPECT().ListPricesByProduct(ctx, gomock.Any()).Return([]db.Price{}, nil).AnyTimes()
-			},
-			wantErr:     false,
-			wantCount:   2,
-			wantHasMore: true, // 10 offset + 10 limit < 25 total
-		},
-		{
-			name: "successfully lists products with custom pagination",
-			params: params.ListProductsParams{
-				WorkspaceID: workspaceID,
-				Limit:       5,
-				Offset:      10,
-			},
-			setupMocks: func() {
-				mockQuerier.EXPECT().ListProductsWithPagination(ctx, db.ListProductsWithPaginationParams{
-					WorkspaceID: workspaceID,
-					Limit:       5,
-					Offset:      10,
-				}).Return(products, nil)
-				mockQuerier.EXPECT().CountProducts(ctx, workspaceID).Return(int64(12), nil)
-
-				// Mock ListPricesByProduct for any product ID
-				mockQuerier.EXPECT().ListPricesByProduct(ctx, gomock.Any()).Return([]db.Price{}, nil).AnyTimes()
-			},
-			wantErr:     false,
-			wantCount:   2,
-			wantHasMore: false, // 10 offset + 5 limit >= 12 total
-		},
-		{
-			name: "handles limit too high (caps at 100)",
-			params: params.ListProductsParams{
-				WorkspaceID: workspaceID,
-				Limit:       200, // Should be capped at 100
-			},
-			setupMocks: func() {
-				mockQuerier.EXPECT().ListProductsWithPagination(ctx, db.ListProductsWithPaginationParams{
-					WorkspaceID: workspaceID,
-					Limit:       100, // Capped limit
-					Offset:      0,
-				}).Return(products, nil)
-				mockQuerier.EXPECT().CountProducts(ctx, workspaceID).Return(int64(2), nil)
-			},
-			wantErr:     false,
-			wantCount:   2,
-			wantHasMore: false,
-		},
-		{
-			name: "fails with empty workspace ID",
-			params: params.ListProductsParams{
-				Limit:  10,
-				Offset: 0,
-			},
-			setupMocks:  func() {},
-			wantErr:     true,
-			errorString: "workspace ID is required",
-		},
-		{
-			name: "database error during listing",
-			params: params.ListProductsParams{
-				WorkspaceID: workspaceID,
-				Limit:       10,
-			},
-			setupMocks: func() {
-				mockQuerier.EXPECT().ListProductsWithPagination(ctx, gomock.Any()).Return(nil, errors.New("database error"))
-			},
-			wantErr:     true,
-			errorString: "failed to retrieve products",
-		},
-		{
-			name: "database error during counting",
-			params: params.ListProductsParams{
-				WorkspaceID: workspaceID,
-				Limit:       10,
-			},
-			setupMocks: func() {
-				mockQuerier.EXPECT().ListProductsWithPagination(ctx, gomock.Any()).Return(products, nil)
-				mockQuerier.EXPECT().CountProducts(ctx, workspaceID).Return(int64(0), errors.New("count error"))
-			},
-			wantErr:     true,
-			errorString: "failed to count products",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-
-			result, err := service.ListProducts(ctx, tt.params)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Nil(t, result)
-				if tt.errorString != "" {
-					assert.Contains(t, err.Error(), tt.errorString)
-				}
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, result)
-				assert.Len(t, result.Products, tt.wantCount)
-				assert.Equal(t, tt.wantHasMore, result.HasMore)
+				assert.Equal(t, tt.wantProduct.ID, product.ID)
+				assert.Equal(t, tt.wantProduct.Name, product.Name)
 			}
 		})
 	}
@@ -664,27 +470,17 @@ func TestProductService_UpdateProduct(t *testing.T) {
 
 	productID := uuid.New()
 	workspaceID := uuid.New()
-	walletID := uuid.New()
-	newWalletID := uuid.New()
+	metadata := json.RawMessage(`{"updated": true}`)
 
 	existingProduct := db.Product{
-		ID:          productID,
-		WorkspaceID: workspaceID,
-		WalletID:    walletID,
-		Name:        "Original Product",
-		Description: pgtype.Text{String: "Original Description", Valid: true},
-		Active:      true,
+		ID:                  productID,
+		WorkspaceID:         workspaceID,
+		Name:                "Original Product",
+		Active:              true,
+		PriceType:           "one_time",
+		Currency:            "USD",
+		UnitAmountInPennies: 1000,
 	}
-
-	validWallet := db.Wallet{
-		ID:          newWalletID,
-		WorkspaceID: workspaceID,
-	}
-
-	updatedName := "Updated Product"
-	updatedDescription := "Updated Description"
-	updatedActive := false
-	metadata := json.RawMessage(`{"updated": true}`)
 
 	tests := []struct {
 		name        string
@@ -698,31 +494,24 @@ func TestProductService_UpdateProduct(t *testing.T) {
 			params: params.UpdateProductParams{
 				ProductID:   productID,
 				WorkspaceID: workspaceID,
-				Name:        &updatedName,
-				Description: &updatedDescription,
-				Active:      &updatedActive,
+				Name:        ptrString("Updated Product"),
+				Description: ptrString("Updated Description"),
+				ImageURL:    ptrString("https://example.com/new-image.jpg"),
+				URL:         ptrString("https://example.com/updated"),
+				Active:      ptrBool(false),
 				Metadata:    metadata,
-				WalletID:    &newWalletID,
 			},
 			setupMocks: func() {
+				// First get the existing product
 				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
 					ID:          productID,
 					WorkspaceID: workspaceID,
 				}).Return(existingProduct, nil)
 
-				// Validate new wallet ownership
-				mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
-					ID:          newWalletID,
-					WorkspaceID: workspaceID,
-				}).Return(validWallet, nil)
-
+				// Then update it
 				updatedProduct := existingProduct
-				updatedProduct.Name = updatedName
-				updatedProduct.Description = pgtype.Text{String: updatedDescription, Valid: true}
-				updatedProduct.Active = updatedActive
-				updatedProduct.Metadata = metadata
-				updatedProduct.WalletID = newWalletID
-
+				updatedProduct.Name = "Updated Product"
+				updatedProduct.Active = false
 				mockQuerier.EXPECT().UpdateProduct(ctx, gomock.Any()).Return(updatedProduct, nil)
 			},
 			wantErr: false,
@@ -732,7 +521,7 @@ func TestProductService_UpdateProduct(t *testing.T) {
 			params: params.UpdateProductParams{
 				ProductID:   productID,
 				WorkspaceID: workspaceID,
-				Name:        &updatedName,
+				Name:        ptrString("Partially Updated"),
 			},
 			setupMocks: func() {
 				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
@@ -741,72 +530,30 @@ func TestProductService_UpdateProduct(t *testing.T) {
 				}).Return(existingProduct, nil)
 
 				updatedProduct := existingProduct
-				updatedProduct.Name = updatedName
+				updatedProduct.Name = "Partially Updated"
 				mockQuerier.EXPECT().UpdateProduct(ctx, gomock.Any()).Return(updatedProduct, nil)
 			},
 			wantErr: false,
 		},
 		{
-			name: "fails with empty product ID",
+			name: "fails when product not found",
 			params: params.UpdateProductParams{
+				ProductID:   uuid.New(),
 				WorkspaceID: workspaceID,
-				Name:        &updatedName,
-			},
-			setupMocks:  func() {},
-			wantErr:     true,
-			errorString: "product ID is required",
-		},
-		{
-			name: "product not found",
-			params: params.UpdateProductParams{
-				ProductID:   productID,
-				WorkspaceID: workspaceID,
-				Name:        &updatedName,
+				Name:        ptrString("Updated"),
 			},
 			setupMocks: func() {
-				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
-					ID:          productID,
-					WorkspaceID: workspaceID,
-				}).Return(db.Product{}, pgx.ErrNoRows)
+				mockQuerier.EXPECT().GetProduct(ctx, gomock.Any()).Return(db.Product{}, pgx.ErrNoRows)
 			},
 			wantErr:     true,
 			errorString: "product not found",
 		},
 		{
-			name: "product not found in workspace",
-			params: params.UpdateProductParams{
-				ProductID:   productID,
-				WorkspaceID: uuid.New(), // Different workspace
-				Name:        &updatedName,
-			},
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetProduct(ctx, gomock.Any()).Return(existingProduct, nil)
-			},
-			wantErr:     true,
-			errorString: "product not found in workspace",
-		},
-		{
-			name: "fails with invalid product name (too long)",
+			name: "handles database error during update",
 			params: params.UpdateProductParams{
 				ProductID:   productID,
 				WorkspaceID: workspaceID,
-				Name:        func() *string { s := string(make([]byte, 300)); return &s }(), // Too long name
-			},
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
-					ID:          productID,
-					WorkspaceID: workspaceID,
-				}).Return(existingProduct, nil)
-			},
-			wantErr:     true,
-			errorString: "name must be less than 255 characters",
-		},
-		{
-			name: "fails with wallet not belonging to workspace",
-			params: params.UpdateProductParams{
-				ProductID:   productID,
-				WorkspaceID: workspaceID,
-				WalletID:    &newWalletID,
+				Name:        ptrString("Updated"),
 			},
 			setupMocks: func() {
 				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
@@ -814,31 +561,7 @@ func TestProductService_UpdateProduct(t *testing.T) {
 					WorkspaceID: workspaceID,
 				}).Return(existingProduct, nil)
 
-				invalidWallet := db.Wallet{
-					ID:          newWalletID,
-					WorkspaceID: uuid.New(), // Different workspace
-				}
-				mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
-					ID:          newWalletID,
-					WorkspaceID: workspaceID,
-				}).Return(invalidWallet, nil)
-			},
-			wantErr:     true,
-			errorString: "wallet does not belong to workspace",
-		},
-		{
-			name: "database error during update",
-			params: params.UpdateProductParams{
-				ProductID:   productID,
-				WorkspaceID: workspaceID,
-				Name:        &updatedName,
-			},
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
-					ID:          productID,
-					WorkspaceID: workspaceID,
-				}).Return(existingProduct, nil)
-				mockQuerier.EXPECT().UpdateProduct(ctx, gomock.Any()).Return(db.Product{}, errors.New("update error"))
+				mockQuerier.EXPECT().UpdateProduct(ctx, gomock.Any()).Return(db.Product{}, errors.New("database error"))
 			},
 			wantErr:     true,
 			errorString: "failed to update product",
@@ -860,9 +583,6 @@ func TestProductService_UpdateProduct(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, product)
-				if tt.params.Name != nil {
-					assert.Equal(t, *tt.params.Name, product.Name)
-				}
 			}
 		})
 	}
@@ -879,12 +599,6 @@ func TestProductService_DeleteProduct(t *testing.T) {
 	productID := uuid.New()
 	workspaceID := uuid.New()
 
-	existingProduct := db.Product{
-		ID:          productID,
-		WorkspaceID: workspaceID,
-		Name:        "Test Product",
-	}
-
 	tests := []struct {
 		name        string
 		productID   uuid.UUID
@@ -898,10 +612,15 @@ func TestProductService_DeleteProduct(t *testing.T) {
 			productID:   productID,
 			workspaceID: workspaceID,
 			setupMocks: func() {
+				// First get the product to validate ownership
 				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
 					ID:          productID,
 					WorkspaceID: workspaceID,
-				}).Return(existingProduct, nil)
+				}).Return(db.Product{
+					ID:          productID,
+					WorkspaceID: workspaceID,
+				}, nil)
+				// Then delete it
 				mockQuerier.EXPECT().DeleteProduct(ctx, db.DeleteProductParams{
 					ID:          productID,
 					WorkspaceID: workspaceID,
@@ -910,49 +629,31 @@ func TestProductService_DeleteProduct(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:        "fails with empty product ID",
-			productID:   uuid.Nil,
-			workspaceID: workspaceID,
-			setupMocks:  func() {},
-			wantErr:     true,
-			errorString: "product ID is required",
-		},
-		{
-			name:        "product not found",
-			productID:   productID,
+			name:        "fails when product not found",
+			productID:   uuid.New(),
 			workspaceID: workspaceID,
 			setupMocks: func() {
-				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
-					ID:          productID,
-					WorkspaceID: workspaceID,
-				}).Return(db.Product{}, pgx.ErrNoRows)
+				// Get product fails - not found
+				mockQuerier.EXPECT().GetProduct(ctx, gomock.Any()).Return(db.Product{}, pgx.ErrNoRows)
 			},
 			wantErr:     true,
 			errorString: "product not found",
 		},
 		{
-			name:        "product not found in workspace",
-			productID:   productID,
-			workspaceID: uuid.New(), // Different workspace
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetProduct(ctx, gomock.Any()).Return(existingProduct, nil)
-			},
-			wantErr:     true,
-			errorString: "product not found in workspace",
-		},
-		{
-			name:        "database error during deletion",
+			name:        "handles database error",
 			productID:   productID,
 			workspaceID: workspaceID,
 			setupMocks: func() {
+				// Get product succeeds
 				mockQuerier.EXPECT().GetProduct(ctx, db.GetProductParams{
 					ID:          productID,
 					WorkspaceID: workspaceID,
-				}).Return(existingProduct, nil)
-				mockQuerier.EXPECT().DeleteProduct(ctx, db.DeleteProductParams{
+				}).Return(db.Product{
 					ID:          productID,
 					WorkspaceID: workspaceID,
-				}).Return(errors.New("delete error"))
+				}, nil)
+				// Delete fails
+				mockQuerier.EXPECT().DeleteProduct(ctx, gomock.Any()).Return(errors.New("database error"))
 			},
 			wantErr:     true,
 			errorString: "failed to delete product",
@@ -977,7 +678,7 @@ func TestProductService_DeleteProduct(t *testing.T) {
 	}
 }
 
-func TestProductService_GetPublicProductByPriceID(t *testing.T) {
+func TestProductService_ListProducts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -985,562 +686,77 @@ func TestProductService_GetPublicProductByPriceID(t *testing.T) {
 	service := services.NewProductService(mockQuerier)
 	ctx := context.Background()
 
-	priceID := uuid.New()
-	productID := uuid.New()
-	workspaceID := uuid.New()
-	walletID := uuid.New()
-	networkID := uuid.New()
-	tokenID := uuid.New()
-
-	validPrice := db.Price{
-		ID:        priceID,
-		ProductID: productID,
-		Active:    true,
-	}
-
-	validProduct := db.Product{
-		ID:          productID,
-		WorkspaceID: workspaceID,
-		WalletID:    walletID,
-		Name:        "Test Product",
-		Active:      true,
-	}
-
-	validWallet := db.Wallet{
-		ID:            walletID,
-		WorkspaceID:   workspaceID,
-		WalletAddress: "0x123456789abcdef",
-	}
-
-	validWorkspace := db.Workspace{
-		ID:        workspaceID,
-		Name:      "Test Workspace",
-		AccountID: uuid.New(),
-	}
-
-	validProductTokens := []db.GetActiveProductTokensByProductRow{
-		{
-			ID:        uuid.New(),
-			ProductID: productID,
-			NetworkID: networkID,
-			TokenID:   tokenID,
-		},
-	}
-
-	validToken := db.Token{
-		ID:              tokenID,
-		ContractAddress: "0xtoken123",
-		NetworkID:       networkID,
-	}
-
-	tests := []struct {
-		name        string
-		priceID     uuid.UUID
-		setupMocks  func()
-		wantErr     bool
-		errorString string
-	}{
-		{
-			name:    "successfully gets public product by price ID",
-			priceID: priceID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(validPrice, nil)
-				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(validProduct, nil)
-				mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
-					ID:          walletID,
-					WorkspaceID: workspaceID,
-				}).Return(validWallet, nil)
-				mockQuerier.EXPECT().GetWorkspace(ctx, workspaceID).Return(validWorkspace, nil)
-				mockQuerier.EXPECT().GetActiveProductTokensByProduct(ctx, productID).Return(validProductTokens, nil)
-				mockQuerier.EXPECT().GetToken(ctx, tokenID).Return(validToken, nil)
-				mockQuerier.EXPECT().GetNetwork(ctx, networkID).Return(db.Network{
-					ID:          networkID,
-					DisplayName: pgtype.Text{String: "Ethereum", Valid: true},
-					NetworkType: db.NetworkTypeEvm,
-					ChainID:     1,
-				}, nil)
-			},
-			wantErr: false,
-		},
-		{
-			name:        "fails with empty price ID",
-			priceID:     uuid.Nil,
-			setupMocks:  func() {},
-			wantErr:     true,
-			errorString: "price ID is required",
-		},
-		{
-			name:    "price not found",
-			priceID: priceID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(db.Price{}, pgx.ErrNoRows)
-			},
-			wantErr:     true,
-			errorString: "price not found",
-		},
-		{
-			name:    "price not active",
-			priceID: priceID,
-			setupMocks: func() {
-				inactivePrice := db.Price{
-					ID:        priceID,
-					ProductID: productID,
-					Active:    false,
-				}
-				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(inactivePrice, nil)
-			},
-			wantErr:     true,
-			errorString: "price is not active",
-		},
-		{
-			name:    "product not found",
-			priceID: priceID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(validPrice, nil)
-				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(db.Product{}, pgx.ErrNoRows)
-			},
-			wantErr:     true,
-			errorString: "product not found for the given price",
-		},
-		{
-			name:    "product not active",
-			priceID: priceID,
-			setupMocks: func() {
-				inactiveProduct := db.Product{
-					ID:          productID,
-					WorkspaceID: workspaceID,
-					WalletID:    walletID,
-					Name:        "Test Product",
-					Active:      false,
-				}
-				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(validPrice, nil)
-				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(inactiveProduct, nil)
-			},
-			wantErr:     true,
-			errorString: "product associated with this price is not active",
-		},
-		{
-			name:    "wallet not found",
-			priceID: priceID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(validPrice, nil)
-				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(validProduct, nil)
-				mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
-					ID:          walletID,
-					WorkspaceID: workspaceID,
-				}).Return(db.Wallet{}, pgx.ErrNoRows)
-			},
-			wantErr:     true,
-			errorString: "wallet not found for the product",
-		},
-		{
-			name:    "workspace not found",
-			priceID: priceID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(validPrice, nil)
-				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(validProduct, nil)
-				mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
-					ID:          walletID,
-					WorkspaceID: workspaceID,
-				}).Return(validWallet, nil)
-				mockQuerier.EXPECT().GetWorkspace(ctx, workspaceID).Return(db.Workspace{}, pgx.ErrNoRows)
-			},
-			wantErr:     true,
-			errorString: "workspace not found for the product",
-		},
-		{
-			name:    "failed to retrieve product tokens",
-			priceID: priceID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(validPrice, nil)
-				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(validProduct, nil)
-				mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
-					ID:          walletID,
-					WorkspaceID: workspaceID,
-				}).Return(validWallet, nil)
-				mockQuerier.EXPECT().GetWorkspace(ctx, workspaceID).Return(validWorkspace, nil)
-				mockQuerier.EXPECT().GetActiveProductTokensByProduct(ctx, productID).Return(nil, errors.New("token error"))
-			},
-			wantErr:     true,
-			errorString: "failed to retrieve product tokens",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-
-			response, err := service.GetPublicProductByPriceID(ctx, tt.priceID)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Nil(t, response)
-				if tt.errorString != "" {
-					assert.Contains(t, err.Error(), tt.errorString)
-				}
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, response)
-				assert.Equal(t, productID.String(), response.ID)
-				assert.Equal(t, validProduct.Name, response.Name)
-			}
-		})
-	}
-}
-
-// TestProductService_EdgeCases tests various edge cases and boundary conditions
-func TestProductService_EdgeCases(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockQuerier := mocks.NewMockQuerier(ctrl)
-	service := services.NewProductService(mockQuerier)
-	ctx := context.Background()
-
-	t.Run("nil metadata is handled correctly", func(t *testing.T) {
-		workspaceID := uuid.New()
-		walletID := uuid.New()
-		params := params.CreateProductParams{
-			WorkspaceID: workspaceID,
-			WalletID:    walletID,
-			Name:        "Test Product",
-			Metadata:    nil,
-		}
-
-		validWallet := db.Wallet{
-			ID:          walletID,
-			WorkspaceID: workspaceID,
-		}
-
-		mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
-			ID:          walletID,
-			WorkspaceID: workspaceID,
-		}).Return(validWallet, nil)
-
-		expectedProduct := db.Product{
-			ID:          uuid.New(),
-			WorkspaceID: workspaceID,
-			WalletID:    walletID,
-			Name:        "Test Product",
-		}
-		mockQuerier.EXPECT().CreateProduct(ctx, gomock.Any()).Return(expectedProduct, nil)
-
-		product, prices, err := service.CreateProduct(ctx, params)
-		assert.NoError(t, err)
-		assert.NotNil(t, product)
-		assert.NotNil(t, prices)
-	})
-
-	t.Run("empty metadata is handled correctly", func(t *testing.T) {
-		workspaceID := uuid.New()
-		walletID := uuid.New()
-		params := params.CreateProductParams{
-			WorkspaceID: workspaceID,
-			WalletID:    walletID,
-			Name:        "Test Product",
-			Metadata:    json.RawMessage(`{}`),
-		}
-
-		validWallet := db.Wallet{
-			ID:          walletID,
-			WorkspaceID: workspaceID,
-		}
-
-		mockQuerier.EXPECT().GetWalletByID(ctx, db.GetWalletByIDParams{
-			ID:          walletID,
-			WorkspaceID: workspaceID,
-		}).Return(validWallet, nil)
-
-		expectedProduct := db.Product{
-			ID:          uuid.New(),
-			WorkspaceID: workspaceID,
-			WalletID:    walletID,
-			Name:        "Test Product",
-		}
-		mockQuerier.EXPECT().CreateProduct(ctx, gomock.Any()).Return(expectedProduct, nil)
-
-		product, prices, err := service.CreateProduct(ctx, params)
-		assert.NoError(t, err)
-		assert.NotNil(t, product)
-		assert.NotNil(t, prices)
-	})
-
-	t.Run("context cancellation", func(t *testing.T) {
-		// Create a cancelled context
-		cancelledCtx, cancel := context.WithCancel(context.Background())
-		cancel()
-
-		productID := uuid.New()
-		params := params.GetProductParams{
-			ProductID:   productID,
-			WorkspaceID: uuid.New(),
-		}
-
-		mockQuerier.EXPECT().GetProduct(cancelledCtx, gomock.Any()).Return(db.Product{}, context.Canceled)
-
-		_, _, err := service.GetProduct(cancelledCtx, params)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "product not found")
-	})
-
-	t.Run("zero limit gets set to default", func(t *testing.T) {
-		workspaceID := uuid.New()
-		params := params.ListProductsParams{
-			WorkspaceID: workspaceID,
-			Limit:       0, // Should default to 10
-		}
-
-		mockQuerier.EXPECT().ListProductsWithPagination(ctx, db.ListProductsWithPaginationParams{
-			WorkspaceID: workspaceID,
-			Limit:       10, // Default applied
-			Offset:      0,
-		}).Return([]db.Product{}, nil)
-		mockQuerier.EXPECT().CountProducts(ctx, workspaceID).Return(int64(0), nil)
-
-		result, err := service.ListProducts(ctx, params)
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-	})
-
-	t.Run("negative limit gets set to default", func(t *testing.T) {
-		workspaceID := uuid.New()
-		params := params.ListProductsParams{
-			WorkspaceID: workspaceID,
-			Limit:       -5, // Should default to 10
-		}
-
-		mockQuerier.EXPECT().ListProductsWithPagination(ctx, db.ListProductsWithPaginationParams{
-			WorkspaceID: workspaceID,
-			Limit:       10, // Default applied
-			Offset:      0,
-		}).Return([]db.Product{}, nil)
-		mockQuerier.EXPECT().CountProducts(ctx, workspaceID).Return(int64(0), nil)
-
-		result, err := service.ListProducts(ctx, params)
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-	})
-}
-
-func TestProductService_ValidateSubscriptionRequest(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockQuerier := mocks.NewMockQuerier(ctrl)
-	service := services.NewProductService(mockQuerier)
-	ctx := context.Background()
-
-	priceID := uuid.New()
-	productTokenID := uuid.New()
-
-	tests := []struct {
-		name        string
-		params      params.ValidateSubscriptionParams
-		wantErr     bool
-		errorString string
-	}{
-		{
-			name: "successfully validates subscription request",
-			params: params.ValidateSubscriptionParams{
-				SubscriberAddress:         "0x123456789abcdef",
-				PriceID:                   priceID.String(),
-				ProductTokenID:            productTokenID.String(),
-				TokenAmount:               "1000",
-				CypheraSmartWalletAddress: "0xabcdef123456789",
-				Delegation: params.DelegationParams{
-					Delegate:  "0xabcdef123456789",
-					Delegator: "0x987654321fedcba",
-					Authority: "0x111222333444555",
-					Salt:      "0x666777888999aaa",
-					Signature: "0xdeadbeefcafebabe",
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "fails with empty subscriber address",
-			params: params.ValidateSubscriptionParams{
-				PriceID:                   priceID.String(),
-				ProductTokenID:            productTokenID.String(),
-				TokenAmount:               "1000",
-				CypheraSmartWalletAddress: "0xabcdef123456789",
-			},
-			wantErr:     true,
-			errorString: "subscriber address is required",
-		},
-		{
-			name: "fails with invalid price ID format",
-			params: params.ValidateSubscriptionParams{
-				SubscriberAddress:         "0x123456789abcdef",
-				PriceID:                   "invalid-uuid",
-				ProductTokenID:            productTokenID.String(),
-				TokenAmount:               "1000",
-				CypheraSmartWalletAddress: "0xabcdef123456789",
-			},
-			wantErr:     true,
-			errorString: "invalid price ID format",
-		},
-		{
-			name: "fails with invalid product token ID format",
-			params: params.ValidateSubscriptionParams{
-				SubscriberAddress:         "0x123456789abcdef",
-				PriceID:                   priceID.String(),
-				ProductTokenID:            "invalid-uuid",
-				TokenAmount:               "1000",
-				CypheraSmartWalletAddress: "0xabcdef123456789",
-			},
-			wantErr:     true,
-			errorString: "invalid product token ID format",
-		},
-		{
-			name: "fails with invalid token amount format",
-			params: params.ValidateSubscriptionParams{
-				SubscriberAddress:         "0x123456789abcdef",
-				PriceID:                   priceID.String(),
-				ProductTokenID:            productTokenID.String(),
-				TokenAmount:               "invalid-amount",
-				CypheraSmartWalletAddress: "0xabcdef123456789",
-			},
-			wantErr:     true,
-			errorString: "invalid token amount format",
-		},
-		{
-			name: "fails with zero token amount",
-			params: params.ValidateSubscriptionParams{
-				SubscriberAddress:         "0x123456789abcdef",
-				PriceID:                   priceID.String(),
-				ProductTokenID:            productTokenID.String(),
-				TokenAmount:               "0",
-				CypheraSmartWalletAddress: "0xabcdef123456789",
-			},
-			wantErr:     true,
-			errorString: "token amount must be greater than zero",
-		},
-		{
-			name: "fails with negative token amount",
-			params: params.ValidateSubscriptionParams{
-				SubscriberAddress:         "0x123456789abcdef",
-				PriceID:                   priceID.String(),
-				ProductTokenID:            productTokenID.String(),
-				TokenAmount:               "-100",
-				CypheraSmartWalletAddress: "0xabcdef123456789",
-			},
-			wantErr:     true,
-			errorString: "token amount must be greater than zero",
-		},
-		{
-			name: "fails with mismatched delegate address",
-			params: params.ValidateSubscriptionParams{
-				SubscriberAddress:         "0x123456789abcdef",
-				PriceID:                   priceID.String(),
-				ProductTokenID:            productTokenID.String(),
-				TokenAmount:               "1000",
-				CypheraSmartWalletAddress: "0xabcdef123456789",
-				Delegation: params.DelegationParams{
-					Delegate:  "0xwrongaddress123",
-					Delegator: "0x987654321fedcba",
-					Authority: "0x111222333444555",
-					Salt:      "0x666777888999aaa",
-					Signature: "0xdeadbeefcafebabe",
-				},
-			},
-			wantErr:     true,
-			errorString: "delegate address does not match cyphera smart wallet address",
-		},
-		{
-			name: "fails with incomplete delegation data",
-			params: params.ValidateSubscriptionParams{
-				SubscriberAddress:         "0x123456789abcdef",
-				PriceID:                   priceID.String(),
-				ProductTokenID:            productTokenID.String(),
-				TokenAmount:               "1000",
-				CypheraSmartWalletAddress: "0xabcdef123456789",
-				Delegation: params.DelegationParams{
-					Delegate:  "0xabcdef123456789",
-					Delegator: "", // Missing delegator
-					Authority: "0x111222333444555",
-					Salt:      "0x666777888999aaa",
-					Signature: "0xdeadbeefcafebabe",
-				},
-			},
-			wantErr:     true,
-			errorString: "incomplete delegation data",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := service.ValidateSubscriptionRequest(ctx, tt.params)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				if tt.errorString != "" {
-					assert.Contains(t, err.Error(), tt.errorString)
-				}
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestProductService_ValidateProductForSubscription(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockQuerier := mocks.NewMockQuerier(ctrl)
-	service := services.NewProductService(mockQuerier)
-	ctx := context.Background()
-
-	productID := uuid.New()
 	workspaceID := uuid.New()
 
-	validProduct := db.Product{
-		ID:          productID,
-		WorkspaceID: workspaceID,
-		Name:        "Test Product",
-		Active:      true,
-	}
-
-	inactiveProduct := db.Product{
-		ID:          productID,
-		WorkspaceID: workspaceID,
-		Name:        "Inactive Product",
-		Active:      false,
+	expectedProducts := []db.Product{
+		{
+			ID:                  uuid.New(),
+			WorkspaceID:         workspaceID,
+			Name:                "Product 1",
+			PriceType:           "one_time",
+			Currency:            "USD",
+			UnitAmountInPennies: 1000,
+		},
+		{
+			ID:                  uuid.New(),
+			WorkspaceID:         workspaceID,
+			Name:                "Product 2",
+			PriceType:           "recurring",
+			Currency:            "USD",
+			UnitAmountInPennies: 2000,
+			IntervalType:        db.NullIntervalType{IntervalType: db.IntervalTypeMonth, Valid: true},
+		},
 	}
 
 	tests := []struct {
 		name        string
-		productID   uuid.UUID
+		workspaceID uuid.UUID
 		setupMocks  func()
+		wantCount   int
 		wantErr     bool
 		errorString string
 	}{
 		{
-			name:      "successfully validates active product",
-			productID: productID,
+			name:        "successfully lists products",
+			workspaceID: workspaceID,
 			setupMocks: func() {
-				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(validProduct, nil)
+				mockQuerier.EXPECT().ListProductsWithPagination(ctx, db.ListProductsWithPaginationParams{
+					WorkspaceID: workspaceID,
+					Limit:       100,
+					Offset:      0,
+				}).Return(expectedProducts, nil)
+				mockQuerier.EXPECT().CountProducts(ctx, workspaceID).Return(int64(2), nil)
 			},
-			wantErr: false,
+			wantCount: 2,
+			wantErr:   false,
 		},
 		{
-			name:      "fails with product not found",
-			productID: productID,
+			name:        "returns empty list when no products",
+			workspaceID: workspaceID,
 			setupMocks: func() {
-				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(db.Product{}, pgx.ErrNoRows)
+				mockQuerier.EXPECT().ListProductsWithPagination(ctx, db.ListProductsWithPaginationParams{
+					WorkspaceID: workspaceID,
+					Limit:       100,
+					Offset:      0,
+				}).Return([]db.Product{}, nil)
+				mockQuerier.EXPECT().CountProducts(ctx, workspaceID).Return(int64(0), nil)
 			},
-			wantErr:     true,
-			errorString: "product not found",
+			wantCount: 0,
+			wantErr:   false,
 		},
 		{
-			name:      "fails with inactive product",
-			productID: productID,
+			name:        "handles database error",
+			workspaceID: workspaceID,
 			setupMocks: func() {
-				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(inactiveProduct, nil)
+				mockQuerier.EXPECT().ListProductsWithPagination(ctx, db.ListProductsWithPaginationParams{
+					WorkspaceID: workspaceID,
+					Limit:       100,
+					Offset:      0,
+				}).Return(nil, errors.New("database error"))
 			},
+			wantCount:   0,
 			wantErr:     true,
-			errorString: "product is not active",
+			errorString: "failed to retrieve products",
 		},
 	}
 
@@ -1548,263 +764,23 @@ func TestProductService_ValidateProductForSubscription(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMocks()
 
-			product, err := service.ValidateProductForSubscription(ctx, tt.productID)
+			result, err := service.ListProducts(ctx, params.ListProductsParams{
+				WorkspaceID: tt.workspaceID,
+				Limit:       100,
+				Offset:      0,
+			})
 
 			if tt.wantErr {
 				assert.Error(t, err)
-				assert.Nil(t, product)
+				assert.Nil(t, result)
 				if tt.errorString != "" {
 					assert.Contains(t, err.Error(), tt.errorString)
 				}
 			} else {
 				assert.NoError(t, err)
-				assert.NotNil(t, product)
-				assert.Equal(t, productID, product.ID)
-				assert.True(t, product.Active)
-			}
-		})
-	}
-}
-
-func TestProductService_ValidatePriceForSubscription(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockQuerier := mocks.NewMockQuerier(ctrl)
-	service := services.NewProductService(mockQuerier)
-	ctx := context.Background()
-
-	priceID := uuid.New()
-	productID := uuid.New()
-	workspaceID := uuid.New()
-
-	validPrice := db.Price{
-		ID:        priceID,
-		ProductID: productID,
-		Active:    true,
-	}
-
-	inactivePrice := db.Price{
-		ID:        priceID,
-		ProductID: productID,
-		Active:    false,
-	}
-
-	validProduct := db.Product{
-		ID:          productID,
-		WorkspaceID: workspaceID,
-		Name:        "Test Product",
-		Active:      true,
-	}
-
-	tests := []struct {
-		name        string
-		priceID     uuid.UUID
-		setupMocks  func()
-		wantErr     bool
-		errorString string
-	}{
-		{
-			name:    "successfully validates active price and product",
-			priceID: priceID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(validPrice, nil)
-				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(validProduct, nil)
-			},
-			wantErr: false,
-		},
-		{
-			name:    "fails with price not found",
-			priceID: priceID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(db.Price{}, pgx.ErrNoRows)
-			},
-			wantErr:     true,
-			errorString: "price not found",
-		},
-		{
-			name:    "fails with inactive price",
-			priceID: priceID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(inactivePrice, nil)
-			},
-			wantErr:     true,
-			errorString: "price is not active",
-		},
-		{
-			name:    "fails when product validation fails",
-			priceID: priceID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetPrice(ctx, priceID).Return(validPrice, nil)
-				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(ctx, productID).Return(db.Product{}, pgx.ErrNoRows)
-			},
-			wantErr:     true,
-			errorString: "product validation failed",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-
-			price, product, err := service.ValidatePriceForSubscription(ctx, tt.priceID)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Nil(t, price)
-				assert.Nil(t, product)
-				if tt.errorString != "" {
-					assert.Contains(t, err.Error(), tt.errorString)
-				}
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, price)
-				assert.NotNil(t, product)
-				assert.Equal(t, priceID, price.ID)
-				assert.Equal(t, productID, product.ID)
-				assert.True(t, price.Active)
-				assert.True(t, product.Active)
-			}
-		})
-	}
-}
-
-func TestProductService_GetProductTokenWithValidation(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockQuerier := mocks.NewMockQuerier(ctrl)
-	service := services.NewProductService(mockQuerier)
-	ctx := context.Background()
-
-	productTokenID := uuid.New()
-	productID := uuid.New()
-	tokenID := uuid.New()
-	otherProductID := uuid.New()
-
-	validProductToken := db.GetProductTokenRow{
-		ID:        productTokenID,
-		ProductID: productID,
-		TokenID:   tokenID,
-		Active:    true,
-	}
-
-	inactiveProductToken := db.GetProductTokenRow{
-		ID:        productTokenID,
-		ProductID: productID,
-		TokenID:   tokenID,
-		Active:    false,
-	}
-
-	wrongProductToken := db.GetProductTokenRow{
-		ID:        productTokenID,
-		ProductID: otherProductID, // Different product
-		TokenID:   tokenID,
-		Active:    true,
-	}
-
-	validToken := db.Token{
-		ID:              tokenID,
-		ContractAddress: "0xtoken123",
-		Active:          true,
-	}
-
-	inactiveToken := db.Token{
-		ID:              tokenID,
-		ContractAddress: "0xtoken123",
-		Active:          false,
-	}
-
-	tests := []struct {
-		name           string
-		productTokenID uuid.UUID
-		productID      uuid.UUID
-		setupMocks     func()
-		wantErr        bool
-		errorString    string
-	}{
-		{
-			name:           "successfully validates product token",
-			productTokenID: productTokenID,
-			productID:      productID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetProductToken(ctx, productTokenID).Return(validProductToken, nil)
-				mockQuerier.EXPECT().GetToken(ctx, tokenID).Return(validToken, nil)
-			},
-			wantErr: false,
-		},
-		{
-			name:           "fails with product token not found",
-			productTokenID: productTokenID,
-			productID:      productID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetProductToken(ctx, productTokenID).Return(db.GetProductTokenRow{}, pgx.ErrNoRows)
-			},
-			wantErr:     true,
-			errorString: "product token not found",
-		},
-		{
-			name:           "fails when product token belongs to different product",
-			productTokenID: productTokenID,
-			productID:      productID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetProductToken(ctx, productTokenID).Return(wrongProductToken, nil)
-			},
-			wantErr:     true,
-			errorString: "product token does not belong to the specified product",
-		},
-		{
-			name:           "fails with inactive product token",
-			productTokenID: productTokenID,
-			productID:      productID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetProductToken(ctx, productTokenID).Return(inactiveProductToken, nil)
-			},
-			wantErr:     true,
-			errorString: "product token is not active",
-		},
-		{
-			name:           "fails with token not found",
-			productTokenID: productTokenID,
-			productID:      productID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetProductToken(ctx, productTokenID).Return(validProductToken, nil)
-				mockQuerier.EXPECT().GetToken(ctx, tokenID).Return(db.Token{}, pgx.ErrNoRows)
-			},
-			wantErr:     true,
-			errorString: "token not found",
-		},
-		{
-			name:           "fails with inactive token",
-			productTokenID: productTokenID,
-			productID:      productID,
-			setupMocks: func() {
-				mockQuerier.EXPECT().GetProductToken(ctx, productTokenID).Return(validProductToken, nil)
-				mockQuerier.EXPECT().GetToken(ctx, tokenID).Return(inactiveToken, nil)
-			},
-			wantErr:     true,
-			errorString: "token is not active",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-
-			productToken, err := service.GetProductTokenWithValidation(ctx, tt.productTokenID, tt.productID)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Nil(t, productToken)
-				if tt.errorString != "" {
-					assert.Contains(t, err.Error(), tt.errorString)
-				}
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, productToken)
-				assert.Equal(t, productTokenID, productToken.ID)
-				assert.Equal(t, productID, productToken.ProductID)
-				assert.True(t, productToken.Active)
+				assert.NotNil(t, result)
+				assert.Len(t, result.Products, tt.wantCount)
+				assert.Equal(t, int64(tt.wantCount), result.Total)
 			}
 		})
 	}

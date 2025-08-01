@@ -73,21 +73,6 @@ func (mr *MockQuerierMockRecorder) ActivateNetwork(ctx, id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ActivateNetwork", reflect.TypeOf((*MockQuerier)(nil).ActivateNetwork), ctx, id)
 }
 
-// ActivatePrice mocks base method.
-func (m *MockQuerier) ActivatePrice(ctx context.Context, id uuid.UUID) (db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ActivatePrice", ctx, id)
-	ret0, _ := ret[0].(db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ActivatePrice indicates an expected call of ActivatePrice.
-func (mr *MockQuerierMockRecorder) ActivatePrice(ctx, id any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ActivatePrice", reflect.TypeOf((*MockQuerier)(nil).ActivatePrice), ctx, id)
-}
-
 // ActivateProduct mocks base method.
 func (m *MockQuerier) ActivateProduct(ctx context.Context, id uuid.UUID) (db.Product, error) {
 	m.ctrl.T.Helper()
@@ -218,20 +203,6 @@ func (m *MockQuerier) BulkUpdateInvoiceSyncStatus(ctx context.Context, arg db.Bu
 func (mr *MockQuerierMockRecorder) BulkUpdateInvoiceSyncStatus(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUpdateInvoiceSyncStatus", reflect.TypeOf((*MockQuerier)(nil).BulkUpdateInvoiceSyncStatus), ctx, arg)
-}
-
-// BulkUpdatePriceSyncStatus mocks base method.
-func (m *MockQuerier) BulkUpdatePriceSyncStatus(ctx context.Context, arg db.BulkUpdatePriceSyncStatusParams) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BulkUpdatePriceSyncStatus", ctx, arg)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// BulkUpdatePriceSyncStatus indicates an expected call of BulkUpdatePriceSyncStatus.
-func (mr *MockQuerierMockRecorder) BulkUpdatePriceSyncStatus(ctx, arg any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUpdatePriceSyncStatus", reflect.TypeOf((*MockQuerier)(nil).BulkUpdatePriceSyncStatus), ctx, arg)
 }
 
 // BulkUpdateProductSyncStatus mocks base method.
@@ -545,36 +516,6 @@ func (m *MockQuerier) CountPaymentsByWorkspace(ctx context.Context, workspaceID 
 func (mr *MockQuerierMockRecorder) CountPaymentsByWorkspace(ctx, workspaceID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPaymentsByWorkspace", reflect.TypeOf((*MockQuerier)(nil).CountPaymentsByWorkspace), ctx, workspaceID)
-}
-
-// CountPricesByProduct mocks base method.
-func (m *MockQuerier) CountPricesByProduct(ctx context.Context, productID uuid.UUID) (int64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CountPricesByProduct", ctx, productID)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CountPricesByProduct indicates an expected call of CountPricesByProduct.
-func (mr *MockQuerierMockRecorder) CountPricesByProduct(ctx, productID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPricesByProduct", reflect.TypeOf((*MockQuerier)(nil).CountPricesByProduct), ctx, productID)
-}
-
-// CountPricesByWorkspace mocks base method.
-func (m *MockQuerier) CountPricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CountPricesByWorkspace", ctx, workspaceID)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CountPricesByWorkspace indicates an expected call of CountPricesByWorkspace.
-func (mr *MockQuerierMockRecorder) CountPricesByWorkspace(ctx, workspaceID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPricesByWorkspace", reflect.TypeOf((*MockQuerier)(nil).CountPricesByWorkspace), ctx, workspaceID)
 }
 
 // CountProducts mocks base method.
@@ -1267,36 +1208,6 @@ func (mr *MockQuerierMockRecorder) CreatePaymentLink(ctx, arg any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePaymentLink", reflect.TypeOf((*MockQuerier)(nil).CreatePaymentLink), ctx, arg)
 }
 
-// CreatePrice mocks base method.
-func (m *MockQuerier) CreatePrice(ctx context.Context, arg db.CreatePriceParams) (db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreatePrice", ctx, arg)
-	ret0, _ := ret[0].(db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CreatePrice indicates an expected call of CreatePrice.
-func (mr *MockQuerierMockRecorder) CreatePrice(ctx, arg any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePrice", reflect.TypeOf((*MockQuerier)(nil).CreatePrice), ctx, arg)
-}
-
-// CreatePriceWithSync mocks base method.
-func (m *MockQuerier) CreatePriceWithSync(ctx context.Context, arg db.CreatePriceWithSyncParams) (db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreatePriceWithSync", ctx, arg)
-	ret0, _ := ret[0].(db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CreatePriceWithSync indicates an expected call of CreatePriceWithSync.
-func (mr *MockQuerierMockRecorder) CreatePriceWithSync(ctx, arg any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePriceWithSync", reflect.TypeOf((*MockQuerier)(nil).CreatePriceWithSync), ctx, arg)
-}
-
 // CreateProduct mocks base method.
 func (m *MockQuerier) CreateProduct(ctx context.Context, arg db.CreateProductParams) (db.Product, error) {
 	m.ctrl.T.Helper()
@@ -1639,21 +1550,6 @@ func (mr *MockQuerierMockRecorder) DeactivatePaymentLink(ctx, arg any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeactivatePaymentLink", reflect.TypeOf((*MockQuerier)(nil).DeactivatePaymentLink), ctx, arg)
 }
 
-// DeactivatePrice mocks base method.
-func (m *MockQuerier) DeactivatePrice(ctx context.Context, id uuid.UUID) (db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeactivatePrice", ctx, id)
-	ret0, _ := ret[0].(db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// DeactivatePrice indicates an expected call of DeactivatePrice.
-func (mr *MockQuerierMockRecorder) DeactivatePrice(ctx, id any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeactivatePrice", reflect.TypeOf((*MockQuerier)(nil).DeactivatePrice), ctx, id)
-}
-
 // DeactivateProduct mocks base method.
 func (m *MockQuerier) DeactivateProduct(ctx context.Context, id uuid.UUID) (db.Product, error) {
 	m.ctrl.T.Helper()
@@ -1982,20 +1878,6 @@ func (m *MockQuerier) DeletePaymentLink(ctx context.Context, arg db.DeletePaymen
 func (mr *MockQuerierMockRecorder) DeletePaymentLink(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePaymentLink", reflect.TypeOf((*MockQuerier)(nil).DeletePaymentLink), ctx, arg)
-}
-
-// DeletePrice mocks base method.
-func (m *MockQuerier) DeletePrice(ctx context.Context, id uuid.UUID) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeletePrice", ctx, id)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeletePrice indicates an expected call of DeletePrice.
-func (mr *MockQuerierMockRecorder) DeletePrice(ctx, id any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePrice", reflect.TypeOf((*MockQuerier)(nil).DeletePrice), ctx, id)
 }
 
 // DeleteProduct mocks base method.
@@ -2436,6 +2318,21 @@ func (mr *MockQuerierMockRecorder) GetActiveSyncSessionsByProvider(ctx, arg any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveSyncSessionsByProvider", reflect.TypeOf((*MockQuerier)(nil).GetActiveSyncSessionsByProvider), ctx, arg)
 }
 
+// GetAddonProducts mocks base method.
+func (m *MockQuerier) GetAddonProducts(ctx context.Context, workspaceID uuid.UUID) ([]db.Product, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAddonProducts", ctx, workspaceID)
+	ret0, _ := ret[0].([]db.Product)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAddonProducts indicates an expected call of GetAddonProducts.
+func (mr *MockQuerierMockRecorder) GetAddonProducts(ctx, workspaceID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAddonProducts", reflect.TypeOf((*MockQuerier)(nil).GetAddonProducts), ctx, workspaceID)
+}
+
 // GetAllAPIKeys mocks base method.
 func (m *MockQuerier) GetAllAPIKeys(ctx context.Context) ([]db.ApiKey, error) {
 	m.ctrl.T.Helper()
@@ -2524,6 +2421,21 @@ func (m *MockQuerier) GetAttemptsByType(ctx context.Context, campaignID uuid.UUI
 func (mr *MockQuerierMockRecorder) GetAttemptsByType(ctx, campaignID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAttemptsByType", reflect.TypeOf((*MockQuerier)(nil).GetAttemptsByType), ctx, campaignID)
+}
+
+// GetBaseProducts mocks base method.
+func (m *MockQuerier) GetBaseProducts(ctx context.Context, workspaceID uuid.UUID) ([]db.Product, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBaseProducts", ctx, workspaceID)
+	ret0, _ := ret[0].([]db.Product)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBaseProducts indicates an expected call of GetBaseProducts.
+func (mr *MockQuerierMockRecorder) GetBaseProducts(ctx, workspaceID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBaseProducts", reflect.TypeOf((*MockQuerier)(nil).GetBaseProducts), ctx, workspaceID)
 }
 
 // GetBusinessCustomers mocks base method.
@@ -4326,126 +4238,6 @@ func (mr *MockQuerierMockRecorder) GetPaymentsByWorkspace(ctx, arg any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPaymentsByWorkspace", reflect.TypeOf((*MockQuerier)(nil).GetPaymentsByWorkspace), ctx, arg)
 }
 
-// GetPrice mocks base method.
-func (m *MockQuerier) GetPrice(ctx context.Context, id uuid.UUID) (db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPrice", ctx, id)
-	ret0, _ := ret[0].(db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetPrice indicates an expected call of GetPrice.
-func (mr *MockQuerierMockRecorder) GetPrice(ctx, id any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPrice", reflect.TypeOf((*MockQuerier)(nil).GetPrice), ctx, id)
-}
-
-// GetPriceByExternalID mocks base method.
-func (m *MockQuerier) GetPriceByExternalID(ctx context.Context, arg db.GetPriceByExternalIDParams) (db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPriceByExternalID", ctx, arg)
-	ret0, _ := ret[0].(db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetPriceByExternalID indicates an expected call of GetPriceByExternalID.
-func (mr *MockQuerierMockRecorder) GetPriceByExternalID(ctx, arg any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPriceByExternalID", reflect.TypeOf((*MockQuerier)(nil).GetPriceByExternalID), ctx, arg)
-}
-
-// GetPriceWithProduct mocks base method.
-func (m *MockQuerier) GetPriceWithProduct(ctx context.Context, id uuid.UUID) (db.GetPriceWithProductRow, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPriceWithProduct", ctx, id)
-	ret0, _ := ret[0].(db.GetPriceWithProductRow)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetPriceWithProduct indicates an expected call of GetPriceWithProduct.
-func (mr *MockQuerierMockRecorder) GetPriceWithProduct(ctx, id any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPriceWithProduct", reflect.TypeOf((*MockQuerier)(nil).GetPriceWithProduct), ctx, id)
-}
-
-// GetPricesByPaymentProvider mocks base method.
-func (m *MockQuerier) GetPricesByPaymentProvider(ctx context.Context, arg db.GetPricesByPaymentProviderParams) ([]db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPricesByPaymentProvider", ctx, arg)
-	ret0, _ := ret[0].([]db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetPricesByPaymentProvider indicates an expected call of GetPricesByPaymentProvider.
-func (mr *MockQuerierMockRecorder) GetPricesByPaymentProvider(ctx, arg any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPricesByPaymentProvider", reflect.TypeOf((*MockQuerier)(nil).GetPricesByPaymentProvider), ctx, arg)
-}
-
-// GetPricesByPaymentSyncStatus mocks base method.
-func (m *MockQuerier) GetPricesByPaymentSyncStatus(ctx context.Context, arg db.GetPricesByPaymentSyncStatusParams) ([]db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPricesByPaymentSyncStatus", ctx, arg)
-	ret0, _ := ret[0].([]db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetPricesByPaymentSyncStatus indicates an expected call of GetPricesByPaymentSyncStatus.
-func (mr *MockQuerierMockRecorder) GetPricesByPaymentSyncStatus(ctx, arg any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPricesByPaymentSyncStatus", reflect.TypeOf((*MockQuerier)(nil).GetPricesByPaymentSyncStatus), ctx, arg)
-}
-
-// GetPricesNeedingSync mocks base method.
-func (m *MockQuerier) GetPricesNeedingSync(ctx context.Context, workspaceID uuid.UUID) ([]db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPricesNeedingSync", ctx, workspaceID)
-	ret0, _ := ret[0].([]db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetPricesNeedingSync indicates an expected call of GetPricesNeedingSync.
-func (mr *MockQuerierMockRecorder) GetPricesNeedingSync(ctx, workspaceID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPricesNeedingSync", reflect.TypeOf((*MockQuerier)(nil).GetPricesNeedingSync), ctx, workspaceID)
-}
-
-// GetPricesSyncedByProvider mocks base method.
-func (m *MockQuerier) GetPricesSyncedByProvider(ctx context.Context, arg db.GetPricesSyncedByProviderParams) ([]db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPricesSyncedByProvider", ctx, arg)
-	ret0, _ := ret[0].([]db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetPricesSyncedByProvider indicates an expected call of GetPricesSyncedByProvider.
-func (mr *MockQuerierMockRecorder) GetPricesSyncedByProvider(ctx, arg any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPricesSyncedByProvider", reflect.TypeOf((*MockQuerier)(nil).GetPricesSyncedByProvider), ctx, arg)
-}
-
-// GetPricesWithSyncConflicts mocks base method.
-func (m *MockQuerier) GetPricesWithSyncConflicts(ctx context.Context, workspaceID uuid.UUID) ([]db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPricesWithSyncConflicts", ctx, workspaceID)
-	ret0, _ := ret[0].([]db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetPricesWithSyncConflicts indicates an expected call of GetPricesWithSyncConflicts.
-func (mr *MockQuerierMockRecorder) GetPricesWithSyncConflicts(ctx, workspaceID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPricesWithSyncConflicts", reflect.TypeOf((*MockQuerier)(nil).GetPricesWithSyncConflicts), ctx, workspaceID)
-}
-
 // GetPrimaryCustomerWallet mocks base method.
 func (m *MockQuerier) GetPrimaryCustomerWallet(ctx context.Context, customerID uuid.UUID) (db.CustomerWallet, error) {
 	m.ctrl.T.Helper()
@@ -4596,6 +4388,21 @@ func (mr *MockQuerierMockRecorder) GetProductWithoutWorkspaceId(ctx, id any) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProductWithoutWorkspaceId", reflect.TypeOf((*MockQuerier)(nil).GetProductWithoutWorkspaceId), ctx, id)
 }
 
+// GetProductsByGroup mocks base method.
+func (m *MockQuerier) GetProductsByGroup(ctx context.Context, arg db.GetProductsByGroupParams) ([]db.Product, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProductsByGroup", ctx, arg)
+	ret0, _ := ret[0].([]db.Product)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetProductsByGroup indicates an expected call of GetProductsByGroup.
+func (mr *MockQuerierMockRecorder) GetProductsByGroup(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProductsByGroup", reflect.TypeOf((*MockQuerier)(nil).GetProductsByGroup), ctx, arg)
+}
+
 // GetProductsByPaymentProvider mocks base method.
 func (m *MockQuerier) GetProductsByPaymentProvider(ctx context.Context, arg db.GetProductsByPaymentProviderParams) ([]db.Product, error) {
 	m.ctrl.T.Helper()
@@ -4624,6 +4431,21 @@ func (m *MockQuerier) GetProductsByPaymentSyncStatus(ctx context.Context, arg db
 func (mr *MockQuerierMockRecorder) GetProductsByPaymentSyncStatus(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProductsByPaymentSyncStatus", reflect.TypeOf((*MockQuerier)(nil).GetProductsByPaymentSyncStatus), ctx, arg)
+}
+
+// GetProductsByType mocks base method.
+func (m *MockQuerier) GetProductsByType(ctx context.Context, arg db.GetProductsByTypeParams) ([]db.Product, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProductsByType", ctx, arg)
+	ret0, _ := ret[0].([]db.Product)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetProductsByType indicates an expected call of GetProductsByType.
+func (mr *MockQuerierMockRecorder) GetProductsByType(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProductsByType", reflect.TypeOf((*MockQuerier)(nil).GetProductsByType), ctx, arg)
 }
 
 // GetProductsNeedingSync mocks base method.
@@ -6154,36 +5976,6 @@ func (mr *MockQuerierMockRecorder) ListActiveNetworks(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListActiveNetworks", reflect.TypeOf((*MockQuerier)(nil).ListActiveNetworks), ctx)
 }
 
-// ListActivePricesByProduct mocks base method.
-func (m *MockQuerier) ListActivePricesByProduct(ctx context.Context, productID uuid.UUID) ([]db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListActivePricesByProduct", ctx, productID)
-	ret0, _ := ret[0].([]db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListActivePricesByProduct indicates an expected call of ListActivePricesByProduct.
-func (mr *MockQuerierMockRecorder) ListActivePricesByProduct(ctx, productID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListActivePricesByProduct", reflect.TypeOf((*MockQuerier)(nil).ListActivePricesByProduct), ctx, productID)
-}
-
-// ListActivePricesByWorkspace mocks base method.
-func (m *MockQuerier) ListActivePricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListActivePricesByWorkspace", ctx, workspaceID)
-	ret0, _ := ret[0].([]db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListActivePricesByWorkspace indicates an expected call of ListActivePricesByWorkspace.
-func (mr *MockQuerierMockRecorder) ListActivePricesByWorkspace(ctx, workspaceID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListActivePricesByWorkspace", reflect.TypeOf((*MockQuerier)(nil).ListActivePricesByWorkspace), ctx, workspaceID)
-}
-
 // ListActiveProducts mocks base method.
 func (m *MockQuerier) ListActiveProducts(ctx context.Context, workspaceID uuid.UUID) ([]db.Product, error) {
 	m.ctrl.T.Helper()
@@ -6707,36 +6499,6 @@ func (m *MockQuerier) ListNetworks(ctx context.Context, arg db.ListNetworksParam
 func (mr *MockQuerierMockRecorder) ListNetworks(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNetworks", reflect.TypeOf((*MockQuerier)(nil).ListNetworks), ctx, arg)
-}
-
-// ListPricesByProduct mocks base method.
-func (m *MockQuerier) ListPricesByProduct(ctx context.Context, productID uuid.UUID) ([]db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListPricesByProduct", ctx, productID)
-	ret0, _ := ret[0].([]db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListPricesByProduct indicates an expected call of ListPricesByProduct.
-func (mr *MockQuerierMockRecorder) ListPricesByProduct(ctx, productID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPricesByProduct", reflect.TypeOf((*MockQuerier)(nil).ListPricesByProduct), ctx, productID)
-}
-
-// ListPricesByWorkspace mocks base method.
-func (m *MockQuerier) ListPricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListPricesByWorkspace", ctx, workspaceID)
-	ret0, _ := ret[0].([]db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListPricesByWorkspace indicates an expected call of ListPricesByWorkspace.
-func (mr *MockQuerierMockRecorder) ListPricesByWorkspace(ctx, workspaceID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPricesByWorkspace", reflect.TypeOf((*MockQuerier)(nil).ListPricesByWorkspace), ctx, workspaceID)
 }
 
 // ListPrimaryCustomerWallets mocks base method.
@@ -8423,66 +8185,6 @@ func (m *MockQuerier) UpdatePaymentWithBlockchainData(ctx context.Context, arg d
 func (mr *MockQuerierMockRecorder) UpdatePaymentWithBlockchainData(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePaymentWithBlockchainData", reflect.TypeOf((*MockQuerier)(nil).UpdatePaymentWithBlockchainData), ctx, arg)
-}
-
-// UpdatePrice mocks base method.
-func (m *MockQuerier) UpdatePrice(ctx context.Context, arg db.UpdatePriceParams) (db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdatePrice", ctx, arg)
-	ret0, _ := ret[0].(db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdatePrice indicates an expected call of UpdatePrice.
-func (mr *MockQuerierMockRecorder) UpdatePrice(ctx, arg any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePrice", reflect.TypeOf((*MockQuerier)(nil).UpdatePrice), ctx, arg)
-}
-
-// UpdatePricePaymentSyncStatus mocks base method.
-func (m *MockQuerier) UpdatePricePaymentSyncStatus(ctx context.Context, arg db.UpdatePricePaymentSyncStatusParams) (db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdatePricePaymentSyncStatus", ctx, arg)
-	ret0, _ := ret[0].(db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdatePricePaymentSyncStatus indicates an expected call of UpdatePricePaymentSyncStatus.
-func (mr *MockQuerierMockRecorder) UpdatePricePaymentSyncStatus(ctx, arg any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePricePaymentSyncStatus", reflect.TypeOf((*MockQuerier)(nil).UpdatePricePaymentSyncStatus), ctx, arg)
-}
-
-// UpdatePriceSyncStatus mocks base method.
-func (m *MockQuerier) UpdatePriceSyncStatus(ctx context.Context, arg db.UpdatePriceSyncStatusParams) (db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdatePriceSyncStatus", ctx, arg)
-	ret0, _ := ret[0].(db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdatePriceSyncStatus indicates an expected call of UpdatePriceSyncStatus.
-func (mr *MockQuerierMockRecorder) UpdatePriceSyncStatus(ctx, arg any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePriceSyncStatus", reflect.TypeOf((*MockQuerier)(nil).UpdatePriceSyncStatus), ctx, arg)
-}
-
-// UpdatePriceWithSync mocks base method.
-func (m *MockQuerier) UpdatePriceWithSync(ctx context.Context, arg db.UpdatePriceWithSyncParams) (db.Price, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdatePriceWithSync", ctx, arg)
-	ret0, _ := ret[0].(db.Price)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdatePriceWithSync indicates an expected call of UpdatePriceWithSync.
-func (mr *MockQuerierMockRecorder) UpdatePriceWithSync(ctx, arg any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePriceWithSync", reflect.TypeOf((*MockQuerier)(nil).UpdatePriceWithSync), ctx, arg)
 }
 
 // UpdateProduct mocks base method.

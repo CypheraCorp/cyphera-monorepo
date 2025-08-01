@@ -193,17 +193,18 @@ type WorkspaceService interface {
 
 // ProductService handles product operations
 type ProductService interface {
-	CreateProduct(ctx context.Context, params params.CreateProductParams) (*db.Product, []db.Price, error)
-	GetProduct(ctx context.Context, params params.GetProductParams) (*db.Product, []db.Price, error)
+	CreateProduct(ctx context.Context, params params.CreateProductParams) (*db.Product, error)
+	GetProduct(ctx context.Context, params params.GetProductParams) (*db.Product, error)
 	ListProducts(ctx context.Context, params params.ListProductsParams) (*responses.ListProductsResult, error)
 	UpdateProduct(ctx context.Context, params params.UpdateProductParams) (*db.Product, error)
 	DeleteProduct(ctx context.Context, productID uuid.UUID, workspaceID uuid.UUID) error
 	GetPublicProductByPriceID(ctx context.Context, priceID uuid.UUID) (*responses.PublicProductResponse, error)
+	GetPublicProductByID(ctx context.Context, productID uuid.UUID) (*responses.PublicProductResponse, error)
 
 	// Subscription validation methods
 	ValidateSubscriptionRequest(ctx context.Context, params params.ValidateSubscriptionParams) error
 	ValidateProductForSubscription(ctx context.Context, productID uuid.UUID) (*db.Product, error)
-	ValidatePriceForSubscription(ctx context.Context, priceID uuid.UUID) (*db.Price, *db.Product, error)
+	ValidatePriceForSubscription(ctx context.Context, priceID uuid.UUID) (*db.Product, *db.Product, error) // Deprecated: Returns product twice for backward compatibility
 	GetProductTokenWithValidation(ctx context.Context, productTokenID uuid.UUID, productID uuid.UUID) (*db.GetProductTokenRow, error)
 }
 

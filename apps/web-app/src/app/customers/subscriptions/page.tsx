@@ -136,7 +136,7 @@ export default function CustomerSubscriptionsPage() {
                 started.
               </p>
               <Button asChild>
-                <Link href="/public/prices">Browse Products</Link>
+                <Link href="/customers/marketplace">Browse Products</Link>
               </Button>
             </CardContent>
           </Card>

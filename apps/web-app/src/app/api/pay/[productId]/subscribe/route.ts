@@ -5,11 +5,11 @@ import { validateBody } from '@/lib/validation/validate';
 import { subscribeRequestSchema } from '@/lib/validation/schemas/subscription';
 
 interface RouteParams {
-  params: Promise<{ priceId: string }>;
+  params: Promise<{ productId: string }>;
 }
 
 /**
- * POST /api/public/prices/:priceId/subscribe
+ * POST /api/pay/:productId/subscribe
  * Public Cyphera API endpoint to handle product subscriptions.
  * Uses the API Key for authentication.
  * Note: Public endpoints don't need CSRF protection
@@ -19,8 +19,8 @@ export async function POST(
   { params }: RouteParams
 ) {
   try {
-    // Get the productId from params (route uses priceId for URL structure)
-    const { priceId: productId } = await params;
+    // Get the productId from params
+    const { productId } = await params;
     
     // Validate request body
     const { data: body, error: validationError } = await validateBody(request, subscribeRequestSchema);

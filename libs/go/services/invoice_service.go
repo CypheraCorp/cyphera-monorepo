@@ -367,7 +367,6 @@ func (s *InvoiceService) createLineItem(ctx context.Context, invoiceID uuid.UUID
 		FiatCurrency:      currency,
 		SubscriptionID:    uuidToPgtype(params.SubscriptionID),
 		ProductID:         uuidToPgtype(params.ProductID),
-		PriceID:           uuidToPgtype(params.PriceID),
 		PeriodStart:       timeToPgtype(params.PeriodStart),
 		PeriodEnd:         timeToPgtype(params.PeriodEnd),
 		LineItemType:      pgtype.Text{String: params.LineItemType, Valid: true},

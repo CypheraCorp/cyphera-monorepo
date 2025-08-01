@@ -216,7 +216,6 @@ func TestSubscriptionManagementService_UpgradeSubscription(t *testing.T) {
 		ID:                 subscriptionID,
 		Status:             db.SubscriptionStatusActive,
 		ProductID:          uuid.New(),
-		PriceID:            uuid.New(),
 		WorkspaceID:        uuid.New(),
 		CustomerID:         uuid.New(),
 		TotalAmountInCents: 1000,
@@ -240,7 +239,6 @@ func TestSubscriptionManagementService_UpgradeSubscription(t *testing.T) {
 				{
 					Action:     "update",
 					ProductID:  subscription.ProductID,
-					PriceID:    subscription.PriceID,
 					Quantity:   1,
 					UnitAmount: 2000,
 				},
@@ -375,7 +373,6 @@ func TestSubscriptionManagementService_DowngradeSubscription(t *testing.T) {
 		ID:                 subscriptionID,
 		Status:             db.SubscriptionStatusActive,
 		ProductID:          uuid.New(),
-		PriceID:            uuid.New(),
 		WorkspaceID:        uuid.New(),
 		CustomerID:         uuid.New(),
 		TotalAmountInCents: 2000,
@@ -398,7 +395,6 @@ func TestSubscriptionManagementService_DowngradeSubscription(t *testing.T) {
 				{
 					Action:     "update",
 					ProductID:  subscription.ProductID,
-					PriceID:    subscription.PriceID,
 					Quantity:   1,
 					UnitAmount: 1000,
 				},

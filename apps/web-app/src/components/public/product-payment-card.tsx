@@ -75,7 +75,7 @@ export function ProductPaymentCard({ product, isAuthenticated = false }: Product
           token_id: primaryOption.token_id,
           network_id: primaryOption.network_id,
           amount_wei: oneTokenInWei,
-          to_currency: product.price.currency.toUpperCase(),
+          to_currency: product.currency.toUpperCase(),
         };
 
         const response = await fetch('/api/tokens/quote', {
@@ -102,7 +102,7 @@ export function ProductPaymentCard({ product, isAuthenticated = false }: Product
 
         try {
           // Convert product price from pennies to dollars
-          const productPriceInFiat = product.price.unit_amount_in_pennies / 100;
+          const productPriceInFiat = product.unit_amount_in_pennies / 100;
           const productPriceStr = productPriceInFiat.toFixed(tokenDecimals);
           const scaledProductPrice = parseUnits(productPriceStr, tokenDecimals);
 
@@ -142,24 +142,23 @@ export function ProductPaymentCard({ product, isAuthenticated = false }: Product
     };
 
     fetchPrice();
-  }, [primaryOption, product.price.unit_amount_in_pennies, product.price.currency]);
+  }, [primaryOption, product.unit_amount_in_pennies, product.currency]);
 
   // Get currency code from product price
   const getCurrency = () => {
-    return product.price?.currency?.toUpperCase() || 'USD';
+    return product.currency?.toUpperCase() || 'USD';
   };
 
   // Format pricing information with proper currency
   const formatPrice = () => {
     if (
-      !product.price ||
-      product.price.unit_amount_in_pennies === null ||
-      product.price.unit_amount_in_pennies === undefined
+      product.unit_amount_in_pennies === null ||
+      product.unit_amount_in_pennies === undefined
     ) {
       return 'Price not available';
     }
 
-    const amount = Number(product.price.unit_amount_in_pennies) / 100; // Convert cents to dollars
+    const amount = Number(product.unit_amount_in_pennies) / 100; // Convert cents to dollars
     const currency = getCurrency();
 
     // Use appropriate currency symbol or currency code
@@ -197,21 +196,21 @@ export function ProductPaymentCard({ product, isAuthenticated = false }: Product
           <div className="text-center space-y-3">
             <div className="text-3xl font-bold text-purple-600 mb-1">{formatPrice()}</div>
             <div className="text-sm text-muted-foreground">
-              per {product.price?.interval_type || 'subscription'}
+              per {product.interval_type || 'subscription'}
             </div>
 
             {/* Total Cost Calculation */}
-            {product.price?.term_length && (
+            {product.term_length && (
               <div className="space-y-2">
                 <div className="text-xs text-muted-foreground bg-white/50 dark:bg-gray-900/50 rounded-full px-3 py-1 inline-block">
-                  {product.price.term_length} payment term
+                  {product.term_length} payment term
                 </div>
                 <div className="border-t border-white/30 dark:border-gray-700/30 pt-2">
                   <div className="text-sm text-muted-foreground">Total Cost</div>
                   <div className="text-xl font-bold text-gray-900 dark:text-white">
                     {(() => {
-                      const unitPrice = Number(product.price.unit_amount_in_pennies) / 100;
-                      const termLength = Number(product.price.term_length);
+                      const unitPrice = Number(product.unit_amount_in_pennies) / 100;
+                      const termLength = Number(product.term_length);
                       const total = unitPrice * termLength;
                       const currency = getCurrency();
                       return currency === 'USD'
@@ -266,24 +265,24 @@ export function ProductPaymentCard({ product, isAuthenticated = false }: Product
           {isAuthenticated ? (
             // Authenticated user - show subscription button
             <div className="space-y-3">
-              {primaryOption && product.price && amountBigInt && (
+              {primaryOption && product.unit_amount_in_pennies && amountBigInt && (
                 <>
                   {(() => {
                     logger.log('🔍 [ProductPaymentCard] Web3AuthDelegationButton props:', {
-                      priceId: product.price.id,
+                      productId: product.id,
                       productTokenId: primaryOption.product_token_id,
                       tokenAmount: amountBigInt,
                       productName: product.name,
                       networkName: primaryOption.network_name,
                       primaryOption,
-                      hasPrice: !!product.price,
+                      hasPrice: !!product.unit_amount_in_pennies,
                       hasAmountBigInt: !!amountBigInt,
                     });
                     return null;
                   })()}
                   <Web3AuthDelegationButton
                     key={`delegation-button-${isAuthenticated}`}
-                    priceId={product.price.id}
+                    productId={product.id}
                     productTokenId={primaryOption.product_token_id}
                     tokenAmount={amountBigInt}
                     disabled={isFetchingPrice || !!priceError || !amountBigInt}
@@ -291,8 +290,8 @@ export function ProductPaymentCard({ product, isAuthenticated = false }: Product
                     productDescription={product.description}
                     networkName={primaryOption.network_name}
                     priceDisplay={formatPrice()}
-                    intervalType={product.price.interval_type}
-                    termLength={product.price.term_length}
+                    intervalType={product.interval_type}
+                    termLength={product.term_length}
                     tokenDecimals={primaryOption.token_decimals}
                   />
                 </>

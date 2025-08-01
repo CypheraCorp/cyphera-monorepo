@@ -271,10 +271,10 @@ export default function SubscriptionsPage() {
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium">
-                            ${(subscription.price.unit_amount_in_pennies / 100).toFixed(2)}
+                            ${((subscription.product.unit_amount_in_pennies || 0) / 100).toFixed(2)}
                           </span>
                           <span className="text-sm text-muted-foreground">
-                            {subscription.price.currency?.toUpperCase() || 'USD'}
+                            {subscription.product.currency?.toUpperCase() || 'USD'}
                           </span>
                         </div>
                       </TableCell>
@@ -282,13 +282,13 @@ export default function SubscriptionsPage() {
                         <div className="flex flex-col">
                           <span className="font-medium">
                             {formatBillingInterval(
-                              subscription.price.interval_type,
-                              subscription.price.interval_count
+                              subscription.product.interval_type || '',
+                              1
                             )}
                           </span>
-                          {subscription.price.term_length && (
+                          {subscription.product.term_length && (
                             <span className="text-sm text-muted-foreground">
-                              {subscription.price.term_length} term{subscription.price.term_length > 1 ? 's' : ''}
+                              {subscription.product.term_length} term{subscription.product.term_length > 1 ? 's' : ''}
                             </span>
                           )}
                         </div>

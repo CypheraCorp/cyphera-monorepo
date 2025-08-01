@@ -561,27 +561,29 @@ func TestCustomerService_ListCustomers(t *testing.T) {
 
 func TestCustomerService_ListWorkspaceCustomers(t *testing.T) {
 	workspaceID := uuid.New()
-	dbCustomers := []db.Customer{
+	dbCustomers := []db.ListWorkspaceCustomersWithRevenueRow{
 		{
-			ID:        uuid.New(),
-			Email:     pgtype.Text{String: "user1@example.com", Valid: true},
-			Metadata:  []byte("{}"),
-			CreatedAt: pgtype.Timestamptz{},
-			UpdatedAt: pgtype.Timestamptz{},
+			ID:           uuid.New(),
+			Email:        pgtype.Text{String: "user1@example.com", Valid: true},
+			Metadata:     []byte("{}"),
+			CreatedAt:    pgtype.Timestamptz{},
+			UpdatedAt:    pgtype.Timestamptz{},
+			TotalRevenue: nil,
 		},
 		{
-			ID:        uuid.New(),
-			Email:     pgtype.Text{String: "user2@example.com", Valid: true},
-			Metadata:  []byte("{}"),
-			CreatedAt: pgtype.Timestamptz{},
-			UpdatedAt: pgtype.Timestamptz{},
+			ID:           uuid.New(),
+			Email:        pgtype.Text{String: "user2@example.com", Valid: true},
+			Metadata:     []byte("{}"),
+			CreatedAt:    pgtype.Timestamptz{},
+			UpdatedAt:    pgtype.Timestamptz{},
+			TotalRevenue: nil,
 		},
 	}
 
 	// Convert to response format for expected result using the actual helper function
 	customerResponses := make([]responses.CustomerResponse, len(dbCustomers))
 	for i, c := range dbCustomers {
-		customerResponses[i] = helpers.ToCustomerResponse(c)
+		customerResponses[i] = helpers.ToCustomerResponseWithRevenue(c)
 	}
 
 	tests := []struct {
@@ -600,12 +602,12 @@ func TestCustomerService_ListWorkspaceCustomers(t *testing.T) {
 				Offset:      0,
 			},
 			mockSetup: func(m *mocks.MockQuerier) {
-				expectedParams := db.ListWorkspaceCustomersWithPaginationParams{
+				expectedParams := db.ListWorkspaceCustomersWithRevenueParams{
 					WorkspaceID: workspaceID,
 					Limit:       10,
 					Offset:      0,
 				}
-				m.EXPECT().ListWorkspaceCustomersWithPagination(gomock.Any(), expectedParams).Return(dbCustomers, nil)
+				m.EXPECT().ListWorkspaceCustomersWithRevenue(gomock.Any(), expectedParams).Return(dbCustomers, nil)
 				m.EXPECT().CountWorkspaceCustomers(gomock.Any(), workspaceID).Return(int64(15), nil)
 			},
 			want: &responses.ListWorkspaceCustomersResult{
@@ -622,7 +624,7 @@ func TestCustomerService_ListWorkspaceCustomers(t *testing.T) {
 				Offset:      0,
 			},
 			mockSetup: func(m *mocks.MockQuerier) {
-				m.EXPECT().ListWorkspaceCustomersWithPagination(gomock.Any(), gomock.Any()).Return(nil, errors.New("database error"))
+				m.EXPECT().ListWorkspaceCustomersWithRevenue(gomock.Any(), gomock.Any()).Return(nil, errors.New("database error"))
 			},
 			want:        nil,
 			wantErr:     true,
@@ -636,7 +638,7 @@ func TestCustomerService_ListWorkspaceCustomers(t *testing.T) {
 				Offset:      0,
 			},
 			mockSetup: func(m *mocks.MockQuerier) {
-				m.EXPECT().ListWorkspaceCustomersWithPagination(gomock.Any(), gomock.Any()).Return(dbCustomers, nil)
+				m.EXPECT().ListWorkspaceCustomersWithRevenue(gomock.Any(), gomock.Any()).Return(dbCustomers, nil)
 				m.EXPECT().CountWorkspaceCustomers(gomock.Any(), workspaceID).Return(int64(0), errors.New("count error"))
 			},
 			want:        nil,

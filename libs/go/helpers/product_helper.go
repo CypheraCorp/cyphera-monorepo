@@ -17,36 +17,44 @@ import (
 )
 
 // ToProductDetailResponse converts database product model to detailed API response
-func ToProductDetailResponse(p db.Product, dbPrices []db.Price) responses.ProductDetailResponse {
+func ToProductDetailResponse(p db.Product) responses.ProductDetailResponse {
 	var metadata map[string]interface{}
 	if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
 		log.Printf("Error unmarshaling product metadata: %v", err)
 	}
 
-	apiPrices := make([]responses.PriceResponse, len(dbPrices))
-	for i, dbPrice := range dbPrices {
-		apiPrices[i] = ToPriceResponseFromDB(dbPrice)
-	}
-
 	return responses.ProductDetailResponse{
-		ID:          p.ID.String(),
-		Object:      "product",
-		WorkspaceID: p.WorkspaceID.String(),
-		WalletID:    p.WalletID.String(),
-		Name:        p.Name,
-		Description: p.Description.String,
-		ImageURL:    p.ImageUrl.String,
-		URL:         p.Url.String,
-		Active:      p.Active,
-		Metadata:    p.Metadata,
-		Prices:      apiPrices,
-		CreatedAt:   p.CreatedAt.Time.Unix(),
-		UpdatedAt:   p.UpdatedAt.Time.Unix(),
+		ID:                  p.ID.String(),
+		Object:              "product",
+		WorkspaceID:         p.WorkspaceID.String(),
+		WalletID:            p.WalletID.String(),
+		Name:                p.Name,
+		Description:         p.Description.String,
+		ImageURL:            p.ImageUrl.String,
+		URL:                 p.Url.String,
+		Active:              p.Active,
+		ProductType:         p.ProductType.String,
+		ProductGroup:        p.ProductGroup.String,
+		PriceType:           string(p.PriceType),
+		Currency:            p.Currency,
+		UnitAmountInPennies: int64(p.UnitAmountInPennies),
+		IntervalType: func() string {
+			if p.IntervalType.Valid {
+				return string(p.IntervalType.IntervalType)
+			}
+			return ""
+		}(),
+		TermLength:      p.TermLength.Int32,
+		PriceNickname:   p.PriceNickname.String,
+		PriceExternalID: p.PriceExternalID.String,
+		Metadata:        p.Metadata,
+		CreatedAt:       p.CreatedAt.Time.Unix(),
+		UpdatedAt:       p.UpdatedAt.Time.Unix(),
 	}
 }
 
 // ToPublicProductResponse converts database models to public API response
-func ToPublicProductResponse(workspace db.Workspace, product db.Product, price db.Price, productTokens []db.GetActiveProductTokensByProductRow, wallet db.Wallet) responses.PublicProductResponse {
+func ToPublicProductResponse(workspace db.Workspace, product db.Product, productTokens []db.GetActiveProductTokensByProductRow, wallet db.Wallet) responses.PublicProductResponse {
 	publicProductTokens := make([]responses.ProductTokenResponse, len(productTokens))
 	for i, pt := range productTokens {
 		publicProductTokens[i] = responses.ProductTokenResponse{
@@ -64,16 +72,27 @@ func ToPublicProductResponse(workspace db.Workspace, product db.Product, price d
 		}
 	}
 	return responses.PublicProductResponse{
-		ID:            product.ID.String(),
-		AccountID:     workspace.AccountID.String(),
-		WorkspaceID:   workspace.ID.String(),
-		WalletAddress: wallet.WalletAddress,
-		Name:          product.Name,
-		Description:   product.Description.String,
-		ImageURL:      product.ImageUrl.String,
-		URL:           product.Url.String,
+		ID:                  product.ID.String(),
+		AccountID:           workspace.AccountID.String(),
+		WorkspaceID:         workspace.ID.String(),
+		WalletAddress:       wallet.WalletAddress,
+		Name:                product.Name,
+		Description:         product.Description.String,
+		ImageURL:            product.ImageUrl.String,
+		URL:                 product.Url.String,
+		ProductType:         product.ProductType.String,
+		ProductGroup:        product.ProductGroup.String,
+		PriceType:           string(product.PriceType),
+		Currency:            product.Currency,
+		UnitAmountInPennies: int64(product.UnitAmountInPennies),
+		IntervalType: func() string {
+			if product.IntervalType.Valid {
+				return string(product.IntervalType.IntervalType)
+			}
+			return ""
+		}(),
+		TermLength:    product.TermLength.Int32,
 		ProductTokens: publicProductTokens,
-		Price:         ToPriceResponseFromDB(price),
 	}
 }
 
@@ -82,8 +101,8 @@ func ValidatePriceType(priceTypeStr string) (db.PriceType, error) {
 	if priceTypeStr == "" {
 		return "", fmt.Errorf("price type is required")
 	}
-	if priceTypeStr != string(db.PriceTypeRecurring) && priceTypeStr != string(db.PriceTypeOneOff) {
-		return "", fmt.Errorf("invalid price type. Must be '%s' or '%s'", db.PriceTypeRecurring, db.PriceTypeOneOff)
+	if priceTypeStr != string(db.PriceTypeRecurring) && priceTypeStr != string(db.PriceTypeOneTime) {
+		return "", fmt.Errorf("invalid price type. Must be '%s' or '%s'", db.PriceTypeRecurring, db.PriceTypeOneTime)
 	}
 	return db.PriceType(priceTypeStr), nil
 }
@@ -122,15 +141,15 @@ func ValidateWalletID(walletID string) (uuid.UUID, error) {
 // ValidatePriceTermLength validates price term length based on price type
 func ValidatePriceTermLength(priceType db.PriceType, termLength int32, intervalType db.IntervalType, intervalCount int32) error {
 	if priceType == db.PriceTypeRecurring {
-		if intervalType == "" || intervalCount <= 0 {
-			return fmt.Errorf("interval_type and interval_count are required for recurring prices")
+		if intervalType == "" {
+			return fmt.Errorf("interval_type is required for recurring prices")
 		}
 		if termLength <= 0 {
-			return fmt.Errorf("term length must be greater than 0 for recurring prices")
+			return fmt.Errorf("term_length must be greater than 0 for recurring prices")
 		}
-	} else if priceType == db.PriceTypeOneOff {
-		if intervalType != "" || intervalCount != 0 || termLength != 0 {
-			return fmt.Errorf("interval_type, interval_count, and term_length must not be set for one_off prices")
+	} else if priceType == db.PriceTypeOneTime {
+		if intervalType != "" || termLength != 0 {
+			return fmt.Errorf("interval_type and term_length must not be set for one_time prices")
 		}
 	}
 	return nil
@@ -227,52 +246,27 @@ func MarshalCaveats(caveats interface{}) json.RawMessage {
 	return bytes
 }
 
-// ToPriceResponseFromDB converts database price model to API response
-func ToPriceResponseFromDB(p db.Price) responses.PriceResponse {
-	return responses.PriceResponse{
-		ID:                  p.ID.String(),
-		Object:              "price",
-		ProductID:           p.ProductID.String(),
-		Active:              p.Active,
-		Type:                string(p.Type),
-		Nickname:            p.Nickname.String,
-		Currency:            p.Currency,
-		UnitAmountInPennies: int64(p.UnitAmountInPennies),
-		IntervalType:        string(p.IntervalType),
-		IntervalCount:       0, // Price doesn't have IntervalCount in db, defaulting to 0
-		TermLength:          p.TermLength,
-		Metadata:            p.Metadata,
-		CreatedAt:           p.CreatedAt.Time.Unix(),
-		UpdatedAt:           p.UpdatedAt.Time.Unix(),
-	}
-}
-
-// ValidatePrice validates price parameters
-func ValidatePrice(price params.CreatePriceParams) error {
+// ValidateProductPricing validates product pricing parameters
+func ValidateProductPricing(priceType, intervalType string, unitAmountInPennies, termLength int32) error {
 	// Validate price type
-	priceType, err := ValidatePriceType(price.Type)
+	dbPriceType, err := ValidatePriceType(priceType)
 	if err != nil {
 		return err
 	}
 
 	// Validate interval type
-	intervalType, err := ValidateIntervalType(price.IntervalType)
+	dbIntervalType, err := ValidateIntervalType(intervalType)
 	if err != nil {
 		return err
 	}
 
 	// Validate price amount
-	if err := ValidatePriceInPennies(int32(price.UnitAmountInPennies)); err != nil {
+	if err := ValidatePriceInPennies(unitAmountInPennies); err != nil {
 		return err
 	}
 
 	// Validate term length based on price type
-	if err := ValidatePriceTermLength(priceType, price.TermLength, intervalType, price.IntervalCount); err != nil {
-		return err
-	}
-
-	// Validate metadata
-	if err := ValidateMetadata(price.Metadata); err != nil {
+	if err := ValidatePriceTermLength(dbPriceType, termLength, dbIntervalType, 1); err != nil {
 		return err
 	}
 

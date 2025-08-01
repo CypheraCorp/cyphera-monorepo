@@ -29,14 +29,13 @@ SELECT
     t.symbol as token_symbol,
     n.name as network_name,
     n.chain_id,
-    pr.type AS price_type,
-    pr.currency AS price_currency,
-    pr.unit_amount_in_pennies AS price_unit_amount_in_pennies,
-    pr.interval_type AS price_interval_type,
-    pr.term_length AS price_term_length
+    p.price_type AS price_type,
+    p.currency AS price_currency,
+    p.unit_amount_in_pennies AS price_unit_amount_in_pennies,
+    p.interval_type AS price_interval_type,
+    p.term_length AS price_term_length
 FROM subscriptions s
 JOIN products p ON p.id = s.product_id
-JOIN prices pr ON pr.id = s.price_id
 JOIN customers c ON c.id = s.customer_id
 LEFT JOIN customer_wallets cw ON cw.id = s.customer_wallet_id
 JOIN products_tokens pt ON pt.id = s.product_token_id
@@ -68,7 +67,7 @@ ORDER BY created_at DESC;
 
 -- name: ListSubscriptionsDueForRedemption :many
 SELECT 
-    id, customer_id, product_id, price_id, product_token_id, token_amount, delegation_id, customer_wallet_id, 
+    id, customer_id, product_id, product_token_id, token_amount, delegation_id, customer_wallet_id, 
     status, current_period_start, current_period_end, next_redemption_date, total_redemptions, 
     total_amount_in_cents, metadata, created_at, updated_at, deleted_at 
 FROM subscriptions
@@ -101,7 +100,6 @@ INSERT INTO subscriptions (
     customer_id,
     product_id,
     workspace_id,
-    price_id,
     product_token_id,
     token_amount,
     delegation_id,
@@ -116,9 +114,9 @@ INSERT INTO subscriptions (
     payment_sync_status,
     payment_provider
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-    COALESCE($16, 'pending'),
-    $17
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+    COALESCE($15, 'pending'),
+    $16
 )
 RETURNING *;
 
@@ -127,7 +125,6 @@ INSERT INTO subscriptions (
     customer_id,
     product_id,
     workspace_id,
-    price_id,
     product_token_id,
     external_id,
     token_amount,
@@ -145,7 +142,7 @@ INSERT INTO subscriptions (
     payment_sync_version,
     payment_provider
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
 )
 RETURNING *;
 
@@ -155,18 +152,17 @@ SET
     customer_id = COALESCE($2, customer_id),
     product_id = COALESCE($3, product_id),
     workspace_id = COALESCE($4, workspace_id),
-    price_id = COALESCE($5, price_id),
-    product_token_id = COALESCE($6, product_token_id),
-    token_amount = COALESCE($7, token_amount),
-    delegation_id = COALESCE($8, delegation_id),
-    customer_wallet_id = COALESCE($9, customer_wallet_id),
-    status = COALESCE($10, status),
-    current_period_start = COALESCE($11, current_period_start),
-    current_period_end = COALESCE($12, current_period_end),
-    next_redemption_date = COALESCE($13, next_redemption_date),
-    total_redemptions = COALESCE($14, total_redemptions),
-    total_amount_in_cents = COALESCE($15, total_amount_in_cents),
-    metadata = COALESCE($16, metadata),
+    product_token_id = COALESCE($5, product_token_id),
+    token_amount = COALESCE($6, token_amount),
+    delegation_id = COALESCE($7, delegation_id),
+    customer_wallet_id = COALESCE($8, customer_wallet_id),
+    status = COALESCE($9, status),
+    current_period_start = COALESCE($10, current_period_start),
+    current_period_end = COALESCE($11, current_period_end),
+    next_redemption_date = COALESCE($12, next_redemption_date),
+    total_redemptions = COALESCE($13, total_redemptions),
+    total_amount_in_cents = COALESCE($14, total_amount_in_cents),
+    metadata = COALESCE($15, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
@@ -177,22 +173,21 @@ SET
     customer_id = COALESCE($2, customer_id),
     product_id = COALESCE($3, product_id),
     workspace_id = COALESCE($4, workspace_id),
-    price_id = COALESCE($5, price_id),
-    product_token_id = COALESCE($6, product_token_id),
-    token_amount = COALESCE($7, token_amount),
-    delegation_id = COALESCE($8, delegation_id),
-    customer_wallet_id = COALESCE($9, customer_wallet_id),
-    status = COALESCE($10, status),
-    current_period_start = COALESCE($11, current_period_start),
-    current_period_end = COALESCE($12, current_period_end),
-    next_redemption_date = COALESCE($13, next_redemption_date),
-    total_redemptions = COALESCE($14, total_redemptions),
-    total_amount_in_cents = COALESCE($15, total_amount_in_cents),
-    metadata = COALESCE($16, metadata),
-    payment_sync_status = COALESCE($17, payment_sync_status),
-    payment_synced_at = COALESCE($18, payment_synced_at),
-    payment_sync_version = COALESCE($19, payment_sync_version),
-    payment_provider = COALESCE($20, payment_provider),
+    product_token_id = COALESCE($5, product_token_id),
+    token_amount = COALESCE($6, token_amount),
+    delegation_id = COALESCE($7, delegation_id),
+    customer_wallet_id = COALESCE($8, customer_wallet_id),
+    status = COALESCE($9, status),
+    current_period_start = COALESCE($10, current_period_start),
+    current_period_end = COALESCE($11, current_period_end),
+    next_redemption_date = COALESCE($12, next_redemption_date),
+    total_redemptions = COALESCE($13, total_redemptions),
+    total_amount_in_cents = COALESCE($14, total_amount_in_cents),
+    metadata = COALESCE($15, metadata),
+    payment_sync_status = COALESCE($16, payment_sync_status),
+    payment_synced_at = COALESCE($17, payment_synced_at),
+    payment_sync_version = COALESCE($18, payment_sync_version),
+    payment_provider = COALESCE($19, payment_provider),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
@@ -291,19 +286,13 @@ SELECT
     p.metadata AS product_metadata,
     p.workspace_id AS product_workspace_id,
 
-    -- Price details (from prices table)
-    pr.id AS price_id,
-    pr.product_id AS price_product_id, -- The product_id FK in the prices table
-    pr.active AS price_active,
-    pr.type AS price_type,
-    pr.nickname AS price_nickname,
-    pr.currency AS price_currency,
-    pr.unit_amount_in_pennies AS price_unit_amount_in_pennies,
-    pr.interval_type AS price_interval_type,
-    pr.term_length AS price_term_length,
-    pr.metadata AS price_metadata,
-    pr.created_at AS price_created_at,
-    pr.updated_at AS price_updated_at,
+    -- Price details (from products table)
+    p.price_type AS price_type,
+    p.price_nickname AS price_nickname,
+    p.currency AS price_currency,
+    p.unit_amount_in_pennies AS price_unit_amount_in_pennies,
+    p.interval_type AS price_interval_type,
+    p.term_length AS price_term_length,
 
     -- Product token details
     pt.id AS product_token_id,
@@ -327,7 +316,6 @@ SELECT
 FROM subscriptions s
 JOIN customers c ON s.customer_id = c.id
 JOIN products p ON s.product_id = p.id
-JOIN prices pr ON s.price_id = pr.id
 JOIN products_tokens pt ON s.product_token_id = pt.id
 JOIN tokens t ON pt.token_id = t.id
 JOIN networks n ON pt.network_id = n.id
@@ -335,7 +323,6 @@ LEFT JOIN customer_wallets cw ON s.customer_wallet_id = cw.id
 WHERE s.deleted_at IS NULL
     AND c.deleted_at IS NULL
     AND p.deleted_at IS NULL
-    AND pr.deleted_at IS NULL
     AND pt.deleted_at IS NULL
     AND t.deleted_at IS NULL
     AND n.deleted_at IS NULL

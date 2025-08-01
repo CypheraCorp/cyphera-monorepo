@@ -7,7 +7,7 @@ type DelegationStruct struct {
 	Delegate  string         `json:"delegate"`  // The address being delegated to
 	Delegator string         `json:"delegator"` // The address creating the delegation
 	Authority string         `json:"authority"` // Hex-encoded authority (typically the delegator)
-	Caveats   []CaveatStruct `json:"caveats"`  // Restrictions on the delegation
+	Caveats   []CaveatStruct `json:"caveats"`   // Restrictions on the delegation
 	Salt      string         `json:"salt"`      // Random value for uniqueness
 	Signature string         `json:"signature"` // The delegation signature
 }

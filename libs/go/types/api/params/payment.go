@@ -9,8 +9,7 @@ import (
 type CreatePaymentFromSubscriptionEventParams struct {
 	SubscriptionEvent *db.SubscriptionEvent
 	Subscription      *db.Subscription
-	Product           *db.Product
-	Price             *db.Price
+	Product           *db.Product // Product now contains pricing info
 	Customer          *db.Customer
 	TransactionHash   string
 	NetworkID         uuid.UUID

@@ -4,54 +4,50 @@ import (
 	"encoding/json"
 )
 
-// PriceResponse represents a price object in API responses
-type PriceResponse struct {
-	ID                  string          `json:"id"`
-	Object              string          `json:"object"`
-	ProductID           string          `json:"product_id"`
-	Active              bool            `json:"active"`
-	Type                string          `json:"type"`
-	Nickname            string          `json:"nickname,omitempty"`
-	Currency            string          `json:"currency"`
-	UnitAmountInPennies int64           `json:"unit_amount_in_pennies"` // Using int64 for better compatibility
-	IntervalType        string          `json:"interval_type,omitempty"`
-	IntervalCount       int32           `json:"interval_count,omitempty"`
-	TermLength          int32           `json:"term_length,omitempty"`
-	Metadata            json.RawMessage `json:"metadata,omitempty" swaggertype:"object"`
-	CreatedAt           int64           `json:"created_at"`
-	UpdatedAt           int64           `json:"updated_at"`
-}
-
 // ProductResponse represents the standardized API response for product operations
 type ProductResponse struct {
-	ID            string                 `json:"id"`
-	Object        string                 `json:"object"`
-	WorkspaceID   string                 `json:"workspace_id"`
-	WalletID      string                 `json:"wallet_id"`
-	Name          string                 `json:"name"`
-	Description   string                 `json:"description,omitempty"`
-	ImageURL      string                 `json:"image_url,omitempty"`
-	URL           string                 `json:"url,omitempty"`
-	Active        bool                   `json:"active"`
-	Metadata      json.RawMessage        `json:"metadata,omitempty" swaggertype:"object"`
-	CreatedAt     int64                  `json:"created_at"`
-	UpdatedAt     int64                  `json:"updated_at"`
-	Prices        []PriceResponse        `json:"prices,omitempty"`
-	ProductTokens []ProductTokenResponse `json:"product_tokens,omitempty"`
+	ID                  string                 `json:"id"`
+	Object              string                 `json:"object"`
+	WorkspaceID         string                 `json:"workspace_id"`
+	WalletID            string                 `json:"wallet_id"`
+	Name                string                 `json:"name"`
+	Description         string                 `json:"description,omitempty"`
+	ImageURL            string                 `json:"image_url,omitempty"`
+	URL                 string                 `json:"url,omitempty"`
+	Active              bool                   `json:"active"`
+	ProductType         string                 `json:"product_type,omitempty"`  // 'base' or 'addon'
+	ProductGroup        string                 `json:"product_group,omitempty"` // Groups related products
+	PriceType           string                 `json:"price_type"`              // 'recurring' or 'one_time'
+	Currency            string                 `json:"currency"`
+	UnitAmountInPennies int64                  `json:"unit_amount_in_pennies"`
+	IntervalType        string                 `json:"interval_type,omitempty"` // 'month', 'year', etc.
+	TermLength          int32                  `json:"term_length,omitempty"`   // Number of intervals
+	PriceNickname       string                 `json:"price_nickname,omitempty"`
+	PriceExternalID     string                 `json:"price_external_id,omitempty"`
+	Metadata            json.RawMessage        `json:"metadata,omitempty" swaggertype:"object"`
+	CreatedAt           int64                  `json:"created_at"`
+	UpdatedAt           int64                  `json:"updated_at"`
+	ProductTokens       []ProductTokenResponse `json:"product_tokens,omitempty"`
 }
 
 // PublicProductResponse represents a product in public API responses (no auth required)
 type PublicProductResponse struct {
-	ID            string                 `json:"id"`
-	AccountID     string                 `json:"account_id"`
-	WorkspaceID   string                 `json:"workspace_id"`
-	WalletAddress string                 `json:"wallet_address"`
-	Name          string                 `json:"name"`
-	Description   string                 `json:"description,omitempty"`
-	ImageURL      string                 `json:"image_url,omitempty"`
-	URL           string                 `json:"url,omitempty"`
-	ProductTokens []ProductTokenResponse `json:"product_tokens,omitempty"`
-	Price         PriceResponse          `json:"price"`
+	ID                  string                 `json:"id"`
+	AccountID           string                 `json:"account_id"`
+	WorkspaceID         string                 `json:"workspace_id"`
+	WalletAddress       string                 `json:"wallet_address"`
+	Name                string                 `json:"name"`
+	Description         string                 `json:"description,omitempty"`
+	ImageURL            string                 `json:"image_url,omitempty"`
+	URL                 string                 `json:"url,omitempty"`
+	ProductType         string                 `json:"product_type,omitempty"`
+	ProductGroup        string                 `json:"product_group,omitempty"`
+	PriceType           string                 `json:"price_type"`
+	Currency            string                 `json:"currency"`
+	UnitAmountInPennies int64                  `json:"unit_amount_in_pennies"`
+	IntervalType        string                 `json:"interval_type,omitempty"`
+	TermLength          int32                  `json:"term_length,omitempty"`
+	ProductTokens       []ProductTokenResponse `json:"product_tokens,omitempty"`
 }
 
 // ProductTokenResponse represents a product token in API responses
@@ -79,20 +75,28 @@ type ProductTokenResponse struct {
 
 // ProductDetailResponse represents a detailed product response with computed fields
 type ProductDetailResponse struct {
-	ID            string                 `json:"id"`
-	Object        string                 `json:"object"`
-	WorkspaceID   string                 `json:"workspace_id"`
-	WalletID      string                 `json:"wallet_id"`
-	Name          string                 `json:"name"`
-	Description   string                 `json:"description,omitempty"`
-	ImageURL      string                 `json:"image_url,omitempty"`
-	URL           string                 `json:"url,omitempty"`
-	Active        bool                   `json:"active"`
-	Metadata      json.RawMessage        `json:"metadata,omitempty" swaggertype:"object"`
-	CreatedAt     int64                  `json:"created_at"`
-	UpdatedAt     int64                  `json:"updated_at"`
-	Prices        []PriceResponse        `json:"prices"`
-	ProductTokens []ProductTokenResponse `json:"product_tokens"`
+	ID                  string                 `json:"id"`
+	Object              string                 `json:"object"`
+	WorkspaceID         string                 `json:"workspace_id"`
+	WalletID            string                 `json:"wallet_id"`
+	Name                string                 `json:"name"`
+	Description         string                 `json:"description,omitempty"`
+	ImageURL            string                 `json:"image_url,omitempty"`
+	URL                 string                 `json:"url,omitempty"`
+	Active              bool                   `json:"active"`
+	ProductType         string                 `json:"product_type,omitempty"`
+	ProductGroup        string                 `json:"product_group,omitempty"`
+	PriceType           string                 `json:"price_type"`
+	Currency            string                 `json:"currency"`
+	UnitAmountInPennies int64                  `json:"unit_amount_in_pennies"`
+	IntervalType        string                 `json:"interval_type,omitempty"`
+	TermLength          int32                  `json:"term_length,omitempty"`
+	PriceNickname       string                 `json:"price_nickname,omitempty"`
+	PriceExternalID     string                 `json:"price_external_id,omitempty"`
+	Metadata            json.RawMessage        `json:"metadata,omitempty" swaggertype:"object"`
+	CreatedAt           int64                  `json:"created_at"`
+	UpdatedAt           int64                  `json:"updated_at"`
+	ProductTokens       []ProductTokenResponse `json:"product_tokens"`
 }
 
 // ListProductsResponse represents a paginated list of products

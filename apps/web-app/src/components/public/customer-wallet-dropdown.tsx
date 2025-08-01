@@ -240,8 +240,8 @@ export function CustomerWalletDropdown({ className = '' }: CustomerWalletDropdow
       // 9. Determine where to redirect based on current page
       const currentPath = window.location.pathname;
 
-      // Check if we're on a public product page (e.g., /public/prices/[priceId])
-      if (currentPath.startsWith('/public/prices/')) {
+      // Check if we're on a public product page (e.g., /pay/[productId] or /public/prices/[priceId])
+      if (currentPath.startsWith('/public/prices/') || currentPath.startsWith('/pay/')) {
         logger.log('🔄 Staying on product page after logout...');
         // Force reload to update the UI state
         window.location.reload();
@@ -262,7 +262,7 @@ export function CustomerWalletDropdown({ className = '' }: CustomerWalletDropdow
 
       // On failure, check current path for redirect logic
       const currentPath = window.location.pathname;
-      if (currentPath.startsWith('/public/prices/')) {
+      if (currentPath.startsWith('/public/prices/') || currentPath.startsWith('/pay/')) {
         window.location.reload();
       } else {
         window.location.href = '/customers/signin';

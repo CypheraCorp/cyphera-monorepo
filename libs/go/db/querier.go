@@ -15,7 +15,6 @@ import (
 type Querier interface {
 	ActivateFiatCurrency(ctx context.Context, code string) error
 	ActivateNetwork(ctx context.Context, id uuid.UUID) (Network, error)
-	ActivatePrice(ctx context.Context, id uuid.UUID) (Price, error)
 	ActivateProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	ActivateProductToken(ctx context.Context, id uuid.UUID) (ProductsToken, error)
 	ActivateToken(ctx context.Context, id uuid.UUID) (Token, error)
@@ -26,8 +25,8 @@ type Querier interface {
 	// Bulk Operations for Initial Sync
 	BulkUpdateCustomerSyncStatus(ctx context.Context, arg BulkUpdateCustomerSyncStatusParams) error
 	BulkUpdateInvoiceSyncStatus(ctx context.Context, arg BulkUpdateInvoiceSyncStatusParams) error
-	BulkUpdatePriceSyncStatus(ctx context.Context, arg BulkUpdatePriceSyncStatusParams) error
 	BulkUpdateProductSyncStatus(ctx context.Context, arg BulkUpdateProductSyncStatusParams) error
+	// BulkUpdatePriceSyncStatus removed - pricing is now in products table
 	BulkUpdateSubscriptionSyncStatus(ctx context.Context, arg BulkUpdateSubscriptionSyncStatusParams) error
 	CancelScheduledChange(ctx context.Context, id uuid.UUID) (SubscriptionScheduleChange, error)
 	CancelSubscription(ctx context.Context, id uuid.UUID) (Subscription, error)
@@ -50,8 +49,6 @@ type Querier interface {
 	CountInvoicesByStatus(ctx context.Context, arg CountInvoicesByStatusParams) (int64, error)
 	CountInvoicesByWorkspace(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountPaymentsByWorkspace(ctx context.Context, workspaceID uuid.UUID) (int64, error)
-	CountPricesByProduct(ctx context.Context, productID uuid.UUID) (int64, error)
-	CountPricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountProducts(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountProviderAccountsByProvider(ctx context.Context, providerName string) (int64, error)
 	CountProviderAccountsByWorkspace(ctx context.Context, workspaceID uuid.UUID) (int64, error)
@@ -99,8 +96,6 @@ type Querier interface {
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
 	CreatePaymentBatch(ctx context.Context, arg []CreatePaymentBatchParams) (int64, error)
 	CreatePaymentLink(ctx context.Context, arg CreatePaymentLinkParams) (PaymentLink, error)
-	CreatePrice(ctx context.Context, arg CreatePriceParams) (Price, error)
-	CreatePriceWithSync(ctx context.Context, arg CreatePriceWithSyncParams) (Price, error)
 	CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error)
 	CreateProductToken(ctx context.Context, arg CreateProductTokenParams) (ProductsToken, error)
 	CreateProductWithSync(ctx context.Context, arg CreateProductWithSyncParams) (Product, error)
@@ -130,7 +125,6 @@ type Querier interface {
 	DeactivateFiatCurrency(ctx context.Context, code string) error
 	DeactivateNetwork(ctx context.Context, id uuid.UUID) (Network, error)
 	DeactivatePaymentLink(ctx context.Context, arg DeactivatePaymentLinkParams) (PaymentLink, error)
-	DeactivatePrice(ctx context.Context, id uuid.UUID) (Price, error)
 	DeactivateProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	DeactivateProductToken(ctx context.Context, id uuid.UUID) (ProductsToken, error)
 	DeactivateTemplatesByType(ctx context.Context, arg DeactivateTemplatesByTypeParams) error
@@ -154,7 +148,6 @@ type Querier interface {
 	DeleteNetwork(ctx context.Context, id uuid.UUID) error
 	DeleteOldMetrics(ctx context.Context, arg DeleteOldMetricsParams) error
 	DeletePaymentLink(ctx context.Context, arg DeletePaymentLinkParams) (PaymentLink, error)
-	DeletePrice(ctx context.Context, id uuid.UUID) error
 	DeleteProduct(ctx context.Context, arg DeleteProductParams) error
 	DeleteProductToken(ctx context.Context, id uuid.UUID) error
 	DeleteProductTokenByIds(ctx context.Context, arg DeleteProductTokenByIdsParams) error
@@ -185,6 +178,7 @@ type Querier interface {
 	GetActiveProductTokensByProduct(ctx context.Context, productID uuid.UUID) ([]GetActiveProductTokensByProductRow, error)
 	GetActiveProductsByWalletID(ctx context.Context, walletID uuid.UUID) ([]Product, error)
 	GetActiveSyncSessionsByProvider(ctx context.Context, arg GetActiveSyncSessionsByProviderParams) ([]PaymentSyncSession, error)
+	GetAddonProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	GetAllAPIKeys(ctx context.Context) ([]ApiKey, error)
 	GetAllAccounts(ctx context.Context) ([]Account, error)
 	// Used for authentication - retrieves all active API keys for bcrypt comparison
@@ -192,6 +186,7 @@ type Querier interface {
 	GetAllCustomers(ctx context.Context) ([]Customer, error)
 	GetAllWorkspaces(ctx context.Context) ([]Workspace, error)
 	GetAttemptsByType(ctx context.Context, campaignID uuid.UUID) ([]GetAttemptsByTypeRow, error)
+	GetBaseProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	GetBusinessCustomers(ctx context.Context, arg GetBusinessCustomersParams) ([]Customer, error)
 	GetCampaignsNeedingFinalAction(ctx context.Context) ([]GetCampaignsNeedingFinalActionRow, error)
 	GetCircleUserByID(ctx context.Context, id uuid.UUID) (CircleUser, error)
@@ -321,15 +316,6 @@ type Querier interface {
 	GetPaymentsByStatus(ctx context.Context, arg GetPaymentsByStatusParams) ([]Payment, error)
 	GetPaymentsBySubscription(ctx context.Context, arg GetPaymentsBySubscriptionParams) ([]Payment, error)
 	GetPaymentsByWorkspace(ctx context.Context, arg GetPaymentsByWorkspaceParams) ([]Payment, error)
-	GetPrice(ctx context.Context, id uuid.UUID) (Price, error)
-	GetPriceByExternalID(ctx context.Context, arg GetPriceByExternalIDParams) (Price, error)
-	GetPriceWithProduct(ctx context.Context, id uuid.UUID) (GetPriceWithProductRow, error)
-	GetPricesByPaymentProvider(ctx context.Context, arg GetPricesByPaymentProviderParams) ([]Price, error)
-	GetPricesByPaymentSyncStatus(ctx context.Context, arg GetPricesByPaymentSyncStatusParams) ([]Price, error)
-	// Payment Sync Related Price Queries
-	GetPricesNeedingSync(ctx context.Context, workspaceID uuid.UUID) ([]Price, error)
-	GetPricesSyncedByProvider(ctx context.Context, arg GetPricesSyncedByProviderParams) ([]Price, error)
-	GetPricesWithSyncConflicts(ctx context.Context, workspaceID uuid.UUID) ([]Price, error)
 	GetPrimaryCustomerWallet(ctx context.Context, customerID uuid.UUID) (CustomerWallet, error)
 	GetProduct(ctx context.Context, arg GetProductParams) (Product, error)
 	GetProductByExternalID(ctx context.Context, arg GetProductByExternalIDParams) (Product, error)
@@ -340,8 +326,10 @@ type Querier interface {
 	GetProductTokensByNetwork(ctx context.Context, arg GetProductTokensByNetworkParams) ([]GetProductTokensByNetworkRow, error)
 	GetProductTokensByProduct(ctx context.Context, productID uuid.UUID) ([]GetProductTokensByProductRow, error)
 	GetProductWithoutWorkspaceId(ctx context.Context, id uuid.UUID) (Product, error)
+	GetProductsByGroup(ctx context.Context, arg GetProductsByGroupParams) ([]Product, error)
 	GetProductsByPaymentProvider(ctx context.Context, arg GetProductsByPaymentProviderParams) ([]Product, error)
 	GetProductsByPaymentSyncStatus(ctx context.Context, arg GetProductsByPaymentSyncStatusParams) ([]Product, error)
+	GetProductsByType(ctx context.Context, arg GetProductsByTypeParams) ([]Product, error)
 	// Payment Sync Related Product Queries
 	GetProductsNeedingSync(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	GetProductsSyncedByProvider(ctx context.Context, arg GetProductsSyncedByProviderParams) ([]Product, error)
@@ -377,6 +365,7 @@ type Querier interface {
 	GetSubscriptionWithDetails(ctx context.Context, arg GetSubscriptionWithDetailsParams) (GetSubscriptionWithDetailsRow, error)
 	GetSubscriptionWithWorkspace(ctx context.Context, arg GetSubscriptionWithWorkspaceParams) (Subscription, error)
 	GetSubscriptionsByDelegation(ctx context.Context, delegationID uuid.UUID) ([]Subscription, error)
+	// Prices queries removed - pricing is now in products table
 	GetSubscriptionsByPaymentProvider(ctx context.Context, arg GetSubscriptionsByPaymentProviderParams) ([]Subscription, error)
 	GetSubscriptionsByPaymentSyncStatus(ctx context.Context, arg GetSubscriptionsByPaymentSyncStatusParams) ([]Subscription, error)
 	GetSubscriptionsDueForCancellation(ctx context.Context, cancelAt pgtype.Timestamptz) ([]Subscription, error)
@@ -464,8 +453,6 @@ type Querier interface {
 	ListActiveDunningEmailTemplates(ctx context.Context, workspaceID uuid.UUID) ([]DunningEmailTemplate, error)
 	ListActiveFiatCurrencies(ctx context.Context) ([]FiatCurrency, error)
 	ListActiveNetworks(ctx context.Context) ([]Network, error)
-	ListActivePricesByProduct(ctx context.Context, productID uuid.UUID) ([]Price, error)
-	ListActivePricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]Price, error)
 	ListActiveProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	// Get list of active providers for a workspace
 	ListActiveProviders(ctx context.Context, workspaceID uuid.UUID) ([]string, error)
@@ -503,8 +490,6 @@ type Querier interface {
 	ListInvoicesBySyncStatus(ctx context.Context, arg ListInvoicesBySyncStatusParams) ([]Invoice, error)
 	ListInvoicesByWorkspace(ctx context.Context, arg ListInvoicesByWorkspaceParams) ([]Invoice, error)
 	ListNetworks(ctx context.Context, arg ListNetworksParams) ([]Network, error)
-	ListPricesByProduct(ctx context.Context, productID uuid.UUID) ([]Price, error)
-	ListPricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]Price, error)
 	ListPrimaryCustomerWallets(ctx context.Context) ([]CustomerWallet, error)
 	ListPrimaryWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]Wallet, error)
 	ListPrimaryWalletsWithCircleDataByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListPrimaryWalletsWithCircleDataByWorkspaceIDRow, error)
@@ -631,10 +616,6 @@ type Querier interface {
 	UpdatePaymentLinkQRCode(ctx context.Context, arg UpdatePaymentLinkQRCodeParams) (PaymentLink, error)
 	UpdatePaymentStatus(ctx context.Context, arg UpdatePaymentStatusParams) (Payment, error)
 	UpdatePaymentWithBlockchainData(ctx context.Context, arg UpdatePaymentWithBlockchainDataParams) (Payment, error)
-	UpdatePrice(ctx context.Context, arg UpdatePriceParams) (Price, error)
-	UpdatePricePaymentSyncStatus(ctx context.Context, arg UpdatePricePaymentSyncStatusParams) (Price, error)
-	UpdatePriceSyncStatus(ctx context.Context, arg UpdatePriceSyncStatusParams) (Price, error)
-	UpdatePriceWithSync(ctx context.Context, arg UpdatePriceWithSyncParams) (Price, error)
 	UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error)
 	UpdateProductPaymentSyncStatus(ctx context.Context, arg UpdateProductPaymentSyncStatusParams) (Product, error)
 	UpdateProductSyncStatus(ctx context.Context, arg UpdateProductSyncStatusParams) (Product, error)
@@ -646,6 +627,7 @@ type Querier interface {
 	UpdateSubscriptionForUpgrade(ctx context.Context, arg UpdateSubscriptionForUpgradeParams) (Subscription, error)
 	UpdateSubscriptionPaymentSyncStatus(ctx context.Context, arg UpdateSubscriptionPaymentSyncStatusParams) (Subscription, error)
 	UpdateSubscriptionStatus(ctx context.Context, arg UpdateSubscriptionStatusParams) (Subscription, error)
+	// UpdatePriceSyncStatus removed - pricing is now in products table
 	UpdateSubscriptionSyncStatus(ctx context.Context, arg UpdateSubscriptionSyncStatusParams) (Subscription, error)
 	UpdateSubscriptionWithSync(ctx context.Context, arg UpdateSubscriptionWithSyncParams) (Subscription, error)
 	UpdateSyncSessionError(ctx context.Context, arg UpdateSyncSessionErrorParams) (PaymentSyncSession, error)

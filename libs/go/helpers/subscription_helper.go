@@ -11,7 +11,6 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/responses"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
 )
 
@@ -85,29 +84,7 @@ func IsPermanentRedemptionError(err error) bool {
 
 // ToSubscriptionResponse converts a db.ListSubscriptionDetailsWithPaginationRow to a SubscriptionResponse.
 func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationRow) (responses.SubscriptionResponse, error) {
-	// Helper to convert pgtype.Text to string for enums
-	helperPgEnumTextToString := func(pgText pgtype.Text) string {
-		if pgText.Valid {
-			return pgText.String
-		}
-		return ""
-	}
-
-	// Prepare PriceResponse.CreatedAt and PriceResponse.UpdatedAt (assuming they are int64 in PriceResponse)
-	var priceCreatedAtUnix int64
-	if subDetails.PriceCreatedAt.Valid {
-		priceCreatedAtUnix = subDetails.PriceCreatedAt.Time.Unix()
-	}
-	var priceUpdatedAtUnix int64
-	if subDetails.PriceUpdatedAt.Valid {
-		priceUpdatedAtUnix = subDetails.PriceUpdatedAt.Time.Unix()
-	}
-
-	// Prepare nullable fields for PriceResponse
-	var intervalTypeStr string
-	if subDetails.PriceIntervalType != "" {
-		intervalTypeStr = string(subDetails.PriceIntervalType)
-	}
+	// These variables are no longer needed since pricing is embedded in the product
 
 	// Parse customer metadata
 	var customerMetadata map[string]interface{}
@@ -142,21 +119,6 @@ func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 			Metadata:           customerMetadata,
 			CreatedAt:          subDetails.CustomerCreatedAt.Time,
 			UpdatedAt:          subDetails.CustomerUpdatedAt.Time,
-		},
-		Price: responses.PriceResponse{
-			ID:                  subDetails.PriceID.String(),
-			Object:              "price", // Typically static for PriceResponse
-			ProductID:           subDetails.PriceProductID.String(),
-			Active:              subDetails.PriceActive,
-			Type:                string(subDetails.PriceType),
-			Nickname:            helperPgEnumTextToString(subDetails.PriceNickname),
-			Currency:            string(subDetails.PriceCurrency),
-			UnitAmountInPennies: int64(subDetails.PriceUnitAmountInPennies),
-			IntervalType:        intervalTypeStr,
-			TermLength:          subDetails.PriceTermLength,
-			Metadata:            subDetails.PriceMetadata, // Expecting json.RawMessage
-			CreatedAt:           priceCreatedAtUnix,
-			UpdatedAt:           priceUpdatedAtUnix,
 		},
 		Product: responses.ProductResponse{
 			ID:          subDetails.ProductID.String(),
@@ -201,21 +163,25 @@ func ToSubscriptionResponseFromDBSubscription(sub db.Subscription) (responses.Su
 	return resp, nil
 }
 
-// CalculateSubscriptionPeriods determines the start, end, and next redemption dates based on a price
-func CalculateSubscriptionPeriods(price db.Price) (time.Time, time.Time, time.Time) {
+// CalculateSubscriptionPeriods determines the start, end, and next redemption dates based on a product
+func CalculateSubscriptionPeriods(product db.Product) (time.Time, time.Time, time.Time) {
 	now := time.Now()
 	periodStart := now
 	var periodEnd time.Time
 	var nextRedemption time.Time
 
 	termLength := 1
-	if price.TermLength != 0 {
-		termLength = int(price.TermLength)
+	if product.TermLength.Valid && product.TermLength.Int32 != 0 {
+		termLength = int(product.TermLength.Int32)
 	}
 
-	if price.Type == db.PriceTypeRecurring {
-		periodEnd = CalculatePeriodEnd(now, string(price.IntervalType), int32(termLength))
-		nextRedemption = CalculateNextRedemption(string(price.IntervalType), now)
+	if product.PriceType == db.PriceTypeRecurring {
+		intervalType := ""
+		if product.IntervalType.Valid {
+			intervalType = string(product.IntervalType.IntervalType)
+		}
+		periodEnd = CalculatePeriodEnd(now, intervalType, int32(termLength))
+		nextRedemption = CalculateNextRedemption(intervalType, now)
 	} else {
 		periodEnd = now
 		nextRedemption = now
@@ -340,19 +306,6 @@ func ToComprehensiveSubscriptionResponse(ctx context.Context, queries db.Querier
 			Metadata:           customerMetadata,
 			CreatedAt:          subscriptionDetails.CustomerCreatedAt.Time,
 			UpdatedAt:          subscriptionDetails.CustomerUpdatedAt.Time,
-		},
-		Price: responses.PriceResponse{
-			ID:                  subscriptionDetails.PriceID.String(),
-			Object:              "price",
-			ProductID:           subscriptionDetails.ProductID.String(),
-			Active:              true, // Assuming active for subscriptions
-			Type:                string(subscriptionDetails.PriceType),
-			Currency:            string(subscriptionDetails.PriceCurrency),
-			UnitAmountInPennies: int64(subscriptionDetails.PriceUnitAmountInPennies), // Convert int32 to int64
-			IntervalType:        string(subscriptionDetails.PriceIntervalType),
-			TermLength:          subscriptionDetails.PriceTermLength,
-			CreatedAt:           time.Now().Unix(), // Default timestamp
-			UpdatedAt:           time.Now().Unix(), // Default timestamp
 		},
 		Product: responses.ProductResponse{
 			ID:     subscriptionDetails.ProductID.String(),

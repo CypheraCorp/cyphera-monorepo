@@ -23,7 +23,7 @@ type UpdateSubscriptionRequest struct {
 // SubscribeRequest represents the request body for subscribing to a product
 type SubscribeRequest struct {
 	SubscriberAddress string                    `json:"subscriber_address" binding:"required"`
-	PriceID           string                    `json:"price_id" binding:"required"`
+	ProductID         string                    `json:"product_id" binding:"required"`
 	ProductTokenID    string                    `json:"product_token_id" binding:"required"`
 	TokenAmount       string                    `json:"token_amount" binding:"required"`
 	Delegation        business.DelegationStruct `json:"delegation" binding:"required"`

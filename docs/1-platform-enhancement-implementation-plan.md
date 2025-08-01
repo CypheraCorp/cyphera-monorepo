@@ -276,7 +276,7 @@ CREATE UNIQUE INDEX idx_dashboard_current_workspace ON dashboard_current_metrics
 
 #### 4. payment_links
 ```sql
--- Note: This table replaces the need for one_off enum on subscriptions table
+-- Note: This table replaces the need for one_time enum on subscriptions table
 -- Payment links provide flexible support for both one-time and recurring payments
 CREATE TABLE payment_links (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -778,9 +778,9 @@ GROUP BY i.id;
 
 ### Database Modifications
 
-#### Remove one_off enum from subscriptions table
+#### Remove one_time enum from subscriptions table
 ```sql
--- IMPORTANT: Remove the one_off enum from subscriptions table
+-- IMPORTANT: Remove the one_time enum from subscriptions table
 -- Payment links now handle both one-time and recurring payments
 -- This provides better flexibility and cleaner architecture
 
@@ -788,7 +788,7 @@ GROUP BY i.id;
 -- 1. Create payment links for any one-off subscriptions
 -- 2. Update references
 -- 3. Then remove the column
-ALTER TABLE subscriptions DROP COLUMN IF EXISTS one_off;
+ALTER TABLE subscriptions DROP COLUMN IF EXISTS one_time;
 
 -- Note: The payment_links table with payment_type field provides
 -- a more flexible solution for different payment scenarios
@@ -1653,7 +1653,7 @@ Since the application is not in production, we'll do a complete replacement:
 
 1. **Drop old subscription structure**
    - Drop existing subscriptions table with CASCADE
-   - Remove one_off enum references
+   - Remove one_time enum references
    - Clean up any dependent tables
    
 2. **Create new structure**

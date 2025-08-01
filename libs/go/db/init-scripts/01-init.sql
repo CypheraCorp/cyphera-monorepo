@@ -6,7 +6,7 @@ CREATE TYPE api_key_level AS ENUM ('read', 'write', 'admin');
 CREATE TYPE account_type AS ENUM ('admin', 'merchant');
 CREATE TYPE user_role AS ENUM ('admin', 'support', 'developer');
 CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended', 'pending');
-CREATE TYPE price_type AS ENUM ('recurring', 'one_off');
+CREATE TYPE price_type AS ENUM ('recurring', 'one_time');
 CREATE TYPE interval_type AS ENUM ('1min', '5mins', 'daily', 'week', 'month', 'year');
 CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkadot');
 -- Currency enum removed - using fiat_currencies table instead
@@ -289,57 +289,54 @@ CREATE TABLE customer_wallets (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
--- Products table (depends on workspaces, wallets) - WITH PAYMENT SYNC COLUMNS
+-- Products table (depends on workspaces, wallets) - WITH MERGED PRICE DATA
 CREATE TABLE products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
     wallet_id UUID NOT NULL REFERENCES wallets(id),
     external_id VARCHAR(255), -- Provider's ID (Stripe ID, etc.)
+    
+    -- Product details
     name TEXT NOT NULL,
     description TEXT,
     image_url TEXT,
     url TEXT,
     active BOOLEAN NOT NULL DEFAULT true,
+    
+    -- Product categorization
+    product_type VARCHAR(50) DEFAULT 'base', -- 'base' or 'addon'
+    product_group VARCHAR(100), -- Groups related products (e.g., "pro_plan" for monthly/yearly variants)
+    
+    -- Merged price fields (previously in prices table)
+    price_type price_type NOT NULL DEFAULT 'recurring', -- 'recurring' or 'one_time'
+    currency VARCHAR(3) NOT NULL REFERENCES fiat_currencies(code), -- ISO 4217 currency code
+    unit_amount_in_pennies INTEGER NOT NULL,
+    interval_type interval_type, -- 'daily', 'weekly', 'monthly', 'yearly' (NULL for one_time)
+    term_length INTEGER, -- Number of intervals, e.g., 12 for 12 months (NULL for one_time)
+    price_nickname TEXT, -- Optional friendly name for the price
+    price_external_id VARCHAR(255), -- Provider's price ID (e.g., Stripe price ID)
+    
+    -- Metadata
     metadata JSONB DEFAULT '{}'::jsonb,
+    
     -- Payment sync tracking columns
     payment_sync_status VARCHAR(20) DEFAULT 'pending', 
     payment_synced_at TIMESTAMP WITH TIME ZONE,
     payment_sync_version INTEGER DEFAULT 1,
     payment_provider VARCHAR(50), -- 'stripe', 'chargebee', etc.
+    
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Constraints
+    CONSTRAINT products_price_type_check CHECK (
+        (price_type = 'recurring' AND interval_type IS NOT NULL AND term_length IS NOT NULL AND term_length > 0) OR
+        (price_type = 'one_time' AND interval_type IS NULL AND term_length IS NULL)
+    ),
+    
     -- Add unique constraint for external_id per workspace and provider
     UNIQUE(workspace_id, external_id, payment_provider)
-);
-
--- Prices table (depends on products) - WITH PAYMENT SYNC COLUMNS
-CREATE TABLE prices (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    product_id UUID NOT NULL REFERENCES products(id),
-    external_id VARCHAR(255), -- Provider's ID (Stripe ID, etc.)
-    active BOOLEAN NOT NULL DEFAULT true,
-    type price_type NOT NULL, -- 'recurring' or 'one_off'
-    nickname TEXT,
-    currency VARCHAR(3) NOT NULL REFERENCES fiat_currencies(code), -- ISO 4217 currency code
-    unit_amount_in_pennies INTEGER NOT NULL,
-    interval_type interval_type NOT NULL,
-    term_length INTEGER NOT NULL, -- Nullable, for 'recurring' type, e.g., 12 for 12 months
-    metadata JSONB DEFAULT '{}'::jsonb,
-    -- Payment sync tracking columns
-    payment_sync_status VARCHAR(20) DEFAULT 'pending',
-    payment_synced_at TIMESTAMP WITH TIME ZONE, 
-    payment_sync_version INTEGER DEFAULT 1,
-    payment_provider VARCHAR(50), -- 'stripe', 'chargebee', etc.
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE,
-    CONSTRAINT prices_recurring_fields_check CHECK (
-        (type = 'recurring' AND interval_type IS NOT NULL AND term_length IS NOT NULL AND term_length > 0) OR
-        (type = 'one_off' AND interval_type IS NULL AND term_length IS NULL)
-    ),
-    -- Add unique constraint for external_id per provider
-    UNIQUE(external_id, payment_provider)
 );
 
 -- Tokens table (depends on networks)
@@ -392,7 +389,7 @@ CREATE TABLE subscriptions (
     customer_id UUID NOT NULL REFERENCES customers(id),
     product_id UUID NOT NULL REFERENCES products(id),
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
-    price_id UUID NOT NULL REFERENCES prices(id),
+    -- price_id removed - pricing is now in products table
     product_token_id UUID NOT NULL REFERENCES products_tokens(id),
     external_id VARCHAR(255), -- Provider's ID (Stripe ID, etc.)
     token_amount INTEGER NOT NULL,
@@ -722,16 +719,21 @@ CREATE INDEX idx_products_created_at ON products(created_at);
 CREATE INDEX idx_products_payment_provider ON products(payment_provider) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_payment_sync_status ON products(payment_sync_status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_external_id ON products(external_id) WHERE deleted_at IS NULL;
+-- New indexes for merged price fields
+CREATE INDEX idx_products_price_type ON products(price_type);
+CREATE INDEX idx_products_currency ON products(currency);
+CREATE INDEX idx_products_product_type ON products(product_type);
+CREATE INDEX idx_products_product_group ON products(product_group) WHERE product_group IS NOT NULL;
 
--- prices
-CREATE INDEX idx_prices_product_id ON prices(product_id);
-CREATE INDEX idx_prices_active ON prices(active) WHERE deleted_at IS NULL;
-CREATE INDEX idx_prices_type ON prices(type);
-CREATE INDEX idx_prices_currency ON prices(currency);
+-- prices indexes removed - pricing is now in products table
+-- CREATE INDEX idx_prices_product_id ON prices(product_id);
+-- CREATE INDEX idx_prices_active ON prices(active) WHERE deleted_at IS NULL;
+-- CREATE INDEX idx_prices_type ON prices(type);
+-- CREATE INDEX idx_prices_currency ON prices(currency);
 CREATE INDEX idx_fiat_currencies_active ON fiat_currencies(is_active, code);
-CREATE INDEX idx_prices_payment_provider ON prices(payment_provider) WHERE deleted_at IS NULL;
-CREATE INDEX idx_prices_payment_sync_status ON prices(payment_sync_status) WHERE deleted_at IS NULL;
-CREATE INDEX idx_prices_external_id ON prices(external_id) WHERE deleted_at IS NULL;
+-- CREATE INDEX idx_prices_payment_provider ON prices(payment_provider) WHERE deleted_at IS NULL;
+-- CREATE INDEX idx_prices_payment_sync_status ON prices(payment_sync_status) WHERE deleted_at IS NULL;
+-- CREATE INDEX idx_prices_external_id ON prices(external_id) WHERE deleted_at IS NULL;
 
 -- tokens
 CREATE INDEX idx_tokens_network_id ON tokens(network_id);
@@ -755,7 +757,7 @@ CREATE INDEX idx_subscriptions_product_id ON subscriptions(product_id);
 CREATE INDEX idx_subscriptions_product_token_id ON subscriptions(product_token_id);
 CREATE INDEX idx_subscriptions_delegation_id ON subscriptions(delegation_id);
 CREATE INDEX idx_subscriptions_customer_wallet_id ON subscriptions(customer_wallet_id);
-CREATE INDEX idx_subscriptions_price_id ON subscriptions(price_id);
+-- CREATE INDEX idx_subscriptions_price_id ON subscriptions(price_id); -- Removed: price_id is now in products table
 CREATE INDEX idx_subscriptions_status ON subscriptions(status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_subscriptions_next_redemption_date ON subscriptions(next_redemption_date) WHERE status = 'active' AND deleted_at IS NULL;
 CREATE INDEX idx_subscriptions_payment_provider ON subscriptions(payment_provider) WHERE deleted_at IS NULL;
@@ -968,10 +970,10 @@ CREATE TRIGGER set_circle_wallets_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 
-CREATE TRIGGER set_prices_updated_at
-    BEFORE UPDATE ON prices
-    FOR EACH ROW
-    EXECUTE FUNCTION trigger_set_updated_at();
+-- CREATE TRIGGER set_prices_updated_at
+--     BEFORE UPDATE ON prices
+--     FOR EACH ROW
+--     EXECUTE FUNCTION trigger_set_updated_at();
 
 CREATE TRIGGER set_invoices_updated_at
     BEFORE UPDATE ON invoices
@@ -1067,7 +1069,7 @@ CREATE TABLE invoice_line_items (
     -- References
     subscription_id UUID REFERENCES subscriptions(id),
     product_id UUID REFERENCES products(id),
-    price_id UUID REFERENCES prices(id),
+    -- price_id removed - pricing is now in products table
     
     -- Crypto payment details
     network_id UUID REFERENCES networks(id),
@@ -1187,7 +1189,7 @@ CREATE TABLE payment_links (
     
     -- Payment configuration
     product_id UUID REFERENCES products(id),
-    price_id UUID REFERENCES prices(id),
+    -- price_id removed - pricing is now in products table
     amount_in_cents BIGINT, -- For one-time custom amounts
     currency VARCHAR(3) REFERENCES fiat_currencies(code),
     payment_type VARCHAR(50) DEFAULT 'one_time', -- one_time, recurring

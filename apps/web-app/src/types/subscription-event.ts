@@ -14,7 +14,7 @@ export type SubscriptionEventType = 'redeemed' | 'failed' | 'failed_redemption';
  */
 export interface SubscriptionEventPriceInfo {
   id: string; // uuid.UUID
-  type: string; // db.PriceType (e.g., recurring, one_off)
+  type: string; // db.PriceType (e.g., recurring, one_time)
   currency: string; // db.Currency
   unit_amount_in_pennies: number; // int32
   interval_type?: string; // db.NullIntervalType (optional)

@@ -14,7 +14,7 @@ export default function Error({
 }) {
   useEffect(() => {
     // Log the error to an error reporting service
-    logger.error('Public price page error', error);
+    logger.error('Pay product page error', error);
   }, [error]);
 
   return (

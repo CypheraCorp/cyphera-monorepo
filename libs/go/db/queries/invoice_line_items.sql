@@ -8,7 +8,6 @@ INSERT INTO invoice_line_items (
     fiat_currency,
     subscription_id,
     product_id,
-    price_id,
     network_id,
     token_id,
     crypto_amount,
@@ -25,7 +24,7 @@ INSERT INTO invoice_line_items (
     gas_sponsor_name,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
 )
 RETURNING *;
 
@@ -97,21 +96,19 @@ INSERT INTO invoice_line_items (
     amount_in_cents,
     fiat_currency,
     product_id,
-    price_id,
     line_item_type
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8
 );
 
 -- name: GetProductLineItemsByInvoice :many
 SELECT 
     ili.*,
     p.name as product_name,
-    pr.interval_type,
-    pr.term_length
+    p.interval_type,
+    p.term_length
 FROM invoice_line_items ili
 LEFT JOIN products p ON ili.product_id = p.id
-LEFT JOIN prices pr ON ili.price_id = pr.id
 WHERE ili.invoice_id = $1
     AND ili.line_item_type = 'product'
 ORDER BY ili.created_at ASC;

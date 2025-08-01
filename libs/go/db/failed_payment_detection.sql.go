@@ -108,7 +108,6 @@ SELECT DISTINCT ON (se.subscription_id)
     s.workspace_id,
     s.customer_id,
     s.product_id,
-    s.price_id,
     s.status as subscription_status
 FROM subscription_events se
 JOIN subscriptions s ON se.subscription_id = s.id
@@ -138,7 +137,6 @@ type ListRecentFailedPaymentsRow struct {
 	WorkspaceID        uuid.UUID             `json:"workspace_id"`
 	CustomerID         uuid.UUID             `json:"customer_id"`
 	ProductID          uuid.UUID             `json:"product_id"`
-	PriceID            uuid.UUID             `json:"price_id"`
 	SubscriptionStatus SubscriptionStatus    `json:"subscription_status"`
 }
 
@@ -166,7 +164,6 @@ func (q *Queries) ListRecentFailedPayments(ctx context.Context, occurredAt pgtyp
 			&i.WorkspaceID,
 			&i.CustomerID,
 			&i.ProductID,
-			&i.PriceID,
 			&i.SubscriptionStatus,
 		); err != nil {
 			return nil, err

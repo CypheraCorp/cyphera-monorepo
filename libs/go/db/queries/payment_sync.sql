@@ -290,15 +290,7 @@ WHERE workspace_id = $1 AND payment_provider = $2 AND deleted_at IS NULL;
 SELECT * FROM products 
 WHERE workspace_id = $1 AND payment_sync_status = $2 AND deleted_at IS NULL;
 
--- name: GetPricesByPaymentProvider :many
-SELECT p.* FROM prices p
-JOIN products pr ON p.product_id = pr.id
-WHERE pr.workspace_id = $1 AND p.payment_provider = $2 AND p.deleted_at IS NULL AND pr.deleted_at IS NULL;
-
--- name: GetPricesByPaymentSyncStatus :many
-SELECT p.* FROM prices p
-JOIN products pr ON p.product_id = pr.id
-WHERE pr.workspace_id = $1 AND p.payment_sync_status = $2 AND p.deleted_at IS NULL AND pr.deleted_at IS NULL;
+-- Prices queries removed - pricing is now in products table
 
 -- name: GetSubscriptionsByPaymentProvider :many
 SELECT * FROM subscriptions 
@@ -322,12 +314,7 @@ SET payment_sync_status = $2, payment_synced_at = CURRENT_TIMESTAMP,
 WHERE id = $1 
 RETURNING *;
 
--- name: UpdatePriceSyncStatus :one
-UPDATE prices 
-SET payment_sync_status = $2, payment_synced_at = CURRENT_TIMESTAMP, 
-    payment_sync_version = payment_sync_version + 1, payment_provider = $3, updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 
-RETURNING *;
+-- UpdatePriceSyncStatus removed - pricing is now in products table
 
 -- name: UpdateSubscriptionSyncStatus :one
 UPDATE subscriptions 
@@ -359,19 +346,6 @@ SELECT
     p.payment_provider
 FROM products p
 WHERE p.workspace_id = $1 AND p.payment_provider = $2 AND p.payment_sync_status = $3 AND p.deleted_at IS NULL
-
-UNION ALL
-
-SELECT 
-    'price' as entity_type,
-    pr.id as entity_id,
-    pr.external_id,
-    pr.payment_sync_status,
-    pr.payment_synced_at,
-    pr.payment_provider
-FROM prices pr
-JOIN products prod ON pr.product_id = prod.id
-WHERE prod.workspace_id = $1 AND pr.payment_provider = $2 AND pr.payment_sync_status = $3 AND pr.deleted_at IS NULL AND prod.deleted_at IS NULL
 
 UNION ALL
 
@@ -435,18 +409,7 @@ WHERE workspace_id = $1
   AND external_id = ANY($4::text[]) 
   AND deleted_at IS NULL;
 
--- name: BulkUpdatePriceSyncStatus :exec
-UPDATE prices 
-SET payment_sync_status = $2, 
-    payment_synced_at = CURRENT_TIMESTAMP, 
-    payment_sync_version = payment_sync_version + 1, 
-    payment_provider = $3, 
-    updated_at = CURRENT_TIMESTAMP
-FROM products p
-WHERE prices.product_id = p.id
-  AND p.workspace_id = $1 
-  AND prices.external_id = ANY($4::text[])
-  AND prices.deleted_at IS NULL;
+-- BulkUpdatePriceSyncStatus removed - pricing is now in products table
 
 -- name: BulkUpdateSubscriptionSyncStatus :exec
 UPDATE subscriptions 
@@ -465,27 +428,22 @@ WHERE workspace_id = $1
 SELECT 
     CASE 
         WHEN p.id IS NOT NULL THEN 'product'
-        WHEN pr.id IS NOT NULL THEN 'price'
         WHEN s.id IS NOT NULL THEN 'subscription'
         ELSE 'unknown'
     END as entity_type,
-    COALESCE(p.id, pr.id, s.id) as entity_id,
-    COALESCE(p.external_id, pr.external_id, s.external_id) as external_id,
-    COALESCE(p.payment_provider, pr.payment_provider, s.payment_provider) as payment_provider
+    COALESCE(p.id, s.id) as entity_id,
+    COALESCE(p.external_id, s.external_id) as external_id,
+    COALESCE(p.payment_provider, s.payment_provider) as payment_provider
 FROM (SELECT $1 as workspace_id, $2 as external_id, $3 as payment_provider) params
 LEFT JOIN products p ON p.workspace_id = params.workspace_id 
     AND p.external_id = params.external_id 
     AND p.payment_provider = params.payment_provider 
     AND p.deleted_at IS NULL
-LEFT JOIN prices pr ON pr.external_id = params.external_id 
-    AND pr.payment_provider = params.payment_provider 
-    AND pr.deleted_at IS NULL
-    AND EXISTS (SELECT 1 FROM products prod WHERE prod.id = pr.product_id AND prod.workspace_id = params.workspace_id AND prod.deleted_at IS NULL)
 LEFT JOIN subscriptions s ON s.workspace_id = params.workspace_id 
     AND s.external_id = params.external_id 
     AND s.payment_provider = params.payment_provider 
     AND s.deleted_at IS NULL
-WHERE COALESCE(p.id, pr.id, s.id) IS NOT NULL
+WHERE COALESCE(p.id, s.id) IS NOT NULL
 LIMIT 1;
 
 -- name: GetCustomerByExternalIDAndProvider :one
@@ -512,7 +470,6 @@ SELECT
     COUNT(DISTINCT CASE WHEN pss.status IN ('pending', 'running') THEN pss.id END) as active_sessions,
     COUNT(DISTINCT CASE WHEN c.payment_sync_status = 'synced' THEN c.id END) as synced_customers,
     COUNT(DISTINCT CASE WHEN p.payment_sync_status = 'synced' THEN p.id END) as synced_products,
-    COUNT(DISTINCT CASE WHEN pr.payment_sync_status = 'synced' THEN pr.id END) as synced_prices,
     COUNT(DISTINCT CASE WHEN s.payment_sync_status = 'synced' THEN s.id END) as synced_subscriptions,
     MAX(pss.completed_at) as last_successful_sync
 FROM workspaces w
@@ -520,7 +477,6 @@ LEFT JOIN payment_sync_sessions pss ON w.id = pss.workspace_id AND pss.deleted_a
 LEFT JOIN workspace_customers wc ON w.id = wc.workspace_id AND wc.deleted_at IS NULL
 LEFT JOIN customers c ON wc.customer_id = c.id AND c.deleted_at IS NULL
 LEFT JOIN products p ON w.id = p.workspace_id AND p.deleted_at IS NULL
-LEFT JOIN prices pr ON p.id = pr.product_id AND pr.deleted_at IS NULL
 LEFT JOIN subscriptions s ON w.id = s.workspace_id AND s.deleted_at IS NULL
 WHERE w.id = $1 AND w.deleted_at IS NULL
 GROUP BY w.id, w.name;

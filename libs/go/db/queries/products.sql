@@ -35,13 +35,22 @@ INSERT INTO products (
     image_url,
     url,
     active,
+    product_type,
+    product_group,
+    price_type,
+    currency,
+    unit_amount_in_pennies,
+    interval_type,
+    term_length,
+    price_nickname,
+    price_external_id,
     metadata,
     payment_sync_status,
     payment_provider
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8,
-    COALESCE($9, 'pending'),
-    $10
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+    COALESCE($18, 'pending'),
+    $19
 )
 RETURNING *;
 
@@ -55,13 +64,22 @@ INSERT INTO products (
     image_url,
     url,
     active,
+    product_type,
+    product_group,
+    price_type,
+    currency,
+    unit_amount_in_pennies,
+    interval_type,
+    term_length,
+    price_nickname,
+    price_external_id,
     metadata,
     payment_sync_status,
     payment_synced_at,
     payment_sync_version,
     payment_provider
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
 )
 RETURNING *;
 
@@ -74,7 +92,16 @@ SET
     image_url = COALESCE($6, image_url),
     url = COALESCE($7, url),
     active = COALESCE($8, active),
-    metadata = COALESCE($9, metadata),
+    product_type = COALESCE($9, product_type),
+    product_group = COALESCE($10, product_group),
+    price_type = COALESCE($11, price_type),
+    currency = COALESCE($12, currency),
+    unit_amount_in_pennies = COALESCE($13, unit_amount_in_pennies),
+    interval_type = COALESCE($14, interval_type),
+    term_length = COALESCE($15, term_length),
+    price_nickname = COALESCE($16, price_nickname),
+    price_external_id = COALESCE($17, price_external_id),
+    metadata = COALESCE($18, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 RETURNING *;
@@ -88,11 +115,20 @@ SET
     image_url = COALESCE($6, image_url),
     url = COALESCE($7, url),
     active = COALESCE($8, active),
-    metadata = COALESCE($9, metadata),
-    payment_sync_status = COALESCE($10, payment_sync_status),
-    payment_synced_at = COALESCE($11, payment_synced_at),
-    payment_sync_version = COALESCE($12, payment_sync_version),
-    payment_provider = COALESCE($13, payment_provider),
+    product_type = COALESCE($9, product_type),
+    product_group = COALESCE($10, product_group),
+    price_type = COALESCE($11, price_type),
+    currency = COALESCE($12, currency),
+    unit_amount_in_pennies = COALESCE($13, unit_amount_in_pennies),
+    interval_type = COALESCE($14, interval_type),
+    term_length = COALESCE($15, term_length),
+    price_nickname = COALESCE($16, price_nickname),
+    price_external_id = COALESCE($17, price_external_id),
+    metadata = COALESCE($18, metadata),
+    payment_sync_status = COALESCE($19, payment_sync_status),
+    payment_synced_at = COALESCE($20, payment_synced_at),
+    payment_sync_version = COALESCE($21, payment_sync_version),
+    payment_provider = COALESCE($22, payment_provider),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 RETURNING *;
@@ -155,3 +191,33 @@ WHERE p.workspace_id = $1
   AND p.external_id = $2
   AND p.payment_provider = $3
   AND p.deleted_at IS NULL;
+
+-- name: GetProductsByGroup :many
+SELECT * FROM products
+WHERE workspace_id = $1 
+  AND product_group = $2
+  AND deleted_at IS NULL
+ORDER BY created_at DESC;
+
+-- name: GetProductsByType :many
+SELECT * FROM products
+WHERE workspace_id = $1 
+  AND product_type = $2
+  AND deleted_at IS NULL
+ORDER BY created_at DESC;
+
+-- name: GetBaseProducts :many
+SELECT * FROM products
+WHERE workspace_id = $1 
+  AND product_type = 'base'
+  AND active = true
+  AND deleted_at IS NULL
+ORDER BY created_at DESC;
+
+-- name: GetAddonProducts :many
+SELECT * FROM products
+WHERE workspace_id = $1 
+  AND product_type = 'addon'
+  AND active = true
+  AND deleted_at IS NULL
+ORDER BY created_at DESC;

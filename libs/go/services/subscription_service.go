@@ -66,8 +66,7 @@ func (e *SubscriptionExistsError) Error() string {
 // ProcessSubscriptionParams represents parameters for processing a subscription
 type ProcessSubscriptionParams struct {
 	Subscription         db.Subscription
-	Price                db.Price
-	Product              db.Product
+	Product              db.Product // Product now contains pricing info
 	Customer             db.Customer
 	MerchantWallet       db.Wallet
 	CustomerWallet       db.Wallet
@@ -387,7 +386,6 @@ func (s *SubscriptionService) CreateSubscription(ctx context.Context, tx pgx.Tx,
 		WorkspaceID:        params.WorkspaceID,
 		CustomerID:         params.Customer.ID,
 		ProductID:          params.ProductID,
-		PriceID:            params.Price.ID,
 		ProductTokenID:     params.ProductTokenID,
 		TokenAmount:        int32(params.TokenAmount),
 		DelegationID:       params.DelegationData.ID,
@@ -399,12 +397,23 @@ func (s *SubscriptionService) CreateSubscription(ctx context.Context, tx pgx.Tx,
 		TotalRedemptions:   0,
 		TotalAmountInCents: 0,
 		Metadata: func() []byte {
+			// Get the product for metadata (params.Product or params.Price for backward compatibility)
+			product := params.Product
+			if product.ID == uuid.Nil && params.Price.ID != uuid.Nil {
+				product = params.Price // Use Price as Product for backward compatibility
+			}
+
 			metadata := map[string]interface{}{
-				"price_id":               params.Price.ID.String(),
-				"token_amount":           params.TokenAmount,
-				"term_length":            params.Price.TermLength,
-				"interval_type":          params.Price.IntervalType,
-				"unit_amount_in_pennies": params.Price.UnitAmountInPennies,
+				"product_id":   product.ID.String(),
+				"token_amount": params.TokenAmount,
+				"term_length":  product.TermLength.Int32,
+				"interval_type": func() string {
+					if product.IntervalType.Valid {
+						return string(product.IntervalType.IntervalType)
+					}
+					return ""
+				}(),
+				"unit_amount_in_pennies": product.UnitAmountInPennies,
 				"wallet_address":         params.CustomerWallet.WalletAddress,
 				"delegation_id":          params.DelegationData.ID.String(),
 			}
@@ -415,6 +424,7 @@ func (s *SubscriptionService) CreateSubscription(ctx context.Context, tx pgx.Tx,
 			}
 			return metadataBytes
 		}(),
+		PaymentProvider: pgtype.Text{String: "", Valid: false},
 	})
 	if err != nil {
 		s.logger.Error("Failed to create subscription", zap.Error(err))
@@ -491,15 +501,15 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 	eventMetadata := map[string]interface{}{
 		"product_id":        redemptionParams.Product.ID.String(),
 		"product_name":      redemptionParams.Product.Name,
-		"price_id":          redemptionParams.Price.ID.String(),
-		"price_type":        redemptionParams.Price.Type,
+		"product_id_old":    redemptionParams.Product.ID.String(),
+		"price_type":        string(redemptionParams.Product.PriceType),
 		"product_token_id":  redemptionParams.ProductToken.ID.String(),
 		"token_symbol":      redemptionParams.ProductToken.TokenSymbol,
 		"network_name":      redemptionParams.ProductToken.NetworkName,
 		"wallet_address":    redemptionParams.CustomerWallet.WalletAddress,
 		"customer_id":       redemptionParams.Customer.ID.String(),
 		"redemption_time":   time.Now().Unix(),
-		"subscription_type": string(redemptionParams.Price.Type),
+		"subscription_type": string(redemptionParams.Product.PriceType),
 		"tx_hash":           txHash,
 	}
 
@@ -514,7 +524,7 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 		EventType:       db.SubscriptionEventTypeRedeemed,
 		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		TransactionHash: pgtype.Text{String: txHash, Valid: true},
-		AmountInCents:   int32(redemptionParams.Price.UnitAmountInPennies),
+		AmountInCents:   redemptionParams.Product.UnitAmountInPennies,
 		Metadata:        metadataBytes,
 	})
 	if eventErr != nil {
@@ -543,7 +553,7 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 		_, paymentErr := paymentServiceTx.CreatePaymentFromSubscriptionEvent(ctx, params.CreatePaymentFromSubscriptionEventParams{
 			SubscriptionEvent: &subscriptionEvent,
 			Subscription:      &redemptionParams.Subscription,
-			Price:             &redemptionParams.Price,
+			Product:           &redemptionParams.Product,
 			Customer:          &redemptionParams.Customer,
 			TransactionHash:   txHash,
 			NetworkID:         redemptionParams.Network.ID,
@@ -565,8 +575,12 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 
 	// Calculate next redemption date
 	var nextRedemptionDate pgtype.Timestamptz
-	if redemptionParams.Price.Type == db.PriceTypeRecurring {
-		nextDate := helpers.CalculateNextRedemption(string(redemptionParams.Price.IntervalType), time.Now())
+	if redemptionParams.Product.PriceType == db.PriceTypeRecurring {
+		intervalType := ""
+		if redemptionParams.Product.IntervalType.Valid {
+			intervalType = string(redemptionParams.Product.IntervalType.IntervalType)
+		}
+		nextDate := helpers.CalculateNextRedemption(intervalType, time.Now())
 		nextRedemptionDate = pgtype.Timestamptz{
 			Time:  nextDate,
 			Valid: true,
@@ -580,7 +594,7 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 	// Update subscription with redemption details
 	updatedSubscription, err := qtx.IncrementSubscriptionRedemption(ctx, db.IncrementSubscriptionRedemptionParams{
 		ID:                 redemptionParams.Subscription.ID,
-		TotalAmountInCents: int32(redemptionParams.Price.UnitAmountInPennies),
+		TotalAmountInCents: redemptionParams.Product.UnitAmountInPennies,
 		NextRedemptionDate: nextRedemptionDate,
 	})
 	if err != nil {
@@ -663,7 +677,7 @@ func (s *SubscriptionService) CreateSubscriptionWithDelegation(ctx context.Conte
 	// Create subscription event
 	eventMetadata := map[string]interface{}{
 		"product_name":   createParams.Product.Name,
-		"price_type":     createParams.Price.Type,
+		"price_type":     string(createParams.Product.PriceType),
 		"wallet_address": customerWallet.WalletAddress,
 		"network_type":   createParams.Network.Type,
 	}
@@ -826,10 +840,8 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 		return fmt.Errorf("failed to get product: %w", err)
 	}
 
-	price, err := qtx.GetPrice(ctx, subscription.PriceID)
-	if err != nil {
-		return fmt.Errorf("failed to get price: %w", err)
-	}
+	// Price is now embedded in product - no need to fetch separately
+	price := product // Use product as price for code that expects price variable
 
 	customer, err := qtx.GetCustomer(ctx, subscription.CustomerID)
 	if err != nil {
@@ -921,15 +933,15 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 
 	// Update subscription with proper term length validation
 	var nextRedemptionDate pgtype.Timestamptz
-	if price.Type == db.PriceTypeRecurring {
+	if price.PriceType == db.PriceTypeRecurring {
 		// CRITICAL BUG FIX: Check if subscription has reached its term limit
 		// currentSub.TotalRedemptions will be incremented by IncrementSubscriptionRedemption below
 		// so we check if the NEXT redemption would exceed the limit
-		if currentSub.TotalRedemptions+1 >= price.TermLength {
+		if currentSub.TotalRedemptions+1 >= price.TermLength.Int32 {
 			s.logger.Info("Subscription reached maximum periods, marking as completed",
 				zap.String("subscription_id", subscription.ID.String()),
 				zap.Int32("current_redemptions", currentSub.TotalRedemptions),
-				zap.Int32("max_periods", price.TermLength))
+				zap.Int32("max_periods", price.TermLength.Int32))
 
 			// Mark as completed - reached maximum periods
 			_, err = qtx.UpdateSubscriptionStatus(ctx, db.UpdateSubscriptionStatusParams{
@@ -946,7 +958,11 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 			nextRedemptionDate = pgtype.Timestamptz{Valid: false}
 		} else {
 			// Continue with next redemption - subscription still has periods remaining
-			nextDate := helpers.CalculateNextRedemption(string(price.IntervalType), time.Now())
+			intervalType := ""
+			if price.IntervalType.Valid {
+				intervalType = string(price.IntervalType.IntervalType)
+			}
+			nextDate := helpers.CalculateNextRedemption(intervalType, time.Now())
 			nextRedemptionDate = pgtype.Timestamptz{
 				Time:  nextDate,
 				Valid: true,
@@ -955,7 +971,7 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 			s.logger.Info("Subscription continuing to next period",
 				zap.String("subscription_id", subscription.ID.String()),
 				zap.Int32("current_redemptions", currentSub.TotalRedemptions),
-				zap.Int32("max_periods", price.TermLength),
+				zap.Int32("max_periods", price.TermLength.Int32),
 				zap.Time("next_redemption", nextDate))
 		}
 	} else {
@@ -976,7 +992,7 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 
 	_, err = qtx.IncrementSubscriptionRedemption(ctx, db.IncrementSubscriptionRedemptionParams{
 		ID:                 subscription.ID,
-		TotalAmountInCents: int32(price.UnitAmountInPennies),
+		TotalAmountInCents: price.UnitAmountInPennies,
 		NextRedemptionDate: nextRedemptionDate,
 	})
 	if err != nil {
@@ -987,15 +1003,15 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 	eventMetadata := map[string]interface{}{
 		"product_id":        product.ID.String(),
 		"product_name":      product.Name,
-		"price_id":          price.ID.String(),
-		"price_type":        price.Type,
+		"product_id_old":    product.ID.String(),
+		"price_type":        string(product.PriceType),
 		"product_token_id":  productToken.ID.String(),
 		"token_symbol":      productToken.TokenSymbol,
 		"network_name":      productToken.NetworkName,
 		"wallet_address":    customerWallet.WalletAddress,
 		"customer_id":       customer.ID.String(),
 		"redemption_time":   time.Now().Unix(),
-		"subscription_type": string(price.Type),
+		"subscription_type": string(product.PriceType),
 		"tx_hash":           txHash,
 	}
 
@@ -1011,7 +1027,7 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 		EventType:       db.SubscriptionEventTypeRedeemed,
 		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		TransactionHash: pgtype.Text{String: txHash, Valid: true},
-		AmountInCents:   int32(price.UnitAmountInPennies),
+		AmountInCents:   product.UnitAmountInPennies,
 		Metadata:        metadataBytes,
 	})
 	if err != nil {
@@ -1025,7 +1041,6 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 		SubscriptionEvent: &subEvent,
 		Subscription:      &currentSub,
 		Product:           &product,
-		Price:             &price,
 		Customer:          &customer,
 		TransactionHash:   txHash,
 		NetworkID:         productToken.NetworkID,
@@ -1050,16 +1065,16 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 	} else if updatedSub.Status == db.SubscriptionStatusCompleted {
 		// Create completion event after redemption and payment
 		completionReason := "term_limit_reached"
-		if price.Type == db.PriceTypeOneOff {
+		if price.PriceType == db.PriceTypeOneTime {
 			completionReason = "one_time_purchase"
 		}
 
 		completionMetadata := map[string]interface{}{
 			"product_id":        product.ID.String(),
 			"product_name":      product.Name,
-			"price_id":          price.ID.String(),
+			"product_id_old":    price.ID.String(),
 			"total_redemptions": updatedSub.TotalRedemptions,
-			"max_periods":       price.TermLength,
+			"max_periods":       price.TermLength.Int32,
 			"completion_reason": completionReason,
 			"final_tx_hash":     txHash,
 		}
@@ -1096,23 +1111,14 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 	return nil
 }
 
-// SubscribeToProductByPriceID handles the complete workflow for subscribing to a product by price ID
+// SubscribeToProductByPriceID handles the complete workflow for subscribing to a product
+// Deprecated: The name is kept for backward compatibility but it now uses product ID directly
 func (s *SubscriptionService) SubscribeToProductByPriceID(ctx context.Context, subscribeParams params.SubscribeToProductByPriceIDParams) (*responses.SubscribeToProductByPriceIDResult, error) {
-	// Get price and validate it's active
-	price, err := s.queries.GetPrice(ctx, subscribeParams.PriceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get price: %w", err)
-	}
-
-	if !price.Active {
-		return &responses.SubscribeToProductByPriceIDResult{
-			Success:      false,
-			ErrorMessage: "Cannot subscribe to inactive price",
-		}, nil
-	}
+	// Since prices are now embedded in products, ProductID is what was formerly PriceID
+	productID := subscribeParams.ProductID
 
 	// Get product and validate it's active
-	product, err := s.queries.GetProductWithoutWorkspaceId(ctx, price.ProductID)
+	product, err := s.queries.GetProductWithoutWorkspaceId(ctx, productID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get product: %w", err)
 	}
@@ -1120,7 +1126,7 @@ func (s *SubscriptionService) SubscribeToProductByPriceID(ctx context.Context, s
 	if !product.Active {
 		return &responses.SubscribeToProductByPriceIDResult{
 			Success:      false,
-			ErrorMessage: "Cannot subscribe to a price of an inactive product",
+			ErrorMessage: "Cannot subscribe to inactive product",
 		}, nil
 	}
 
@@ -1216,7 +1222,7 @@ func (s *SubscriptionService) SubscribeToProductByPriceID(ctx context.Context, s
 	}
 
 	// Calculate subscription periods
-	periodStart, periodEnd, nextRedemption := helpers.CalculateSubscriptionPeriods(price)
+	periodStart, periodEnd, nextRedemption := helpers.CalculateSubscriptionPeriods(product)
 
 	// Create subscription using the service method
 	subscription, err := s.CreateSubscription(ctx, nil, params.CreateSubscriptionParams{
@@ -1225,7 +1231,7 @@ func (s *SubscriptionService) SubscribeToProductByPriceID(ctx context.Context, s
 		WorkspaceID:    product.WorkspaceID,
 		ProductID:      product.ID,
 		ProductTokenID: parsedProductTokenID,
-		Price:          price,
+		Product:        product,
 		TokenAmount:    tokenAmount,
 		DelegationData: *delegationData,
 		PeriodStart:    periodStart,
@@ -1246,7 +1252,7 @@ func (s *SubscriptionService) SubscribeToProductByPriceID(ctx context.Context, s
 	// Create subscription creation event
 	eventMetadata, err := json.Marshal(map[string]interface{}{
 		"product_name":   product.Name,
-		"price_type":     price.Type,
+		"price_type":     string(product.PriceType),
 		"wallet_address": customerWallet.WalletAddress,
 		"network_type":   customerWallet.NetworkType,
 	})
@@ -1259,7 +1265,7 @@ func (s *SubscriptionService) SubscribeToProductByPriceID(ctx context.Context, s
 		SubscriptionID: subscription.ID,
 		EventType:      db.SubscriptionEventTypeCreated,
 		OccurredAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		AmountInCents:  price.UnitAmountInPennies,
+		AmountInCents:  product.UnitAmountInPennies,
 		Metadata:       eventMetadata,
 	})
 	if err != nil {
@@ -1273,7 +1279,6 @@ func (s *SubscriptionService) SubscribeToProductByPriceID(ctx context.Context, s
 		Customer:       *customer,
 		CustomerWallet: *customerWallet,
 		Product:        product,
-		Price:          price,
 		ProductToken:   productToken,
 		DelegationData: delegationParams,
 		MerchantWallet: merchantWallet,
@@ -1306,7 +1311,7 @@ func (s *SubscriptionService) SubscribeToProductByPriceID(ctx context.Context, s
 			SubscriptionID:  subscription.ID,
 			EventType:       db.SubscriptionEventTypeFailedRedemption,
 			TransactionHash: pgtype.Text{String: "", Valid: false},
-			AmountInCents:   price.UnitAmountInPennies,
+			AmountInCents:   product.UnitAmountInPennies,
 			ErrorMessage:    pgtype.Text{String: errorMsg, Valid: true},
 			OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
 			Metadata:        json.RawMessage(`{}`),

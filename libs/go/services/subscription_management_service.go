@@ -96,7 +96,6 @@ func (sms *SubscriptionManagementService) UpgradeSubscription(
 	// Create schedule change record
 	fromLineItems, _ := json.Marshal(map[string]interface{}{
 		"product_id": sub.ProductID,
-		"price_id":   sub.PriceID,
 		"amount":     oldTotal,
 	})
 	toLineItems, _ := json.Marshal(newLineItems)
@@ -123,7 +122,7 @@ func (sms *SubscriptionManagementService) UpgradeSubscription(
 	// In real implementation, would update line items properly
 	_, err = sms.db.UpdateSubscriptionForUpgrade(ctx, db.UpdateSubscriptionForUpgradeParams{
 		ID:                 subscriptionID,
-		PriceID:            sub.PriceID, // Would be updated in real implementation
+		ProductID:          sub.ProductID, // Would be updated in real implementation
 		TotalAmountInCents: int32(newTotal),
 	})
 	if err != nil {
@@ -224,7 +223,6 @@ func (sms *SubscriptionManagementService) DowngradeSubscription(
 	// Create schedule change record
 	fromLineItems, _ := json.Marshal(map[string]interface{}{
 		"product_id": sub.ProductID,
-		"price_id":   sub.PriceID,
 		"amount":     sub.TotalAmountInCents,
 	})
 	toLineItems, _ := json.Marshal(newLineItems)

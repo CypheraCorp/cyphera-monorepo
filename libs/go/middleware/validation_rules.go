@@ -89,62 +89,108 @@ var CreateProductValidation = ValidationConfig{
 			Type:     "object",
 			Required: false,
 		},
+		// Embedded price fields (required since prices table was merged into products)
 		{
-			Field:    "prices",
-			Type:     "array",
+			Field:    "price_type",
+			Type:     "string",
 			Required: true,
 			Custom: func(value interface{}) error {
-				// Ensure at least one price
-				arr, ok := value.([]interface{})
+				str, ok := value.(string)
 				if !ok {
-					return fmt.Errorf("prices must be an array")
+					return fmt.Errorf("must be a string")
 				}
-				if len(arr) == 0 {
-					return fmt.Errorf("at least one price is required")
-				}
-
-				// Validate each price object
-				for i, priceInterface := range arr {
-					price, ok := priceInterface.(map[string]interface{})
-					if !ok {
-						return fmt.Errorf("price at index %d must be an object", i)
-					}
-
-					// Check required fields
-					if _, exists := price["active"]; !exists {
-						return fmt.Errorf("price at index %d: active field is required", i)
-					}
-					if _, exists := price["type"]; !exists {
-						return fmt.Errorf("price at index %d: type field is required", i)
-					}
-					if _, exists := price["currency"]; !exists {
-						return fmt.Errorf("price at index %d: currency field is required", i)
-					}
-					if _, exists := price["unit_amount_in_pennies"]; !exists {
-						return fmt.Errorf("price at index %d: unit_amount_in_pennies field is required", i)
-					}
-
-					// Validate type
-					priceType, ok := price["type"].(string)
-					if !ok {
-						return fmt.Errorf("price at index %d: type must be a string", i)
-					}
-					if priceType != "one_off" && priceType != "recurring" {
-						return fmt.Errorf("price at index %d: type must be 'one_off' or 'recurring'", i)
-					}
-
-					// If recurring, validate interval fields
-					if priceType == "recurring" {
-						if _, exists := price["interval_type"]; !exists {
-							return fmt.Errorf("price at index %d: interval_type is required for recurring prices", i)
-						}
-						if _, exists := price["interval_count"]; !exists {
-							return fmt.Errorf("price at index %d: interval_count is required for recurring prices", i)
-						}
-					}
+				if str != "one_time" && str != "recurring" {
+					return fmt.Errorf("must be either 'one_time' or 'recurring'")
 				}
 				return nil
 			},
+		},
+		{
+			Field:    "currency",
+			Type:     "string",
+			Required: true,
+			Custom: func(value interface{}) error {
+				str, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("must be a string")
+				}
+				if len(str) != 3 {
+					return fmt.Errorf("must be a 3-character currency code (e.g. USD)")
+				}
+				return nil
+			},
+		},
+		{
+			Field:    "unit_amount_in_pennies",
+			Type:     "number",
+			Required: true,
+			Custom: func(value interface{}) error {
+				// Handle both int and float64 from JSON
+				var amount float64
+				switch v := value.(type) {
+				case float64:
+					amount = v
+				case int:
+					amount = float64(v)
+				default:
+					return fmt.Errorf("must be a number")
+				}
+				if amount <= 0 {
+					return fmt.Errorf("must be positive")
+				}
+				return nil
+			},
+		},
+		{
+			Field:    "interval_type",
+			Type:     "string",
+			Required: false, // Only required for recurring prices
+			Custom: func(value interface{}) error {
+				if value == nil {
+					return nil // Optional field
+				}
+				str, ok := value.(string)
+				if !ok {
+					return fmt.Errorf("must be a string")
+				}
+				validIntervals := []string{"1min", "5mins", "daily", "week", "month", "year"}
+				for _, valid := range validIntervals {
+					if str == valid {
+						return nil
+					}
+				}
+				return fmt.Errorf("must be one of: %s", strings.Join(validIntervals, ", "))
+			},
+		},
+		{
+			Field:    "term_length",
+			Type:     "number",
+			Required: false,
+			Custom: func(value interface{}) error {
+				if value == nil {
+					return nil // Optional field
+				}
+				// Handle both int and float64 from JSON
+				var length float64
+				switch v := value.(type) {
+				case float64:
+					length = v
+				case int:
+					length = float64(v)
+				default:
+					return fmt.Errorf("must be a number")
+				}
+				if length <= 0 {
+					return fmt.Errorf("must be positive")
+				}
+				return nil
+			},
+		},
+		{
+			Field:     "price_nickname",
+			Type:      "string",
+			Required:  false,
+			MaxLength: 100,
 		},
 		{
 			Field:    "product_tokens",
@@ -312,7 +358,7 @@ var CreateSubscriptionValidation = ValidationConfig{
 	MaxBodySize: 256 * 1024, // 256KB
 	Rules: []ValidationRule{
 		{
-			Field:    "price_id",
+			Field:    "product_id",
 			Type:     "uuid",
 			Required: true,
 		},
@@ -340,7 +386,7 @@ var CreateDelegationSubscriptionValidation = ValidationConfig{
 	MaxBodySize: 256 * 1024, // 256KB
 	Rules: []ValidationRule{
 		{
-			Field:    "price_id",
+			Field:    "product_id",
 			Type:     "uuid",
 			Required: true,
 		},

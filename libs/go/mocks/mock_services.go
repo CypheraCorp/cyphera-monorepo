@@ -1943,13 +1943,12 @@ func (m *MockProductService) EXPECT() *MockProductServiceMockRecorder {
 }
 
 // CreateProduct mocks base method.
-func (m *MockProductService) CreateProduct(ctx context.Context, arg1 params.CreateProductParams) (*db.Product, []db.Price, error) {
+func (m *MockProductService) CreateProduct(ctx context.Context, arg1 params.CreateProductParams) (*db.Product, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateProduct", ctx, arg1)
 	ret0, _ := ret[0].(*db.Product)
-	ret1, _ := ret[1].([]db.Price)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // CreateProduct indicates an expected call of CreateProduct.
@@ -1973,13 +1972,12 @@ func (mr *MockProductServiceMockRecorder) DeleteProduct(ctx, productID, workspac
 }
 
 // GetProduct mocks base method.
-func (m *MockProductService) GetProduct(ctx context.Context, arg1 params.GetProductParams) (*db.Product, []db.Price, error) {
+func (m *MockProductService) GetProduct(ctx context.Context, arg1 params.GetProductParams) (*db.Product, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetProduct", ctx, arg1)
 	ret0, _ := ret[0].(*db.Product)
-	ret1, _ := ret[1].([]db.Price)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetProduct indicates an expected call of GetProduct.
@@ -2001,6 +1999,21 @@ func (m *MockProductService) GetProductTokenWithValidation(ctx context.Context, 
 func (mr *MockProductServiceMockRecorder) GetProductTokenWithValidation(ctx, productTokenID, productID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProductTokenWithValidation", reflect.TypeOf((*MockProductService)(nil).GetProductTokenWithValidation), ctx, productTokenID, productID)
+}
+
+// GetPublicProductByID mocks base method.
+func (m *MockProductService) GetPublicProductByID(ctx context.Context, productID uuid.UUID) (*responses.PublicProductResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPublicProductByID", ctx, productID)
+	ret0, _ := ret[0].(*responses.PublicProductResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPublicProductByID indicates an expected call of GetPublicProductByID.
+func (mr *MockProductServiceMockRecorder) GetPublicProductByID(ctx, productID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicProductByID", reflect.TypeOf((*MockProductService)(nil).GetPublicProductByID), ctx, productID)
 }
 
 // GetPublicProductByPriceID mocks base method.
@@ -2049,10 +2062,10 @@ func (mr *MockProductServiceMockRecorder) UpdateProduct(ctx, arg1 any) *gomock.C
 }
 
 // ValidatePriceForSubscription mocks base method.
-func (m *MockProductService) ValidatePriceForSubscription(ctx context.Context, priceID uuid.UUID) (*db.Price, *db.Product, error) {
+func (m *MockProductService) ValidatePriceForSubscription(ctx context.Context, priceID uuid.UUID) (*db.Product, *db.Product, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ValidatePriceForSubscription", ctx, priceID)
-	ret0, _ := ret[0].(*db.Price)
+	ret0, _ := ret[0].(*db.Product)
 	ret1, _ := ret[1].(*db.Product)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2

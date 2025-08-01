@@ -25,7 +25,6 @@ import (
 
 // Use types from the centralized packages
 type (
-	PriceResponse   = responses.PriceResponse
 	ProductResponse = responses.ProductResponse
 )
 
@@ -523,29 +522,7 @@ func CalculatePeriodEnd(start time.Time, intervalType string, termLength int32) 
 
 // toSubscriptionResponse converts a db.ListSubscriptionDetailsWithPaginationRow to a SubscriptionResponse.
 func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationRow) (responses.SubscriptionResponse, error) {
-	// Helper to convert pgtype.Text to string for enums
-	helperPgEnumTextToString := func(pgText pgtype.Text) string {
-		if pgText.Valid {
-			return pgText.String
-		}
-		return ""
-	}
-
-	// Prepare PriceResponse.CreatedAt and PriceResponse.UpdatedAt (assuming they are int64 in PriceResponse)
-	var priceCreatedAtUnix int64
-	if subDetails.PriceCreatedAt.Valid {
-		priceCreatedAtUnix = subDetails.PriceCreatedAt.Time.Unix()
-	}
-	var priceUpdatedAtUnix int64
-	if subDetails.PriceUpdatedAt.Valid {
-		priceUpdatedAtUnix = subDetails.PriceUpdatedAt.Time.Unix()
-	}
-
-	// Prepare nullable fields for PriceResponse
-	var intervalTypeStr string
-	if subDetails.PriceIntervalType != "" {
-		intervalTypeStr = string(subDetails.PriceIntervalType)
-	}
+	// Variables removed since pricing is now embedded in product
 
 	resp := responses.SubscriptionResponse{
 		ID:                 subDetails.SubscriptionID,
@@ -559,21 +536,6 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 		TokenAmount:        subDetails.SubscriptionTokenAmount,
 		CustomerName:       subDetails.CustomerName.String,
 		CustomerEmail:      subDetails.CustomerEmail.String,
-		Price: PriceResponse{
-			ID:                  subDetails.PriceID.String(),
-			Object:              "price", // Typically static for PriceResponse
-			ProductID:           subDetails.PriceProductID.String(),
-			Active:              subDetails.PriceActive,
-			Type:                string(subDetails.PriceType),
-			Nickname:            helperPgEnumTextToString(subDetails.PriceNickname),
-			Currency:            string(subDetails.PriceCurrency),
-			UnitAmountInPennies: int64(subDetails.PriceUnitAmountInPennies), // Convert int32 to int64
-			IntervalType:        intervalTypeStr,
-			TermLength:          subDetails.PriceTermLength,
-			Metadata:            subDetails.PriceMetadata, // Expecting json.RawMessage
-			CreatedAt:           priceCreatedAtUnix,
-			UpdatedAt:           priceUpdatedAtUnix,
-		},
 		Product: ProductResponse{
 			ID:          subDetails.ProductID.String(),
 			Name:        subDetails.ProductName,

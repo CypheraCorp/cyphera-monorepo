@@ -17,10 +17,8 @@ SELECT COUNT(*)
 FROM subscription_events se
 JOIN subscriptions s ON se.subscription_id = s.id
 JOIN products p ON s.product_id = p.id
-JOIN prices pr ON s.price_id = pr.id
 WHERE s.deleted_at IS NULL
     AND p.deleted_at IS NULL
-    AND pr.deleted_at IS NULL
     AND p.workspace_id = $1
     AND se.event_type IN ('redeemed', 'failed', 'failed_redemption')
 `
@@ -523,12 +521,11 @@ SELECT
     s.status AS subscription_status,
     p.id AS product_id,
     p.name AS product_name,
-    pr.id AS price_id,
-    pr.type AS price_type,
-    pr.currency AS price_currency,
-    pr.unit_amount_in_pennies AS price_unit_amount_in_pennies,
-    pr.interval_type AS price_interval_type,
-    pr.term_length AS price_term_length,
+    p.price_type AS price_type,
+    p.currency AS price_currency,
+    p.unit_amount_in_pennies AS price_unit_amount_in_pennies,
+    p.interval_type AS price_interval_type,
+    p.term_length AS price_term_length,
     pt.id AS product_token_id,
     pt.token_id AS product_token_token_id,
     pt.created_at AS product_token_created_at,
@@ -546,8 +543,6 @@ JOIN
 JOIN
     products p ON s.product_id = p.id
 JOIN
-    prices pr ON s.price_id = pr.id
-JOIN
     products_tokens pt ON s.product_token_id = pt.id
 JOIN
     tokens t ON pt.token_id = t.id
@@ -559,7 +554,6 @@ WHERE
     p.workspace_id = $1
     AND s.deleted_at IS NULL
     AND p.deleted_at IS NULL
-    AND pr.deleted_at IS NULL
     AND se.event_type IN ('redeemed', 'failed', 'failed_redemption')
 ORDER BY
     se.occurred_at DESC
@@ -586,12 +580,11 @@ type ListSubscriptionEventDetailsWithPaginationRow struct {
 	SubscriptionStatus       SubscriptionStatus    `json:"subscription_status"`
 	ProductID                uuid.UUID             `json:"product_id"`
 	ProductName              string                `json:"product_name"`
-	PriceID                  uuid.UUID             `json:"price_id"`
 	PriceType                PriceType             `json:"price_type"`
 	PriceCurrency            string                `json:"price_currency"`
 	PriceUnitAmountInPennies int32                 `json:"price_unit_amount_in_pennies"`
-	PriceIntervalType        IntervalType          `json:"price_interval_type"`
-	PriceTermLength          int32                 `json:"price_term_length"`
+	PriceIntervalType        NullIntervalType      `json:"price_interval_type"`
+	PriceTermLength          pgtype.Int4           `json:"price_term_length"`
 	ProductTokenID           uuid.UUID             `json:"product_token_id"`
 	ProductTokenTokenID      uuid.UUID             `json:"product_token_token_id"`
 	ProductTokenCreatedAt    pgtype.Timestamptz    `json:"product_token_created_at"`
@@ -627,7 +620,6 @@ func (q *Queries) ListSubscriptionEventDetailsWithPagination(ctx context.Context
 			&i.SubscriptionStatus,
 			&i.ProductID,
 			&i.ProductName,
-			&i.PriceID,
 			&i.PriceType,
 			&i.PriceCurrency,
 			&i.PriceUnitAmountInPennies,

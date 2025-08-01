@@ -126,7 +126,7 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 	}
 
 	// Get product using service
-	product, prices, err := h.productService.GetProduct(c.Request.Context(), params.GetProductParams{
+	product, err := h.productService.GetProduct(c.Request.Context(), params.GetProductParams{
 		ProductID:   parsedProductID,
 		WorkspaceID: parsedWorkspaceID,
 	})
@@ -140,32 +140,32 @@ func (h *ProductHandler) GetProduct(c *gin.Context) {
 	}
 
 	// Convert to response format
-	response := helpers.ToProductDetailResponse(*product, prices)
+	response := helpers.ToProductDetailResponse(*product)
 	c.JSON(http.StatusOK, response)
 }
 
-// GetPublicProductByPriceID godoc
-// @Summary Get public product by price ID
-// @Description Get public product details by price ID
+// GetPublicProductByID godoc
+// @Summary Get public product by product ID
+// @Description Get public product details by product ID
 // @Tags products
 // @Accept json
 // @Produce json
-// @Param price_id path string true "Price ID"
+// @Param product_id path string true "Product ID"
 // @Success 200 {object} PublicProductResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Tags exclude
-func (h *ProductHandler) GetPublicProductByPriceID(c *gin.Context) {
-	// Parse price ID
-	priceIDStr := c.Param("price_id")
-	parsedPriceID, err := uuid.Parse(priceIDStr)
+func (h *ProductHandler) GetPublicProductByID(c *gin.Context) {
+	// Parse product ID
+	productIDStr := c.Param("product_id")
+	parsedProductID, err := uuid.Parse(productIDStr)
 	if err != nil {
-		h.common.HandleError(c, err, errMsgInvalidPriceIDFormat, http.StatusBadRequest, h.common.GetLogger())
+		h.common.HandleError(c, err, errMsgInvalidProductIDFormat, http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
 	// Get public product using service
-	response, err := h.productService.GetPublicProductByPriceID(c.Request.Context(), parsedPriceID)
+	response, err := h.productService.GetPublicProductByID(c.Request.Context(), parsedProductID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not active") {
 			h.common.HandleError(c, err, err.Error(), http.StatusNotFound, h.common.GetLogger())
@@ -272,23 +272,37 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 
 	responseList := make([]responses.ProductResponse, len(result.Products))
 	for i, productDetail := range result.Products {
-		// Convert product detail to db.Product for compatibility
+		// Convert product detail to db.Product for compatibility with all embedded price fields
 		product := db.Product{
-			ID:          uuid.MustParse(productDetail.ID),
-			WorkspaceID: uuid.MustParse(productDetail.WorkspaceID),
-			WalletID:    uuid.MustParse(productDetail.WalletID),
-			Name:        productDetail.Name,
-			Active:      productDetail.Active,
-			CreatedAt:   pgtype.Timestamptz{Time: time.Unix(productDetail.CreatedAt, 0), Valid: true},
-			UpdatedAt:   pgtype.Timestamptz{Time: time.Unix(productDetail.UpdatedAt, 0), Valid: true},
+			ID:           uuid.MustParse(productDetail.ID),
+			WorkspaceID:  uuid.MustParse(productDetail.WorkspaceID),
+			WalletID:     uuid.MustParse(productDetail.WalletID),
+			Name:         productDetail.Name,
+			Description:  pgtype.Text{String: productDetail.Description, Valid: productDetail.Description != ""},
+			ImageUrl:     pgtype.Text{String: productDetail.ImageURL, Valid: productDetail.ImageURL != ""},
+			Url:          pgtype.Text{String: productDetail.URL, Valid: productDetail.URL != ""},
+			Active:       productDetail.Active,
+			ProductType:  pgtype.Text{String: productDetail.ProductType, Valid: productDetail.ProductType != ""},
+			ProductGroup: pgtype.Text{String: productDetail.ProductGroup, Valid: productDetail.ProductGroup != ""},
+			// Embedded price fields
+			PriceType:           db.PriceType(productDetail.PriceType),
+			Currency:            productDetail.Currency,
+			UnitAmountInPennies: int32(productDetail.UnitAmountInPennies),
+			IntervalType: func() db.NullIntervalType {
+				if productDetail.IntervalType != "" {
+					return db.NullIntervalType{IntervalType: db.IntervalType(productDetail.IntervalType), Valid: true}
+				}
+				return db.NullIntervalType{Valid: false}
+			}(),
+			TermLength:      pgtype.Int4{Int32: productDetail.TermLength, Valid: productDetail.TermLength > 0},
+			PriceNickname:   pgtype.Text{String: productDetail.PriceNickname, Valid: productDetail.PriceNickname != ""},
+			PriceExternalID: pgtype.Text{String: productDetail.PriceExternalID, Valid: productDetail.PriceExternalID != ""},
+			Metadata:        productDetail.Metadata,
+			CreatedAt:       pgtype.Timestamptz{Time: time.Unix(productDetail.CreatedAt, 0), Valid: true},
+			UpdatedAt:       pgtype.Timestamptz{Time: time.Unix(productDetail.UpdatedAt, 0), Valid: true},
 		}
 
-		dbPrices, err := h.common.db.ListPricesByProduct(c.Request.Context(), product.ID)
-		if err != nil {
-			h.common.HandleError(c, err, fmt.Sprintf("Failed to retrieve prices for product %s", product.ID), http.StatusInternalServerError, h.common.GetLogger())
-			return
-		}
-		productResponse := toProductResponse(product, dbPrices)
+		productResponse := toProductResponse(product)
 
 		productTokenList, err := h.common.db.GetActiveProductTokensByProduct(c.Request.Context(), product.ID)
 		if err != nil {
@@ -371,21 +385,7 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
-	// Convert request prices to service params
-	servicePrices := make([]params.CreatePriceParams, len(req.Prices))
-	for i, price := range req.Prices {
-		servicePrices[i] = params.CreatePriceParams{
-			Active:              price.Active,
-			Type:                price.Type,
-			Nickname:            price.Nickname,
-			Currency:            price.Currency,
-			UnitAmountInPennies: price.UnitAmountInPennies,
-			IntervalType:        price.IntervalType,
-			IntervalCount:       price.IntervalCount,
-			TermLength:          price.TermLength,
-			Metadata:            price.Metadata,
-		}
-	}
+	// No need to convert prices array - pricing is now embedded in the product
 
 	// Convert request product tokens to service params
 	serviceTokens := make([]params.CreateProductTokenParams, len(req.ProductTokens))
@@ -416,18 +416,24 @@ func (h *ProductHandler) CreateProduct(c *gin.Context) {
 		URL:           req.URL,
 		Active:        req.Active,
 		Metadata:      req.Metadata,
-		Prices:        servicePrices,
 		ProductTokens: serviceTokens,
+		// Embedded price fields
+		PriceType:           req.PriceType,
+		Currency:            req.Currency,
+		UnitAmountInPennies: int32(req.UnitAmountInPennies),
+		IntervalType:        req.IntervalType,
+		TermLength:          req.TermLength,
+		PriceNickname:       req.PriceNickname,
 	}
 
 	// Use service to create product
-	product, prices, err := h.productService.CreateProduct(c.Request.Context(), serviceParams)
+	product, err := h.productService.CreateProduct(c.Request.Context(), serviceParams)
 	if err != nil {
 		h.common.HandleError(c, err, "Failed to create product", http.StatusInternalServerError, h.common.GetLogger())
 		return
 	}
 
-	c.JSON(http.StatusCreated, toProductResponse(*product, prices))
+	c.JSON(http.StatusCreated, toProductResponse(*product))
 }
 
 // UpdateProduct godoc
@@ -508,7 +514,7 @@ func (h *ProductHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, toProductResponse(*product, []db.Price{}))
+	c.JSON(http.StatusOK, toProductResponse(*product))
 }
 
 // DeleteProduct godoc
@@ -553,70 +559,36 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 	c.JSON(http.StatusNoContent, nil)
 }
 
-// Helper function to convert db.Price to PriceResponse
-func toPriceResponse(p db.Price) responses.PriceResponse {
-	var metadata map[string]interface{}
-	if len(p.Metadata) > 0 && string(p.Metadata) != "null" {
-		if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
-			logger.Error("Error unmarshaling price metadata", zap.Error(err))
-			// Set empty metadata on error
-			metadata = make(map[string]interface{})
-		}
-	} else {
-		// Set empty metadata for null or empty JSON
-		metadata = make(map[string]interface{})
-	}
-
-	return responses.PriceResponse{
-		ID:                  p.ID.String(),
-		Object:              "price",
-		ProductID:           p.ProductID.String(),
-		Active:              p.Active,
-		Type:                string(p.Type),
-		Nickname:            p.Nickname.String,
-		Currency:            string(p.Currency),
-		UnitAmountInPennies: int64(p.UnitAmountInPennies), // Convert int32 to int64
-		IntervalType:        string(p.IntervalType),
-		TermLength:          p.TermLength,
-		Metadata:            p.Metadata,
-		CreatedAt:           p.CreatedAt.Time.Unix(),
-		UpdatedAt:           p.UpdatedAt.Time.Unix(),
-	}
-}
-
 // Helper function to convert database model to API response
-func toProductResponse(p db.Product, dbPrices []db.Price) responses.ProductResponse {
-	var metadata map[string]interface{}
-	if len(p.Metadata) > 0 && string(p.Metadata) != "null" {
-		if err := json.Unmarshal(p.Metadata, &metadata); err != nil {
-			logger.Error("Error unmarshaling product metadata", zap.Error(err))
-			// Set empty metadata on error
-			metadata = make(map[string]interface{})
-		}
-	} else {
-		// Set empty metadata for null or empty JSON
-		metadata = make(map[string]interface{})
-	}
-
-	apiPrices := make([]responses.PriceResponse, len(dbPrices))
-	for i, dbPrice := range dbPrices {
-		apiPrices[i] = toPriceResponse(dbPrice)
-	}
-
+func toProductResponse(p db.Product) responses.ProductResponse {
 	return responses.ProductResponse{
-		ID:          p.ID.String(),
-		Object:      "product",
-		WorkspaceID: p.WorkspaceID.String(),
-		WalletID:    p.WalletID.String(),
-		Name:        p.Name,
-		Description: p.Description.String,
-		ImageURL:    p.ImageUrl.String,
-		URL:         p.Url.String,
-		Active:      p.Active,
-		Metadata:    p.Metadata,
-		Prices:      apiPrices,
-		CreatedAt:   p.CreatedAt.Time.Unix(),
-		UpdatedAt:   p.UpdatedAt.Time.Unix(),
+		ID:           p.ID.String(),
+		Object:       "product",
+		WorkspaceID:  p.WorkspaceID.String(),
+		WalletID:     p.WalletID.String(),
+		Name:         p.Name,
+		Description:  p.Description.String,
+		ImageURL:     p.ImageUrl.String,
+		URL:          p.Url.String,
+		Active:       p.Active,
+		Metadata:     p.Metadata,
+		ProductType:  p.ProductType.String,
+		ProductGroup: p.ProductGroup.String,
+		// Embedded price fields
+		PriceType:           string(p.PriceType),
+		Currency:            string(p.Currency),
+		UnitAmountInPennies: int64(p.UnitAmountInPennies),
+		IntervalType: func() string {
+			if p.IntervalType.Valid {
+				return string(p.IntervalType.IntervalType)
+			}
+			return ""
+		}(),
+		TermLength:      p.TermLength.Int32,
+		PriceNickname:   p.PriceNickname.String,
+		PriceExternalID: p.PriceExternalID.String,
+		CreatedAt:       p.CreatedAt.Time.Unix(),
+		UpdatedAt:       p.UpdatedAt.Time.Unix(),
 	}
 }
 
@@ -625,7 +597,6 @@ func (h *ProductHandler) logFailedSubscriptionCreation(
 	ctx context.Context,
 	customerId *uuid.UUID,
 	product db.Product,
-	price db.Price,
 	productToken db.GetProductTokenRow,
 	walletAddress string,
 	delegationSignature string,
@@ -635,7 +606,7 @@ func (h *ProductHandler) logFailedSubscriptionCreation(
 		zap.Any("customer_id", customerId),
 		zap.String("workspace_id", product.WorkspaceID.String()),
 		zap.String("product_id", product.ID.String()),
-		zap.String("price_id", price.ID.String()),
+		zap.String("product_id", product.ID.String()),
 		zap.String("product_token_id", productToken.ID.String()),
 		zap.String("wallet_address", walletAddress),
 		zap.String("delegation_signature", delegationSignature),
@@ -666,7 +637,7 @@ func (h *ProductHandler) logFailedSubscriptionCreation(
 		WalletAddress:       walletAddress,
 		ErrorType:           errorType,
 		ErrorMessage:        err.Error(),
-		ErrorDetails:        []byte(`{"price_id":"` + price.ID.String() + `"}`),
+		ErrorDetails:        []byte(`{"product_id":"` + product.ID.String() + `"}`),
 		DelegationSignature: delegationSignaturePgType,
 		Metadata:            []byte("{}"),
 	})
@@ -676,19 +647,19 @@ func (h *ProductHandler) logFailedSubscriptionCreation(
 	}
 }
 
-// SubscribeToProductByPriceID godoc
-// @Summary Subscribe to a product by price ID
-// @Description Subscribe to a product by specifying the price ID
+// SubscribeToProductByID godoc
+// @Summary Subscribe to a product by product ID
+// @Description Subscribe to a product by specifying the product ID
 // @Tags subscriptions
 // @Accept json
 // @Produce json
 // @Tags exclude
-func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
+func (h *ProductHandler) SubscribeToProductByID(c *gin.Context) {
 	ctx := c.Request.Context()
-	priceIDStr := c.Param("price_id")
-	parsedPriceID, err := uuid.Parse(priceIDStr)
+	productIDStr := c.Param("product_id")
+	parsedProductID, err := uuid.Parse(productIDStr)
 	if err != nil {
-		h.common.HandleError(c, err, errMsgInvalidPriceIDFormat, http.StatusBadRequest, h.common.GetLogger())
+		h.common.HandleError(c, err, errMsgInvalidProductIDFormat, http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
 
@@ -697,7 +668,7 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		h.common.HandleError(c, err, errMsgInvalidRequestFormat, http.StatusBadRequest, h.common.GetLogger())
 		return
 	}
-	request.PriceID = priceIDStr
+	request.ProductID = productIDStr
 
 	// Convert caveats to JSON for validation
 	caveatsJSON, err := json.Marshal(request.Delegation.Caveats)
@@ -712,10 +683,9 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 	// Use product service to validate subscription request
 	if err := h.productService.ValidateSubscriptionRequest(ctx, params.ValidateSubscriptionParams{
 		SubscriberAddress: request.SubscriberAddress,
-		PriceID:           request.PriceID,
+		ProductID:         request.ProductID,
 		ProductTokenID:    request.ProductTokenID,
 		TokenAmount:       request.TokenAmount,
-		ProductID:         uuid.Nil, // Will be validated by the service
 		Delegation: params.DelegationParams{
 			Delegate:  request.Delegation.Delegate,
 			Delegator: request.Delegation.Delegator,
@@ -744,24 +714,14 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 
 	// Execute within transaction
 	err = helpers.WithTransaction(ctx, pool, func(tx pgx.Tx) error {
-		// Get price and validate it's active
-		price, err := h.common.db.GetPrice(ctx, parsedPriceID)
-		if err != nil {
-			return fmt.Errorf("failed to get price: %w", err)
-		}
-
-		if !price.Active {
-			return errors.New("Cannot subscribe to inactive price")
-		}
-
 		// Get product and validate it's active
-		product, err := h.common.db.GetProductWithoutWorkspaceId(ctx, price.ProductID)
+		product, err := h.common.db.GetProductWithoutWorkspaceId(ctx, parsedProductID)
 		if err != nil {
 			return fmt.Errorf("failed to get product: %w", err)
 		}
 
 		if !product.Active {
-			return errors.New("Cannot subscribe to a price of an inactive product")
+			return errors.New("Cannot subscribe to inactive product")
 		}
 
 		// Parse and get required entities
@@ -816,7 +776,6 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 
 		// Use the service method to create subscription with delegation
 		result, err := h.subscriptionService.CreateSubscriptionWithDelegation(ctx, tx, params.CreateSubscriptionWithDelegationParams{
-			Price:             price,
 			Product:           product,
 			ProductToken:      productToken,
 			MerchantWallet:    merchantWallet,
@@ -832,7 +791,7 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 			if errors.As(err, &subExistsErr) {
 				return err // Pass through the subscription exists error
 			}
-			h.logFailedSubscriptionCreation(ctx, nil, product, price, productToken, normalizedAddress, request.Delegation.Signature, err)
+			h.logFailedSubscriptionCreation(ctx, nil, product, productToken, normalizedAddress, request.Delegation.Signature, err)
 			return fmt.Errorf("failed to create subscription: %w", err)
 		}
 
@@ -845,7 +804,7 @@ func (h *ProductHandler) SubscribeToProductByPriceID(c *gin.Context) {
 		var subExistsErr *SubscriptionExistsError
 		if errors.As(err, &subExistsErr) {
 			c.JSON(http.StatusConflict, gin.H{
-				"message":      "Subscription already exists for this price",
+				"message":      "Subscription already exists for this product",
 				"subscription": subExistsErr.Subscription,
 			})
 			return

@@ -41,7 +41,6 @@ func TestSubscriptionService_ProcessSingleSubscription(t *testing.T) {
 	subscriptionID := uuid.New()
 	customerID := uuid.New()
 	productID := uuid.New()
-	priceID := uuid.New()
 	productTokenID := uuid.New()
 	delegationID := uuid.New()
 	customerWalletID := uuid.New()
@@ -63,7 +62,6 @@ func TestSubscriptionService_ProcessSingleSubscription(t *testing.T) {
 						ID:               subscriptionID,
 						CustomerID:       customerID,
 						ProductID:        productID,
-						PriceID:          priceID,
 						ProductTokenID:   productTokenID,
 						TokenAmount:      1000000,
 						DelegationID:     delegationID,
@@ -78,7 +76,6 @@ func TestSubscriptionService_ProcessSingleSubscription(t *testing.T) {
 					ID:               subscriptionID,
 					CustomerID:       customerID,
 					ProductID:        productID,
-					PriceID:          priceID,
 					ProductTokenID:   productTokenID,
 					TokenAmount:      1000000,
 					DelegationID:     delegationID,
@@ -101,7 +98,6 @@ func TestSubscriptionService_ProcessSingleSubscription(t *testing.T) {
 						ID:               subscriptionID,
 						CustomerID:       customerID,
 						ProductID:        productID,
-						PriceID:          priceID,
 						ProductTokenID:   productTokenID,
 						TokenAmount:      1000000,
 						DelegationID:     delegationID,
@@ -125,7 +121,6 @@ func TestSubscriptionService_ProcessSingleSubscription(t *testing.T) {
 						ID:               subscriptionID,
 						CustomerID:       customerID,
 						ProductID:        productID,
-						PriceID:          priceID,
 						ProductTokenID:   productTokenID,
 						TokenAmount:      1000000,
 						DelegationID:     delegationID,
@@ -140,7 +135,6 @@ func TestSubscriptionService_ProcessSingleSubscription(t *testing.T) {
 					ID:               subscriptionID,
 					CustomerID:       customerID,
 					ProductID:        productID,
-					PriceID:          priceID,
 					ProductTokenID:   productTokenID,
 					TokenAmount:      1000000,
 					DelegationID:     delegationID,
@@ -155,55 +149,7 @@ func TestSubscriptionService_ProcessSingleSubscription(t *testing.T) {
 			},
 			wantErr: false, // ProcessDueSubscriptions handles individual failures gracefully
 		},
-		{
-			name: "handles price fetch error",
-			setupMock: func() {
-				// Mock getting due subscriptions
-				dueSubscriptions := []db.ListSubscriptionsDueForRedemptionRow{
-					{
-						ID:               subscriptionID,
-						CustomerID:       customerID,
-						ProductID:        productID,
-						PriceID:          priceID,
-						ProductTokenID:   productTokenID,
-						TokenAmount:      1000000,
-						DelegationID:     delegationID,
-						CustomerWalletID: pgtype.UUID{Bytes: customerWalletID, Valid: true},
-						Status:           db.SubscriptionStatusActive,
-					},
-				}
-				mockQuerier.EXPECT().ListSubscriptionsDueForRedemption(gomock.Any(), gomock.Any()).Return(dueSubscriptions, nil)
-
-				// Mock re-fetching subscription
-				currentSub := db.Subscription{
-					ID:               subscriptionID,
-					CustomerID:       customerID,
-					ProductID:        productID,
-					PriceID:          priceID,
-					ProductTokenID:   productTokenID,
-					TokenAmount:      1000000,
-					DelegationID:     delegationID,
-					CustomerWalletID: pgtype.UUID{Bytes: customerWalletID, Valid: true},
-					Status:           db.SubscriptionStatusActive,
-					TotalRedemptions: 0,
-				}
-				mockQuerier.EXPECT().GetSubscription(gomock.Any(), subscriptionID).Return(currentSub, nil)
-
-				// Mock getting product
-				product := db.Product{
-					ID:          productID,
-					WorkspaceID: workspaceID,
-					WalletID:    walletID,
-					Name:        "Test Product",
-					Active:      true,
-				}
-				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(product, nil)
-
-				// Mock price fetch error
-				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(db.Price{}, errors.New("price fetch error"))
-			},
-			wantErr: false, // ProcessDueSubscriptions handles individual failures gracefully
-		},
+		// Test case removed: "handles price fetch error" - prices are now embedded in products
 		{
 			name: "handles delegation data fetch error",
 			setupMock: func() {
@@ -213,7 +159,6 @@ func TestSubscriptionService_ProcessSingleSubscription(t *testing.T) {
 						ID:               subscriptionID,
 						CustomerID:       customerID,
 						ProductID:        productID,
-						PriceID:          priceID,
 						ProductTokenID:   productTokenID,
 						TokenAmount:      1000000,
 						DelegationID:     delegationID,
@@ -228,7 +173,6 @@ func TestSubscriptionService_ProcessSingleSubscription(t *testing.T) {
 					ID:               subscriptionID,
 					CustomerID:       customerID,
 					ProductID:        productID,
-					PriceID:          priceID,
 					ProductTokenID:   productTokenID,
 					TokenAmount:      1000000,
 					DelegationID:     delegationID,
@@ -249,15 +193,6 @@ func TestSubscriptionService_ProcessSingleSubscription(t *testing.T) {
 				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(product, nil)
 
 				// Mock getting price
-				price := db.Price{
-					ID:                  priceID,
-					ProductID:           productID,
-					Active:              true,
-					Type:                db.PriceTypeRecurring,
-					UnitAmountInPennies: 1000,
-					IntervalType:        db.IntervalTypeMonth,
-				}
-				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(price, nil)
 
 				// Mock getting customer
 				customer := db.Customer{
@@ -448,14 +383,12 @@ func TestSubscriptionService_ListSubscriptions(t *testing.T) {
 			ProductName:                    "Test Product",
 			SubscriptionCurrentPeriodStart: pgtype.Timestamptz{Time: time.Now(), Valid: true},
 			SubscriptionCurrentPeriodEnd:   pgtype.Timestamptz{Time: time.Now().Add(30 * 24 * time.Hour), Valid: true},
-			PriceID:                        uuid.New(),
-			PriceProductID:                 productID,
-			PriceActive:                    true,
+			ProductActive:                  true,
 			PriceType:                      "recurring",
 			PriceCurrency:                  "USD",
 			PriceUnitAmountInPennies:       1000,
-			PriceIntervalType:              "month",
-			PriceTermLength:                1,
+			PriceIntervalType:              db.NullIntervalType{IntervalType: db.IntervalTypeMonth, Valid: true},
+			PriceTermLength:                pgtype.Int4{Int32: 1, Valid: true},
 			ProductTokenID:                 uuid.New(),
 			ProductTokenTokenID:            uuid.New(),
 			ProductTokenNetworkID:          uuid.New(),
@@ -472,14 +405,12 @@ func TestSubscriptionService_ListSubscriptions(t *testing.T) {
 			ProductName:                    "Test Product 2",
 			SubscriptionCurrentPeriodStart: pgtype.Timestamptz{Time: time.Now(), Valid: true},
 			SubscriptionCurrentPeriodEnd:   pgtype.Timestamptz{Time: time.Now().Add(30 * 24 * time.Hour), Valid: true},
-			PriceID:                        uuid.New(),
-			PriceProductID:                 productID,
-			PriceActive:                    true,
+			ProductActive:                  true,
 			PriceType:                      "recurring",
 			PriceCurrency:                  "USD",
 			PriceUnitAmountInPennies:       2000,
-			PriceIntervalType:              "month",
-			PriceTermLength:                1,
+			PriceIntervalType:              db.NullIntervalType{IntervalType: db.IntervalTypeMonth, Valid: true},
+			PriceTermLength:                pgtype.Int4{Int32: 1, Valid: true},
 			ProductTokenID:                 uuid.New(),
 			ProductTokenTokenID:            uuid.New(),
 			ProductTokenNetworkID:          uuid.New(),
@@ -1455,7 +1386,6 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Test data setup
-	priceID := uuid.New()
 	productID := uuid.New()
 	productTokenID := uuid.New()
 	walletID := uuid.New()
@@ -1468,15 +1398,6 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 	subscriptionID := uuid.New()
 
 	// Valid test objects
-	validPrice := db.Price{
-		ID:                  priceID,
-		ProductID:           productID,
-		Active:              true,
-		Type:                db.PriceTypeRecurring,
-		UnitAmountInPennies: 1000,
-		IntervalType:        db.IntervalTypeMonth,
-		TermLength:          1,
-	}
 
 	validProduct := db.Product{
 		ID:          productID,
@@ -1545,7 +1466,6 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 		CustomerID:       customerID,
 		WorkspaceID:      workspaceID,
 		ProductID:        productID,
-		PriceID:          priceID,
 		ProductTokenID:   productTokenID,
 		CustomerWalletID: pgtype.UUID{Bytes: customerWalletID, Valid: true},
 		DelegationID:     delegationDataID,
@@ -1567,7 +1487,7 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 
 	// Create valid subscription params
 	validParams := params.SubscribeToProductByPriceIDParams{
-		PriceID:           priceID,
+		ProductID:         productID, // Now using product ID directly instead of price ID
 		SubscriberAddress: "0xcustomer123",
 		ProductTokenID:    productTokenID.String(),
 		TokenAmount:       "1000000",
@@ -1593,9 +1513,6 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 			name:   "creates subscription but fails initial redemption due to nil delegation client",
 			params: validParams,
 			setupMocks: func(mockQuerier *mocks.MockQuerier) {
-				// Mock getting price
-				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
-
 				// Mock getting product
 				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
 
@@ -1642,33 +1559,16 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 			wantSuccess: false,
 			errorString: "Initial redemption failed, subscription marked as failed and soft-deleted",
 		},
-		{
-			name: "fails with inactive price",
-			params: params.SubscribeToProductByPriceIDParams{
-				PriceID:           priceID,
-				SubscriberAddress: "0xcustomer123",
-				ProductTokenID:    productTokenID.String(),
-				TokenAmount:       "1000000",
-			},
-			setupMocks: func(mockQuerier *mocks.MockQuerier) {
-				inactivePrice := validPrice
-				inactivePrice.Active = false
-				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(inactivePrice, nil)
-			},
-			wantErr:     false,
-			wantSuccess: false,
-			errorString: "Cannot subscribe to inactive price",
-		},
+		// Test case removed: "fails with inactive price" - prices are now embedded in products
 		{
 			name: "fails with inactive product",
 			params: params.SubscribeToProductByPriceIDParams{
-				PriceID:           priceID,
+				ProductID:         productID,
 				SubscriberAddress: "0xcustomer123",
 				ProductTokenID:    productTokenID.String(),
 				TokenAmount:       "1000000",
 			},
 			setupMocks: func(mockQuerier *mocks.MockQuerier) {
-				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
 
 				inactiveProduct := validProduct
 				inactiveProduct.Active = false
@@ -1676,18 +1576,17 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 			},
 			wantErr:     false,
 			wantSuccess: false,
-			errorString: "Cannot subscribe to a price of an inactive product",
+			errorString: "Cannot subscribe to inactive product",
 		},
 		{
 			name: "fails with invalid product token ID format",
 			params: params.SubscribeToProductByPriceIDParams{
-				PriceID:           priceID,
+				ProductID:         productID,
 				SubscriberAddress: "0xcustomer123",
 				ProductTokenID:    "invalid-uuid",
 				TokenAmount:       "1000000",
 			},
 			setupMocks: func(mockQuerier *mocks.MockQuerier) {
-				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
 				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
 			},
 			wantErr:     false,
@@ -1697,13 +1596,12 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 		{
 			name: "fails when product token doesn't belong to product",
 			params: params.SubscribeToProductByPriceIDParams{
-				PriceID:           priceID,
+				ProductID:         productID,
 				SubscriberAddress: "0xcustomer123",
 				ProductTokenID:    productTokenID.String(),
 				TokenAmount:       "1000000",
 			},
 			setupMocks: func(mockQuerier *mocks.MockQuerier) {
-				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
 				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
 				mockQuerier.EXPECT().GetWalletByID(gomock.Any(), gomock.Any()).Return(validWallet, nil)
 
@@ -1718,13 +1616,12 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 		{
 			name: "fails with invalid token amount format",
 			params: params.SubscribeToProductByPriceIDParams{
-				PriceID:           priceID,
+				ProductID:         productID,
 				SubscriberAddress: "0xcustomer123",
 				ProductTokenID:    productTokenID.String(),
 				TokenAmount:       "invalid-amount",
 			},
 			setupMocks: func(mockQuerier *mocks.MockQuerier) {
-				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
 				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
 				mockQuerier.EXPECT().GetWalletByID(gomock.Any(), gomock.Any()).Return(validWallet, nil)
 				mockQuerier.EXPECT().GetProductToken(gomock.Any(), productTokenID).Return(validProductToken, nil)
@@ -1736,23 +1633,20 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 			errorString: "Invalid token amount format",
 		},
 		{
-			name: "handles price not found error",
-			params: params.SubscribeToProductByPriceIDParams{
-				PriceID: priceID,
-			},
+			name:   "handles product not found error with empty params",
+			params: params.SubscribeToProductByPriceIDParams{},
 			setupMocks: func(mockQuerier *mocks.MockQuerier) {
-				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(db.Price{}, errors.New("no rows"))
+				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), uuid.UUID{}).Return(db.Product{}, errors.New("no rows"))
 			},
 			wantErr:     true,
-			errorString: "failed to get price",
+			errorString: "failed to get product",
 		},
 		{
 			name: "handles product not found error",
 			params: params.SubscribeToProductByPriceIDParams{
-				PriceID: priceID,
+				ProductID: productID,
 			},
 			setupMocks: func(mockQuerier *mocks.MockQuerier) {
-				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
 				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(db.Product{}, errors.New("no rows"))
 			},
 			wantErr:     true,
@@ -1761,13 +1655,12 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 		{
 			name: "handles merchant wallet not found error",
 			params: params.SubscribeToProductByPriceIDParams{
-				PriceID:           priceID,
+				ProductID:         productID,
 				SubscriberAddress: "0xcustomer123",
 				ProductTokenID:    productTokenID.String(),
 				TokenAmount:       "1000000",
 			},
 			setupMocks: func(mockQuerier *mocks.MockQuerier) {
-				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
 				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
 				mockQuerier.EXPECT().GetWalletByID(gomock.Any(), gomock.Any()).Return(db.Wallet{}, errors.New("no rows"))
 			},
@@ -1779,7 +1672,6 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 			params: validParams,
 			setupMocks: func(mockQuerier *mocks.MockQuerier) {
 				// Setup all the initial mocks
-				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
 				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
 				mockQuerier.EXPECT().GetWalletByID(gomock.Any(), gomock.Any()).Return(validWallet, nil)
 				mockQuerier.EXPECT().GetProductToken(gomock.Any(), productTokenID).Return(validProductToken, nil)
@@ -1801,7 +1693,7 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 		{
 			name: "handles caveats marshaling error",
 			params: params.SubscribeToProductByPriceIDParams{
-				PriceID:           priceID,
+				ProductID:         productID,
 				SubscriberAddress: "0xcustomer123",
 				ProductTokenID:    productTokenID.String(),
 				TokenAmount:       "1000000",
@@ -1815,7 +1707,6 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 				},
 			},
 			setupMocks: func(mockQuerier *mocks.MockQuerier) {
-				mockQuerier.EXPECT().GetPrice(gomock.Any(), priceID).Return(validPrice, nil)
 				mockQuerier.EXPECT().GetProductWithoutWorkspaceId(gomock.Any(), productID).Return(validProduct, nil)
 				mockQuerier.EXPECT().GetWalletByID(gomock.Any(), gomock.Any()).Return(validWallet, nil)
 				mockQuerier.EXPECT().GetProductToken(gomock.Any(), productTokenID).Return(validProductToken, nil)

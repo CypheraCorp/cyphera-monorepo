@@ -3641,7 +3641,7 @@
                     "type": "integer"
                 },
                 "type": {
-                    "description": "e.g., recurring, one_off",
+                    "description": "e.g., recurring, one_time",
                     "type": "string"
                 },
                 "unit_amount_in_pennies": {

@@ -468,10 +468,10 @@ func InitializeRoutes(router *gin.Engine) {
 				// Apply stricter rate limiting for auth endpoints
 				admin.POST("/accounts/signin", middleware.StrictRateLimiter.Middleware(), accountHandler.SignInRegisterAccount)
 				admin.POST("/customers/signin", middleware.StrictRateLimiter.Middleware(), customerHandler.SignInRegisterCustomer)
-				admin.GET("/prices/:price_id", productHandler.GetPublicProductByPriceID)
+				admin.GET("/products/:product_id", productHandler.GetPublicProductByID)
 
 				// subscribe to a product
-				admin.POST("/prices/:price_id/subscribe", middleware.ValidateInput(middleware.CreateDelegationSubscriptionValidation), productHandler.SubscribeToProductByPriceID)
+				admin.POST("/products/:product_id/subscribe", middleware.ValidateInput(middleware.CreateDelegationSubscriptionValidation), productHandler.SubscribeToProductByID)
 
 				// Account management
 				admin.GET("/accounts", accountHandler.ListAccounts)

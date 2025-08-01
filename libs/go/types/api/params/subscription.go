@@ -11,8 +11,7 @@ import (
 // ProcessSubscriptionParams represents parameters for processing a subscription
 type ProcessSubscriptionParams struct {
 	Subscription         db.Subscription
-	Price                db.Price
-	Product              db.Product
+	Product              db.Product // Product now contains pricing
 	Customer             db.Customer
 	MerchantWallet       db.Wallet
 	CustomerWallet       db.Wallet
@@ -28,6 +27,8 @@ type ProcessSubscriptionParams struct {
 	AuthenticatedMessage string
 	RedemptionAttempts   int32
 	RedemptionTxHash     string
+	// Deprecated: Use Product fields instead
+	Price db.Product
 }
 
 // ListSubscriptionEventsParams contains parameters for listing subscription events
@@ -77,12 +78,14 @@ type CreateSubscriptionParams struct {
 	WorkspaceID    uuid.UUID
 	ProductID      uuid.UUID
 	ProductTokenID uuid.UUID
-	Price          db.Price
+	Product        db.Product // Product now contains pricing
 	TokenAmount    int64
 	DelegationData db.DelegationDatum
 	PeriodStart    time.Time
 	PeriodEnd      time.Time
 	NextRedemption time.Time
+	// Deprecated: Use Product instead
+	Price db.Product
 }
 
 // StoreDelegationDataParams contains parameters for storing delegation data
@@ -100,20 +103,20 @@ type InitialRedemptionParams struct {
 	Customer       db.Customer
 	CustomerWallet db.CustomerWallet
 	Subscription   db.Subscription
-	Product        db.Product
-	Price          db.Price
+	Product        db.Product // Product now contains pricing
 	ProductToken   db.GetProductTokenRow
 	DelegationData StoreDelegationDataParams
 	MerchantWallet db.Wallet
 	Token          db.Token
 	Network        db.Network
 	TokenAmount    int64
+	// Deprecated: Use Product instead
+	Price db.Product
 }
 
 // CreateSubscriptionWithDelegationParams contains parameters for creating subscription with delegation
 type CreateSubscriptionWithDelegationParams struct {
-	Price             db.Price
-	Product           db.Product
+	Product           db.Product // Product now contains pricing
 	ProductToken      db.GetProductTokenRow
 	MerchantWallet    db.Wallet
 	Token             db.Token
@@ -122,6 +125,8 @@ type CreateSubscriptionWithDelegationParams struct {
 	SubscriberAddress string
 	ProductTokenID    uuid.UUID
 	TokenAmount       int64
+	// Deprecated: Use Product instead
+	Price db.Product
 }
 
 // SubscriptionCreationResult represents the result of subscription creation
@@ -133,15 +138,18 @@ type SubscriptionCreationResult struct {
 	InitialRedemption bool
 }
 
-// SubscribeToProductByPriceIDParams contains all parameters for creating a subscription by price ID
-type SubscribeToProductByPriceIDParams struct {
-	PriceID                   uuid.UUID
+// SubscribeToProductParams contains all parameters for creating a subscription
+type SubscribeToProductParams struct {
+	ProductID                 uuid.UUID
 	SubscriberAddress         string
 	ProductTokenID            string
 	TokenAmount               string
 	DelegationData            DelegationParams
 	CypheraSmartWalletAddress string
 }
+
+// SubscribeToProductByPriceIDParams deprecated alias for backward compatibility
+type SubscribeToProductByPriceIDParams = SubscribeToProductParams
 
 // DelegationParams contains delegation data for validation
 type DelegationParams struct {
