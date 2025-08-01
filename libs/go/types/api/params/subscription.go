@@ -85,8 +85,6 @@ type CreateSubscriptionParams struct {
 	PeriodEnd      time.Time
 	NextRedemption time.Time
 	Addons         []SubscriptionAddonParams
-	// Deprecated: Use Product instead
-	Price db.Product
 }
 
 // SubscriptionAddonParams contains parameters for a subscription addon
@@ -117,8 +115,6 @@ type InitialRedemptionParams struct {
 	Token          db.Token
 	Network        db.Network
 	TokenAmount    int64
-	// Deprecated: Use Product instead
-	Price db.Product
 }
 
 // CreateSubscriptionWithDelegationParams contains parameters for creating subscription with delegation
@@ -132,8 +128,6 @@ type CreateSubscriptionWithDelegationParams struct {
 	SubscriberAddress string
 	ProductTokenID    uuid.UUID
 	TokenAmount       int64
-	// Deprecated: Use Product instead
-	Price db.Product
 }
 
 // SubscriptionCreationResult represents the result of subscription creation

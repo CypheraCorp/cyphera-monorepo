@@ -25,6 +25,14 @@ func init() {
 	logger.InitLogger("test")
 }
 
+// Helper function to create subscription service with all required dependencies
+func createSubscriptionService(ctrl *gomock.Controller, mockQuerier *mocks.MockQuerier, mockDelegationClient *dsClient.DelegationClient) *services.SubscriptionService {
+	paymentService := services.NewPaymentService(mockQuerier, "test-api-key")
+	customerService := services.NewCustomerService(mockQuerier)
+	mockInvoiceService := mocks.NewMockInvoiceService(ctrl)
+	return services.NewSubscriptionService(mockQuerier, mockDelegationClient, paymentService, customerService, mockInvoiceService)
+}
+
 // TestProcessSingleSubscription tests the processSingleSubscription method via ProcessDueSubscriptions
 // Since processSingleSubscription is not exported, we test it through ProcessDueSubscriptions
 // This test focuses on the edge cases and error handling within processSingleSubscription
@@ -34,9 +42,7 @@ func TestSubscriptionService_ProcessSingleSubscription(t *testing.T) {
 
 	mockQuerier := mocks.NewMockQuerier(ctrl)
 	// Use nil delegation client since we're testing error paths that don't reach delegation
-	mockPaymentService := services.NewPaymentService(mockQuerier, "test-api-key")
-	customerService := services.NewCustomerService(mockQuerier)
-	service := services.NewSubscriptionService(mockQuerier, nil, mockPaymentService, customerService)
+	service := createSubscriptionService(ctrl, mockQuerier, nil)
 
 	subscriptionID := uuid.New()
 	customerID := uuid.New()
@@ -246,10 +252,8 @@ func TestSubscriptionService_GetSubscription(t *testing.T) {
 
 	mockQuerier := mocks.NewMockQuerier(ctrl)
 	mockDelegationClient := &dsClient.DelegationClient{} // Mock client
-	// Create a real PaymentService since constructor expects concrete type
-	paymentService := services.NewPaymentService(mockQuerier, "test-api-key")
-	customerService := services.NewCustomerService(mockQuerier)
-	service := services.NewSubscriptionService(mockQuerier, mockDelegationClient, paymentService, customerService)
+	// Create subscription service with all dependencies
+	service := createSubscriptionService(ctrl, mockQuerier, mockDelegationClient)
 	ctx := context.Background()
 
 	workspaceID := uuid.New()
@@ -361,10 +365,8 @@ func TestSubscriptionService_ListSubscriptions(t *testing.T) {
 
 	mockQuerier := mocks.NewMockQuerier(ctrl)
 	mockDelegationClient := &dsClient.DelegationClient{}
-	// Create a real PaymentService since constructor expects concrete type
-	paymentService := services.NewPaymentService(mockQuerier, "test-api-key")
-	customerService := services.NewCustomerService(mockQuerier)
-	service := services.NewSubscriptionService(mockQuerier, mockDelegationClient, paymentService, customerService)
+	// Create subscription service with all dependencies
+	service := createSubscriptionService(ctrl, mockQuerier, mockDelegationClient)
 	ctx := context.Background()
 
 	workspaceID := uuid.New()
@@ -550,10 +552,8 @@ func TestSubscriptionService_ListSubscriptionsByCustomer(t *testing.T) {
 
 	mockQuerier := mocks.NewMockQuerier(ctrl)
 	mockDelegationClient := &dsClient.DelegationClient{}
-	// Create a real PaymentService since constructor expects concrete type
-	paymentService := services.NewPaymentService(mockQuerier, "test-api-key")
-	customerService := services.NewCustomerService(mockQuerier)
-	service := services.NewSubscriptionService(mockQuerier, mockDelegationClient, paymentService, customerService)
+	// Create subscription service with all dependencies
+	service := createSubscriptionService(ctrl, mockQuerier, mockDelegationClient)
 	ctx := context.Background()
 
 	workspaceID := uuid.New()
@@ -664,10 +664,8 @@ func TestSubscriptionService_ListSubscriptionsByProduct(t *testing.T) {
 
 	mockQuerier := mocks.NewMockQuerier(ctrl)
 	mockDelegationClient := &dsClient.DelegationClient{}
-	// Create a real PaymentService since constructor expects concrete type
-	paymentService := services.NewPaymentService(mockQuerier, "test-api-key")
-	customerService := services.NewCustomerService(mockQuerier)
-	service := services.NewSubscriptionService(mockQuerier, mockDelegationClient, paymentService, customerService)
+	// Create subscription service with all dependencies
+	service := createSubscriptionService(ctrl, mockQuerier, mockDelegationClient)
 	ctx := context.Background()
 
 	workspaceID := uuid.New()
@@ -764,10 +762,8 @@ func TestSubscriptionService_UpdateSubscription(t *testing.T) {
 
 	mockQuerier := mocks.NewMockQuerier(ctrl)
 	mockDelegationClient := &dsClient.DelegationClient{}
-	// Create a real PaymentService since constructor expects concrete type
-	paymentService := services.NewPaymentService(mockQuerier, "test-api-key")
-	customerService := services.NewCustomerService(mockQuerier)
-	service := services.NewSubscriptionService(mockQuerier, mockDelegationClient, paymentService, customerService)
+	// Create subscription service with all dependencies
+	service := createSubscriptionService(ctrl, mockQuerier, mockDelegationClient)
 	ctx := context.Background()
 
 	subscriptionID := uuid.New()
@@ -997,10 +993,8 @@ func TestSubscriptionService_DeleteSubscription(t *testing.T) {
 
 	mockQuerier := mocks.NewMockQuerier(ctrl)
 	mockDelegationClient := &dsClient.DelegationClient{}
-	// Create a real PaymentService since constructor expects concrete type
-	paymentService := services.NewPaymentService(mockQuerier, "test-api-key")
-	customerService := services.NewCustomerService(mockQuerier)
-	service := services.NewSubscriptionService(mockQuerier, mockDelegationClient, paymentService, customerService)
+	// Create subscription service with all dependencies
+	service := createSubscriptionService(ctrl, mockQuerier, mockDelegationClient)
 	ctx := context.Background()
 
 	workspaceID := uuid.New()
@@ -1159,10 +1153,8 @@ func TestSubscriptionService_EdgeCases(t *testing.T) {
 
 	mockQuerier := mocks.NewMockQuerier(ctrl)
 	mockDelegationClient := &dsClient.DelegationClient{}
-	// Create a real PaymentService since constructor expects concrete type
-	paymentService := services.NewPaymentService(mockQuerier, "test-api-key")
-	customerService := services.NewCustomerService(mockQuerier)
-	service := services.NewSubscriptionService(mockQuerier, mockDelegationClient, paymentService, customerService)
+	// Create subscription service with all dependencies
+	service := createSubscriptionService(ctrl, mockQuerier, mockDelegationClient)
 
 	tests := []struct {
 		name        string
@@ -1223,10 +1215,8 @@ func TestSubscriptionService_BoundaryConditions(t *testing.T) {
 
 	mockQuerier := mocks.NewMockQuerier(ctrl)
 	mockDelegationClient := &dsClient.DelegationClient{}
-	// Create a real PaymentService since constructor expects concrete type
-	paymentService := services.NewPaymentService(mockQuerier, "test-api-key")
-	customerService := services.NewCustomerService(mockQuerier)
-	service := services.NewSubscriptionService(mockQuerier, mockDelegationClient, paymentService, customerService)
+	// Create subscription service with all dependencies
+	service := createSubscriptionService(ctrl, mockQuerier, mockDelegationClient)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -1317,10 +1307,8 @@ func TestSubscriptionService_ConcurrentAccess(t *testing.T) {
 
 	mockQuerier := mocks.NewMockQuerier(ctrl)
 	mockDelegationClient := &dsClient.DelegationClient{}
-	// Create a real PaymentService since constructor expects concrete type
-	paymentService := services.NewPaymentService(mockQuerier, "test-api-key")
-	customerService := services.NewCustomerService(mockQuerier)
-	service := services.NewSubscriptionService(mockQuerier, mockDelegationClient, paymentService, customerService)
+	// Create subscription service with all dependencies
+	service := createSubscriptionService(ctrl, mockQuerier, mockDelegationClient)
 	ctx := context.Background()
 
 	// Test concurrent subscription retrieval
@@ -1721,9 +1709,7 @@ func TestSubscriptionService_SubscribeToProductByPriceID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockQuerier := mocks.NewMockQuerier(ctrl)
-			paymentService := services.NewPaymentService(mockQuerier, "test-api-key")
-			customerService := services.NewCustomerService(mockQuerier)
-			service := services.NewSubscriptionService(mockQuerier, nil, paymentService, customerService)
+			service := createSubscriptionService(ctrl, mockQuerier, nil)
 
 			tt.setupMocks(mockQuerier)
 

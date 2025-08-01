@@ -458,4 +458,48 @@ UPDATE invoices SET
     status = $3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING *; 
+RETURNING *;
+
+-- name: GetSubscriptionsForBulkInvoicing :many
+SELECT 
+    s.id,
+    s.workspace_id,
+    s.customer_id,
+    s.status,
+    s.current_period_start,
+    s.current_period_end,
+    s.next_redemption_date,
+    s.total_amount_in_cents,
+    s.currency,
+    c.email as customer_email,
+    c.name as customer_name
+FROM subscriptions s
+JOIN customers c ON s.customer_id = c.id
+WHERE s.workspace_id = $1
+    AND s.status IN ('active', 'trialing')
+    AND s.current_period_end <= $2
+    AND NOT EXISTS (
+        SELECT 1 FROM invoices i
+        WHERE i.subscription_id = s.id
+        AND i.period_start = s.current_period_start
+        AND i.period_end = s.current_period_end
+        AND i.status != 'void'
+    )
+ORDER BY s.current_period_end ASC
+LIMIT $3;
+
+-- name: GetInvoiceStatsByWorkspace :one
+SELECT 
+    COUNT(*) FILTER (WHERE status = 'draft') as draft_count,
+    COUNT(*) FILTER (WHERE status = 'open') as open_count,
+    COUNT(*) FILTER (WHERE status = 'paid') as paid_count,
+    COUNT(*) FILTER (WHERE status = 'void') as void_count,
+    COUNT(*) FILTER (WHERE status = 'uncollectible') as uncollectible_count,
+    COUNT(*) as total_count,
+    COALESCE(SUM(amount_due) FILTER (WHERE status = 'open'), 0) as total_outstanding_cents,
+    COALESCE(SUM(amount_paid) FILTER (WHERE status = 'paid'), 0) as total_paid_cents,
+    COALESCE(SUM(amount_due) FILTER (WHERE status = 'uncollectible'), 0) as total_uncollectible_cents
+FROM invoices
+WHERE workspace_id = $1
+    AND created_at >= $2
+    AND created_at <= $3; 

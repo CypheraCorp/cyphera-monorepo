@@ -11,6 +11,7 @@ import { SubscriptionsAPI } from './subscriptions';
 import { TransactionsAPI } from './transactions';
 import { CircleAPI } from './circle';
 import { TokensAPI } from './tokens';
+import { InvoicesAPI } from './invoices';
 
 export { CypheraAPI } from './api';
 export { UsersAPI } from './users';
@@ -25,6 +26,7 @@ export { SubscriptionsAPI } from './subscriptions';
 export { TransactionsAPI } from './transactions';
 export { CircleAPI } from './circle';
 export { TokensAPI } from './tokens';
+export { InvoicesAPI } from './invoices';
 
 /**
  * Combined API class that provides access to all API functionality
@@ -43,6 +45,7 @@ export class CypheraAPIClient extends CypheraAPI {
   public readonly transactions: TransactionsAPI;
   public readonly circle: CircleAPI;
   public readonly tokens: TokensAPI;
+  public readonly invoices: InvoicesAPI;
 
   constructor() {
     super();
@@ -59,5 +62,6 @@ export class CypheraAPIClient extends CypheraAPI {
     this.transactions = new TransactionsAPI();
     this.circle = new CircleAPI();
     this.tokens = new TokensAPI();
+    this.invoices = new InvoicesAPI();
   }
 }

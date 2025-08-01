@@ -1786,3 +1786,29 @@ CREATE TRIGGER set_subscription_schedule_changes_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 
+-- Invoice activities table for audit trail
+CREATE TABLE IF NOT EXISTS invoice_activities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    activity_type VARCHAR(50) NOT NULL, -- 'created', 'status_changed', 'sent', 'viewed', 'paid', 'reminder_sent', etc.
+    from_status VARCHAR(50),
+    to_status VARCHAR(50),
+    performed_by UUID REFERENCES users(id),
+    description TEXT,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for invoice activities
+CREATE INDEX idx_invoice_activities_invoice_id ON invoice_activities(invoice_id);
+CREATE INDEX idx_invoice_activities_created_at ON invoice_activities(created_at);
+
+-- Add reminder fields to invoices table
+ALTER TABLE invoices
+ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS reminder_count INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS notes TEXT,
+ADD COLUMN IF NOT EXISTS terms TEXT,
+ADD COLUMN IF NOT EXISTS footer TEXT;
+

@@ -901,6 +901,24 @@ type Invoice struct {
 	CustomerTaxID          pgtype.Text        `json:"customer_tax_id"`
 	CustomerJurisdictionID pgtype.UUID        `json:"customer_jurisdiction_id"`
 	ReverseChargeApplies   pgtype.Bool        `json:"reverse_charge_applies"`
+	ReminderSentAt         pgtype.Timestamptz `json:"reminder_sent_at"`
+	ReminderCount          pgtype.Int4        `json:"reminder_count"`
+	Notes                  pgtype.Text        `json:"notes"`
+	Terms                  pgtype.Text        `json:"terms"`
+	Footer                 pgtype.Text        `json:"footer"`
+}
+
+type InvoiceActivity struct {
+	ID           uuid.UUID          `json:"id"`
+	InvoiceID    uuid.UUID          `json:"invoice_id"`
+	WorkspaceID  uuid.UUID          `json:"workspace_id"`
+	ActivityType string             `json:"activity_type"`
+	FromStatus   pgtype.Text        `json:"from_status"`
+	ToStatus     pgtype.Text        `json:"to_status"`
+	PerformedBy  pgtype.UUID        `json:"performed_by"`
+	Description  pgtype.Text        `json:"description"`
+	Metadata     []byte             `json:"metadata"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 type InvoiceLineItem struct {

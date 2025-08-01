@@ -12,6 +12,7 @@ import (
 	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
@@ -28,17 +29,19 @@ type SubscriptionService struct {
 	delegationClient     *dsClient.DelegationClient
 	paymentService       *PaymentService
 	customerService      *CustomerService
+	invoiceService       interfaces.InvoiceService
 	logger               *zap.Logger
 	lastRedemptionTxHash string // Stores the transaction hash from the last successful redemption
 }
 
 // NewSubscriptionService creates a new subscription service
-func NewSubscriptionService(queries db.Querier, delegationClient *dsClient.DelegationClient, paymentService *PaymentService, customerService *CustomerService) *SubscriptionService {
+func NewSubscriptionService(queries db.Querier, delegationClient *dsClient.DelegationClient, paymentService *PaymentService, customerService *CustomerService, invoiceService interfaces.InvoiceService) *SubscriptionService {
 	return &SubscriptionService{
 		queries:          queries,
 		delegationClient: delegationClient,
 		paymentService:   paymentService,
 		customerService:  customerService,
+		invoiceService:   invoiceService,
 		logger:           logger.Log,
 	}
 }
@@ -50,6 +53,7 @@ func (s *SubscriptionService) WithTransaction(tx pgx.Tx) *SubscriptionService {
 		delegationClient: s.delegationClient,
 		paymentService:   s.paymentService,
 		customerService:  s.customerService,
+		invoiceService:   s.invoiceService,
 		logger:           s.logger,
 	}
 }
@@ -397,11 +401,8 @@ func (s *SubscriptionService) CreateSubscription(ctx context.Context, tx pgx.Tx,
 		TotalRedemptions:   0,
 		TotalAmountInCents: 0,
 		Metadata: func() []byte {
-			// Get the product for metadata (params.Product or params.Price for backward compatibility)
+			// Get the product for metadata
 			product := params.Product
-			if product.ID == uuid.Nil && params.Price.ID != uuid.Nil {
-				product = params.Price // Use Price as Product for backward compatibility
-			}
 
 			metadata := map[string]interface{}{
 				"product_id":   product.ID.String(),
@@ -437,9 +438,6 @@ func (s *SubscriptionService) CreateSubscription(ctx context.Context, tx pgx.Tx,
 	// Create subscription line items
 	// First, create the base product line item
 	baseProduct := params.Product
-	if baseProduct.ID == uuid.Nil && params.Price.ID != uuid.Nil {
-		baseProduct = params.Price // Use Price as Product for backward compatibility
-	}
 
 	// Create base product line item
 	_, err = qtx.CreateSubscriptionLineItem(ctx, db.CreateSubscriptionLineItemParams{
@@ -650,6 +648,45 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 			s.logger.Info("Payment record created successfully for subscription redemption",
 				zap.String("subscription_id", redemptionParams.Subscription.ID.String()),
 				zap.String("transaction_hash", txHash))
+
+			// Create invoice for the initial subscription payment
+			if s.invoiceService != nil {
+				s.logger.Info("Creating invoice for initial subscription payment",
+					zap.String("subscription_id", redemptionParams.Subscription.ID.String()),
+					zap.String("customer_id", redemptionParams.Customer.ID.String()))
+
+				// Skip invoice generation during transaction - line items not yet committed
+				// TODO: Create invoice after transaction commits
+				invoice, invoiceErr := (*responses.InvoiceResponse)(nil), error(nil)
+				invoiceErr = fmt.Errorf("invoice creation skipped during transaction")
+
+				if invoiceErr != nil {
+					s.logger.Info("Skipping invoice creation during initial redemption",
+						zap.String("reason", "transaction not yet committed"),
+						zap.String("subscription_id", redemptionParams.Subscription.ID.String()))
+				} else {
+					s.logger.Info("Invoice created successfully for subscription",
+						zap.String("subscription_id", redemptionParams.Subscription.ID.String()),
+						zap.String("invoice_id", invoice.ID.String()),
+						zap.String("invoice_status", invoice.Status))
+
+					// Mark the invoice as paid since payment was already processed
+					if invoice.Status == "open" {
+						_, markPaidErr := s.invoiceService.MarkInvoicePaid(ctx, 
+							redemptionParams.Product.WorkspaceID,
+							invoice.ID)
+						
+						if markPaidErr != nil {
+							s.logger.Error("Failed to mark invoice as paid",
+								zap.Error(markPaidErr),
+								zap.String("invoice_id", invoice.ID.String()))
+						} else {
+							s.logger.Info("Invoice marked as paid",
+								zap.String("invoice_id", invoice.ID.String()))
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -695,7 +732,7 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 	s.logger.Info("Initial redemption successful",
 		zap.String("subscription_id", redemptionParams.Subscription.ID.String()),
 		zap.String("transaction_hash", txHash),
-		zap.Int32("amount_in_cents", int32(redemptionParams.Price.UnitAmountInPennies)))
+		zap.Int32("amount_in_cents", int32(redemptionParams.Product.UnitAmountInPennies)))
 
 	return &updatedSubscription, nil
 }
@@ -731,7 +768,7 @@ func (s *SubscriptionService) CreateSubscriptionWithDelegation(ctx context.Conte
 	}
 
 	// Calculate subscription periods
-	periodStart, periodEnd, nextRedemption := helpers.CalculateSubscriptionPeriods(createParams.Price)
+	periodStart, periodEnd, nextRedemption := helpers.CalculateSubscriptionPeriods(createParams.Product)
 
 	// Create subscription
 	subscription, err := s.CreateSubscription(ctx, tx, params.CreateSubscriptionParams{
@@ -740,7 +777,7 @@ func (s *SubscriptionService) CreateSubscriptionWithDelegation(ctx context.Conte
 		WorkspaceID:    createParams.Product.WorkspaceID,
 		ProductID:      createParams.Product.ID,
 		ProductTokenID: createParams.ProductTokenID,
-		Price:          createParams.Price,
+		Product:        createParams.Product,
 		TokenAmount:    createParams.TokenAmount,
 		DelegationData: *delegationData,
 		PeriodStart:    periodStart,
@@ -773,7 +810,7 @@ func (s *SubscriptionService) CreateSubscriptionWithDelegation(ctx context.Conte
 		SubscriptionID: subscription.ID,
 		EventType:      db.SubscriptionEventTypeCreated,
 		OccurredAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		AmountInCents:  createParams.Price.UnitAmountInPennies,
+		AmountInCents:  createParams.Product.UnitAmountInPennies,
 		Metadata:       eventMetadataBytes,
 	})
 	if err != nil {
@@ -790,7 +827,6 @@ func (s *SubscriptionService) CreateSubscriptionWithDelegation(ctx context.Conte
 		CustomerWallet: *customerWallet,
 		Subscription:   *subscription,
 		Product:        createParams.Product,
-		Price:          createParams.Price,
 		ProductToken:   createParams.ProductToken,
 		DelegationData: createParams.DelegationData,
 		MerchantWallet: createParams.MerchantWallet,

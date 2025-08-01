@@ -11,6 +11,7 @@ import {
   Receipt,
   Wallet,
   LogOut,
+  FileText,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -153,6 +154,17 @@ export function MainSidebar() {
         <motion.div whileHover="hover" initial="initial" variants={iconAnimation}>
           <Receipt
             className={`h-5 w-5 flex-shrink-0 ${pathname === '/merchants/transactions' ? 'text-gray-400' : 'text-neutral-700 dark:text-neutral-200'}`}
+          />
+        </motion.div>
+      ),
+    },
+    {
+      label: 'Invoices',
+      href: '/merchants/invoices',
+      icon: (
+        <motion.div whileHover="hover" initial="initial" variants={iconAnimation}>
+          <FileText
+            className={`h-5 w-5 flex-shrink-0 ${pathname === '/merchants/invoices' ? 'text-gray-400' : 'text-neutral-700 dark:text-neutral-200'}`}
           />
         </motion.div>
       ),

@@ -57,6 +57,14 @@ type InvoiceService interface {
 	CreateInvoice(ctx context.Context, params params.InvoiceCreateParams) (*responses.InvoiceResponse, error)
 	GetInvoiceWithDetails(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*responses.InvoiceResponse, error)
 	FinalizeInvoice(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error)
+	VoidInvoice(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error)
+	MarkInvoicePaid(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error)
+	MarkInvoiceUncollectible(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error)
+	DuplicateInvoice(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*responses.InvoiceResponse, error)
+	GetInvoiceActivity(ctx context.Context, workspaceID, invoiceID uuid.UUID, limit, offset int32) ([]db.InvoiceActivity, error)
+	GenerateInvoiceFromSubscription(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool) (*responses.InvoiceResponse, error)
+	BulkGenerateInvoices(ctx context.Context, workspaceID uuid.UUID, endDate time.Time, maxInvoices int32) (*responses.BulkInvoiceGenerationResult, error)
+	GetInvoiceStats(ctx context.Context, workspaceID uuid.UUID, startDate, endDate time.Time) (*responses.InvoiceStatsResponse, error)
 }
 
 // DunningService handles dunning campaigns

@@ -452,6 +452,21 @@ func (m *MockInvoiceService) EXPECT() *MockInvoiceServiceMockRecorder {
 	return m.recorder
 }
 
+// BulkGenerateInvoices mocks base method.
+func (m *MockInvoiceService) BulkGenerateInvoices(ctx context.Context, workspaceID uuid.UUID, endDate time.Time, maxInvoices int32) (*responses.BulkInvoiceGenerationResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BulkGenerateInvoices", ctx, workspaceID, endDate, maxInvoices)
+	ret0, _ := ret[0].(*responses.BulkInvoiceGenerationResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BulkGenerateInvoices indicates an expected call of BulkGenerateInvoices.
+func (mr *MockInvoiceServiceMockRecorder) BulkGenerateInvoices(ctx, workspaceID, endDate, maxInvoices any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkGenerateInvoices", reflect.TypeOf((*MockInvoiceService)(nil).BulkGenerateInvoices), ctx, workspaceID, endDate, maxInvoices)
+}
+
 // CreateInvoice mocks base method.
 func (m *MockInvoiceService) CreateInvoice(ctx context.Context, arg1 params.InvoiceCreateParams) (*responses.InvoiceResponse, error) {
 	m.ctrl.T.Helper()
@@ -465,6 +480,21 @@ func (m *MockInvoiceService) CreateInvoice(ctx context.Context, arg1 params.Invo
 func (mr *MockInvoiceServiceMockRecorder) CreateInvoice(ctx, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateInvoice", reflect.TypeOf((*MockInvoiceService)(nil).CreateInvoice), ctx, arg1)
+}
+
+// DuplicateInvoice mocks base method.
+func (m *MockInvoiceService) DuplicateInvoice(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*responses.InvoiceResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DuplicateInvoice", ctx, workspaceID, invoiceID)
+	ret0, _ := ret[0].(*responses.InvoiceResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DuplicateInvoice indicates an expected call of DuplicateInvoice.
+func (mr *MockInvoiceServiceMockRecorder) DuplicateInvoice(ctx, workspaceID, invoiceID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DuplicateInvoice", reflect.TypeOf((*MockInvoiceService)(nil).DuplicateInvoice), ctx, workspaceID, invoiceID)
 }
 
 // FinalizeInvoice mocks base method.
@@ -482,6 +512,51 @@ func (mr *MockInvoiceServiceMockRecorder) FinalizeInvoice(ctx, workspaceID, invo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinalizeInvoice", reflect.TypeOf((*MockInvoiceService)(nil).FinalizeInvoice), ctx, workspaceID, invoiceID)
 }
 
+// GenerateInvoiceFromSubscription mocks base method.
+func (m *MockInvoiceService) GenerateInvoiceFromSubscription(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool) (*responses.InvoiceResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GenerateInvoiceFromSubscription", ctx, subscriptionID, periodStart, periodEnd, isDraft)
+	ret0, _ := ret[0].(*responses.InvoiceResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GenerateInvoiceFromSubscription indicates an expected call of GenerateInvoiceFromSubscription.
+func (mr *MockInvoiceServiceMockRecorder) GenerateInvoiceFromSubscription(ctx, subscriptionID, periodStart, periodEnd, isDraft any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateInvoiceFromSubscription", reflect.TypeOf((*MockInvoiceService)(nil).GenerateInvoiceFromSubscription), ctx, subscriptionID, periodStart, periodEnd, isDraft)
+}
+
+// GetInvoiceActivity mocks base method.
+func (m *MockInvoiceService) GetInvoiceActivity(ctx context.Context, workspaceID, invoiceID uuid.UUID, limit, offset int32) ([]db.InvoiceActivity, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInvoiceActivity", ctx, workspaceID, invoiceID, limit, offset)
+	ret0, _ := ret[0].([]db.InvoiceActivity)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInvoiceActivity indicates an expected call of GetInvoiceActivity.
+func (mr *MockInvoiceServiceMockRecorder) GetInvoiceActivity(ctx, workspaceID, invoiceID, limit, offset any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInvoiceActivity", reflect.TypeOf((*MockInvoiceService)(nil).GetInvoiceActivity), ctx, workspaceID, invoiceID, limit, offset)
+}
+
+// GetInvoiceStats mocks base method.
+func (m *MockInvoiceService) GetInvoiceStats(ctx context.Context, workspaceID uuid.UUID, startDate, endDate time.Time) (*responses.InvoiceStatsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInvoiceStats", ctx, workspaceID, startDate, endDate)
+	ret0, _ := ret[0].(*responses.InvoiceStatsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInvoiceStats indicates an expected call of GetInvoiceStats.
+func (mr *MockInvoiceServiceMockRecorder) GetInvoiceStats(ctx, workspaceID, startDate, endDate any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInvoiceStats", reflect.TypeOf((*MockInvoiceService)(nil).GetInvoiceStats), ctx, workspaceID, startDate, endDate)
+}
+
 // GetInvoiceWithDetails mocks base method.
 func (m *MockInvoiceService) GetInvoiceWithDetails(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*responses.InvoiceResponse, error) {
 	m.ctrl.T.Helper()
@@ -495,6 +570,51 @@ func (m *MockInvoiceService) GetInvoiceWithDetails(ctx context.Context, workspac
 func (mr *MockInvoiceServiceMockRecorder) GetInvoiceWithDetails(ctx, workspaceID, invoiceID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInvoiceWithDetails", reflect.TypeOf((*MockInvoiceService)(nil).GetInvoiceWithDetails), ctx, workspaceID, invoiceID)
+}
+
+// MarkInvoicePaid mocks base method.
+func (m *MockInvoiceService) MarkInvoicePaid(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkInvoicePaid", ctx, workspaceID, invoiceID)
+	ret0, _ := ret[0].(*db.Invoice)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MarkInvoicePaid indicates an expected call of MarkInvoicePaid.
+func (mr *MockInvoiceServiceMockRecorder) MarkInvoicePaid(ctx, workspaceID, invoiceID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkInvoicePaid", reflect.TypeOf((*MockInvoiceService)(nil).MarkInvoicePaid), ctx, workspaceID, invoiceID)
+}
+
+// MarkInvoiceUncollectible mocks base method.
+func (m *MockInvoiceService) MarkInvoiceUncollectible(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MarkInvoiceUncollectible", ctx, workspaceID, invoiceID)
+	ret0, _ := ret[0].(*db.Invoice)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MarkInvoiceUncollectible indicates an expected call of MarkInvoiceUncollectible.
+func (mr *MockInvoiceServiceMockRecorder) MarkInvoiceUncollectible(ctx, workspaceID, invoiceID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkInvoiceUncollectible", reflect.TypeOf((*MockInvoiceService)(nil).MarkInvoiceUncollectible), ctx, workspaceID, invoiceID)
+}
+
+// VoidInvoice mocks base method.
+func (m *MockInvoiceService) VoidInvoice(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VoidInvoice", ctx, workspaceID, invoiceID)
+	ret0, _ := ret[0].(*db.Invoice)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// VoidInvoice indicates an expected call of VoidInvoice.
+func (mr *MockInvoiceServiceMockRecorder) VoidInvoice(ctx, workspaceID, invoiceID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VoidInvoice", reflect.TypeOf((*MockInvoiceService)(nil).VoidInvoice), ctx, workspaceID, invoiceID)
 }
 
 // MockDunningService is a mock of DunningService interface.

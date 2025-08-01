@@ -765,10 +765,17 @@ func InitializeRoutes(router *gin.Engine) {
 				// Invoice management
 				invoices.GET("", invoiceHandler.ListInvoices)
 				invoices.POST("", middleware.ValidateInput(middleware.CreateInvoiceValidation), invoiceHandler.CreateInvoice)
+				invoices.POST("/bulk-generate", invoiceHandler.BulkGenerateInvoices)
+				invoices.GET("/stats", invoiceHandler.GetInvoiceStats)
 				invoices.GET("/:invoice_id", invoiceHandler.GetInvoice)
 				invoices.GET("/:invoice_id/preview", invoiceHandler.PreviewInvoice)
 				invoices.POST("/:invoice_id/finalize", invoiceHandler.FinalizeInvoice)
 				invoices.POST("/:invoice_id/send", invoiceHandler.SendInvoice)
+				invoices.POST("/:invoice_id/void", invoiceHandler.VoidInvoice)
+				invoices.POST("/:invoice_id/mark-paid", invoiceHandler.MarkInvoicePaid)
+				invoices.POST("/:invoice_id/mark-uncollectible", invoiceHandler.MarkInvoiceUncollectible)
+				invoices.POST("/:invoice_id/duplicate", invoiceHandler.DuplicateInvoice)
+				invoices.GET("/:invoice_id/activity", invoiceHandler.GetInvoiceActivity)
 				invoices.GET("/:invoice_id/payment-link", invoiceHandler.GetInvoicePaymentLink)
 				// Create payment link for invoice
 				invoices.POST("/:invoice_id/payment-link", paymentLinkHandler.CreateInvoicePaymentLink)

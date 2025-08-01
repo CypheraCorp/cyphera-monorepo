@@ -315,8 +315,16 @@ func main() {
 	// Initialize customer service
 	customerService := services.NewCustomerService(dbQueries)
 
+	// Initialize services for invoice creation
+	taxService := services.NewTaxService(dbQueries)
+	discountService := services.NewDiscountService(dbQueries)
+	gasSponsorshipService := services.NewGasSponsorshipService(dbQueries)
+	currencyService := services.NewCurrencyService(dbQueries)
+	exchangeRateService := services.NewExchangeRateService(dbQueries, "")
+	invoiceService := services.NewInvoiceService(dbQueries, logger.Log, taxService, discountService, gasSponsorshipService, currencyService, exchangeRateService)
+
 	// Initialize subscription service
-	subscriptionService := services.NewSubscriptionService(dbQueries, delegationClient, paymentService, customerService)
+	subscriptionService := services.NewSubscriptionService(dbQueries, delegationClient, paymentService, customerService, invoiceService)
 
 	// Create the scheduled changes processor
 	var scheduledChangesProcessor *processor.ScheduledChangesProcessor
