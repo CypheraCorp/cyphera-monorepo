@@ -12,6 +12,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type BulkCreateInvoiceLineItemsFromSubscriptionParams struct {
+	InvoiceID         uuid.UUID          `json:"invoice_id"`
+	SubscriptionID    pgtype.UUID        `json:"subscription_id"`
+	ProductID         pgtype.UUID        `json:"product_id"`
+	Description       string             `json:"description"`
+	Quantity          pgtype.Numeric     `json:"quantity"`
+	UnitAmountInCents int64              `json:"unit_amount_in_cents"`
+	AmountInCents     int64              `json:"amount_in_cents"`
+	FiatCurrency      string             `json:"fiat_currency"`
+	LineItemType      pgtype.Text        `json:"line_item_type"`
+	PeriodStart       pgtype.Timestamptz `json:"period_start"`
+	PeriodEnd         pgtype.Timestamptz `json:"period_end"`
+}
+
 const createInvoiceLineItem = `-- name: CreateInvoiceLineItem :one
 INSERT INTO invoice_line_items (
     invoice_id,
@@ -136,6 +150,87 @@ type CreateInvoiceLineItemBatchParams struct {
 	FiatCurrency      string         `json:"fiat_currency"`
 	ProductID         pgtype.UUID    `json:"product_id"`
 	LineItemType      pgtype.Text    `json:"line_item_type"`
+}
+
+const createInvoiceLineItemFromSubscription = `-- name: CreateInvoiceLineItemFromSubscription :one
+INSERT INTO invoice_line_items (
+    invoice_id,
+    subscription_id,
+    product_id,
+    description,
+    quantity,
+    unit_amount_in_cents,
+    amount_in_cents,
+    fiat_currency,
+    line_item_type,
+    period_start,
+    period_end,
+    metadata
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+) RETURNING id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at
+`
+
+type CreateInvoiceLineItemFromSubscriptionParams struct {
+	InvoiceID         uuid.UUID          `json:"invoice_id"`
+	SubscriptionID    pgtype.UUID        `json:"subscription_id"`
+	ProductID         pgtype.UUID        `json:"product_id"`
+	Description       string             `json:"description"`
+	Quantity          pgtype.Numeric     `json:"quantity"`
+	UnitAmountInCents int64              `json:"unit_amount_in_cents"`
+	AmountInCents     int64              `json:"amount_in_cents"`
+	FiatCurrency      string             `json:"fiat_currency"`
+	LineItemType      pgtype.Text        `json:"line_item_type"`
+	PeriodStart       pgtype.Timestamptz `json:"period_start"`
+	PeriodEnd         pgtype.Timestamptz `json:"period_end"`
+	Metadata          []byte             `json:"metadata"`
+}
+
+func (q *Queries) CreateInvoiceLineItemFromSubscription(ctx context.Context, arg CreateInvoiceLineItemFromSubscriptionParams) (InvoiceLineItem, error) {
+	row := q.db.QueryRow(ctx, createInvoiceLineItemFromSubscription,
+		arg.InvoiceID,
+		arg.SubscriptionID,
+		arg.ProductID,
+		arg.Description,
+		arg.Quantity,
+		arg.UnitAmountInCents,
+		arg.AmountInCents,
+		arg.FiatCurrency,
+		arg.LineItemType,
+		arg.PeriodStart,
+		arg.PeriodEnd,
+		arg.Metadata,
+	)
+	var i InvoiceLineItem
+	err := row.Scan(
+		&i.ID,
+		&i.InvoiceID,
+		&i.Description,
+		&i.Quantity,
+		&i.UnitAmountInCents,
+		&i.AmountInCents,
+		&i.FiatCurrency,
+		&i.SubscriptionID,
+		&i.ProductID,
+		&i.NetworkID,
+		&i.TokenID,
+		&i.CryptoAmount,
+		&i.ExchangeRate,
+		&i.TaxRate,
+		&i.TaxAmountInCents,
+		&i.TaxCryptoAmount,
+		&i.PeriodStart,
+		&i.PeriodEnd,
+		&i.LineItemType,
+		&i.GasFeePaymentID,
+		&i.IsGasSponsored,
+		&i.GasSponsorType,
+		&i.GasSponsorName,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const deleteInvoiceLineItem = `-- name: DeleteInvoiceLineItem :exec
@@ -348,6 +443,72 @@ ORDER BY created_at ASC
 
 func (q *Queries) GetInvoiceLineItems(ctx context.Context, invoiceID uuid.UUID) ([]InvoiceLineItem, error) {
 	rows, err := q.db.Query(ctx, getInvoiceLineItems, invoiceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InvoiceLineItem{}
+	for rows.Next() {
+		var i InvoiceLineItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.InvoiceID,
+			&i.Description,
+			&i.Quantity,
+			&i.UnitAmountInCents,
+			&i.AmountInCents,
+			&i.FiatCurrency,
+			&i.SubscriptionID,
+			&i.ProductID,
+			&i.NetworkID,
+			&i.TokenID,
+			&i.CryptoAmount,
+			&i.ExchangeRate,
+			&i.TaxRate,
+			&i.TaxAmountInCents,
+			&i.TaxCryptoAmount,
+			&i.PeriodStart,
+			&i.PeriodEnd,
+			&i.LineItemType,
+			&i.GasFeePaymentID,
+			&i.IsGasSponsored,
+			&i.GasSponsorType,
+			&i.GasSponsorName,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getInvoiceLineItemsBySubscription = `-- name: GetInvoiceLineItemsBySubscription :many
+SELECT id, invoice_id, description, quantity, unit_amount_in_cents, amount_in_cents, fiat_currency, subscription_id, product_id, network_id, token_id, crypto_amount, exchange_rate, tax_rate, tax_amount_in_cents, tax_crypto_amount, period_start, period_end, line_item_type, gas_fee_payment_id, is_gas_sponsored, gas_sponsor_type, gas_sponsor_name, metadata, created_at, updated_at FROM invoice_line_items
+WHERE subscription_id = $1 AND invoice_id = $2
+ORDER BY 
+    CASE 
+        WHEN line_item_type = 'product' THEN 1
+        WHEN line_item_type = 'gas_fee' THEN 2
+        WHEN line_item_type = 'discount' THEN 3
+        WHEN line_item_type = 'tax' THEN 4
+        ELSE 5
+    END,
+    created_at ASC
+`
+
+type GetInvoiceLineItemsBySubscriptionParams struct {
+	SubscriptionID pgtype.UUID `json:"subscription_id"`
+	InvoiceID      uuid.UUID   `json:"invoice_id"`
+}
+
+func (q *Queries) GetInvoiceLineItemsBySubscription(ctx context.Context, arg GetInvoiceLineItemsBySubscriptionParams) ([]InvoiceLineItem, error) {
+	rows, err := q.db.Query(ctx, getInvoiceLineItemsBySubscription, arg.SubscriptionID, arg.InvoiceID)
 	if err != nil {
 		return nil, err
 	}

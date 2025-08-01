@@ -104,3 +104,13 @@ type ValidateSubscriptionParams struct {
 	Delegation                DelegationParams
 	CypheraSmartWalletAddress string // The expected delegate address
 }
+
+// CreateProductAddonRelationshipParams contains parameters for creating a product addon relationship
+type CreateProductAddonRelationshipParams struct {
+	AddonProductID uuid.UUID
+	IsRequired     bool
+	MaxQuantity    *int32
+	MinQuantity    int32
+	DisplayOrder   int32
+	Metadata       json.RawMessage
+}

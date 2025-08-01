@@ -84,8 +84,15 @@ type CreateSubscriptionParams struct {
 	PeriodStart    time.Time
 	PeriodEnd      time.Time
 	NextRedemption time.Time
+	Addons         []SubscriptionAddonParams
 	// Deprecated: Use Product instead
 	Price db.Product
+}
+
+// SubscriptionAddonParams contains parameters for a subscription addon
+type SubscriptionAddonParams struct {
+	ProductID uuid.UUID
+	Quantity  int32
 }
 
 // StoreDelegationDataParams contains parameters for storing delegation data

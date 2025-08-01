@@ -73,6 +73,7 @@ export interface ProductResponse {
   unit_amount_in_pennies?: number;
   interval_type?: string;
   term_length?: number;
+  available_addons?: ProductAddonResponse[];
 }
 
 /**
@@ -172,6 +173,7 @@ export interface PublicProductResponse {
   unit_amount_in_pennies: number;
   interval_type?: string;
   term_length?: number;
+  available_addons?: ProductAddonResponse[];
 }
 
 /**
@@ -181,4 +183,65 @@ export interface PublishProductResponse {
   message: string;
   cyphera_product_id: string;
   cyphera_product_token_id: string;
+}
+
+/**
+ * Product addon relationship response
+ */
+export interface ProductAddonRelationshipResponse {
+  id: string;
+  object: string;
+  base_product_id: string;
+  addon_product_id: string;
+  is_required: boolean;
+  max_quantity?: number | null;
+  min_quantity: number;
+  display_order: number;
+  metadata?: Record<string, unknown> | null;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * Product addon response with full product details
+ */
+export interface ProductAddonResponse extends ProductAddonRelationshipResponse {
+  addon_product: ProductResponse;
+}
+
+/**
+ * Product with available addons
+ */
+export interface ProductWithAddonsResponse extends ProductResponse {
+  available_addons?: ProductAddonResponse[];
+}
+
+/**
+ * Request payload for creating a product addon relationship
+ */
+export interface CreateProductAddonRelationshipRequest {
+  addon_product_id: string;
+  is_required?: boolean;
+  max_quantity?: number | null;
+  min_quantity?: number;
+  display_order?: number;
+  metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Request payload for updating a product addon relationship
+ */
+export interface UpdateProductAddonRelationshipRequest {
+  is_required?: boolean;
+  max_quantity?: number | null;
+  min_quantity?: number;
+  display_order?: number;
+  metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Request payload for bulk setting product addons
+ */
+export interface BulkSetProductAddonsRequest {
+  addons: CreateProductAddonRelationshipRequest[];
 }

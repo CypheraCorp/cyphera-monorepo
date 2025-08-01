@@ -53,6 +53,84 @@ func ToProductDetailResponse(p db.Product) responses.ProductDetailResponse {
 	}
 }
 
+// ToProductDetailResponseWithAddons converts database product model to detailed API response with addons
+func ToProductDetailResponseWithAddons(p db.Product, addons []db.ListProductAddonsRow) responses.ProductDetailResponse {
+	response := ToProductDetailResponse(p)
+
+	// Only include addons for base products
+	if p.ProductType.Valid && p.ProductType.String == "base" && len(addons) > 0 {
+		availableAddons := make([]responses.ProductAddonResponse, len(addons))
+		for i, addon := range addons {
+			availableAddons[i] = responses.ProductAddonResponse{
+				ProductAddonRelationshipResponse: responses.ProductAddonRelationshipResponse{
+					ID:             addon.ID.String(),
+					Object:         "product_addon_relationship",
+					BaseProductID:  addon.BaseProductID.String(),
+					AddonProductID: addon.AddonProductID.String(),
+					IsRequired:     addon.IsRequired.Bool,
+					MaxQuantity: func() *int32 {
+						if addon.MaxQuantity.Valid {
+							return &addon.MaxQuantity.Int32
+						}
+						return nil
+					}(),
+					MinQuantity:  addon.MinQuantity.Int32,
+					DisplayOrder: addon.DisplayOrder.Int32,
+					Metadata:     addon.Metadata,
+					CreatedAt:    addon.CreatedAt.Time.Unix(),
+					UpdatedAt:    addon.UpdatedAt.Time.Unix(),
+				},
+				AddonProduct: responses.ProductResponse{
+					ID:                  addon.AddonID.String(),
+					Object:              "product",
+					Name:                addon.AddonName,
+					Description:         addon.AddonDescription.String,
+					ImageURL:            addon.AddonImageUrl.String,
+					Active:              addon.AddonActive,
+					PriceType:           string(addon.AddonPriceType),
+					Currency:            addon.AddonCurrency,
+					UnitAmountInPennies: int64(addon.AddonUnitAmount),
+					IntervalType: func() string {
+						if addon.AddonIntervalType.Valid {
+							return string(addon.AddonIntervalType.IntervalType)
+						}
+						return ""
+					}(),
+					TermLength: addon.AddonTermLength.Int32,
+				},
+			}
+		}
+		// Return a ProductWithAddonsResponse instead
+		return responses.ProductDetailResponse{
+			ID:                  response.ID,
+			Object:              response.Object,
+			WorkspaceID:         response.WorkspaceID,
+			WalletID:            response.WalletID,
+			Name:                response.Name,
+			Description:         response.Description,
+			ImageURL:            response.ImageURL,
+			URL:                 response.URL,
+			Active:              response.Active,
+			ProductType:         response.ProductType,
+			ProductGroup:        response.ProductGroup,
+			PriceType:           response.PriceType,
+			Currency:            response.Currency,
+			UnitAmountInPennies: response.UnitAmountInPennies,
+			IntervalType:        response.IntervalType,
+			TermLength:          response.TermLength,
+			PriceNickname:       response.PriceNickname,
+			PriceExternalID:     response.PriceExternalID,
+			Metadata:            response.Metadata,
+			CreatedAt:           response.CreatedAt,
+			UpdatedAt:           response.UpdatedAt,
+			ProductTokens:       response.ProductTokens,
+			AvailableAddons:     availableAddons,
+		}
+	}
+
+	return response
+}
+
 // ToPublicProductResponse converts database models to public API response
 func ToPublicProductResponse(workspace db.Workspace, product db.Product, productTokens []db.GetActiveProductTokensByProductRow, wallet db.Wallet) responses.PublicProductResponse {
 	publicProductTokens := make([]responses.ProductTokenResponse, len(productTokens))
@@ -94,6 +172,59 @@ func ToPublicProductResponse(workspace db.Workspace, product db.Product, product
 		TermLength:    product.TermLength.Int32,
 		ProductTokens: publicProductTokens,
 	}
+}
+
+// ToPublicProductResponseWithAddons converts database models to public API response with addons
+func ToPublicProductResponseWithAddons(workspace db.Workspace, product db.Product, productTokens []db.GetActiveProductTokensByProductRow, wallet db.Wallet, addons []db.ListProductAddonsRow) responses.PublicProductResponse {
+	response := ToPublicProductResponse(workspace, product, productTokens, wallet)
+
+	// Only include addons for base products
+	if product.ProductType.Valid && product.ProductType.String == "base" && len(addons) > 0 {
+		availableAddons := make([]responses.ProductAddonResponse, len(addons))
+		for i, addon := range addons {
+			availableAddons[i] = responses.ProductAddonResponse{
+				ProductAddonRelationshipResponse: responses.ProductAddonRelationshipResponse{
+					ID:             addon.ID.String(),
+					Object:         "product_addon_relationship",
+					BaseProductID:  addon.BaseProductID.String(),
+					AddonProductID: addon.AddonProductID.String(),
+					IsRequired:     addon.IsRequired.Bool,
+					MaxQuantity: func() *int32 {
+						if addon.MaxQuantity.Valid {
+							return &addon.MaxQuantity.Int32
+						}
+						return nil
+					}(),
+					MinQuantity:  addon.MinQuantity.Int32,
+					DisplayOrder: addon.DisplayOrder.Int32,
+					Metadata:     addon.Metadata,
+					CreatedAt:    addon.CreatedAt.Time.Unix(),
+					UpdatedAt:    addon.UpdatedAt.Time.Unix(),
+				},
+				AddonProduct: responses.ProductResponse{
+					ID:                  addon.AddonID.String(),
+					Object:              "product",
+					Name:                addon.AddonName,
+					Description:         addon.AddonDescription.String,
+					ImageURL:            addon.AddonImageUrl.String,
+					Active:              addon.AddonActive,
+					PriceType:           string(addon.AddonPriceType),
+					Currency:            addon.AddonCurrency,
+					UnitAmountInPennies: int64(addon.AddonUnitAmount),
+					IntervalType: func() string {
+						if addon.AddonIntervalType.Valid {
+							return string(addon.AddonIntervalType.IntervalType)
+						}
+						return ""
+					}(),
+					TermLength: addon.AddonTermLength.Int32,
+				},
+			}
+		}
+		response.AvailableAddons = availableAddons
+	}
+
+	return response
 }
 
 // ValidatePriceType validates the price type and returns a db.PriceType if valid

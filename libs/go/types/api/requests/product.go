@@ -26,6 +26,8 @@ type CreateProductRequest struct {
 	ImageURL      string                      `json:"image_url"`
 	URL           string                      `json:"url"`
 	Active        bool                        `json:"active"`
+	ProductType   string                      `json:"product_type,omitempty"`  // 'base' or 'addon', defaults to 'base'
+	ProductGroup  string                      `json:"product_group,omitempty"` // Optional grouping for related products
 	Metadata      json.RawMessage             `json:"metadata" swaggertype:"object"`
 	ProductTokens []CreateProductTokenRequest `json:"product_tokens,omitempty"`
 
@@ -64,4 +66,28 @@ type UpdateProductTokenRequest struct {
 	TokenID   string          `json:"token_id,omitempty"`
 	Active    *bool           `json:"active,omitempty"`
 	Metadata  json.RawMessage `json:"metadata,omitempty" swaggertype:"object"`
+}
+
+// CreateProductAddonRelationshipRequest represents the request body for creating a product addon relationship
+type CreateProductAddonRelationshipRequest struct {
+	AddonProductID string          `json:"addon_product_id" binding:"required"`
+	IsRequired     bool            `json:"is_required"`
+	MaxQuantity    *int32          `json:"max_quantity"`
+	MinQuantity    int32           `json:"min_quantity"`
+	DisplayOrder   int32           `json:"display_order"`
+	Metadata       json.RawMessage `json:"metadata" swaggertype:"object"`
+}
+
+// UpdateProductAddonRelationshipRequest represents the request body for updating a product addon relationship
+type UpdateProductAddonRelationshipRequest struct {
+	IsRequired   *bool           `json:"is_required,omitempty"`
+	MaxQuantity  *int32          `json:"max_quantity,omitempty"`
+	MinQuantity  *int32          `json:"min_quantity,omitempty"`
+	DisplayOrder *int32          `json:"display_order,omitempty"`
+	Metadata     json.RawMessage `json:"metadata,omitempty" swaggertype:"object"`
+}
+
+// BulkSetProductAddonsRequest represents the request body for setting all addons for a product
+type BulkSetProductAddonsRequest struct {
+	Addons []CreateProductAddonRelationshipRequest `json:"addons" binding:"required"`
 }

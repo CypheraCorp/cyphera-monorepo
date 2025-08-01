@@ -434,6 +434,86 @@ func (s *SubscriptionService) CreateSubscription(ctx context.Context, tx pgx.Tx,
 	s.logger.Info("Subscription created successfully",
 		zap.String("subscription_id", subscription.ID.String()))
 
+	// Create subscription line items
+	// First, create the base product line item
+	baseProduct := params.Product
+	if baseProduct.ID == uuid.Nil && params.Price.ID != uuid.Nil {
+		baseProduct = params.Price // Use Price as Product for backward compatibility
+	}
+
+	// Create base product line item
+	_, err = qtx.CreateSubscriptionLineItem(ctx, db.CreateSubscriptionLineItemParams{
+		SubscriptionID:       subscription.ID,
+		ProductID:            baseProduct.ID,
+		LineItemType:         "base",
+		Quantity:             1,
+		UnitAmountInPennies:  baseProduct.UnitAmountInPennies,
+		Currency:             baseProduct.Currency,
+		PriceType:            baseProduct.PriceType,
+		IntervalType:         baseProduct.IntervalType,
+		TotalAmountInPennies: baseProduct.UnitAmountInPennies,
+		IsActive:             pgtype.Bool{Bool: true, Valid: true},
+		Metadata:             []byte("{}"),
+	})
+	if err != nil {
+		s.logger.Error("Failed to create base product line item", zap.Error(err))
+		return nil, fmt.Errorf("failed to create base product line item: %w", err)
+	}
+
+	// Create addon line items if provided
+	if params.Addons != nil && len(params.Addons) > 0 {
+		for _, addon := range params.Addons {
+			// Get addon product details
+			addonProduct, err := qtx.GetProductWithoutWorkspaceId(ctx, addon.ProductID)
+			if err != nil {
+				s.logger.Error("Failed to get addon product",
+					zap.String("addon_product_id", addon.ProductID.String()),
+					zap.Error(err))
+				return nil, fmt.Errorf("failed to get addon product: %w", err)
+			}
+
+			// Validate addon is actually an addon type
+			if !addonProduct.ProductType.Valid || addonProduct.ProductType.String != "addon" {
+				return nil, fmt.Errorf("product %s is not an addon type", addon.ProductID.String())
+			}
+
+			// Create addon line item
+			totalAmount := addonProduct.UnitAmountInPennies * addon.Quantity
+			_, err = qtx.CreateSubscriptionLineItem(ctx, db.CreateSubscriptionLineItemParams{
+				SubscriptionID:       subscription.ID,
+				ProductID:            addon.ProductID,
+				LineItemType:         "addon",
+				Quantity:             addon.Quantity,
+				UnitAmountInPennies:  addonProduct.UnitAmountInPennies,
+				Currency:             addonProduct.Currency,
+				PriceType:            addonProduct.PriceType,
+				IntervalType:         addonProduct.IntervalType,
+				TotalAmountInPennies: totalAmount,
+				IsActive:             pgtype.Bool{Bool: true, Valid: true},
+				Metadata:             []byte("{}"),
+			})
+			if err != nil {
+				s.logger.Error("Failed to create addon line item",
+					zap.String("addon_product_id", addon.ProductID.String()),
+					zap.Error(err))
+				return nil, fmt.Errorf("failed to create addon line item: %w", err)
+			}
+		}
+	}
+
+	// Update subscription total amount based on line items
+	totalRow, err := qtx.CalculateSubscriptionTotal(ctx, subscription.ID)
+	if err != nil {
+		s.logger.Error("Failed to calculate subscription total", zap.Error(err))
+		// Don't fail the whole operation, just log the error
+	} else {
+		// Update the subscription's total amount
+		// The query returns BIGINT which is int64 in Go
+		if totalAmount, ok := totalRow.(int64); ok {
+			subscription.TotalAmountInCents = int32(totalAmount)
+		}
+	}
+
 	return &subscription, nil
 }
 

@@ -49,6 +49,20 @@ func NewInvoiceService(
 
 // CreateInvoice creates a new invoice with line items
 func (s *InvoiceService) CreateInvoice(ctx context.Context, invoiceParams params.InvoiceCreateParams) (*responses.InvoiceResponse, error) {
+	// If subscription ID is provided and no line items, generate from subscription
+	if invoiceParams.SubscriptionID != nil && len(invoiceParams.LineItems) == 0 {
+		// Determine period dates
+		periodStart := time.Now()
+		periodEnd := periodStart.AddDate(0, 1, 0) // Default to one month
+		if invoiceParams.PeriodStart != nil && invoiceParams.PeriodEnd != nil {
+			periodStart = *invoiceParams.PeriodStart
+			periodEnd = *invoiceParams.PeriodEnd
+		}
+		
+		// Generate invoice from subscription
+		return s.GenerateInvoiceFromSubscription(ctx, *invoiceParams.SubscriptionID, periodStart, periodEnd, invoiceParams.Status == "draft")
+	}
+
 	// Generate invoice number
 	invoiceNumber, err := s.generateInvoiceNumber(ctx, invoiceParams.WorkspaceID)
 	if err != nil {
@@ -276,6 +290,166 @@ func (s *InvoiceService) GetInvoiceWithDetails(ctx context.Context, workspaceID,
 	return convertToInvoiceResponse(invoiceDetails), nil
 }
 
+// GenerateInvoiceFromSubscription creates an invoice from a subscription and its line items
+func (s *InvoiceService) GenerateInvoiceFromSubscription(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool) (*responses.InvoiceResponse, error) {
+	// Get subscription with line items
+	subscriptionRows, err := s.queries.GetSubscriptionWithLineItems(ctx, subscriptionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription with line items: %w", err)
+	}
+
+	if len(subscriptionRows) == 0 {
+		return nil, fmt.Errorf("subscription %s has no active line items", subscriptionID)
+	}
+
+	// Get subscription and customer details
+	subscriptionDetails, err := s.queries.GetSubscriptionForInvoicing(ctx, subscriptionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription details: %w", err)
+	}
+
+	// Check if invoice already exists for this period
+	exists, err := s.queries.CheckInvoiceExistsForPeriod(ctx, db.CheckInvoiceExistsForPeriodParams{
+		SubscriptionID: pgtype.UUID{Bytes: subscriptionID, Valid: true},
+		WorkspaceID:    subscriptionDetails.WorkspaceID,
+		PeriodStart:    timeToPgtype(&periodStart),
+		PeriodEnd:      timeToPgtype(&periodEnd),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing invoice: %w", err)
+	}
+
+	if exists {
+		return nil, fmt.Errorf("invoice already exists for subscription %s for period %s to %s", 
+			subscriptionID, periodStart.Format("2006-01-02"), periodEnd.Format("2006-01-02"))
+	}
+
+	// Determine currency from base line item
+	var currency string
+	var subtotalCents int64
+	for _, row := range subscriptionRows {
+		if row.LineItemType == "base" {
+			currency = row.LineItemCurrency
+		}
+		subtotalCents += int64(row.TotalAmountInPennies)
+	}
+
+	// Generate invoice number
+	invoiceNumber, err := s.generateInvoiceNumber(ctx, subscriptionDetails.WorkspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate invoice number: %w", err)
+	}
+
+	// Calculate tax
+	taxCalculation, err := s.taxService.CalculateTax(ctx, params.TaxCalculationParams{
+		WorkspaceID:     subscriptionDetails.WorkspaceID,
+		CustomerID:      subscriptionDetails.CustomerID,
+		AmountCents:     subtotalCents,
+		Currency:        currency,
+		TransactionType: "subscription",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate tax: %w", err)
+	}
+
+	// Calculate total
+	totalAmount := subtotalCents + taxCalculation.TotalTaxCents
+
+	// Set due date (30 days from period end)
+	dueDate := periodEnd.AddDate(0, 0, 30)
+
+	// Determine status
+	status := "draft"
+	if !isDraft {
+		status = "open"
+	}
+
+	// Convert tax details to JSON
+	taxDetailsJSON, err := json.Marshal(taxCalculation.TaxBreakdown)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal tax details: %w", err)
+	}
+
+	// Create invoice
+	invoice, err := s.queries.CreateInvoiceWithDetails(ctx, db.CreateInvoiceWithDetailsParams{
+		WorkspaceID:            subscriptionDetails.WorkspaceID,
+		CustomerID:             pgtype.UUID{Bytes: subscriptionDetails.CustomerID, Valid: true},
+		SubscriptionID:         pgtype.UUID{Bytes: subscriptionID, Valid: true},
+		InvoiceNumber:          pgtype.Text{String: invoiceNumber, Valid: true},
+		Status:                 status,
+		AmountDue:              int32(totalAmount),
+		Currency:               currency,
+		SubtotalCents:          pgtype.Int8{Int64: subtotalCents, Valid: true},
+		DiscountCents:          pgtype.Int8{Int64: 0, Valid: true},
+		TaxAmountCents:         taxCalculation.TotalTaxCents,
+		TaxDetails:             taxDetailsJSON,
+		DueDate:                timeToPgtype(&dueDate),
+		CustomerTaxID:          pgtype.Text{String: subscriptionDetails.TaxID.String, Valid: subscriptionDetails.TaxID.Valid},
+		CustomerJurisdictionID: pgtype.UUID{Valid: false},
+		ReverseChargeApplies:   pgtype.Bool{Bool: false, Valid: true},
+		Metadata:               []byte(`{"generated_from": "subscription"}`),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create invoice: %w", err)
+	}
+
+	// Create line items from subscription line items
+	for _, row := range subscriptionRows {
+		description := fmt.Sprintf("%s - %s", row.ProductName.String, row.ProductDescription.String)
+		if row.LineItemType == "addon" {
+			description = fmt.Sprintf("Add-on: %s", description)
+		}
+
+		quantity := pgtype.Numeric{}
+		if err := quantity.Scan(fmt.Sprintf("%d", row.Quantity)); err != nil {
+			return nil, fmt.Errorf("failed to convert quantity: %w", err)
+		}
+
+		_, err = s.queries.CreateInvoiceLineItemFromSubscription(ctx, db.CreateInvoiceLineItemFromSubscriptionParams{
+			InvoiceID:         invoice.ID,
+			SubscriptionID:    pgtype.UUID{Bytes: subscriptionID, Valid: true},
+			ProductID:         pgtype.UUID{Bytes: row.ProductID, Valid: true},
+			Description:       description,
+			Quantity:          quantity,
+			UnitAmountInCents: int64(row.UnitAmountInPennies),
+			AmountInCents:     int64(row.TotalAmountInPennies),
+			FiatCurrency:      row.LineItemCurrency,
+			LineItemType:      pgtype.Text{String: "product", Valid: true},
+			PeriodStart:       timeToPgtype(&periodStart),
+			PeriodEnd:         timeToPgtype(&periodEnd),
+			Metadata:          []byte(fmt.Sprintf(`{"line_item_type": "%s"}`, row.LineItemType)),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create line item for product %s: %w", row.ProductID, err)
+		}
+	}
+
+	// Add tax line items
+	for _, taxDetail := range taxCalculation.TaxBreakdown {
+		quantity := pgtype.Numeric{}
+		if err := quantity.Scan("1"); err != nil {
+			return nil, fmt.Errorf("failed to convert tax quantity: %w", err)
+		}
+
+		_, err = s.queries.CreateInvoiceLineItem(ctx, db.CreateInvoiceLineItemParams{
+			InvoiceID:         invoice.ID,
+			Description:       fmt.Sprintf("Tax (%s)", taxDetail.Description),
+			Quantity:          quantity,
+			UnitAmountInCents: taxDetail.TaxAmountCents,
+			AmountInCents:     taxDetail.TaxAmountCents,
+			FiatCurrency:      currency,
+			LineItemType:      pgtype.Text{String: "tax", Valid: true},
+			SubscriptionID:    pgtype.UUID{Bytes: subscriptionID, Valid: true},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create tax line item: %w", err)
+		}
+	}
+
+	// Get the created invoice with line items
+	return s.GetInvoiceWithDetails(ctx, invoice.WorkspaceID, invoice.ID)
+}
+
 // FinalizeInvoice marks an invoice as finalized and ready for payment
 func (s *InvoiceService) FinalizeInvoice(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error) {
 	// Get current invoice
@@ -324,6 +498,138 @@ func (s *InvoiceService) FinalizeInvoice(ctx context.Context, workspaceID, invoi
 	}
 
 	return &updatedInvoice, nil
+}
+
+// VoidInvoice marks an invoice as void
+func (s *InvoiceService) VoidInvoice(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error) {
+	// Void the invoice
+	invoice, err := s.queries.VoidInvoice(ctx, db.VoidInvoiceParams{
+		ID:          invoiceID,
+		WorkspaceID: workspaceID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to void invoice: %w", err)
+	}
+
+	s.logger.Info("Invoice voided",
+		zap.String("invoice_id", invoiceID.String()),
+		zap.String("workspace_id", workspaceID.String()))
+
+	return &invoice, nil
+}
+
+// MarkInvoicePaid marks an invoice as paid
+func (s *InvoiceService) MarkInvoicePaid(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error) {
+	// Mark the invoice as paid
+	invoice, err := s.queries.MarkInvoicePaid(ctx, db.MarkInvoicePaidParams{
+		ID:          invoiceID,
+		WorkspaceID: workspaceID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to mark invoice as paid: %w", err)
+	}
+
+	s.logger.Info("Invoice marked as paid",
+		zap.String("invoice_id", invoiceID.String()),
+		zap.String("workspace_id", workspaceID.String()),
+		zap.Time("paid_at", invoice.PaidAt.Time))
+
+	return &invoice, nil
+}
+
+// CreateInvoiceLineItemsFromSubscription creates invoice line items from subscription line items
+func (s *InvoiceService) CreateInvoiceLineItemsFromSubscription(ctx context.Context, invoiceID, subscriptionID uuid.UUID, periodStart, periodEnd time.Time) error {
+	// Get subscription with line items
+	subscriptionRows, err := s.queries.GetSubscriptionWithLineItems(ctx, subscriptionID)
+	if err != nil {
+		return fmt.Errorf("failed to get subscription with line items: %w", err)
+	}
+
+	if len(subscriptionRows) == 0 {
+		return fmt.Errorf("subscription %s has no active line items", subscriptionID)
+	}
+
+	// Get invoice to verify it exists and get currency
+	invoice, err := s.queries.GetInvoiceByID(ctx, db.GetInvoiceByIDParams{
+		ID:          invoiceID,
+		WorkspaceID: subscriptionRows[0].WorkspaceID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get invoice: %w", err)
+	}
+
+	// Create line items from subscription line items
+	for _, row := range subscriptionRows {
+		description := fmt.Sprintf("%s - %s", row.ProductName.String, row.ProductDescription.String)
+		if row.LineItemType == "addon" {
+			description = fmt.Sprintf("Add-on: %s", description)
+		}
+
+		quantity := pgtype.Numeric{}
+		if err := quantity.Scan(fmt.Sprintf("%d", row.Quantity)); err != nil {
+			return fmt.Errorf("failed to convert quantity: %w", err)
+		}
+
+		_, err = s.queries.CreateInvoiceLineItemFromSubscription(ctx, db.CreateInvoiceLineItemFromSubscriptionParams{
+			InvoiceID:         invoiceID,
+			SubscriptionID:    pgtype.UUID{Bytes: subscriptionID, Valid: true},
+			ProductID:         pgtype.UUID{Bytes: row.ProductID, Valid: true},
+			Description:       description,
+			Quantity:          quantity,
+			UnitAmountInCents: int64(row.UnitAmountInPennies),
+			AmountInCents:     int64(row.TotalAmountInPennies),
+			FiatCurrency:      invoice.Currency,
+			LineItemType:      pgtype.Text{String: "product", Valid: true},
+			PeriodStart:       timeToPgtype(&periodStart),
+			PeriodEnd:         timeToPgtype(&periodEnd),
+			Metadata:          []byte(fmt.Sprintf(`{"line_item_type": "%s"}`, row.LineItemType)),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create line item for product %s: %w", row.ProductID, err)
+		}
+	}
+
+	return nil
+}
+
+// GeneratePendingInvoices generates invoices for all subscriptions that are due
+func (s *InvoiceService) GeneratePendingInvoices(ctx context.Context, lookAheadDays int) ([]uuid.UUID, error) {
+	// Calculate look-ahead date
+	lookAheadDate := time.Now().AddDate(0, 0, lookAheadDays)
+	
+	// Get pending subscriptions
+	pendingSubscriptions, err := s.queries.GetPendingInvoicesForGeneration(ctx, pgtype.Timestamptz{
+		Time:  lookAheadDate,
+		Valid: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pending subscriptions: %w", err)
+	}
+
+	var generatedInvoiceIDs []uuid.UUID
+	for _, sub := range pendingSubscriptions {
+		// Calculate period dates
+		periodStart := sub.CurrentPeriodEnd.Time
+		periodEnd := sub.NextRedemptionDate.Time
+
+		// Generate invoice
+		invoice, err := s.GenerateInvoiceFromSubscription(ctx, sub.SubscriptionID, periodStart, periodEnd, false)
+		if err != nil {
+			s.logger.Error("Failed to generate invoice for subscription",
+				zap.String("subscription_id", sub.SubscriptionID.String()),
+				zap.Error(err))
+			continue
+		}
+
+		generatedInvoiceIDs = append(generatedInvoiceIDs, invoice.ID)
+		
+		s.logger.Info("Generated invoice for subscription",
+			zap.String("subscription_id", sub.SubscriptionID.String()),
+			zap.String("invoice_id", invoice.ID.String()),
+			zap.String("invoice_number", invoice.InvoiceNumber))
+	}
+
+	return generatedInvoiceIDs, nil
 }
 
 // Helper functions

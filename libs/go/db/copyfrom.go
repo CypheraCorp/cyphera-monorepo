@@ -9,6 +9,90 @@ import (
 	"context"
 )
 
+// iteratorForBatchCreateSubscriptionLineItems implements pgx.CopyFromSource.
+type iteratorForBatchCreateSubscriptionLineItems struct {
+	rows                 []BatchCreateSubscriptionLineItemsParams
+	skippedFirstNextCall bool
+}
+
+func (r *iteratorForBatchCreateSubscriptionLineItems) Next() bool {
+	if len(r.rows) == 0 {
+		return false
+	}
+	if !r.skippedFirstNextCall {
+		r.skippedFirstNextCall = true
+		return true
+	}
+	r.rows = r.rows[1:]
+	return len(r.rows) > 0
+}
+
+func (r iteratorForBatchCreateSubscriptionLineItems) Values() ([]interface{}, error) {
+	return []interface{}{
+		r.rows[0].SubscriptionID,
+		r.rows[0].ProductID,
+		r.rows[0].LineItemType,
+		r.rows[0].Quantity,
+		r.rows[0].UnitAmountInPennies,
+		r.rows[0].Currency,
+		r.rows[0].PriceType,
+		r.rows[0].IntervalType,
+		r.rows[0].TotalAmountInPennies,
+		r.rows[0].IsActive,
+		r.rows[0].Metadata,
+	}, nil
+}
+
+func (r iteratorForBatchCreateSubscriptionLineItems) Err() error {
+	return nil
+}
+
+func (q *Queries) BatchCreateSubscriptionLineItems(ctx context.Context, arg []BatchCreateSubscriptionLineItemsParams) (int64, error) {
+	return q.db.CopyFrom(ctx, []string{"subscription_line_items"}, []string{"subscription_id", "product_id", "line_item_type", "quantity", "unit_amount_in_pennies", "currency", "price_type", "interval_type", "total_amount_in_pennies", "is_active", "metadata"}, &iteratorForBatchCreateSubscriptionLineItems{rows: arg})
+}
+
+// iteratorForBulkCreateInvoiceLineItemsFromSubscription implements pgx.CopyFromSource.
+type iteratorForBulkCreateInvoiceLineItemsFromSubscription struct {
+	rows                 []BulkCreateInvoiceLineItemsFromSubscriptionParams
+	skippedFirstNextCall bool
+}
+
+func (r *iteratorForBulkCreateInvoiceLineItemsFromSubscription) Next() bool {
+	if len(r.rows) == 0 {
+		return false
+	}
+	if !r.skippedFirstNextCall {
+		r.skippedFirstNextCall = true
+		return true
+	}
+	r.rows = r.rows[1:]
+	return len(r.rows) > 0
+}
+
+func (r iteratorForBulkCreateInvoiceLineItemsFromSubscription) Values() ([]interface{}, error) {
+	return []interface{}{
+		r.rows[0].InvoiceID,
+		r.rows[0].SubscriptionID,
+		r.rows[0].ProductID,
+		r.rows[0].Description,
+		r.rows[0].Quantity,
+		r.rows[0].UnitAmountInCents,
+		r.rows[0].AmountInCents,
+		r.rows[0].FiatCurrency,
+		r.rows[0].LineItemType,
+		r.rows[0].PeriodStart,
+		r.rows[0].PeriodEnd,
+	}, nil
+}
+
+func (r iteratorForBulkCreateInvoiceLineItemsFromSubscription) Err() error {
+	return nil
+}
+
+func (q *Queries) BulkCreateInvoiceLineItemsFromSubscription(ctx context.Context, arg []BulkCreateInvoiceLineItemsFromSubscriptionParams) (int64, error) {
+	return q.db.CopyFrom(ctx, []string{"invoice_line_items"}, []string{"invoice_id", "subscription_id", "product_id", "description", "quantity", "unit_amount_in_cents", "amount_in_cents", "fiat_currency", "line_item_type", "period_start", "period_end"}, &iteratorForBulkCreateInvoiceLineItemsFromSubscription{rows: arg})
+}
+
 // iteratorForCreateInvoiceLineItemBatch implements pgx.CopyFromSource.
 type iteratorForCreateInvoiceLineItemBatch struct {
 	rows                 []CreateInvoiceLineItemBatchParams

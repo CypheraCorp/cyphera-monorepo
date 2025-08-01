@@ -15,6 +15,15 @@ export interface SubscribeRequest {
   product_token_id: string;
   token_amount: string;
   delegation: Delegation;
+  addons?: SubscriptionAddonRequest[];
+}
+
+/**
+ * Subscription addon request
+ */
+export interface SubscriptionAddonRequest {
+  product_id: string;
+  quantity: number;
 }
 
 /**
@@ -31,6 +40,27 @@ export interface SubscriptionCustomer {
   metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Subscription line item response
+ */
+export interface SubscriptionLineItemResponse {
+  id: string;
+  subscription_id: string;
+  product_id: string;
+  line_item_type: 'base' | 'addon';
+  quantity: number;
+  unit_amount_in_pennies: number;
+  currency: string;
+  price_type: string;
+  interval_type?: string;
+  total_amount_in_pennies: number;
+  is_active: boolean;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  product?: ProductResponse;
 }
 
 /**
@@ -62,4 +92,5 @@ export interface SubscriptionResponse {
   };
   product: ProductResponse;
   product_token: ProductTokenResponse;
+  line_items?: SubscriptionLineItemResponse[];
 }

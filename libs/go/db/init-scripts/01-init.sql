@@ -368,6 +368,39 @@ CREATE TABLE products_tokens (
     UNIQUE(product_id, network_id, token_id)
 );
 
+-- Product Addon Relationships table
+-- Manages the relationships between base products and their available addons
+CREATE TABLE product_addon_relationships (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    base_product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    addon_product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    
+    -- Relationship details
+    is_required BOOLEAN DEFAULT FALSE, -- Whether this addon is required with the base product
+    max_quantity INTEGER, -- Maximum quantity allowed (NULL = unlimited)
+    min_quantity INTEGER DEFAULT 0, -- Minimum quantity required
+    
+    -- Display order
+    display_order INTEGER DEFAULT 0,
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}'::jsonb,
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Ensure unique relationships
+    UNIQUE(base_product_id, addon_product_id),
+    -- Ensure base products can't be addons to themselves
+    CONSTRAINT different_products CHECK (base_product_id != addon_product_id),
+    -- Ensure min/max quantity constraints are valid
+    CONSTRAINT valid_quantity_range CHECK (
+        (max_quantity IS NULL OR max_quantity > 0) AND
+        min_quantity >= 0 AND
+        (max_quantity IS NULL OR min_quantity <= max_quantity)
+    )
+);
+
 -- Delegation Data table (no dependencies)
 CREATE TABLE delegation_data (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -426,6 +459,39 @@ CREATE TABLE subscription_events (
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Subscription Line Items table
+-- Tracks individual line items within a subscription (base product + addons)
+CREATE TABLE subscription_line_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+    product_id UUID NOT NULL REFERENCES products(id),
+    
+    -- Line item details
+    line_item_type VARCHAR(50) NOT NULL DEFAULT 'base', -- 'base' or 'addon'
+    quantity INTEGER NOT NULL DEFAULT 1,
+    
+    -- Pricing at time of subscription (snapshot)
+    unit_amount_in_pennies INTEGER NOT NULL,
+    currency VARCHAR(3) NOT NULL REFERENCES fiat_currencies(code),
+    price_type price_type NOT NULL,
+    interval_type interval_type,
+    
+    -- Total calculation
+    total_amount_in_pennies INTEGER NOT NULL, -- quantity * unit_amount
+    
+    -- Status
+    is_active BOOLEAN DEFAULT TRUE,
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}'::jsonb,
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Ensure line item type matches product type
+    CONSTRAINT valid_line_item_type CHECK (line_item_type IN ('base', 'addon'))
 );
 
 -- Invoices table (NEW - for storing payment invoices from providers)
@@ -747,6 +813,11 @@ CREATE INDEX idx_products_tokens_token_id ON products_tokens(token_id);
 CREATE INDEX idx_products_tokens_active ON products_tokens(active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_tokens_composite ON products_tokens(product_id, network_id, active) WHERE deleted_at IS NULL;
 
+-- product_addon_relationships
+CREATE INDEX idx_product_addon_base ON product_addon_relationships(base_product_id);
+CREATE INDEX idx_product_addon_addon ON product_addon_relationships(addon_product_id);
+CREATE INDEX idx_product_addon_required ON product_addon_relationships(is_required) WHERE is_required = TRUE;
+
 -- delegation_data
 CREATE INDEX idx_delegation_data_delegator ON delegation_data(delegator);
 CREATE INDEX idx_delegation_data_delegate ON delegation_data(delegate);
@@ -770,6 +841,12 @@ CREATE INDEX idx_subscription_events_subscription_id ON subscription_events(subs
 CREATE INDEX idx_subscription_events_event_type ON subscription_events(event_type);
 CREATE INDEX idx_subscription_events_transaction_hash ON subscription_events(transaction_hash);
 CREATE INDEX idx_subscription_events_occurred_at ON subscription_events(occurred_at);
+
+-- subscription_line_items
+CREATE INDEX idx_subscription_line_items_subscription ON subscription_line_items(subscription_id);
+CREATE INDEX idx_subscription_line_items_product ON subscription_line_items(product_id);
+CREATE INDEX idx_subscription_line_items_type ON subscription_line_items(line_item_type);
+CREATE INDEX idx_subscription_line_items_active ON subscription_line_items(is_active) WHERE is_active = TRUE;
 
 -- failed_subscription_attempts
 CREATE INDEX idx_failed_subscription_attempts_customer_id ON failed_subscription_attempts(customer_id);
@@ -935,6 +1012,11 @@ CREATE TRIGGER set_products_tokens_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 
+CREATE TRIGGER set_product_addon_relationships_updated_at
+    BEFORE UPDATE ON product_addon_relationships
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
 CREATE TRIGGER set_delegation_data_updated_at
     BEFORE UPDATE ON delegation_data
     FOR EACH ROW
@@ -947,6 +1029,11 @@ CREATE TRIGGER set_subscriptions_updated_at
 
 CREATE TRIGGER set_subscription_events_updated_at
     BEFORE UPDATE ON subscription_events
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_subscription_line_items_updated_at
+    BEFORE UPDATE ON subscription_line_items
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 
@@ -1325,6 +1412,10 @@ ADD COLUMN IF NOT EXISTS reverse_charge_applies BOOLEAN DEFAULT FALSE;
 ALTER TABLE invoices 
 ADD CONSTRAINT unique_workspace_invoice_number 
 UNIQUE(workspace_id, invoice_number);
+
+-- Add currency to subscriptions table
+ALTER TABLE subscriptions
+ADD COLUMN IF NOT EXISTS currency VARCHAR(3) REFERENCES fiat_currencies(code);
 
 -- Update customers table for tax support
 ALTER TABLE customers 

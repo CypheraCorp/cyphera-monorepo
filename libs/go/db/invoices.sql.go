@@ -43,6 +43,38 @@ func (q *Queries) BulkUpdateInvoiceSyncStatus(ctx context.Context, arg BulkUpdat
 	return err
 }
 
+const checkInvoiceExistsForPeriod = `-- name: CheckInvoiceExistsForPeriod :one
+SELECT EXISTS (
+    SELECT 1 FROM invoices i
+    JOIN invoice_line_items ili ON i.id = ili.invoice_id
+    WHERE i.subscription_id = $1 
+    AND i.workspace_id = $2
+    AND ili.period_start = $3
+    AND ili.period_end = $4
+    AND i.deleted_at IS NULL
+    AND i.status != 'void'
+)
+`
+
+type CheckInvoiceExistsForPeriodParams struct {
+	SubscriptionID pgtype.UUID        `json:"subscription_id"`
+	WorkspaceID    uuid.UUID          `json:"workspace_id"`
+	PeriodStart    pgtype.Timestamptz `json:"period_start"`
+	PeriodEnd      pgtype.Timestamptz `json:"period_end"`
+}
+
+func (q *Queries) CheckInvoiceExistsForPeriod(ctx context.Context, arg CheckInvoiceExistsForPeriodParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkInvoiceExistsForPeriod,
+		arg.SubscriptionID,
+		arg.WorkspaceID,
+		arg.PeriodStart,
+		arg.PeriodEnd,
+	)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const countInvoicesByProvider = `-- name: CountInvoicesByProvider :one
 SELECT COUNT(*) FROM invoices 
 WHERE workspace_id = $1 AND payment_provider = $2 AND deleted_at IS NULL
@@ -1025,6 +1057,68 @@ func (q *Queries) GetOverdueInvoices(ctx context.Context, arg GetOverdueInvoices
 	return items, nil
 }
 
+const getPendingInvoicesForGeneration = `-- name: GetPendingInvoicesForGeneration :many
+SELECT DISTINCT
+    s.id as subscription_id,
+    s.workspace_id,
+    s.customer_id,
+    s.next_redemption_date,
+    s.current_period_end,
+    s.total_amount_in_cents,
+    sli.currency
+FROM subscriptions s
+JOIN subscription_line_items sli ON s.id = sli.subscription_id AND sli.line_item_type = 'base' AND sli.is_active = true
+WHERE s.status = 'active'
+AND s.next_redemption_date <= $1  -- Within look-ahead period
+AND s.deleted_at IS NULL
+AND NOT EXISTS (
+    SELECT 1 FROM invoices i
+    WHERE i.subscription_id = s.id
+    AND i.status != 'void'
+    AND i.created_at >= s.current_period_start
+    AND i.deleted_at IS NULL
+)
+ORDER BY s.next_redemption_date
+`
+
+type GetPendingInvoicesForGenerationRow struct {
+	SubscriptionID     uuid.UUID          `json:"subscription_id"`
+	WorkspaceID        uuid.UUID          `json:"workspace_id"`
+	CustomerID         uuid.UUID          `json:"customer_id"`
+	NextRedemptionDate pgtype.Timestamptz `json:"next_redemption_date"`
+	CurrentPeriodEnd   pgtype.Timestamptz `json:"current_period_end"`
+	TotalAmountInCents int32              `json:"total_amount_in_cents"`
+	Currency           string             `json:"currency"`
+}
+
+func (q *Queries) GetPendingInvoicesForGeneration(ctx context.Context, nextRedemptionDate pgtype.Timestamptz) ([]GetPendingInvoicesForGenerationRow, error) {
+	rows, err := q.db.Query(ctx, getPendingInvoicesForGeneration, nextRedemptionDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPendingInvoicesForGenerationRow{}
+	for rows.Next() {
+		var i GetPendingInvoicesForGenerationRow
+		if err := rows.Scan(
+			&i.SubscriptionID,
+			&i.WorkspaceID,
+			&i.CustomerID,
+			&i.NextRedemptionDate,
+			&i.CurrentPeriodEnd,
+			&i.TotalAmountInCents,
+			&i.Currency,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getRecentInvoices = `-- name: GetRecentInvoices :many
 SELECT id, workspace_id, customer_id, subscription_id, external_id, external_customer_id, external_subscription_id, status, collection_method, amount_due, amount_paid, amount_remaining, currency, due_date, paid_at, created_date, invoice_pdf, hosted_invoice_url, charge_id, payment_intent_id, line_items, tax_amount, total_tax_amounts, billing_reason, paid_out_of_band, payment_provider, payment_sync_status, payment_synced_at, attempt_count, next_payment_attempt, metadata, created_at, updated_at, deleted_at, invoice_number, subtotal_cents, discount_cents, payment_link_id, delegation_address, qr_code_data, tax_amount_cents, tax_details, customer_tax_id, customer_jurisdiction_id, reverse_charge_applies FROM invoices 
 WHERE workspace_id = $1 
@@ -1101,6 +1195,230 @@ func (q *Queries) GetRecentInvoices(ctx context.Context, arg GetRecentInvoicesPa
 			&i.CustomerTaxID,
 			&i.CustomerJurisdictionID,
 			&i.ReverseChargeApplies,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSubscriptionForInvoicing = `-- name: GetSubscriptionForInvoicing :one
+SELECT 
+    s.id, s.num_id, s.customer_id, s.product_id, s.workspace_id, s.product_token_id, s.external_id, s.token_amount, s.delegation_id, s.customer_wallet_id, s.status, s.current_period_start, s.current_period_end, s.next_redemption_date, s.total_redemptions, s.total_amount_in_cents, s.metadata, s.payment_sync_status, s.payment_synced_at, s.payment_sync_version, s.payment_provider, s.created_at, s.updated_at, s.deleted_at, s.currency, s.cancel_at, s.cancelled_at, s.cancellation_reason, s.paused_at, s.pause_ends_at, s.trial_start, s.trial_end,
+    c.id as cust_id,
+    c.name as customer_name,
+    c.email as customer_email,
+    c.is_business,
+    c.business_name,
+    c.tax_id,
+    c.billing_country,
+    c.billing_state,
+    c.billing_city,
+    c.billing_postal_code,
+    w.id as wallet_id,
+    w.wallet_address
+FROM subscriptions s
+JOIN customers c ON s.customer_id = c.id
+LEFT JOIN customer_wallets cw ON s.customer_wallet_id = cw.id
+LEFT JOIN wallets w ON cw.wallet_id = w.id
+WHERE s.id = $1
+AND s.deleted_at IS NULL
+`
+
+type GetSubscriptionForInvoicingRow struct {
+	ID                 uuid.UUID          `json:"id"`
+	NumID              int64              `json:"num_id"`
+	CustomerID         uuid.UUID          `json:"customer_id"`
+	ProductID          uuid.UUID          `json:"product_id"`
+	WorkspaceID        uuid.UUID          `json:"workspace_id"`
+	ProductTokenID     uuid.UUID          `json:"product_token_id"`
+	ExternalID         pgtype.Text        `json:"external_id"`
+	TokenAmount        int32              `json:"token_amount"`
+	DelegationID       uuid.UUID          `json:"delegation_id"`
+	CustomerWalletID   pgtype.UUID        `json:"customer_wallet_id"`
+	Status             SubscriptionStatus `json:"status"`
+	CurrentPeriodStart pgtype.Timestamptz `json:"current_period_start"`
+	CurrentPeriodEnd   pgtype.Timestamptz `json:"current_period_end"`
+	NextRedemptionDate pgtype.Timestamptz `json:"next_redemption_date"`
+	TotalRedemptions   int32              `json:"total_redemptions"`
+	TotalAmountInCents int32              `json:"total_amount_in_cents"`
+	Metadata           []byte             `json:"metadata"`
+	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider    pgtype.Text        `json:"payment_provider"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	Currency           pgtype.Text        `json:"currency"`
+	CancelAt           pgtype.Timestamptz `json:"cancel_at"`
+	CancelledAt        pgtype.Timestamptz `json:"cancelled_at"`
+	CancellationReason pgtype.Text        `json:"cancellation_reason"`
+	PausedAt           pgtype.Timestamptz `json:"paused_at"`
+	PauseEndsAt        pgtype.Timestamptz `json:"pause_ends_at"`
+	TrialStart         pgtype.Timestamptz `json:"trial_start"`
+	TrialEnd           pgtype.Timestamptz `json:"trial_end"`
+	CustID             uuid.UUID          `json:"cust_id"`
+	CustomerName       pgtype.Text        `json:"customer_name"`
+	CustomerEmail      pgtype.Text        `json:"customer_email"`
+	IsBusiness         pgtype.Bool        `json:"is_business"`
+	BusinessName       pgtype.Text        `json:"business_name"`
+	TaxID              pgtype.Text        `json:"tax_id"`
+	BillingCountry     pgtype.Text        `json:"billing_country"`
+	BillingState       pgtype.Text        `json:"billing_state"`
+	BillingCity        pgtype.Text        `json:"billing_city"`
+	BillingPostalCode  pgtype.Text        `json:"billing_postal_code"`
+	WalletID           pgtype.UUID        `json:"wallet_id"`
+	WalletAddress      pgtype.Text        `json:"wallet_address"`
+}
+
+func (q *Queries) GetSubscriptionForInvoicing(ctx context.Context, id uuid.UUID) (GetSubscriptionForInvoicingRow, error) {
+	row := q.db.QueryRow(ctx, getSubscriptionForInvoicing, id)
+	var i GetSubscriptionForInvoicingRow
+	err := row.Scan(
+		&i.ID,
+		&i.NumID,
+		&i.CustomerID,
+		&i.ProductID,
+		&i.WorkspaceID,
+		&i.ProductTokenID,
+		&i.ExternalID,
+		&i.TokenAmount,
+		&i.DelegationID,
+		&i.CustomerWalletID,
+		&i.Status,
+		&i.CurrentPeriodStart,
+		&i.CurrentPeriodEnd,
+		&i.NextRedemptionDate,
+		&i.TotalRedemptions,
+		&i.TotalAmountInCents,
+		&i.Metadata,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.Currency,
+		&i.CancelAt,
+		&i.CancelledAt,
+		&i.CancellationReason,
+		&i.PausedAt,
+		&i.PauseEndsAt,
+		&i.TrialStart,
+		&i.TrialEnd,
+		&i.CustID,
+		&i.CustomerName,
+		&i.CustomerEmail,
+		&i.IsBusiness,
+		&i.BusinessName,
+		&i.TaxID,
+		&i.BillingCountry,
+		&i.BillingState,
+		&i.BillingCity,
+		&i.BillingPostalCode,
+		&i.WalletID,
+		&i.WalletAddress,
+	)
+	return i, err
+}
+
+const getSubscriptionWithLineItems = `-- name: GetSubscriptionWithLineItems :many
+SELECT 
+    s.id as subscription_id,
+    s.workspace_id,
+    s.customer_id,
+    s.status as subscription_status,
+    s.current_period_start,
+    s.current_period_end,
+    s.next_redemption_date,
+    s.total_amount_in_cents,
+    sli.id as line_item_id,
+    sli.product_id,
+    sli.quantity,
+    sli.unit_amount_in_pennies,
+    sli.total_amount_in_pennies,
+    sli.line_item_type,
+    sli.currency as line_item_currency,
+    sli.price_type,
+    sli.interval_type as line_item_interval_type,
+    p.name as product_name,
+    p.description as product_description,
+    p.product_type,
+    p.interval_type as product_interval_type,
+    p.term_length
+FROM subscriptions s
+JOIN subscription_line_items sli ON s.id = sli.subscription_id
+LEFT JOIN products p ON sli.product_id = p.id
+WHERE s.id = $1 
+AND sli.is_active = true
+ORDER BY 
+    CASE WHEN sli.line_item_type = 'base' THEN 0 ELSE 1 END,
+    sli.created_at
+`
+
+type GetSubscriptionWithLineItemsRow struct {
+	SubscriptionID       uuid.UUID          `json:"subscription_id"`
+	WorkspaceID          uuid.UUID          `json:"workspace_id"`
+	CustomerID           uuid.UUID          `json:"customer_id"`
+	SubscriptionStatus   SubscriptionStatus `json:"subscription_status"`
+	CurrentPeriodStart   pgtype.Timestamptz `json:"current_period_start"`
+	CurrentPeriodEnd     pgtype.Timestamptz `json:"current_period_end"`
+	NextRedemptionDate   pgtype.Timestamptz `json:"next_redemption_date"`
+	TotalAmountInCents   int32              `json:"total_amount_in_cents"`
+	LineItemID           uuid.UUID          `json:"line_item_id"`
+	ProductID            uuid.UUID          `json:"product_id"`
+	Quantity             int32              `json:"quantity"`
+	UnitAmountInPennies  int32              `json:"unit_amount_in_pennies"`
+	TotalAmountInPennies int32              `json:"total_amount_in_pennies"`
+	LineItemType         string             `json:"line_item_type"`
+	LineItemCurrency     string             `json:"line_item_currency"`
+	PriceType            PriceType          `json:"price_type"`
+	LineItemIntervalType NullIntervalType   `json:"line_item_interval_type"`
+	ProductName          pgtype.Text        `json:"product_name"`
+	ProductDescription   pgtype.Text        `json:"product_description"`
+	ProductType          pgtype.Text        `json:"product_type"`
+	ProductIntervalType  NullIntervalType   `json:"product_interval_type"`
+	TermLength           pgtype.Int4        `json:"term_length"`
+}
+
+func (q *Queries) GetSubscriptionWithLineItems(ctx context.Context, id uuid.UUID) ([]GetSubscriptionWithLineItemsRow, error) {
+	rows, err := q.db.Query(ctx, getSubscriptionWithLineItems, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetSubscriptionWithLineItemsRow{}
+	for rows.Next() {
+		var i GetSubscriptionWithLineItemsRow
+		if err := rows.Scan(
+			&i.SubscriptionID,
+			&i.WorkspaceID,
+			&i.CustomerID,
+			&i.SubscriptionStatus,
+			&i.CurrentPeriodStart,
+			&i.CurrentPeriodEnd,
+			&i.NextRedemptionDate,
+			&i.TotalAmountInCents,
+			&i.LineItemID,
+			&i.ProductID,
+			&i.Quantity,
+			&i.UnitAmountInPennies,
+			&i.TotalAmountInPennies,
+			&i.LineItemType,
+			&i.LineItemCurrency,
+			&i.PriceType,
+			&i.LineItemIntervalType,
+			&i.ProductName,
+			&i.ProductDescription,
+			&i.ProductType,
+			&i.ProductIntervalType,
+			&i.TermLength,
 		); err != nil {
 			return nil, err
 		}
@@ -1765,6 +2083,77 @@ func (q *Queries) ListInvoicesByWorkspace(ctx context.Context, arg ListInvoicesB
 	return items, nil
 }
 
+const markInvoicePaid = `-- name: MarkInvoicePaid :one
+UPDATE invoices SET
+    status = 'paid',
+    amount_paid = amount_due,
+    amount_remaining = 0,
+    paid_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND workspace_id = $2 
+AND status = 'open'
+AND deleted_at IS NULL
+RETURNING id, workspace_id, customer_id, subscription_id, external_id, external_customer_id, external_subscription_id, status, collection_method, amount_due, amount_paid, amount_remaining, currency, due_date, paid_at, created_date, invoice_pdf, hosted_invoice_url, charge_id, payment_intent_id, line_items, tax_amount, total_tax_amounts, billing_reason, paid_out_of_band, payment_provider, payment_sync_status, payment_synced_at, attempt_count, next_payment_attempt, metadata, created_at, updated_at, deleted_at, invoice_number, subtotal_cents, discount_cents, payment_link_id, delegation_address, qr_code_data, tax_amount_cents, tax_details, customer_tax_id, customer_jurisdiction_id, reverse_charge_applies
+`
+
+type MarkInvoicePaidParams struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) MarkInvoicePaid(ctx context.Context, arg MarkInvoicePaidParams) (Invoice, error) {
+	row := q.db.QueryRow(ctx, markInvoicePaid, arg.ID, arg.WorkspaceID)
+	var i Invoice
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.CustomerID,
+		&i.SubscriptionID,
+		&i.ExternalID,
+		&i.ExternalCustomerID,
+		&i.ExternalSubscriptionID,
+		&i.Status,
+		&i.CollectionMethod,
+		&i.AmountDue,
+		&i.AmountPaid,
+		&i.AmountRemaining,
+		&i.Currency,
+		&i.DueDate,
+		&i.PaidAt,
+		&i.CreatedDate,
+		&i.InvoicePdf,
+		&i.HostedInvoiceUrl,
+		&i.ChargeID,
+		&i.PaymentIntentID,
+		&i.LineItems,
+		&i.TaxAmount,
+		&i.TotalTaxAmounts,
+		&i.BillingReason,
+		&i.PaidOutOfBand,
+		&i.PaymentProvider,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.AttemptCount,
+		&i.NextPaymentAttempt,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.InvoiceNumber,
+		&i.SubtotalCents,
+		&i.DiscountCents,
+		&i.PaymentLinkID,
+		&i.DelegationAddress,
+		&i.QrCodeData,
+		&i.TaxAmountCents,
+		&i.TaxDetails,
+		&i.CustomerTaxID,
+		&i.CustomerJurisdictionID,
+		&i.ReverseChargeApplies,
+	)
+	return i, err
+}
+
 const updateInvoice = `-- name: UpdateInvoice :one
 UPDATE invoices SET
     customer_id = $3,
@@ -2125,6 +2514,73 @@ func (q *Queries) UpdateInvoiceQRCode(ctx context.Context, arg UpdateInvoiceQRCo
 	return i, err
 }
 
+const updateInvoiceStatus = `-- name: UpdateInvoiceStatus :one
+UPDATE invoices SET
+    status = $3,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+RETURNING id, workspace_id, customer_id, subscription_id, external_id, external_customer_id, external_subscription_id, status, collection_method, amount_due, amount_paid, amount_remaining, currency, due_date, paid_at, created_date, invoice_pdf, hosted_invoice_url, charge_id, payment_intent_id, line_items, tax_amount, total_tax_amounts, billing_reason, paid_out_of_band, payment_provider, payment_sync_status, payment_synced_at, attempt_count, next_payment_attempt, metadata, created_at, updated_at, deleted_at, invoice_number, subtotal_cents, discount_cents, payment_link_id, delegation_address, qr_code_data, tax_amount_cents, tax_details, customer_tax_id, customer_jurisdiction_id, reverse_charge_applies
+`
+
+type UpdateInvoiceStatusParams struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+	Status      string    `json:"status"`
+}
+
+func (q *Queries) UpdateInvoiceStatus(ctx context.Context, arg UpdateInvoiceStatusParams) (Invoice, error) {
+	row := q.db.QueryRow(ctx, updateInvoiceStatus, arg.ID, arg.WorkspaceID, arg.Status)
+	var i Invoice
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.CustomerID,
+		&i.SubscriptionID,
+		&i.ExternalID,
+		&i.ExternalCustomerID,
+		&i.ExternalSubscriptionID,
+		&i.Status,
+		&i.CollectionMethod,
+		&i.AmountDue,
+		&i.AmountPaid,
+		&i.AmountRemaining,
+		&i.Currency,
+		&i.DueDate,
+		&i.PaidAt,
+		&i.CreatedDate,
+		&i.InvoicePdf,
+		&i.HostedInvoiceUrl,
+		&i.ChargeID,
+		&i.PaymentIntentID,
+		&i.LineItems,
+		&i.TaxAmount,
+		&i.TotalTaxAmounts,
+		&i.BillingReason,
+		&i.PaidOutOfBand,
+		&i.PaymentProvider,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.AttemptCount,
+		&i.NextPaymentAttempt,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.InvoiceNumber,
+		&i.SubtotalCents,
+		&i.DiscountCents,
+		&i.PaymentLinkID,
+		&i.DelegationAddress,
+		&i.QrCodeData,
+		&i.TaxAmountCents,
+		&i.TaxDetails,
+		&i.CustomerTaxID,
+		&i.CustomerJurisdictionID,
+		&i.ReverseChargeApplies,
+	)
+	return i, err
+}
+
 const updateInvoiceSyncStatus = `-- name: UpdateInvoiceSyncStatus :one
 UPDATE invoices SET
     payment_sync_status = $3,
@@ -2330,6 +2786,74 @@ func (q *Queries) UpsertInvoice(ctx context.Context, arg UpsertInvoiceParams) (I
 		arg.NextPaymentAttempt,
 		arg.Metadata,
 	)
+	var i Invoice
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.CustomerID,
+		&i.SubscriptionID,
+		&i.ExternalID,
+		&i.ExternalCustomerID,
+		&i.ExternalSubscriptionID,
+		&i.Status,
+		&i.CollectionMethod,
+		&i.AmountDue,
+		&i.AmountPaid,
+		&i.AmountRemaining,
+		&i.Currency,
+		&i.DueDate,
+		&i.PaidAt,
+		&i.CreatedDate,
+		&i.InvoicePdf,
+		&i.HostedInvoiceUrl,
+		&i.ChargeID,
+		&i.PaymentIntentID,
+		&i.LineItems,
+		&i.TaxAmount,
+		&i.TotalTaxAmounts,
+		&i.BillingReason,
+		&i.PaidOutOfBand,
+		&i.PaymentProvider,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.AttemptCount,
+		&i.NextPaymentAttempt,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.InvoiceNumber,
+		&i.SubtotalCents,
+		&i.DiscountCents,
+		&i.PaymentLinkID,
+		&i.DelegationAddress,
+		&i.QrCodeData,
+		&i.TaxAmountCents,
+		&i.TaxDetails,
+		&i.CustomerTaxID,
+		&i.CustomerJurisdictionID,
+		&i.ReverseChargeApplies,
+	)
+	return i, err
+}
+
+const voidInvoice = `-- name: VoidInvoice :one
+UPDATE invoices SET
+    status = 'void',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND workspace_id = $2 
+AND status IN ('draft', 'open')
+AND deleted_at IS NULL
+RETURNING id, workspace_id, customer_id, subscription_id, external_id, external_customer_id, external_subscription_id, status, collection_method, amount_due, amount_paid, amount_remaining, currency, due_date, paid_at, created_date, invoice_pdf, hosted_invoice_url, charge_id, payment_intent_id, line_items, tax_amount, total_tax_amounts, billing_reason, paid_out_of_band, payment_provider, payment_sync_status, payment_synced_at, attempt_count, next_payment_attempt, metadata, created_at, updated_at, deleted_at, invoice_number, subtotal_cents, discount_cents, payment_link_id, delegation_address, qr_code_data, tax_amount_cents, tax_details, customer_tax_id, customer_jurisdiction_id, reverse_charge_applies
+`
+
+type VoidInvoiceParams struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspace_id"`
+}
+
+func (q *Queries) VoidInvoice(ctx context.Context, arg VoidInvoiceParams) (Invoice, error) {
+	row := q.db.QueryRow(ctx, voidInvoice, arg.ID, arg.WorkspaceID)
 	var i Invoice
 	err := row.Scan(
 		&i.ID,

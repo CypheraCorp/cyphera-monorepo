@@ -1083,6 +1083,19 @@ type Product struct {
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 }
 
+type ProductAddonRelationship struct {
+	ID             uuid.UUID          `json:"id"`
+	BaseProductID  uuid.UUID          `json:"base_product_id"`
+	AddonProductID uuid.UUID          `json:"addon_product_id"`
+	IsRequired     pgtype.Bool        `json:"is_required"`
+	MaxQuantity    pgtype.Int4        `json:"max_quantity"`
+	MinQuantity    pgtype.Int4        `json:"min_quantity"`
+	DisplayOrder   pgtype.Int4        `json:"display_order"`
+	Metadata       []byte             `json:"metadata"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ProductsToken struct {
 	ID        uuid.UUID          `json:"id"`
 	ProductID uuid.UUID          `json:"product_id"`
@@ -1119,6 +1132,7 @@ type Subscription struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	Currency           pgtype.Text        `json:"currency"`
 	CancelAt           pgtype.Timestamptz `json:"cancel_at"`
 	CancelledAt        pgtype.Timestamptz `json:"cancelled_at"`
 	CancellationReason pgtype.Text        `json:"cancellation_reason"`
@@ -1139,6 +1153,23 @@ type SubscriptionEvent struct {
 	Metadata        []byte                `json:"metadata"`
 	CreatedAt       pgtype.Timestamptz    `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz    `json:"updated_at"`
+}
+
+type SubscriptionLineItem struct {
+	ID                   uuid.UUID          `json:"id"`
+	SubscriptionID       uuid.UUID          `json:"subscription_id"`
+	ProductID            uuid.UUID          `json:"product_id"`
+	LineItemType         string             `json:"line_item_type"`
+	Quantity             int32              `json:"quantity"`
+	UnitAmountInPennies  int32              `json:"unit_amount_in_pennies"`
+	Currency             string             `json:"currency"`
+	PriceType            PriceType          `json:"price_type"`
+	IntervalType         NullIntervalType   `json:"interval_type"`
+	TotalAmountInPennies int32              `json:"total_amount_in_pennies"`
+	IsActive             pgtype.Bool        `json:"is_active"`
+	Metadata             []byte             `json:"metadata"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
 type SubscriptionProration struct {

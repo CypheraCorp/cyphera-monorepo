@@ -40,35 +40,55 @@ type SubscriptionCustomerResponse struct {
 	UpdatedAt          time.Time              `json:"updated_at"`
 }
 
+// SubscriptionLineItemResponse represents a line item in a subscription
+type SubscriptionLineItemResponse struct {
+	ID                   uuid.UUID              `json:"id"`
+	SubscriptionID       uuid.UUID              `json:"subscription_id"`
+	ProductID            uuid.UUID              `json:"product_id"`
+	LineItemType         string                 `json:"line_item_type"` // 'base' or 'addon'
+	Quantity             int32                  `json:"quantity"`
+	UnitAmountInPennies  int32                  `json:"unit_amount_in_pennies"`
+	Currency             string                 `json:"currency"`
+	PriceType            string                 `json:"price_type"`
+	IntervalType         *string                `json:"interval_type,omitempty"`
+	TotalAmountInPennies int32                  `json:"total_amount_in_pennies"`
+	IsActive             bool                   `json:"is_active"`
+	Metadata             map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt            time.Time              `json:"created_at"`
+	UpdatedAt            time.Time              `json:"updated_at"`
+	Product              *ProductResponse       `json:"product,omitempty"`
+}
+
 // SubscriptionResponse represents a subscription along with its associated product details.
 type SubscriptionResponse struct {
-	ID                     uuid.UUID                     `json:"id"`
-	NumID                  int64                         `json:"num_id"`
-	WorkspaceID            uuid.UUID                     `json:"workspace_id"`
-	CustomerID             uuid.UUID                     `json:"customer_id,omitempty"`
-	CustomerName           string                        `json:"customer_name,omitempty"`
-	CustomerEmail          string                        `json:"customer_email,omitempty"`
-	Customer               *SubscriptionCustomerResponse `json:"customer,omitempty"`
-	Status                 string                        `json:"status"`
-	CurrentPeriodStart     time.Time                     `json:"current_period_start"`
-	CurrentPeriodEnd       time.Time                     `json:"current_period_end"`
-	NextRedemptionDate     *time.Time                    `json:"next_redemption_date,omitempty"`
-	TotalRedemptions       int32                         `json:"total_redemptions"`
-	TotalAmountInCents     int32                         `json:"total_amount_in_cents"`
-	TokenAmount            int32                         `json:"token_amount"`
-	DelegationID           uuid.UUID                     `json:"delegation_id"`
-	CustomerWalletID       *uuid.UUID                    `json:"customer_wallet_id,omitempty"`
-	ExternalID             string                        `json:"external_id,omitempty"`
-	PaymentSyncStatus      string                        `json:"payment_sync_status,omitempty"`
-	PaymentSyncedAt        *time.Time                    `json:"payment_synced_at,omitempty"`
-	PaymentSyncVersion     int32                         `json:"payment_sync_version,omitempty"`
-	PaymentProvider        string                        `json:"payment_provider,omitempty"`
-	InitialTransactionHash string                        `json:"initial_transaction_hash,omitempty"`
-	Metadata               map[string]interface{}        `json:"metadata,omitempty"`
-	CreatedAt              time.Time                     `json:"created_at"`
-	UpdatedAt              time.Time                     `json:"updated_at"`
-	Product                ProductResponse               `json:"product"`
-	ProductToken           ProductTokenResponse          `json:"product_token"`
+	ID                     uuid.UUID                      `json:"id"`
+	NumID                  int64                          `json:"num_id"`
+	WorkspaceID            uuid.UUID                      `json:"workspace_id"`
+	CustomerID             uuid.UUID                      `json:"customer_id,omitempty"`
+	CustomerName           string                         `json:"customer_name,omitempty"`
+	CustomerEmail          string                         `json:"customer_email,omitempty"`
+	Customer               *SubscriptionCustomerResponse  `json:"customer,omitempty"`
+	Status                 string                         `json:"status"`
+	CurrentPeriodStart     time.Time                      `json:"current_period_start"`
+	CurrentPeriodEnd       time.Time                      `json:"current_period_end"`
+	NextRedemptionDate     *time.Time                     `json:"next_redemption_date,omitempty"`
+	TotalRedemptions       int32                          `json:"total_redemptions"`
+	TotalAmountInCents     int32                          `json:"total_amount_in_cents"`
+	TokenAmount            int32                          `json:"token_amount"`
+	DelegationID           uuid.UUID                      `json:"delegation_id"`
+	CustomerWalletID       *uuid.UUID                     `json:"customer_wallet_id,omitempty"`
+	ExternalID             string                         `json:"external_id,omitempty"`
+	PaymentSyncStatus      string                         `json:"payment_sync_status,omitempty"`
+	PaymentSyncedAt        *time.Time                     `json:"payment_synced_at,omitempty"`
+	PaymentSyncVersion     int32                          `json:"payment_sync_version,omitempty"`
+	PaymentProvider        string                         `json:"payment_provider,omitempty"`
+	InitialTransactionHash string                         `json:"initial_transaction_hash,omitempty"`
+	Metadata               map[string]interface{}         `json:"metadata,omitempty"`
+	CreatedAt              time.Time                      `json:"created_at"`
+	UpdatedAt              time.Time                      `json:"updated_at"`
+	Product                ProductResponse                `json:"product"`
+	ProductToken           ProductTokenResponse           `json:"product_token"`
+	LineItems              []SubscriptionLineItemResponse `json:"line_items,omitempty"`
 }
 
 // GetRedemptionStatusResponse represents the response for the redemption status endpoint
@@ -92,6 +112,13 @@ type SubscribeToProductParams struct {
 	TokenAmount               string
 	DelegationData            params.DelegationParams
 	CypheraSmartWalletAddress string
+	Addons                    []SubscriptionAddonParams
+}
+
+// SubscriptionAddonParams contains parameters for a subscription addon
+type SubscriptionAddonParams struct {
+	ProductID uuid.UUID
+	Quantity  int32
 }
 
 // SubscribeToProductResult contains the result of subscription creation

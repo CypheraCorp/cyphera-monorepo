@@ -159,6 +159,31 @@ func (s *ProductService) GetProduct(ctx context.Context, getParams params.GetPro
 	return &product, nil
 }
 
+// GetProductWithAddons retrieves a product by ID with its addons
+func (s *ProductService) GetProductWithAddons(ctx context.Context, getParams params.GetProductParams) (*responses.ProductDetailResponse, error) {
+	// Get the product
+	product, err := s.GetProduct(ctx, getParams)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get addons if it's a base product
+	var addons []db.ListProductAddonsRow
+	if product.ProductType.Valid && product.ProductType.String == "base" {
+		addons, err = s.queries.ListProductAddons(ctx, product.ID)
+		if err != nil {
+			s.logger.Error("Failed to get product addons",
+				zap.String("product_id", product.ID.String()),
+				zap.Error(err))
+			// Don't fail if we can't get addons, just return product without them
+		}
+	}
+
+	// Convert to response with addons
+	response := helpers.ToProductDetailResponseWithAddons(*product, addons)
+	return &response, nil
+}
+
 // ListProducts retrieves a paginated list of products for a workspace
 func (s *ProductService) ListProducts(ctx context.Context, listParams params.ListProductsParams) (*responses.ListProductsResult, error) {
 	if listParams.WorkspaceID == uuid.Nil {
@@ -199,11 +224,22 @@ func (s *ProductService) ListProducts(ctx context.Context, listParams params.Lis
 
 	hasMore := int64(listParams.Offset+listParams.Limit) < total
 
-	// Convert products to ProductDetailResponse
+	// Convert products to ProductDetailResponse with addons
 	productResponses := make([]responses.ProductDetailResponse, len(products))
 	for i, product := range products {
-		// Convert to response format (pricing is now embedded in product)
-		productResponses[i] = helpers.ToProductDetailResponse(product)
+		// Get addons for base products
+		var addons []db.ListProductAddonsRow
+		if product.ProductType.Valid && product.ProductType.String == "base" {
+			addons, err = s.queries.ListProductAddons(ctx, product.ID)
+			if err != nil {
+				s.logger.Warn("Failed to get product addons",
+					zap.String("product_id", product.ID.String()),
+					zap.Error(err))
+				// Continue without addons
+			}
+		}
+		// Convert to response format with addons
+		productResponses[i] = helpers.ToProductDetailResponseWithAddons(product, addons)
 	}
 
 	return &responses.ListProductsResult{
@@ -297,6 +333,133 @@ func (s *ProductService) DeleteProduct(ctx context.Context, productID uuid.UUID,
 	return nil
 }
 
+// CreateProductAddonRelationship creates a relationship between a base product and an addon
+func (s *ProductService) CreateProductAddonRelationship(ctx context.Context, baseProductID uuid.UUID, addonProductID uuid.UUID, params params.CreateProductAddonRelationshipParams) (*db.ProductAddonRelationship, error) {
+	// Validate both products exist and belong to the same workspace
+	baseProduct, err := s.queries.GetProductWithoutWorkspaceId(ctx, baseProductID)
+	if err != nil {
+		return nil, fmt.Errorf("base product not found: %w", err)
+	}
+
+	addonProduct, err := s.queries.GetProductWithoutWorkspaceId(ctx, addonProductID)
+	if err != nil {
+		return nil, fmt.Errorf("addon product not found: %w", err)
+	}
+
+	// Ensure both products are in the same workspace
+	if baseProduct.WorkspaceID != addonProduct.WorkspaceID {
+		return nil, fmt.Errorf("products must be in the same workspace")
+	}
+
+	// Ensure base product is actually a base product
+	if baseProduct.ProductType.Valid && baseProduct.ProductType.String != "base" {
+		return nil, fmt.Errorf("base product must be of type 'base'")
+	}
+
+	// Ensure addon product is actually an addon
+	if !addonProduct.ProductType.Valid || addonProduct.ProductType.String != "addon" {
+		return nil, fmt.Errorf("addon product must be of type 'addon'")
+	}
+
+	// Create the relationship
+	var maxQuantity pgtype.Int4
+	if params.MaxQuantity != nil {
+		maxQuantity = pgtype.Int4{Int32: *params.MaxQuantity, Valid: true}
+	}
+
+	relationship, err := s.queries.CreateProductAddonRelationship(ctx, db.CreateProductAddonRelationshipParams{
+		BaseProductID:  baseProductID,
+		AddonProductID: addonProductID,
+		IsRequired:     pgtype.Bool{Bool: params.IsRequired, Valid: true},
+		MaxQuantity:    maxQuantity,
+		MinQuantity:    pgtype.Int4{Int32: params.MinQuantity, Valid: true},
+		DisplayOrder:   pgtype.Int4{Int32: params.DisplayOrder, Valid: true},
+		Metadata:       params.Metadata,
+	})
+	if err != nil {
+		s.logger.Error("Failed to create product addon relationship",
+			zap.String("base_product_id", baseProductID.String()),
+			zap.String("addon_product_id", addonProductID.String()),
+			zap.Error(err))
+		return nil, fmt.Errorf("failed to create product addon relationship: %w", err)
+	}
+
+	s.logger.Info("Product addon relationship created successfully",
+		zap.String("relationship_id", relationship.ID.String()),
+		zap.String("base_product_id", baseProductID.String()),
+		zap.String("addon_product_id", addonProductID.String()))
+
+	return &relationship, nil
+}
+
+// ListProductAddons lists all addons for a base product
+func (s *ProductService) ListProductAddons(ctx context.Context, baseProductID uuid.UUID) ([]db.ListProductAddonsRow, error) {
+	addons, err := s.queries.ListProductAddons(ctx, baseProductID)
+	if err != nil {
+		s.logger.Error("Failed to list product addons",
+			zap.String("base_product_id", baseProductID.String()),
+			zap.Error(err))
+		return nil, fmt.Errorf("failed to list product addons: %w", err)
+	}
+
+	return addons, nil
+}
+
+// DeleteProductAddonRelationship removes a relationship between a base product and an addon
+func (s *ProductService) DeleteProductAddonRelationship(ctx context.Context, baseProductID uuid.UUID, addonProductID uuid.UUID) error {
+	err := s.queries.DeleteProductAddonRelationshipByProducts(ctx, db.DeleteProductAddonRelationshipByProductsParams{
+		BaseProductID:  baseProductID,
+		AddonProductID: addonProductID,
+	})
+	if err != nil {
+		s.logger.Error("Failed to delete product addon relationship",
+			zap.String("base_product_id", baseProductID.String()),
+			zap.String("addon_product_id", addonProductID.String()),
+			zap.Error(err))
+		return fmt.Errorf("failed to delete product addon relationship: %w", err)
+	}
+
+	s.logger.Info("Product addon relationship deleted successfully",
+		zap.String("base_product_id", baseProductID.String()),
+		zap.String("addon_product_id", addonProductID.String()))
+
+	return nil
+}
+
+// BulkSetProductAddons replaces all addon relationships for a product
+func (s *ProductService) BulkSetProductAddons(ctx context.Context, baseProductID uuid.UUID, addonParams []params.CreateProductAddonRelationshipParams) error {
+	// Start a transaction would be ideal here, but for now we'll delete all and recreate
+
+	// Delete all existing addon relationships
+	err := s.queries.DeleteAllAddonsForProduct(ctx, baseProductID)
+	if err != nil {
+		s.logger.Error("Failed to delete existing product addons",
+			zap.String("base_product_id", baseProductID.String()),
+			zap.Error(err))
+		return fmt.Errorf("failed to delete existing product addons: %w", err)
+	}
+
+	// Create new relationships
+	for _, addon := range addonParams {
+		_, err := s.CreateProductAddonRelationship(ctx, baseProductID, addon.AddonProductID, addon)
+		if err != nil {
+			// Log error but continue with other addons
+			s.logger.Error("Failed to create addon relationship",
+				zap.String("base_product_id", baseProductID.String()),
+				zap.String("addon_product_id", addon.AddonProductID.String()),
+				zap.Error(err))
+			// Consider whether to fail entirely or continue
+			return err
+		}
+	}
+
+	s.logger.Info("Product addons bulk set successfully",
+		zap.String("base_product_id", baseProductID.String()),
+		zap.Int("addon_count", len(addonParams)))
+
+	return nil
+}
+
 // GetPublicProductByPriceID retrieves a product and its details for public access via price ID
 // Deprecated: Use GetPublicProductByID instead. Price IDs are now product IDs.
 func (s *ProductService) GetPublicProductByPriceID(ctx context.Context, priceID uuid.UUID) (*responses.PublicProductResponse, error) {
@@ -342,8 +505,20 @@ func (s *ProductService) GetPublicProductByID(ctx context.Context, productID uui
 		return nil, fmt.Errorf("failed to retrieve product tokens: %w", err)
 	}
 
-	// Build response
-	response := helpers.ToPublicProductResponse(workspace, product, productTokens, wallet)
+	// Get addons if it's a base product
+	var addons []db.ListProductAddonsRow
+	if product.ProductType.Valid && product.ProductType.String == "base" {
+		addons, err = s.queries.ListProductAddons(ctx, product.ID)
+		if err != nil {
+			s.logger.Warn("Failed to get product addons",
+				zap.String("product_id", product.ID.String()),
+				zap.Error(err))
+			// Continue without addons
+		}
+	}
+
+	// Build response with addons
+	response := helpers.ToPublicProductResponseWithAddons(workspace, product, productTokens, wallet, addons)
 
 	// Enrich product tokens with complete token and network details
 	for i, pt := range response.ProductTokens {

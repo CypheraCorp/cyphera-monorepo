@@ -28,6 +28,7 @@ type ProductResponse struct {
 	CreatedAt           int64                  `json:"created_at"`
 	UpdatedAt           int64                  `json:"updated_at"`
 	ProductTokens       []ProductTokenResponse `json:"product_tokens,omitempty"`
+	AvailableAddons     []ProductAddonResponse `json:"available_addons,omitempty"`
 }
 
 // PublicProductResponse represents a product in public API responses (no auth required)
@@ -48,6 +49,7 @@ type PublicProductResponse struct {
 	IntervalType        string                 `json:"interval_type,omitempty"`
 	TermLength          int32                  `json:"term_length,omitempty"`
 	ProductTokens       []ProductTokenResponse `json:"product_tokens,omitempty"`
+	AvailableAddons     []ProductAddonResponse `json:"available_addons,omitempty"`
 }
 
 // ProductTokenResponse represents a product token in API responses
@@ -97,6 +99,7 @@ type ProductDetailResponse struct {
 	CreatedAt           int64                  `json:"created_at"`
 	UpdatedAt           int64                  `json:"updated_at"`
 	ProductTokens       []ProductTokenResponse `json:"product_tokens"`
+	AvailableAddons     []ProductAddonResponse `json:"available_addons,omitempty"`
 }
 
 // ListProductsResponse represents a paginated list of products
@@ -112,4 +115,38 @@ type ListProductsResult struct {
 	Products []ProductDetailResponse `json:"products"`
 	Total    int64                   `json:"total"`
 	HasMore  bool                    `json:"has_more"`
+}
+
+// ProductAddonRelationshipResponse represents a product addon relationship in API responses
+type ProductAddonRelationshipResponse struct {
+	ID             string          `json:"id"`
+	Object         string          `json:"object"`
+	BaseProductID  string          `json:"base_product_id"`
+	AddonProductID string          `json:"addon_product_id"`
+	IsRequired     bool            `json:"is_required"`
+	MaxQuantity    *int32          `json:"max_quantity"`
+	MinQuantity    int32           `json:"min_quantity"`
+	DisplayOrder   int32           `json:"display_order"`
+	Metadata       json.RawMessage `json:"metadata,omitempty" swaggertype:"object"`
+	CreatedAt      int64           `json:"created_at"`
+	UpdatedAt      int64           `json:"updated_at"`
+}
+
+// ProductAddonResponse represents an addon product with its relationship details
+type ProductAddonResponse struct {
+	ProductAddonRelationshipResponse
+	AddonProduct ProductResponse `json:"addon_product"`
+}
+
+// ProductWithAddonsResponse represents a product with its available addons
+type ProductWithAddonsResponse struct {
+	ProductResponse
+	AvailableAddons []ProductAddonResponse `json:"available_addons,omitempty"`
+}
+
+// ListProductAddonsResponse represents a list of addons for a product
+type ListProductAddonsResponse struct {
+	Object string                 `json:"object"`
+	Data   []ProductAddonResponse `json:"data"`
+	Total  int64                  `json:"total"`
 }

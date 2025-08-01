@@ -147,3 +147,51 @@ LIMIT $2 OFFSET $3;
 SELECT * FROM invoice_line_items
 WHERE invoice_id = $1 AND fiat_currency = $2
 ORDER BY created_at ASC;
+
+-- name: CreateInvoiceLineItemFromSubscription :one
+INSERT INTO invoice_line_items (
+    invoice_id,
+    subscription_id,
+    product_id,
+    description,
+    quantity,
+    unit_amount_in_cents,
+    amount_in_cents,
+    fiat_currency,
+    line_item_type,
+    period_start,
+    period_end,
+    metadata
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+) RETURNING *;
+
+-- name: BulkCreateInvoiceLineItemsFromSubscription :copyfrom
+INSERT INTO invoice_line_items (
+    invoice_id,
+    subscription_id,
+    product_id,
+    description,
+    quantity,
+    unit_amount_in_cents,
+    amount_in_cents,
+    fiat_currency,
+    line_item_type,
+    period_start,
+    period_end
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+);
+
+-- name: GetInvoiceLineItemsBySubscription :many
+SELECT * FROM invoice_line_items
+WHERE subscription_id = $1 AND invoice_id = $2
+ORDER BY 
+    CASE 
+        WHEN line_item_type = 'product' THEN 1
+        WHEN line_item_type = 'gas_fee' THEN 2
+        WHEN line_item_type = 'discount' THEN 3
+        WHEN line_item_type = 'tax' THEN 4
+        ELSE 5
+    END,
+    created_at ASC;

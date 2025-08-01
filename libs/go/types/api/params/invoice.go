@@ -16,6 +16,9 @@ type InvoiceCreateParams struct {
 	LineItems      []LineItemCreateParams
 	DiscountCode   *string
 	Metadata       map[string]interface{}
+	Status         string     // "draft" or "open", defaults to "draft"
+	PeriodStart    *time.Time // For subscription invoices
+	PeriodEnd      *time.Time // For subscription invoices
 }
 
 // LineItemCreateParams contains parameters for creating a line item
