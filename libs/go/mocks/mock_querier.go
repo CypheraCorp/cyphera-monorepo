@@ -2706,6 +2706,21 @@ func (mr *MockQuerierMockRecorder) GetCustomerByExternalIDAndProvider(ctx, arg a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCustomerByExternalIDAndProvider", reflect.TypeOf((*MockQuerier)(nil).GetCustomerByExternalIDAndProvider), ctx, arg)
 }
 
+// GetCustomerByNumID mocks base method.
+func (m *MockQuerier) GetCustomerByNumID(ctx context.Context, numID int64) (db.Customer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCustomerByNumID", ctx, numID)
+	ret0, _ := ret[0].(db.Customer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCustomerByNumID indicates an expected call of GetCustomerByNumID.
+func (mr *MockQuerierMockRecorder) GetCustomerByNumID(ctx, numID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCustomerByNumID", reflect.TypeOf((*MockQuerier)(nil).GetCustomerByNumID), ctx, numID)
+}
+
 // GetCustomerByTaxId mocks base method.
 func (m *MockQuerier) GetCustomerByTaxId(ctx context.Context, arg db.GetCustomerByTaxIdParams) (db.Customer, error) {
 	m.ctrl.T.Helper()
@@ -4894,6 +4909,21 @@ func (m *MockQuerier) GetSubscriptionByExternalID(ctx context.Context, arg db.Ge
 func (mr *MockQuerierMockRecorder) GetSubscriptionByExternalID(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubscriptionByExternalID", reflect.TypeOf((*MockQuerier)(nil).GetSubscriptionByExternalID), ctx, arg)
+}
+
+// GetSubscriptionByNumID mocks base method.
+func (m *MockQuerier) GetSubscriptionByNumID(ctx context.Context, numID int64) (db.Subscription, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSubscriptionByNumID", ctx, numID)
+	ret0, _ := ret[0].(db.Subscription)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSubscriptionByNumID indicates an expected call of GetSubscriptionByNumID.
+func (mr *MockQuerierMockRecorder) GetSubscriptionByNumID(ctx, numID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubscriptionByNumID", reflect.TypeOf((*MockQuerier)(nil).GetSubscriptionByNumID), ctx, numID)
 }
 
 // GetSubscriptionEvent mocks base method.

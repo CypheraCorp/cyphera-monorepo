@@ -152,7 +152,7 @@ func (q *Queries) ListCustomerWorkspaces(ctx context.Context, customerID uuid.UU
 
 const listWorkspaceCustomers = `-- name: ListWorkspaceCustomers :many
 SELECT 
-    c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at, c.tax_jurisdiction_id, c.tax_id, c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, c.business_name, c.billing_country, c.billing_state, c.billing_city, c.billing_postal_code
+    c.id, c.num_id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at, c.tax_jurisdiction_id, c.tax_id, c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, c.business_name, c.billing_country, c.billing_state, c.billing_city, c.billing_postal_code
 FROM customers c
 INNER JOIN workspace_customers wc ON c.id = wc.customer_id
 WHERE wc.workspace_id = $1 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL
@@ -170,6 +170,7 @@ func (q *Queries) ListWorkspaceCustomers(ctx context.Context, workspaceID uuid.U
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -209,7 +210,7 @@ func (q *Queries) ListWorkspaceCustomers(ctx context.Context, workspaceID uuid.U
 
 const listWorkspaceCustomersWithInfo = `-- name: ListWorkspaceCustomersWithInfo :many
 SELECT 
-    c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at, c.tax_jurisdiction_id, c.tax_id, c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, c.business_name, c.billing_country, c.billing_state, c.billing_city, c.billing_postal_code,
+    c.id, c.num_id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at, c.tax_jurisdiction_id, c.tax_id, c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, c.business_name, c.billing_country, c.billing_state, c.billing_city, c.billing_postal_code,
     w.name as workspace_name,
     w.business_name as workspace_business_name,
     w.support_email as workspace_support_email,
@@ -223,6 +224,7 @@ ORDER BY c.created_at DESC
 
 type ListWorkspaceCustomersWithInfoRow struct {
 	ID                    uuid.UUID          `json:"id"`
+	NumID                 int64              `json:"num_id"`
 	Web3authID            pgtype.Text        `json:"web3auth_id"`
 	ExternalID            pgtype.Text        `json:"external_id"`
 	Email                 pgtype.Text        `json:"email"`
@@ -266,6 +268,7 @@ func (q *Queries) ListWorkspaceCustomersWithInfo(ctx context.Context, workspaceI
 		var i ListWorkspaceCustomersWithInfoRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -309,7 +312,7 @@ func (q *Queries) ListWorkspaceCustomersWithInfo(ctx context.Context, workspaceI
 
 const listWorkspaceCustomersWithPagination = `-- name: ListWorkspaceCustomersWithPagination :many
 SELECT 
-    c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at, c.tax_jurisdiction_id, c.tax_id, c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, c.business_name, c.billing_country, c.billing_state, c.billing_city, c.billing_postal_code
+    c.id, c.num_id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at, c.tax_jurisdiction_id, c.tax_id, c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, c.business_name, c.billing_country, c.billing_state, c.billing_city, c.billing_postal_code
 FROM customers c
 INNER JOIN workspace_customers wc ON c.id = wc.customer_id
 WHERE wc.workspace_id = $1 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL
@@ -334,6 +337,7 @@ func (q *Queries) ListWorkspaceCustomersWithPagination(ctx context.Context, arg 
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -373,7 +377,7 @@ func (q *Queries) ListWorkspaceCustomersWithPagination(ctx context.Context, arg 
 
 const listWorkspaceCustomersWithRevenue = `-- name: ListWorkspaceCustomersWithRevenue :many
 SELECT 
-    c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at, c.tax_jurisdiction_id, c.tax_id, c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, c.business_name, c.billing_country, c.billing_state, c.billing_city, c.billing_postal_code,
+    c.id, c.num_id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at, c.tax_jurisdiction_id, c.tax_id, c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, c.business_name, c.billing_country, c.billing_state, c.billing_city, c.billing_postal_code,
     COALESCE(SUM(p.amount_in_cents), 0) as total_revenue
 FROM customers c
 INNER JOIN workspace_customers wc ON c.id = wc.customer_id
@@ -399,6 +403,7 @@ type ListWorkspaceCustomersWithRevenueParams struct {
 
 type ListWorkspaceCustomersWithRevenueRow struct {
 	ID                 uuid.UUID          `json:"id"`
+	NumID              int64              `json:"num_id"`
 	Web3authID         pgtype.Text        `json:"web3auth_id"`
 	ExternalID         pgtype.Text        `json:"external_id"`
 	Email              pgtype.Text        `json:"email"`
@@ -439,6 +444,7 @@ func (q *Queries) ListWorkspaceCustomersWithRevenue(ctx context.Context, arg Lis
 		var i ListWorkspaceCustomersWithRevenueRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,

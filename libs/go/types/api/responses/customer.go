@@ -3,6 +3,7 @@ package responses
 // CustomerResponse represents the standardized API response for customer operations
 type CustomerResponse struct {
 	ID                 string                 `json:"id"`
+	NumID              int64                  `json:"num_id"`
 	Object             string                 `json:"object"`
 	ExternalID         string                 `json:"external_id,omitempty"`
 	Email              string                 `json:"email"`

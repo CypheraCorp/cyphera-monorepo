@@ -210,6 +210,7 @@ export default function SubscriptionsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[100px]">ID</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Product</TableHead>
                   <TableHead>Status</TableHead>
@@ -222,21 +223,31 @@ export default function SubscriptionsPage() {
               <TableBody>
                 {subscriptions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                       <div className="text-muted-foreground">No subscriptions found</div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   subscriptions.map((subscription) => (
                     <TableRow key={subscription.id}>
+                      <TableCell className="font-mono text-sm">
+                        #{subscription.num_id}
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium">
                             {subscription.customer_name || 'Unknown'}
                           </span>
-                          <span className="text-sm text-muted-foreground">
-                            {subscription.customer_email || 'No email'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">
+                              {subscription.customer_email || 'No email'}
+                            </span>
+                            {subscription.customer?.num_id && (
+                              <span className="text-xs text-muted-foreground font-mono">
+                                (#{subscription.customer.num_id})
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>

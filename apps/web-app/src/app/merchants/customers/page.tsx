@@ -198,6 +198,7 @@ export default function MerchantCustomersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[100px]">ID</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead className="text-right">Revenue</TableHead>
@@ -207,6 +208,9 @@ export default function MerchantCustomersPage() {
               <TableBody>
                 {customers.map((customer) => (
                   <TableRow key={customer.id}>
+                    <TableCell className="font-mono text-sm">
+                      #{customer.num_id}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="flex flex-col">

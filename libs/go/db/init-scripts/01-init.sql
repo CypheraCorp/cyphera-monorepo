@@ -164,6 +164,7 @@ CREATE TABLE IF NOT EXISTS circle_users (
 -- Customers table (depends on workspaces) - WITH PAYMENT SYNC COLUMNS
 CREATE TABLE IF NOT EXISTS customers (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    num_id BIGSERIAL UNIQUE NOT NULL,
     web3auth_id VARCHAR(255) UNIQUE,
     external_id VARCHAR(255),
     email VARCHAR(255),
@@ -387,6 +388,7 @@ CREATE TABLE delegation_data (
 -- Subscriptions table (depends on customers, products, products_tokens, delegation_data, customer_wallets) - WITH PAYMENT SYNC COLUMNS
 CREATE TABLE subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    num_id BIGSERIAL UNIQUE NOT NULL,
     customer_id UUID NOT NULL REFERENCES customers(id),
     product_id UUID NOT NULL REFERENCES products(id),
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
@@ -660,6 +662,7 @@ CREATE INDEX idx_circle_users_workspace_id ON circle_users(workspace_id);
 
 -- customers
 CREATE INDEX idx_customers_web3auth_id ON customers(web3auth_id);
+CREATE INDEX idx_customers_num_id ON customers(num_id);
 
 -- Workspace-Customer Association Table (Many-to-Many)
 CREATE TABLE IF NOT EXISTS workspace_customers (
@@ -758,6 +761,7 @@ CREATE INDEX idx_subscriptions_next_redemption_date ON subscriptions(next_redemp
 CREATE INDEX idx_subscriptions_payment_provider ON subscriptions(payment_provider) WHERE deleted_at IS NULL;
 CREATE INDEX idx_subscriptions_payment_sync_status ON subscriptions(payment_sync_status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_subscriptions_external_id ON subscriptions(external_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_subscriptions_num_id ON subscriptions(num_id);
 
 -- subscription_events
 CREATE INDEX idx_subscription_events_subscription_id ON subscription_events(subscription_id);

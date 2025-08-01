@@ -46,7 +46,7 @@ INSERT INTO customers (
     COALESCE($8, 'pending'),
     $9
 )
-RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
+RETURNING id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
 `
 
 type CreateCustomerParams struct {
@@ -76,6 +76,7 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -132,7 +133,7 @@ INSERT INTO customers (
     $10,
     $11
 )
-RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
+RETURNING id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
 `
 
 type CreateCustomerWithSyncParams struct {
@@ -166,6 +167,7 @@ func (q *Queries) CreateCustomerWithSync(ctx context.Context, arg CreateCustomer
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -214,7 +216,7 @@ INSERT INTO customers (
     $6,
     COALESCE($7, false)
 )
-RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
+RETURNING id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
 `
 
 type CreateCustomerWithWeb3AuthParams struct {
@@ -240,6 +242,7 @@ func (q *Queries) CreateCustomerWithWeb3Auth(ctx context.Context, arg CreateCust
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -282,7 +285,7 @@ func (q *Queries) DeleteCustomer(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAllCustomers = `-- name: GetAllCustomers :many
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
 ORDER BY created_at DESC
 `
 
@@ -297,6 +300,7 @@ func (q *Queries) GetAllCustomers(ctx context.Context) ([]Customer, error) {
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -335,7 +339,7 @@ func (q *Queries) GetAllCustomers(ctx context.Context) ([]Customer, error) {
 }
 
 const getBusinessCustomers = `-- name: GetBusinessCustomers :many
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
 WHERE is_business = true AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -357,6 +361,7 @@ func (q *Queries) GetBusinessCustomers(ctx context.Context, arg GetBusinessCusto
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -395,7 +400,7 @@ func (q *Queries) GetBusinessCustomers(ctx context.Context, arg GetBusinessCusto
 }
 
 const getCustomer = `-- name: GetCustomer :one
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -404,6 +409,7 @@ func (q *Queries) GetCustomer(ctx context.Context, id uuid.UUID) (Customer, erro
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -435,7 +441,7 @@ func (q *Queries) GetCustomer(ctx context.Context, id uuid.UUID) (Customer, erro
 }
 
 const getCustomerByEmail = `-- name: GetCustomerByEmail :one
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
 WHERE email = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -444,6 +450,7 @@ func (q *Queries) GetCustomerByEmail(ctx context.Context, email pgtype.Text) (Cu
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -475,7 +482,7 @@ func (q *Queries) GetCustomerByEmail(ctx context.Context, email pgtype.Text) (Cu
 }
 
 const getCustomerByExternalID = `-- name: GetCustomerByExternalID :one
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
 WHERE external_id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -484,6 +491,48 @@ func (q *Queries) GetCustomerByExternalID(ctx context.Context, externalID pgtype
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
+		&i.Web3authID,
+		&i.ExternalID,
+		&i.Email,
+		&i.Name,
+		&i.Phone,
+		&i.Description,
+		&i.Metadata,
+		&i.FinishedOnboarding,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.PaymentSyncVersion,
+		&i.PaymentProvider,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.TaxJurisdictionID,
+		&i.TaxID,
+		&i.TaxIDType,
+		&i.TaxIDVerified,
+		&i.TaxIDVerifiedAt,
+		&i.IsBusiness,
+		&i.BusinessName,
+		&i.BillingCountry,
+		&i.BillingState,
+		&i.BillingCity,
+		&i.BillingPostalCode,
+	)
+	return i, err
+}
+
+const getCustomerByNumID = `-- name: GetCustomerByNumID :one
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
+WHERE num_id = $1 AND deleted_at IS NULL LIMIT 1
+`
+
+func (q *Queries) GetCustomerByNumID(ctx context.Context, numID int64) (Customer, error) {
+	row := q.db.QueryRow(ctx, getCustomerByNumID, numID)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -515,7 +564,7 @@ func (q *Queries) GetCustomerByExternalID(ctx context.Context, externalID pgtype
 }
 
 const getCustomerByTaxId = `-- name: GetCustomerByTaxId :one
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
 WHERE tax_id = $1 AND tax_id_type = $2 AND deleted_at IS NULL
 LIMIT 1
 `
@@ -530,6 +579,7 @@ func (q *Queries) GetCustomerByTaxId(ctx context.Context, arg GetCustomerByTaxId
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -561,7 +611,7 @@ func (q *Queries) GetCustomerByTaxId(ctx context.Context, arg GetCustomerByTaxId
 }
 
 const getCustomerByWeb3AuthID = `-- name: GetCustomerByWeb3AuthID :one
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
 WHERE web3auth_id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -570,6 +620,7 @@ func (q *Queries) GetCustomerByWeb3AuthID(ctx context.Context, web3authID pgtype
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -601,7 +652,7 @@ func (q *Queries) GetCustomerByWeb3AuthID(ctx context.Context, web3authID pgtype
 }
 
 const getCustomersByBillingCountry = `-- name: GetCustomersByBillingCountry :many
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
 WHERE billing_country = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -624,6 +675,7 @@ func (q *Queries) GetCustomersByBillingCountry(ctx context.Context, arg GetCusto
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -663,7 +715,7 @@ func (q *Queries) GetCustomersByBillingCountry(ctx context.Context, arg GetCusto
 
 const getCustomersByExternalIDs = `-- name: GetCustomersByExternalIDs :many
 
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers 
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers 
 WHERE external_id = ANY($1::text[]) AND deleted_at IS NULL
 `
 
@@ -679,6 +731,7 @@ func (q *Queries) GetCustomersByExternalIDs(ctx context.Context, dollar_1 []stri
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -717,7 +770,7 @@ func (q *Queries) GetCustomersByExternalIDs(ctx context.Context, dollar_1 []stri
 }
 
 const getCustomersNeedingSync = `-- name: GetCustomersNeedingSync :many
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers 
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers 
 WHERE payment_sync_status = 'pending' AND deleted_at IS NULL
 ORDER BY created_at ASC
 `
@@ -733,6 +786,7 @@ func (q *Queries) GetCustomersNeedingSync(ctx context.Context) ([]Customer, erro
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -771,7 +825,7 @@ func (q *Queries) GetCustomersNeedingSync(ctx context.Context) ([]Customer, erro
 }
 
 const getCustomersSyncedByProvider = `-- name: GetCustomersSyncedByProvider :many
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers 
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers 
 WHERE payment_provider = $1 AND payment_sync_status != 'pending' AND deleted_at IS NULL
 ORDER BY payment_synced_at DESC
 `
@@ -787,6 +841,7 @@ func (q *Queries) GetCustomersSyncedByProvider(ctx context.Context, paymentProvi
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -825,7 +880,7 @@ func (q *Queries) GetCustomersSyncedByProvider(ctx context.Context, paymentProvi
 }
 
 const getCustomersWithSyncConflicts = `-- name: GetCustomersWithSyncConflicts :many
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers 
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers 
 WHERE payment_sync_status = 'conflict' AND deleted_at IS NULL
 ORDER BY payment_synced_at DESC
 `
@@ -841,6 +896,7 @@ func (q *Queries) GetCustomersWithSyncConflicts(ctx context.Context) ([]Customer
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -879,7 +935,7 @@ func (q *Queries) GetCustomersWithSyncConflicts(ctx context.Context) ([]Customer
 }
 
 const getCustomersWithVerifiedTaxId = `-- name: GetCustomersWithVerifiedTaxId :many
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
 WHERE tax_id_verified = true AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -901,6 +957,7 @@ func (q *Queries) GetCustomersWithVerifiedTaxId(ctx context.Context, arg GetCust
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -939,7 +996,7 @@ func (q *Queries) GetCustomersWithVerifiedTaxId(ctx context.Context, arg GetCust
 }
 
 const listCustomers = `-- name: ListCustomers :many
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -955,6 +1012,7 @@ func (q *Queries) ListCustomers(ctx context.Context) ([]Customer, error) {
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -993,7 +1051,7 @@ func (q *Queries) ListCustomers(ctx context.Context) ([]Customer, error) {
 }
 
 const listCustomersWithPagination = `-- name: ListCustomersWithPagination :many
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -1015,6 +1073,7 @@ func (q *Queries) ListCustomersWithPagination(ctx context.Context, arg ListCusto
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -1063,7 +1122,7 @@ SET
     finished_onboarding = COALESCE($6, finished_onboarding),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $7 AND deleted_at IS NULL
-RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
+RETURNING id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
 `
 
 type UpdateCustomerParams struct {
@@ -1089,6 +1148,7 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -1128,7 +1188,7 @@ SET
     billing_postal_code = $5,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
+RETURNING id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
 `
 
 type UpdateCustomerBillingAddressParams struct {
@@ -1150,6 +1210,7 @@ func (q *Queries) UpdateCustomerBillingAddress(ctx context.Context, arg UpdateCu
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -1186,7 +1247,7 @@ SET
     finished_onboarding = $1,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $2 AND deleted_at IS NULL
-RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
+RETURNING id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
 `
 
 type UpdateCustomerOnboardingStatusParams struct {
@@ -1199,6 +1260,7 @@ func (q *Queries) UpdateCustomerOnboardingStatus(ctx context.Context, arg Update
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -1237,7 +1299,7 @@ SET payment_sync_status = $2,
     payment_provider = COALESCE($3, payment_provider),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
+RETURNING id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
 `
 
 type UpdateCustomerPaymentSyncStatusParams struct {
@@ -1251,6 +1313,7 @@ func (q *Queries) UpdateCustomerPaymentSyncStatus(ctx context.Context, arg Updat
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -1293,7 +1356,7 @@ SET
     business_name = $7,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
+RETURNING id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
 `
 
 type UpdateCustomerTaxInfoParams struct {
@@ -1319,6 +1382,7 @@ func (q *Queries) UpdateCustomerTaxInfo(ctx context.Context, arg UpdateCustomerT
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -1364,7 +1428,7 @@ SET
     payment_provider = COALESCE($10, payment_provider),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $11 AND deleted_at IS NULL
-RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
+RETURNING id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
 `
 
 type UpdateCustomerWithSyncParams struct {
@@ -1398,6 +1462,7 @@ func (q *Queries) UpdateCustomerWithSync(ctx context.Context, arg UpdateCustomer
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,

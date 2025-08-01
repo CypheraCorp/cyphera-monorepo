@@ -26,34 +26,50 @@ type ProcessDueSubscriptionsResult struct {
 	ProcessingErrors []string    `json:"processing_errors,omitempty"`
 }
 
+// SubscriptionCustomerResponse represents the customer data within a subscription response
+type SubscriptionCustomerResponse struct {
+	ID                 uuid.UUID              `json:"id"`
+	NumID              int64                  `json:"num_id"`
+	Name               string                 `json:"name,omitempty"`
+	Email              string                 `json:"email"`
+	Phone              string                 `json:"phone,omitempty"`
+	Description        string                 `json:"description,omitempty"`
+	FinishedOnboarding bool                   `json:"finished_onboarding"`
+	Metadata           map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt          time.Time              `json:"created_at"`
+	UpdatedAt          time.Time              `json:"updated_at"`
+}
+
 // SubscriptionResponse represents a subscription along with its associated price and product details.
 type SubscriptionResponse struct {
-	ID                     uuid.UUID              `json:"id"`
-	WorkspaceID            uuid.UUID              `json:"workspace_id"`
-	CustomerID             uuid.UUID              `json:"customer_id,omitempty"`
-	CustomerName           string                 `json:"customer_name,omitempty"`
-	CustomerEmail          string                 `json:"customer_email,omitempty"`
-	Status                 string                 `json:"status"`
-	CurrentPeriodStart     time.Time              `json:"current_period_start"`
-	CurrentPeriodEnd       time.Time              `json:"current_period_end"`
-	NextRedemptionDate     *time.Time             `json:"next_redemption_date,omitempty"`
-	TotalRedemptions       int32                  `json:"total_redemptions"`
-	TotalAmountInCents     int32                  `json:"total_amount_in_cents"`
-	TokenAmount            int32                  `json:"token_amount"`
-	DelegationID           uuid.UUID              `json:"delegation_id"`
-	CustomerWalletID       *uuid.UUID             `json:"customer_wallet_id,omitempty"`
-	ExternalID             string                 `json:"external_id,omitempty"`
-	PaymentSyncStatus      string                 `json:"payment_sync_status,omitempty"`
-	PaymentSyncedAt        *time.Time             `json:"payment_synced_at,omitempty"`
-	PaymentSyncVersion     int32                  `json:"payment_sync_version,omitempty"`
-	PaymentProvider        string                 `json:"payment_provider,omitempty"`
-	InitialTransactionHash string                 `json:"initial_transaction_hash,omitempty"`
-	Metadata               map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt              time.Time              `json:"created_at"`
-	UpdatedAt              time.Time              `json:"updated_at"`
-	Price                  PriceResponse          `json:"price"`
-	Product                ProductResponse        `json:"product"`
-	ProductToken           ProductTokenResponse   `json:"product_token"`
+	ID                     uuid.UUID                     `json:"id"`
+	NumID                  int64                         `json:"num_id"`
+	WorkspaceID            uuid.UUID                     `json:"workspace_id"`
+	CustomerID             uuid.UUID                     `json:"customer_id,omitempty"`
+	CustomerName           string                        `json:"customer_name,omitempty"`
+	CustomerEmail          string                        `json:"customer_email,omitempty"`
+	Customer               *SubscriptionCustomerResponse `json:"customer,omitempty"`
+	Status                 string                        `json:"status"`
+	CurrentPeriodStart     time.Time                     `json:"current_period_start"`
+	CurrentPeriodEnd       time.Time                     `json:"current_period_end"`
+	NextRedemptionDate     *time.Time                    `json:"next_redemption_date,omitempty"`
+	TotalRedemptions       int32                         `json:"total_redemptions"`
+	TotalAmountInCents     int32                         `json:"total_amount_in_cents"`
+	TokenAmount            int32                         `json:"token_amount"`
+	DelegationID           uuid.UUID                     `json:"delegation_id"`
+	CustomerWalletID       *uuid.UUID                    `json:"customer_wallet_id,omitempty"`
+	ExternalID             string                        `json:"external_id,omitempty"`
+	PaymentSyncStatus      string                        `json:"payment_sync_status,omitempty"`
+	PaymentSyncedAt        *time.Time                    `json:"payment_synced_at,omitempty"`
+	PaymentSyncVersion     int32                         `json:"payment_sync_version,omitempty"`
+	PaymentProvider        string                        `json:"payment_provider,omitempty"`
+	InitialTransactionHash string                        `json:"initial_transaction_hash,omitempty"`
+	Metadata               map[string]interface{}        `json:"metadata,omitempty"`
+	CreatedAt              time.Time                     `json:"created_at"`
+	UpdatedAt              time.Time                     `json:"updated_at"`
+	Price                  PriceResponse                 `json:"price"`
+	Product                ProductResponse               `json:"product"`
+	ProductToken           ProductTokenResponse          `json:"product_token"`
 }
 
 // GetRedemptionStatusResponse represents the response for the redemption status endpoint

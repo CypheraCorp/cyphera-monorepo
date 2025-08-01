@@ -109,8 +109,18 @@ func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 		intervalTypeStr = string(subDetails.PriceIntervalType)
 	}
 
+	// Parse customer metadata
+	var customerMetadata map[string]interface{}
+	if len(subDetails.CustomerMetadata) > 0 {
+		if err := json.Unmarshal(subDetails.CustomerMetadata, &customerMetadata); err != nil {
+			logger.Error("Error unmarshaling customer metadata", zap.Error(err))
+			customerMetadata = make(map[string]interface{})
+		}
+	}
+
 	resp := responses.SubscriptionResponse{
 		ID:                 subDetails.SubscriptionID,
+		NumID:              subDetails.SubscriptionNumID,
 		WorkspaceID:        subDetails.ProductWorkspaceID,
 		Status:             string(subDetails.SubscriptionStatus),
 		CurrentPeriodStart: subDetails.SubscriptionCurrentPeriodStart.Time,
@@ -121,6 +131,18 @@ func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 		TokenAmount:        int32(subDetails.SubscriptionTokenAmount),
 		CustomerName:       subDetails.CustomerName.String,
 		CustomerEmail:      subDetails.CustomerEmail.String,
+		Customer: &responses.SubscriptionCustomerResponse{
+			ID:                 subDetails.CustomerID,
+			NumID:              subDetails.CustomerNumID,
+			Name:               subDetails.CustomerName.String,
+			Email:              subDetails.CustomerEmail.String,
+			Phone:              subDetails.CustomerPhone.String,
+			Description:        subDetails.CustomerDescription.String,
+			FinishedOnboarding: subDetails.CustomerFinishedOnboarding.Bool,
+			Metadata:           customerMetadata,
+			CreatedAt:          subDetails.CustomerCreatedAt.Time,
+			UpdatedAt:          subDetails.CustomerUpdatedAt.Time,
+		},
 		Price: responses.PriceResponse{
 			ID:                  subDetails.PriceID.String(),
 			Object:              "price", // Typically static for PriceResponse
@@ -160,6 +182,7 @@ func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 func ToSubscriptionResponseFromDBSubscription(sub db.Subscription) (responses.SubscriptionResponse, error) {
 	resp := responses.SubscriptionResponse{
 		ID:          sub.ID,
+		NumID:       sub.NumID,
 		CustomerID:  sub.CustomerID,
 		WorkspaceID: sub.WorkspaceID,
 		Status:      string(sub.Status),
@@ -278,9 +301,19 @@ func ToComprehensiveSubscriptionResponse(ctx context.Context, queries db.Querier
 		}
 	}
 
+	// Parse customer metadata
+	var customerMetadata map[string]interface{}
+	if len(subscriptionDetails.CustomerMetadata) > 0 {
+		if err := json.Unmarshal(subscriptionDetails.CustomerMetadata, &customerMetadata); err != nil {
+			logger.Error("Error unmarshaling customer metadata", zap.Error(err))
+			customerMetadata = make(map[string]interface{})
+		}
+	}
+
 	// Convert to response
 	response := &responses.SubscriptionResponse{
 		ID:                     subscription.ID,
+		NumID:                  subscription.NumID,
 		WorkspaceID:            subscription.WorkspaceID,
 		CustomerID:             subscription.CustomerID,
 		Status:                 string(subscription.Status),
@@ -296,6 +329,18 @@ func ToComprehensiveSubscriptionResponse(ctx context.Context, queries db.Querier
 		UpdatedAt:              subscription.UpdatedAt.Time,
 		CustomerName:           subscriptionDetails.CustomerName.String,
 		CustomerEmail:          subscriptionDetails.CustomerEmail.String,
+		Customer: &responses.SubscriptionCustomerResponse{
+			ID:                 subscriptionDetails.CustomerID,
+			NumID:              subscriptionDetails.CustomerNumID,
+			Name:               subscriptionDetails.CustomerName.String,
+			Email:              subscriptionDetails.CustomerEmail.String,
+			Phone:              subscriptionDetails.CustomerPhone.String,
+			Description:        subscriptionDetails.CustomerDescription.String,
+			FinishedOnboarding: subscriptionDetails.CustomerFinishedOnboarding.Bool,
+			Metadata:           customerMetadata,
+			CreatedAt:          subscriptionDetails.CustomerCreatedAt.Time,
+			UpdatedAt:          subscriptionDetails.CustomerUpdatedAt.Time,
+		},
 		Price: responses.PriceResponse{
 			ID:                  subscriptionDetails.PriceID.String(),
 			Object:              "price",

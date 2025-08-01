@@ -573,6 +573,7 @@ type CircleWallet struct {
 
 type Customer struct {
 	ID                 uuid.UUID          `json:"id"`
+	NumID              int64              `json:"num_id"`
 	Web3authID         pgtype.Text        `json:"web3auth_id"`
 	ExternalID         pgtype.Text        `json:"external_id"`
 	Email              pgtype.Text        `json:"email"`
@@ -1109,6 +1110,7 @@ type ProductsToken struct {
 
 type Subscription struct {
 	ID                 uuid.UUID          `json:"id"`
+	NumID              int64              `json:"num_id"`
 	CustomerID         uuid.UUID          `json:"customer_id"`
 	ProductID          uuid.UUID          `json:"product_id"`
 	WorkspaceID        uuid.UUID          `json:"workspace_id"`

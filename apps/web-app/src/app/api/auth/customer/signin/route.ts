@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
         const backendCustomer = backendResponse.data.customer;
         customer = {
           id: backendCustomer.id,
+          num_id: backendCustomer.num_id,
           object: backendCustomer.object,
           workspace_id: '', // Will be set by backend
           external_id: backendCustomer.external_id,
@@ -186,6 +187,7 @@ export async function POST(request: NextRequest) {
       // Fallback to local customer creation if backend fails
       customer = {
         id: `customer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        num_id: Math.floor(Math.random() * 1000000), // Generate random num_id for fallback
         object: 'customer',
         workspace_id: '', // Mock value for fallback
         email: customerEmail,

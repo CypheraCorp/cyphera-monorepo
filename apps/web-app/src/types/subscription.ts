@@ -18,14 +18,32 @@ export interface SubscribeRequest {
 }
 
 /**
+ * Customer information within a subscription
+ */
+export interface SubscriptionCustomer {
+  id: string;
+  num_id: number;
+  name?: string;
+  email: string;
+  phone?: string;
+  description?: string;
+  finished_onboarding: boolean;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
  * Represents a subscription along with its associated price and product details (new, matches Go backend SubscriptionResponse)
  */
 export interface SubscriptionResponse {
   id: string;
+  num_id: number;
   workspace_id: string;
   customer_id?: string;
   customer_name?: string;
   customer_email?: string;
+  customer?: SubscriptionCustomer;
   token_amount: number;
   total_amount_in_cents?: number;
   status: SubscriptionStatus;

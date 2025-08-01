@@ -20,6 +20,7 @@ func ToCustomerResponse(c db.Customer) responses.CustomerResponse {
 
 	return responses.CustomerResponse{
 		ID:                 c.ID.String(),
+		NumID:              c.NumID,
 		Object:             "customer",
 		ExternalID:         c.ExternalID.String,
 		Email:              c.Email.String,
@@ -82,6 +83,7 @@ func ToCustomerResponseWithRevenue(c db.ListWorkspaceCustomersWithRevenueRow) re
 
 	return responses.CustomerResponse{
 		ID:                 c.ID.String(),
+		NumID:              c.NumID,
 		Object:             "customer",
 		ExternalID:         c.ExternalID.String,
 		Email:              c.Email.String,
@@ -137,6 +139,7 @@ func ToCustomerDetailsResponse(customer db.Customer, wallet *db.CustomerWallet) 
 func ToResponsesCustomerResponse(helperResponse responses.CustomerResponse) responses.CustomerResponse {
 	return responses.CustomerResponse{
 		ID:                 helperResponse.ID,
+		NumID:              helperResponse.NumID,
 		Object:             helperResponse.Object,
 		ExternalID:         helperResponse.ExternalID,
 		Email:              helperResponse.Email,

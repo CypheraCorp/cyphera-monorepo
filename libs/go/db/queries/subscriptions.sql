@@ -2,6 +2,10 @@
 SELECT * FROM subscriptions
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1;
 
+-- name: GetSubscriptionByNumID :one
+SELECT * FROM subscriptions
+WHERE num_id = $1 AND deleted_at IS NULL LIMIT 1;
+
 -- name: GetSubscriptionWithWorkspace :one
 SELECT * FROM subscriptions s
 WHERE s.id = $1 AND s.workspace_id = $2 AND s.deleted_at IS NULL LIMIT 1;
@@ -10,8 +14,16 @@ WHERE s.id = $1 AND s.workspace_id = $2 AND s.deleted_at IS NULL LIMIT 1;
 SELECT 
     s.*,
     p.name as product_name,
+    c.id as customer_id,
+    c.num_id as customer_num_id,
     c.name as customer_name,
     c.email as customer_email,
+    c.phone as customer_phone,
+    c.description as customer_description,
+    c.finished_onboarding as customer_finished_onboarding,
+    c.metadata as customer_metadata,
+    c.created_at as customer_created_at,
+    c.updated_at as customer_updated_at,
     cw.wallet_address as subscriber_wallet_address,
     cw.network_type as subscriber_network_type,
     t.symbol as token_symbol,
@@ -247,6 +259,7 @@ LIMIT 1;
 -- name: ListSubscriptionDetailsWithPagination :many
 SELECT 
     s.id AS subscription_id,
+    s.num_id AS subscription_num_id,
     s.status AS subscription_status,
     s.current_period_start AS subscription_current_period_start,
     s.current_period_end AS subscription_current_period_end,
@@ -259,8 +272,15 @@ SELECT
 
     -- Customer details
     c.id AS customer_id,
+    c.num_id AS customer_num_id,
     c.name AS customer_name,
     c.email AS customer_email,
+    c.phone AS customer_phone,
+    c.description AS customer_description,
+    c.finished_onboarding AS customer_finished_onboarding,
+    c.metadata AS customer_metadata,
+    c.created_at AS customer_created_at,
+    c.updated_at AS customer_updated_at,
 
     -- Product details
     p.id AS product_id,

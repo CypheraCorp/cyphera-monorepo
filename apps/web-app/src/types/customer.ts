@@ -70,6 +70,7 @@ export interface CustomerSignInResponse {
   data: {
     customer: {
       id: string;
+      num_id: number;
       object: 'customer';
       external_id?: string;
       email: string;
@@ -111,6 +112,7 @@ export interface UpdateCustomerRequest {
  */
 export interface CustomerResponse {
   id: string;
+  num_id: number;
   object: string;
   workspace_id: string;
   external_id?: string;
