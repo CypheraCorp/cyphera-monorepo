@@ -287,24 +287,28 @@ INSERT INTO invoices (
     workspace_id,
     customer_id,
     subscription_id,
+    external_id,
     invoice_number,
     status,
     amount_due,
+    amount_remaining,
     currency,
     subtotal_cents,
     discount_cents,
     tax_amount_cents,
     tax_details,
     due_date,
+    created_date,
     payment_link_id,
     delegation_address,
     qr_code_data,
     customer_tax_id,
     customer_jurisdiction_id,
     reverse_charge_applies,
-    metadata
+    metadata,
+    notes
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+    $1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, $14, $15, $16, $17, $18, $19, $20, $21
 ) RETURNING id, workspace_id, customer_id, subscription_id, external_id, external_customer_id, external_subscription_id, status, collection_method, amount_due, amount_paid, amount_remaining, currency, due_date, paid_at, created_date, invoice_pdf, hosted_invoice_url, charge_id, payment_intent_id, line_items, tax_amount, total_tax_amounts, billing_reason, paid_out_of_band, payment_provider, payment_sync_status, payment_synced_at, attempt_count, next_payment_attempt, metadata, created_at, updated_at, deleted_at, invoice_number, subtotal_cents, discount_cents, payment_link_id, delegation_address, qr_code_data, tax_amount_cents, tax_details, customer_tax_id, customer_jurisdiction_id, reverse_charge_applies, reminder_sent_at, reminder_count, notes, terms, footer
 `
 
@@ -312,6 +316,7 @@ type CreateInvoiceWithDetailsParams struct {
 	WorkspaceID            uuid.UUID          `json:"workspace_id"`
 	CustomerID             pgtype.UUID        `json:"customer_id"`
 	SubscriptionID         pgtype.UUID        `json:"subscription_id"`
+	ExternalID             string             `json:"external_id"`
 	InvoiceNumber          pgtype.Text        `json:"invoice_number"`
 	Status                 string             `json:"status"`
 	AmountDue              int32              `json:"amount_due"`
@@ -328,6 +333,7 @@ type CreateInvoiceWithDetailsParams struct {
 	CustomerJurisdictionID pgtype.UUID        `json:"customer_jurisdiction_id"`
 	ReverseChargeApplies   pgtype.Bool        `json:"reverse_charge_applies"`
 	Metadata               []byte             `json:"metadata"`
+	Notes                  pgtype.Text        `json:"notes"`
 }
 
 func (q *Queries) CreateInvoiceWithDetails(ctx context.Context, arg CreateInvoiceWithDetailsParams) (Invoice, error) {
@@ -335,6 +341,7 @@ func (q *Queries) CreateInvoiceWithDetails(ctx context.Context, arg CreateInvoic
 		arg.WorkspaceID,
 		arg.CustomerID,
 		arg.SubscriptionID,
+		arg.ExternalID,
 		arg.InvoiceNumber,
 		arg.Status,
 		arg.AmountDue,
@@ -351,6 +358,7 @@ func (q *Queries) CreateInvoiceWithDetails(ctx context.Context, arg CreateInvoic
 		arg.CustomerJurisdictionID,
 		arg.ReverseChargeApplies,
 		arg.Metadata,
+		arg.Notes,
 	)
 	var i Invoice
 	err := row.Scan(
@@ -1331,61 +1339,64 @@ SELECT
     c.billing_state,
     c.billing_city,
     c.billing_postal_code,
-    w.id as wallet_id,
-    w.wallet_address
+    cw.wallet_address as customer_wallet_address,
+    p.wallet_id as merchant_wallet_id,
+    w.wallet_address as merchant_wallet_address
 FROM subscriptions s
 JOIN customers c ON s.customer_id = c.id
 LEFT JOIN customer_wallets cw ON s.customer_wallet_id = cw.id
-LEFT JOIN wallets w ON cw.wallet_id = w.id
+JOIN products p ON s.product_id = p.id
+LEFT JOIN wallets w ON p.wallet_id = w.id
 WHERE s.id = $1
 AND s.deleted_at IS NULL
 `
 
 type GetSubscriptionForInvoicingRow struct {
-	ID                 uuid.UUID          `json:"id"`
-	NumID              int64              `json:"num_id"`
-	CustomerID         uuid.UUID          `json:"customer_id"`
-	ProductID          uuid.UUID          `json:"product_id"`
-	WorkspaceID        uuid.UUID          `json:"workspace_id"`
-	ProductTokenID     uuid.UUID          `json:"product_token_id"`
-	ExternalID         pgtype.Text        `json:"external_id"`
-	TokenAmount        int32              `json:"token_amount"`
-	DelegationID       uuid.UUID          `json:"delegation_id"`
-	CustomerWalletID   pgtype.UUID        `json:"customer_wallet_id"`
-	Status             SubscriptionStatus `json:"status"`
-	CurrentPeriodStart pgtype.Timestamptz `json:"current_period_start"`
-	CurrentPeriodEnd   pgtype.Timestamptz `json:"current_period_end"`
-	NextRedemptionDate pgtype.Timestamptz `json:"next_redemption_date"`
-	TotalRedemptions   int32              `json:"total_redemptions"`
-	TotalAmountInCents int32              `json:"total_amount_in_cents"`
-	Metadata           []byte             `json:"metadata"`
-	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
-	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
-	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`
-	PaymentProvider    pgtype.Text        `json:"payment_provider"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
-	Currency           pgtype.Text        `json:"currency"`
-	CancelAt           pgtype.Timestamptz `json:"cancel_at"`
-	CancelledAt        pgtype.Timestamptz `json:"cancelled_at"`
-	CancellationReason pgtype.Text        `json:"cancellation_reason"`
-	PausedAt           pgtype.Timestamptz `json:"paused_at"`
-	PauseEndsAt        pgtype.Timestamptz `json:"pause_ends_at"`
-	TrialStart         pgtype.Timestamptz `json:"trial_start"`
-	TrialEnd           pgtype.Timestamptz `json:"trial_end"`
-	CustID             uuid.UUID          `json:"cust_id"`
-	CustomerName       pgtype.Text        `json:"customer_name"`
-	CustomerEmail      pgtype.Text        `json:"customer_email"`
-	IsBusiness         pgtype.Bool        `json:"is_business"`
-	BusinessName       pgtype.Text        `json:"business_name"`
-	TaxID              pgtype.Text        `json:"tax_id"`
-	BillingCountry     pgtype.Text        `json:"billing_country"`
-	BillingState       pgtype.Text        `json:"billing_state"`
-	BillingCity        pgtype.Text        `json:"billing_city"`
-	BillingPostalCode  pgtype.Text        `json:"billing_postal_code"`
-	WalletID           pgtype.UUID        `json:"wallet_id"`
-	WalletAddress      pgtype.Text        `json:"wallet_address"`
+	ID                    uuid.UUID          `json:"id"`
+	NumID                 int64              `json:"num_id"`
+	CustomerID            uuid.UUID          `json:"customer_id"`
+	ProductID             uuid.UUID          `json:"product_id"`
+	WorkspaceID           uuid.UUID          `json:"workspace_id"`
+	ProductTokenID        uuid.UUID          `json:"product_token_id"`
+	ExternalID            pgtype.Text        `json:"external_id"`
+	TokenAmount           int32              `json:"token_amount"`
+	DelegationID          uuid.UUID          `json:"delegation_id"`
+	CustomerWalletID      pgtype.UUID        `json:"customer_wallet_id"`
+	Status                SubscriptionStatus `json:"status"`
+	CurrentPeriodStart    pgtype.Timestamptz `json:"current_period_start"`
+	CurrentPeriodEnd      pgtype.Timestamptz `json:"current_period_end"`
+	NextRedemptionDate    pgtype.Timestamptz `json:"next_redemption_date"`
+	TotalRedemptions      int32              `json:"total_redemptions"`
+	TotalAmountInCents    int32              `json:"total_amount_in_cents"`
+	Metadata              []byte             `json:"metadata"`
+	PaymentSyncStatus     pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt       pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion    pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider       pgtype.Text        `json:"payment_provider"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt             pgtype.Timestamptz `json:"deleted_at"`
+	Currency              pgtype.Text        `json:"currency"`
+	CancelAt              pgtype.Timestamptz `json:"cancel_at"`
+	CancelledAt           pgtype.Timestamptz `json:"cancelled_at"`
+	CancellationReason    pgtype.Text        `json:"cancellation_reason"`
+	PausedAt              pgtype.Timestamptz `json:"paused_at"`
+	PauseEndsAt           pgtype.Timestamptz `json:"pause_ends_at"`
+	TrialStart            pgtype.Timestamptz `json:"trial_start"`
+	TrialEnd              pgtype.Timestamptz `json:"trial_end"`
+	CustID                uuid.UUID          `json:"cust_id"`
+	CustomerName          pgtype.Text        `json:"customer_name"`
+	CustomerEmail         pgtype.Text        `json:"customer_email"`
+	IsBusiness            pgtype.Bool        `json:"is_business"`
+	BusinessName          pgtype.Text        `json:"business_name"`
+	TaxID                 pgtype.Text        `json:"tax_id"`
+	BillingCountry        pgtype.Text        `json:"billing_country"`
+	BillingState          pgtype.Text        `json:"billing_state"`
+	BillingCity           pgtype.Text        `json:"billing_city"`
+	BillingPostalCode     pgtype.Text        `json:"billing_postal_code"`
+	CustomerWalletAddress pgtype.Text        `json:"customer_wallet_address"`
+	MerchantWalletID      uuid.UUID          `json:"merchant_wallet_id"`
+	MerchantWalletAddress pgtype.Text        `json:"merchant_wallet_address"`
 }
 
 func (q *Queries) GetSubscriptionForInvoicing(ctx context.Context, id uuid.UUID) (GetSubscriptionForInvoicingRow, error) {
@@ -1434,8 +1445,9 @@ func (q *Queries) GetSubscriptionForInvoicing(ctx context.Context, id uuid.UUID)
 		&i.BillingState,
 		&i.BillingCity,
 		&i.BillingPostalCode,
-		&i.WalletID,
-		&i.WalletAddress,
+		&i.CustomerWalletAddress,
+		&i.MerchantWalletID,
+		&i.MerchantWalletAddress,
 	)
 	return i, err
 }
@@ -2572,6 +2584,77 @@ func (q *Queries) UpdateInvoiceDetails(ctx context.Context, arg UpdateInvoiceDet
 		arg.CustomerJurisdictionID,
 		arg.ReverseChargeApplies,
 	)
+	var i Invoice
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.CustomerID,
+		&i.SubscriptionID,
+		&i.ExternalID,
+		&i.ExternalCustomerID,
+		&i.ExternalSubscriptionID,
+		&i.Status,
+		&i.CollectionMethod,
+		&i.AmountDue,
+		&i.AmountPaid,
+		&i.AmountRemaining,
+		&i.Currency,
+		&i.DueDate,
+		&i.PaidAt,
+		&i.CreatedDate,
+		&i.InvoicePdf,
+		&i.HostedInvoiceUrl,
+		&i.ChargeID,
+		&i.PaymentIntentID,
+		&i.LineItems,
+		&i.TaxAmount,
+		&i.TotalTaxAmounts,
+		&i.BillingReason,
+		&i.PaidOutOfBand,
+		&i.PaymentProvider,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.AttemptCount,
+		&i.NextPaymentAttempt,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.InvoiceNumber,
+		&i.SubtotalCents,
+		&i.DiscountCents,
+		&i.PaymentLinkID,
+		&i.DelegationAddress,
+		&i.QrCodeData,
+		&i.TaxAmountCents,
+		&i.TaxDetails,
+		&i.CustomerTaxID,
+		&i.CustomerJurisdictionID,
+		&i.ReverseChargeApplies,
+		&i.ReminderSentAt,
+		&i.ReminderCount,
+		&i.Notes,
+		&i.Terms,
+		&i.Footer,
+	)
+	return i, err
+}
+
+const updateInvoiceNotes = `-- name: UpdateInvoiceNotes :one
+UPDATE invoices SET
+    notes = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, workspace_id, customer_id, subscription_id, external_id, external_customer_id, external_subscription_id, status, collection_method, amount_due, amount_paid, amount_remaining, currency, due_date, paid_at, created_date, invoice_pdf, hosted_invoice_url, charge_id, payment_intent_id, line_items, tax_amount, total_tax_amounts, billing_reason, paid_out_of_band, payment_provider, payment_sync_status, payment_synced_at, attempt_count, next_payment_attempt, metadata, created_at, updated_at, deleted_at, invoice_number, subtotal_cents, discount_cents, payment_link_id, delegation_address, qr_code_data, tax_amount_cents, tax_details, customer_tax_id, customer_jurisdiction_id, reverse_charge_applies, reminder_sent_at, reminder_count, notes, terms, footer
+`
+
+type UpdateInvoiceNotesParams struct {
+	ID    uuid.UUID   `json:"id"`
+	Notes pgtype.Text `json:"notes"`
+}
+
+func (q *Queries) UpdateInvoiceNotes(ctx context.Context, arg UpdateInvoiceNotesParams) (Invoice, error) {
+	row := q.db.QueryRow(ctx, updateInvoiceNotes, arg.ID, arg.Notes)
 	var i Invoice
 	err := row.Scan(
 		&i.ID,

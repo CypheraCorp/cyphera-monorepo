@@ -67,12 +67,12 @@ WHERE invoice_id = $1;
 
 -- name: GetInvoiceSubtotal :one
 SELECT 
-    SUM(amount_in_cents) FILTER (WHERE line_item_type = 'product') as product_subtotal,
-    SUM(amount_in_cents) FILTER (WHERE line_item_type = 'gas_fee' AND NOT is_gas_sponsored) as customer_gas_fees,
-    SUM(amount_in_cents) FILTER (WHERE line_item_type = 'gas_fee' AND is_gas_sponsored) as sponsored_gas_fees,
-    SUM(tax_amount_in_cents) as total_tax,
-    SUM(amount_in_cents) FILTER (WHERE line_item_type = 'discount') as total_discount,
-    SUM(amount_in_cents) - COALESCE(SUM(amount_in_cents) FILTER (WHERE is_gas_sponsored), 0) as customer_total
+    COALESCE(SUM(amount_in_cents) FILTER (WHERE line_item_type = 'product'), 0)::BIGINT as product_subtotal,
+    COALESCE(SUM(amount_in_cents) FILTER (WHERE line_item_type = 'gas_fee' AND NOT is_gas_sponsored), 0)::BIGINT as customer_gas_fees,
+    COALESCE(SUM(amount_in_cents) FILTER (WHERE line_item_type = 'gas_fee' AND is_gas_sponsored), 0)::BIGINT as sponsored_gas_fees,
+    COALESCE(SUM(tax_amount_in_cents), 0)::BIGINT as total_tax,
+    COALESCE(SUM(amount_in_cents) FILTER (WHERE line_item_type = 'discount'), 0)::BIGINT as total_discount,
+    (COALESCE(SUM(amount_in_cents), 0) - COALESCE(SUM(amount_in_cents) FILTER (WHERE is_gas_sponsored), 0))::BIGINT as customer_total
 FROM invoice_line_items
 WHERE invoice_id = $1;
 

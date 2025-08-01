@@ -258,24 +258,28 @@ INSERT INTO invoices (
     workspace_id,
     customer_id,
     subscription_id,
+    external_id,
     invoice_number,
     status,
     amount_due,
+    amount_remaining,
     currency,
     subtotal_cents,
     discount_cents,
     tax_amount_cents,
     tax_details,
     due_date,
+    created_date,
     payment_link_id,
     delegation_address,
     qr_code_data,
     customer_tax_id,
     customer_jurisdiction_id,
     reverse_charge_applies,
-    metadata
+    metadata,
+    notes
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+    $1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, $14, $15, $16, $17, $18, $19, $20, $21
 ) RETURNING *;
 
 -- name: UpdateInvoiceDetails :one
@@ -400,12 +404,14 @@ SELECT
     c.billing_state,
     c.billing_city,
     c.billing_postal_code,
-    w.id as wallet_id,
-    w.wallet_address
+    cw.wallet_address as customer_wallet_address,
+    p.wallet_id as merchant_wallet_id,
+    w.wallet_address as merchant_wallet_address
 FROM subscriptions s
 JOIN customers c ON s.customer_id = c.id
 LEFT JOIN customer_wallets cw ON s.customer_wallet_id = cw.id
-LEFT JOIN wallets w ON cw.wallet_id = w.id
+JOIN products p ON s.product_id = p.id
+LEFT JOIN wallets w ON p.wallet_id = w.id
 WHERE s.id = $1
 AND s.deleted_at IS NULL;
 
@@ -458,6 +464,13 @@ UPDATE invoices SET
     status = $3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: UpdateInvoiceNotes :one
+UPDATE invoices SET
+    notes = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
 
 -- name: GetSubscriptionsForBulkInvoicing :many

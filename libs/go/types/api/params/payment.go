@@ -18,6 +18,7 @@ type CreatePaymentFromSubscriptionEventParams struct {
 	ExchangeRate      string // Decimal as string
 	GasFeeUSDCents    int64
 	GasSponsored      bool
+	InvoiceID         *uuid.UUID // Optional invoice ID to link payment to invoice
 }
 
 // CreateComprehensivePaymentParams contains parameters for creating a comprehensive payment

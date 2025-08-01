@@ -8782,6 +8782,21 @@ func (mr *MockQuerierMockRecorder) UpdatePaymentGasSponsorship(ctx, arg any) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePaymentGasSponsorship", reflect.TypeOf((*MockQuerier)(nil).UpdatePaymentGasSponsorship), ctx, arg)
 }
 
+// UpdatePaymentInvoiceID mocks base method.
+func (m *MockQuerier) UpdatePaymentInvoiceID(ctx context.Context, arg db.UpdatePaymentInvoiceIDParams) (db.Payment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePaymentInvoiceID", ctx, arg)
+	ret0, _ := ret[0].(db.Payment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePaymentInvoiceID indicates an expected call of UpdatePaymentInvoiceID.
+func (mr *MockQuerierMockRecorder) UpdatePaymentInvoiceID(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePaymentInvoiceID", reflect.TypeOf((*MockQuerier)(nil).UpdatePaymentInvoiceID), ctx, arg)
+}
+
 // UpdatePaymentLink mocks base method.
 func (m *MockQuerier) UpdatePaymentLink(ctx context.Context, arg db.UpdatePaymentLinkParams) (db.PaymentLink, error) {
 	m.ctrl.T.Helper()

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { type Address, formatUnits } from 'viem';
 import { useWeb3AuthSmartAccount } from '@/hooks/auth';
 import { useWeb3AuthInitialization } from '@/hooks/auth';
-import { useWeb3Auth } from '@web3auth/modal/react';
+import { useWeb3Auth, useSwitchChain } from '@web3auth/modal/react';
 import { formatDelegation } from '@/lib/web3/utils/delegation';
 import { MetaMaskSmartAccount } from '@metamask/delegation-toolkit';
 import { createAndSignDelegation } from '@cyphera/delegation';
@@ -66,35 +66,7 @@ async function getChainIdFromNetworkName(networkName: string): Promise<number | 
   }
 }
 
-// Helper function to switch network using Web3Auth
-async function switchToNetwork(
-  web3AuthProvider: Web3AuthProvider,
-  targetChainId: number
-): Promise<void> {
-  try {
-    const hexChainId = `0x${targetChainId.toString(16)}`;
-
-    // First try to switch to the network
-    try {
-      await web3AuthProvider.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: hexChainId }],
-      });
-      logger.log(`✅ Successfully switched to chain ${targetChainId}`);
-    } catch (switchError) {
-      // If the network doesn't exist, we might need to add it
-      if ((switchError as { code?: number }).code === 4902) {
-        logger.log(`Network ${targetChainId} not found, would need to add it`);
-        throw new Error(`Network ${targetChainId} not configured in wallet`);
-      } else {
-        throw switchError;
-      }
-    }
-  } catch (error) {
-    logger.error('Failed to switch network:', { error });
-    throw error;
-  }
-}
+// Note: Network switching is now handled by the useSwitchChain hook from Web3Auth
 
 interface Web3AuthDelegationButtonProps {
   productId: string; // Product ID for the subscription
@@ -134,10 +106,14 @@ export function Web3AuthDelegationButton({
     deploymentSupported,
     checkDeploymentStatus,
     deploySmartAccount,
+    refreshNetworkState,
   } = useWeb3AuthSmartAccount();
 
   // Get Web3Auth instance to access the underlying smart account
   const { web3Auth } = useWeb3Auth();
+  
+  // Use Web3Auth's chain switching hook
+  const { switchChain, loading: isSwitchingChain, error: switchChainError } = useSwitchChain();
 
   // Get current network context
   const currentNetwork = useNetworkStore((state) => state.currentNetwork);
@@ -171,51 +147,21 @@ export function Web3AuthDelegationButton({
   } | null>(null);
 
   useEffect(() => setMounted(true), []);
-
-  // Auto-switch network on mount if authenticated and network is specified
+  
+  // Handle switch chain errors
   useEffect(() => {
-    if (!isAuthenticated || !networkName || !web3Auth?.provider || !mounted) return;
+    if (switchChainError) {
+      logger.error('❌ Switch chain error:', switchChainError);
+      toast({
+        title: 'Network Switch Error',
+        description: switchChainError.message || 'Failed to switch network. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  }, [switchChainError, toast]);
 
-    const checkAndSwitchNetwork = async () => {
-      try {
-        const requiredChainId = await getChainIdFromNetworkName(networkName);
-        if (!requiredChainId) return;
-
-        // Small delay to ensure provider is ready
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        let currentChainIdDecimal: number;
-        try {
-          const currentChainId = (await (web3Auth.provider as Web3AuthProvider).request({
-            method: 'eth_chainId',
-          })) as string;
-          currentChainIdDecimal = parseInt(currentChainId, 16);
-        } catch (error) {
-          logger.error('Failed to get current chain ID on mount:', { error });
-          return;
-        }
-
-        if (currentChainIdDecimal !== requiredChainId) {
-          logger.log(
-            `🔄 Auto-switching from chain ${currentChainIdDecimal} to ${requiredChainId} on mount`
-          );
-
-          try {
-            await switchToNetwork(web3Auth.provider as Web3AuthProvider, requiredChainId);
-            logger.log('✅ Auto-switched to correct network on mount');
-          } catch (error) {
-            logger.warn('⚠️ Auto-switch failed on mount, user will need to switch manually:', {
-              error,
-            });
-          }
-        }
-      } catch (error) {
-        logger.error('Error in auto-switch network check:', { error });
-      }
-    };
-
-    checkAndSwitchNetwork();
-  }, [isAuthenticated, networkName, web3Auth?.provider, mounted]);
+  // Note: Auto-switch is now handled at the page level by useWeb3AuthAutoNetwork hook
+  // This ensures network is ready before any component interaction
 
   async function handleCreateDelegation() {
     if (status !== 'idle') {
@@ -278,8 +224,9 @@ export function Web3AuthDelegationButton({
 
         const requiredChainId = await getChainIdFromNetworkName(networkName);
         if (requiredChainId) {
-          // Add a small delay to ensure Web3Auth provider is fully initialized
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          // Add a longer delay to ensure Web3Auth provider is fully stabilized
+          logger.log('⏳ Allowing provider to stabilize before network operations...');
+          await new Promise((resolve) => setTimeout(resolve, 1500));
 
           // Get current chain ID
           let currentChainIdDecimal: number;
@@ -305,15 +252,67 @@ export function Web3AuthDelegationButton({
             logger.log(`🔄 Switching from chain ${currentChainIdDecimal} to ${requiredChainId}`);
 
             try {
-              await switchToNetwork(web3Auth.provider as Web3AuthProvider, requiredChainId);
+              const hexChainId = `0x${requiredChainId.toString(16)}`;
+              await switchChain(hexChainId);
 
+              toast({
+                title: 'Switching Network',
+                description: `Switching to ${networkName}...`,
+              });
+
+              // Poll for network change confirmation with exponential backoff
+              let retries = 0;
+              const maxRetries = 20; // More retries for better reliability
+              let verifiedChainId = currentChainIdDecimal;
+              let lastError = null;
+              
+              while (verifiedChainId !== requiredChainId && retries < maxRetries) {
+                // Wait with exponential backoff: 100ms, 200ms, 400ms, etc., capped at 2s
+                const delay = Math.min(100 * Math.pow(1.5, retries), 2000);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                
+                try {
+                  const checkChainId = (await (web3Auth.provider as Web3AuthProvider).request({
+                    method: 'eth_chainId',
+                  })) as string;
+                  verifiedChainId = parseInt(checkChainId, 16);
+                  
+                  logger.log(`🔄 Network check attempt ${retries + 1}/${maxRetries}:`, {
+                    verifiedChainId,
+                    requiredChainId,
+                    match: verifiedChainId === requiredChainId,
+                    delay
+                  });
+                  
+                  lastError = null; // Clear error if check succeeded
+                } catch (checkError) {
+                  lastError = checkError;
+                  logger.warn(`Failed to check chain ID (attempt ${retries + 1}):`, checkError as Record<string, unknown>);
+                }
+                
+                retries++;
+              }
+              
+              if (verifiedChainId !== requiredChainId) {
+                const errorMsg = lastError 
+                  ? `Network switch failed after ${retries} attempts. Last error: ${lastError}`
+                  : `Failed to switch to required network after ${retries} attempts. Still on chain ${verifiedChainId}`;
+                throw new Error(errorMsg);
+              }
+              
+              logger.log('✅ Network switch verified successfully');
+              
               toast({
                 title: 'Network Switched',
                 description: `Successfully switched to ${networkName}`,
               });
-
-              // Give a moment for the network switch to propagate
-              await new Promise((resolve) => setTimeout(resolve, 1500));
+              
+              // Refresh the smart account hook's network state
+              await refreshNetworkState();
+              logger.log('✅ Smart account network state refreshed');
+              
+              // Additional delay to ensure all state is synchronized
+              await new Promise(resolve => setTimeout(resolve, 1000));
             } catch (switchError) {
               logger.error('❌ Failed to switch network:', { error: switchError });
               toast({
@@ -327,6 +326,27 @@ export function Web3AuthDelegationButton({
           } else {
             logger.log('✅ Already on correct network');
           }
+        }
+      }
+
+      // Final network verification before deployment
+      if (networkName && web3Auth?.provider) {
+        const requiredChainId = await getChainIdFromNetworkName(networkName);
+        if (requiredChainId) {
+          const finalChainId = (await (web3Auth.provider as Web3AuthProvider).request({
+            method: 'eth_chainId',
+          })) as string;
+          const finalChainIdDecimal = parseInt(finalChainId, 16);
+          
+          if (finalChainIdDecimal !== requiredChainId) {
+            logger.error('❌ Network state inconsistent after switch:', {
+              expected: requiredChainId,
+              actual: finalChainIdDecimal
+            });
+            throw new Error(`Network mismatch: Expected chain ${requiredChainId} but on chain ${finalChainIdDecimal}`);
+          }
+          
+          logger.log('✅ Final network verification passed');
         }
       }
 
@@ -527,9 +547,11 @@ export function Web3AuthDelegationButton({
       networkName,
       currentNetworkChainId: currentNetwork?.network.chain_id,
       web3AuthAccountAbstractionProvider: !!web3Auth?.accountAbstractionProvider,
+      isSwitchingChain,
     });
 
     if (!isAuthenticated) return 'Sign In to Subscribe';
+    if (isSwitchingChain) return 'Switching Network...';
     if (!isSmartAccountReady) return 'Subscribe';
     // For now, don't check deploymentSupported as it may give false negatives
     // if (!deploymentSupported) return 'Network Not Supported';
@@ -568,7 +590,8 @@ export function Web3AuthDelegationButton({
       disabled ||
       !isAuthenticated ||
       !isSmartAccountReady ||
-      status !== 'idle'
+      status !== 'idle' ||
+      isSwitchingChain
       // Removed deploymentSupported check as it may give false negatives
       // || !deploymentSupported
     );

@@ -82,6 +82,15 @@ func (s *PaymentService) CreatePaymentFromSubscriptionEvent(ctx context.Context,
 		Status:             "completed", // Subscription events are already completed
 		PaymentMethod:      "crypto",
 		ProductAmountCents: int64(event.AmountInCents),
+		InvoiceID:          pgtype.UUID{Valid: false}, // Default to no invoice
+	}
+	
+	// Link to invoice if provided
+	if params.InvoiceID != nil {
+		paymentParams.InvoiceID = pgtype.UUID{
+			Bytes: *params.InvoiceID,
+			Valid: true,
+		}
 	}
 
 	// Add blockchain data if available

@@ -2,8 +2,10 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/cyphera/cyphera-api/libs/go/db"
@@ -308,6 +310,11 @@ func (s *InvoiceService) GetInvoiceWithDetails(ctx context.Context, workspaceID,
 
 // GenerateInvoiceFromSubscription creates an invoice from a subscription and its line items
 func (s *InvoiceService) GenerateInvoiceFromSubscription(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool) (*responses.InvoiceResponse, error) {
+	return s.generateInvoiceFromSubscriptionWithNotes(ctx, subscriptionID, periodStart, periodEnd, isDraft, "")
+}
+
+// generateInvoiceFromSubscriptionWithNotes creates an invoice from a subscription with optional notes
+func (s *InvoiceService) generateInvoiceFromSubscriptionWithNotes(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool, notes string) (*responses.InvoiceResponse, error) {
 	// Get subscription with line items
 	subscriptionRows, err := s.queries.GetSubscriptionWithLineItems(ctx, subscriptionID)
 	if err != nil {
@@ -386,11 +393,15 @@ func (s *InvoiceService) GenerateInvoiceFromSubscription(ctx context.Context, su
 		return nil, fmt.Errorf("failed to marshal tax details: %w", err)
 	}
 
+	// Generate external ID for internal invoice
+	externalID := fmt.Sprintf("cyp_inv_%s", uuid.New().String())
+
 	// Create invoice
 	invoice, err := s.queries.CreateInvoiceWithDetails(ctx, db.CreateInvoiceWithDetailsParams{
 		WorkspaceID:            subscriptionDetails.WorkspaceID,
 		CustomerID:             pgtype.UUID{Bytes: subscriptionDetails.CustomerID, Valid: true},
 		SubscriptionID:         pgtype.UUID{Bytes: subscriptionID, Valid: true},
+		ExternalID:             externalID,
 		InvoiceNumber:          pgtype.Text{String: invoiceNumber, Valid: true},
 		Status:                 status,
 		AmountDue:              int32(totalAmount),
@@ -404,6 +415,7 @@ func (s *InvoiceService) GenerateInvoiceFromSubscription(ctx context.Context, su
 		CustomerJurisdictionID: pgtype.UUID{Valid: false},
 		ReverseChargeApplies:   pgtype.Bool{Bool: false, Valid: true},
 		Metadata:               []byte(`{"generated_from": "subscription"}`),
+		Notes:                  pgtype.Text{String: notes, Valid: notes != ""},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create invoice: %w", err)
@@ -464,6 +476,11 @@ func (s *InvoiceService) GenerateInvoiceFromSubscription(ctx context.Context, su
 
 	// Get the created invoice with line items
 	return s.GetInvoiceWithDetails(ctx, invoice.WorkspaceID, invoice.ID)
+}
+
+// GenerateInvoiceFromSubscriptionWithNotes creates an invoice from a subscription with custom notes
+func (s *InvoiceService) GenerateInvoiceFromSubscriptionWithNotes(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool, notes string) (*responses.InvoiceResponse, error) {
+	return s.generateInvoiceFromSubscriptionWithNotes(ctx, subscriptionID, periodStart, periodEnd, isDraft, notes)
 }
 
 // FinalizeInvoice marks an invoice as finalized and ready for payment
@@ -909,11 +926,70 @@ func (s *InvoiceService) generateInvoiceNumber(ctx context.Context, workspaceID 
 		return "", fmt.Errorf("failed to get next invoice number: %w", err)
 	}
 
-	// Format invoice number (e.g., INV-2024-0001)
+	// Format invoice number (e.g., INV-2025-0001)
 	year := time.Now().Year()
-	invoiceNumber := fmt.Sprintf("INV-%d-%04d", year, nextNumber)
+	baseInvoiceNumber := fmt.Sprintf("INV-%d-%04d", year, nextNumber)
 
-	return invoiceNumber, nil
+	// Try the base number first
+	exists, err := s.checkInvoiceNumberExists(ctx, workspaceID, baseInvoiceNumber)
+	if err != nil {
+		return "", fmt.Errorf("failed to check invoice number existence: %w", err)
+	}
+	if !exists {
+		return baseInvoiceNumber, nil
+	}
+
+	// If the base number exists (race condition), try incrementing the number
+	// Try up to 10 times with incremented numbers
+	for i := 1; i <= 10; i++ {
+		incrementedNumber := nextNumber + int32(i)
+		invoiceNumber := fmt.Sprintf("INV-%d-%04d", year, incrementedNumber)
+		
+		exists, err := s.checkInvoiceNumberExists(ctx, workspaceID, invoiceNumber)
+		if err != nil {
+			return "", fmt.Errorf("failed to check invoice number existence: %w", err)
+		}
+		if !exists {
+			s.logger.Warn("Generated invoice number with incremented value due to race condition",
+				zap.String("invoice_number", invoiceNumber),
+				zap.String("workspace_id", workspaceID.String()),
+				zap.Int("increment", i))
+			return invoiceNumber, nil
+		}
+	}
+
+	return "", fmt.Errorf("failed to generate unique invoice number after 10 attempts")
+}
+
+func (s *InvoiceService) checkInvoiceNumberExists(ctx context.Context, workspaceID uuid.UUID, invoiceNumber string) (bool, error) {
+	invoice, err := s.queries.GetInvoiceByNumber(ctx, db.GetInvoiceByNumberParams{
+		WorkspaceID:   workspaceID,
+		InvoiceNumber: pgtype.Text{String: invoiceNumber, Valid: true},
+	})
+	if err != nil {
+		// If no rows found, invoice doesn't exist
+		if err.Error() == "no rows in result set" {
+			return false, nil
+		}
+		return false, err
+	}
+	// Invoice exists if we found one
+	return invoice.ID != uuid.Nil, nil
+}
+
+func generateRandomString(length int) string {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, length)
+	for i := range b {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			// Fallback to timestamp-based if crypto/rand fails
+			b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+		} else {
+			b[i] = charset[n.Int64()]
+		}
+	}
+	return string(b)
 }
 
 func (s *InvoiceService) createLineItem(ctx context.Context, invoiceID uuid.UUID, currency string, params params.LineItemCreateParams) (db.InvoiceLineItem, error) {

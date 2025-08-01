@@ -392,6 +392,7 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 			"status":         invoice.Status,
 			"currency":       invoice.Currency,
 			"amount_due":     invoice.AmountDue,
+			"total_amount":   invoice.AmountDue, // Frontend expects total_amount
 			"due_date":       invoice.DueDate.Time,
 			"created_at":     invoice.CreatedAt,
 		})

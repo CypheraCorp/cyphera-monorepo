@@ -6,7 +6,6 @@ import { useSearchParams } from 'next/navigation';
 import { useSubscriptions } from '@/hooks/data';
 import { Suspense } from 'react';
 import { TableSkeleton } from '@/components/ui/loading-states';
-import { formatBillingInterval } from '@/lib/utils/format/billing';
 import dynamic from 'next/dynamic';
 
 // Dynamically import lucide-react icons
@@ -215,7 +214,6 @@ export default function SubscriptionsPage() {
                   <TableHead>Product</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Amount</TableHead>
-                  <TableHead>Billing</TableHead>
                   <TableHead>Current Period</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
@@ -223,7 +221,7 @@ export default function SubscriptionsPage() {
               <TableBody>
                 {subscriptions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       <div className="text-muted-foreground">No subscriptions found</div>
                     </TableCell>
                   </TableRow>
@@ -272,25 +270,14 @@ export default function SubscriptionsPage() {
                         <div className="flex flex-col">
                           <span className="font-medium">
                             ${((subscription.product.unit_amount_in_pennies || 0) / 100).toFixed(2)}
+                            <span className="text-sm text-muted-foreground">
+                              /{subscription.product.interval_type || 'month'}
+                            </span>
                           </span>
                           <span className="text-sm text-muted-foreground">
-                            {subscription.product.currency?.toUpperCase() || 'USD'}
+                            Total: ${(((subscription.product.unit_amount_in_pennies || 0) * (subscription.product.term_length || 1)) / 100).toFixed(2)}
+                            {' '}{subscription.product.currency?.toUpperCase() || 'USD'}
                           </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium">
-                            {formatBillingInterval(
-                              subscription.product.interval_type || '',
-                              1
-                            )}
-                          </span>
-                          {subscription.product.term_length && (
-                            <span className="text-sm text-muted-foreground">
-                              {subscription.product.term_length} term{subscription.product.term_length > 1 ? 's' : ''}
-                            </span>
-                          )}
                         </div>
                       </TableCell>
                       <TableCell>

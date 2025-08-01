@@ -9,6 +9,7 @@ import { PublicHeader } from '@/components/public/public-header';
 import { USDCBalanceCard } from '@/components/public/usdc-balance-card';
 import { PublicProductResponse } from '@/types/product';
 import { useWeb3AuthInitialization } from '@/hooks/auth';
+import { useWeb3AuthAutoNetwork } from '@/hooks/auth/use-web3auth-auto-network';
 import { logger } from '@/lib/core/logger/logger-utils';
 import { ProductCardSkeleton, BalanceCardSkeleton } from '@/components/ui/loading-states';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,6 +30,14 @@ export default function PayProductPage({ params }: PayProductPageProps) {
 
   // Web3Auth initialization tracking
   const { isInitializing, isAuthenticated, isConnected } = useWeb3AuthInitialization();
+  
+  // Get required network from product
+  const primaryOption = product?.product_tokens?.[0];
+  const requiredChainId = primaryOption?.chain_id;
+  const networkName = primaryOption?.network_name;
+  
+  // Auto-switch to required network after authentication
+  const { isNetworkReady, isSwitching } = useWeb3AuthAutoNetwork(requiredChainId, networkName);
 
   // Resolve params first
   useEffect(() => {
@@ -90,8 +99,8 @@ export default function PayProductPage({ params }: PayProductPageProps) {
     logger.debug('Authentication state changed', { isAuthenticated, isConnected });
   }, [isAuthenticated, isConnected]);
 
-  // Show loading state for product data OR Web3Auth initialization
-  if (loading || isInitializing) {
+  // Show loading state for product data OR Web3Auth initialization OR network switching
+  if (loading || isInitializing || (isAuthenticated && isSwitching && !isNetworkReady)) {
     return (
       <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900">
         <PublicHeader />
@@ -115,9 +124,16 @@ export default function PayProductPage({ params }: PayProductPageProps) {
               </div>
 
               {/* Balance Card Skeleton - Only show when we expect authentication */}
-              {!loading && isInitializing && (
+              {!loading && (isInitializing || (isAuthenticated && isSwitching)) && (
                 <div className="max-w-md mx-auto">
                   <BalanceCardSkeleton />
+                </div>
+              )}
+              
+              {/* Network Switching Message */}
+              {isAuthenticated && isSwitching && networkName && (
+                <div className="text-center mt-4">
+                  <p className="text-sm text-muted-foreground">Switching to {networkName}...</p>
                 </div>
               )}
             </div>

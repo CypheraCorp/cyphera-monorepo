@@ -23,6 +23,9 @@ interface UseWeb3AuthSmartAccountReturn extends Web3AuthSmartAccountState {
   refreshSmartAccount: () => Promise<void>;
   checkDeploymentStatus: () => Promise<boolean>;
   deploySmartAccount: () => Promise<void>;
+  refreshNetworkState: () => Promise<void>;
+  verifyProviderState: () => Promise<boolean>;
+  forceProviderRefresh: () => Promise<void>;
 }
 
 /**
@@ -48,10 +51,11 @@ export function useWeb3AuthSmartAccount(): UseWeb3AuthSmartAccountReturn {
   }
 
   // Remove Wagmi dependencies - we'll get everything from Web3Auth
-  const [, setCurrentChainId] = useState<number | null>(null);
+  const [currentChainId, setCurrentChainId] = useState<number | null>(null);
   const [publicClient, setPublicClient] = useState<ReturnType<typeof createPublicClient> | null>(
     null
   );
+  const [providerInitialized, setProviderInitialized] = useState(false);
 
   const [state, setState] = useState<Web3AuthSmartAccountState>({
     smartAccountAddress: null,
@@ -68,76 +72,77 @@ export function useWeb3AuthSmartAccount(): UseWeb3AuthSmartAccountReturn {
   // Requires both network support AND AccountAbstractionProvider availability
   const [deploymentSupported, setDeploymentSupported] = useState(false);
 
+  // Add setupNetworkInfo as a callable function (moved before the effect)
+  const setupNetworkInfo = useCallback(async () => {
+    if (!web3Auth?.provider || !isWeb3AuthConnected) {
+      setCurrentChainId(null);
+      setPublicClient(null);
+      setDeploymentSupported(false);
+      return;
+    }
+
+    try {
+      // Get current chain ID from Web3Auth provider
+      const chainIdHex = (await web3Auth.provider.request({
+        method: 'eth_chainId',
+      })) as string;
+      const chainIdDecimal = parseInt(chainIdHex, 16);
+
+      logger.log('🔍 [setupNetworkInfo] Got chain ID from Web3Auth:', {
+        chainIdHex,
+        chainIdDecimal,
+      });
+
+      setCurrentChainId(chainIdDecimal);
+
+      // Create public client for this network
+      const networkConfig = await getNetworkConfig(chainIdDecimal);
+      if (networkConfig) {
+        const client = createPublicClient({
+          chain: networkConfig.chain,
+          transport: http(networkConfig.rpcUrl),
+        });
+        setPublicClient(client);
+
+        logger.log('🔍 [setupNetworkInfo] Created public client for network:', {
+          chainId: chainIdDecimal,
+          networkName: networkConfig.chain.name,
+        });
+      }
+
+      // Check deployment support
+      const networkSupported = isPimlicoSupportedForChain(chainIdDecimal);
+      const hasAAProvider = !!web3Auth?.accountAbstractionProvider;
+
+      logger.log('🔍 [setupNetworkInfo] Deployment support check:', {
+        chainId: chainIdDecimal,
+        networkSupported,
+        hasAAProvider,
+        deploymentSupported: networkSupported && hasAAProvider,
+      });
+
+      if (networkSupported && !hasAAProvider) {
+        logger.log(
+          `ℹ️ Network ${chainIdDecimal} supports AA but AccountAbstractionProvider not available`
+        );
+      }
+
+      setDeploymentSupported(networkSupported && hasAAProvider);
+    } catch (error) {
+      logger.error(
+        '🔍 [setupNetworkInfo] Failed to get network info from Web3Auth:',
+        error
+      );
+      setCurrentChainId(null);
+      setPublicClient(null);
+      setDeploymentSupported(false);
+    }
+  }, [web3Auth?.provider, web3Auth?.accountAbstractionProvider, isWeb3AuthConnected]);
+
   // Effect to get current chain ID from Web3Auth and setup public client
   useEffect(() => {
-    const setupNetworkInfo = async () => {
-      if (!web3Auth?.provider || !isWeb3AuthConnected) {
-        setCurrentChainId(null);
-        setPublicClient(null);
-        setDeploymentSupported(false);
-        return;
-      }
-
-      try {
-        // Get current chain ID from Web3Auth provider
-        const chainIdHex = (await web3Auth.provider.request({
-          method: 'eth_chainId',
-        })) as string;
-        const chainIdDecimal = parseInt(chainIdHex, 16);
-
-        logger.log('🔍 [useWeb3AuthSmartAccount] Got chain ID from Web3Auth:', {
-          chainIdHex,
-          chainIdDecimal,
-        });
-
-        setCurrentChainId(chainIdDecimal);
-
-        // Create public client for this network
-        const networkConfig = await getNetworkConfig(chainIdDecimal);
-        if (networkConfig) {
-          const client = createPublicClient({
-            chain: networkConfig.chain,
-            transport: http(networkConfig.rpcUrl),
-          });
-          setPublicClient(client);
-
-          logger.log('🔍 [useWeb3AuthSmartAccount] Created public client for network:', {
-            chainId: chainIdDecimal,
-            networkName: networkConfig.chain.name,
-          });
-        }
-
-        // Check deployment support
-        const networkSupported = isPimlicoSupportedForChain(chainIdDecimal);
-        const hasAAProvider = !!web3Auth?.accountAbstractionProvider;
-
-        logger.log('🔍 [useWeb3AuthSmartAccount] Deployment support check:', {
-          chainId: chainIdDecimal,
-          networkSupported,
-          hasAAProvider,
-          deploymentSupported: networkSupported && hasAAProvider,
-        });
-
-        if (networkSupported && !hasAAProvider) {
-          logger.log(
-            `ℹ️ Network ${chainIdDecimal} supports AA but AccountAbstractionProvider not available`
-          );
-        }
-
-        setDeploymentSupported(networkSupported && hasAAProvider);
-      } catch (error) {
-        logger.error(
-          '🔍 [useWeb3AuthSmartAccount] Failed to get network info from Web3Auth:',
-          error
-        );
-        setCurrentChainId(null);
-        setPublicClient(null);
-        setDeploymentSupported(false);
-      }
-    };
-
     setupNetworkInfo();
-  }, [web3Auth?.provider, web3Auth?.accountAbstractionProvider, isWeb3AuthConnected]);
+  }, [setupNetworkInfo]);
 
   // Check deployment status with direct bytecode checking
   const checkDeploymentStatus = useCallback(async (): Promise<boolean> => {
@@ -167,6 +172,73 @@ export function useWeb3AuthSmartAccount(): UseWeb3AuthSmartAccountReturn {
     }
   }, [state.smartAccountAddress, publicClient]);
 
+  // Declare these functions before deploySmartAccount to avoid dependency issues
+  const verifyProviderStateInternal = useCallback(async (): Promise<boolean> => {
+    if (!web3Auth?.provider || !currentChainId) {
+      return false;
+    }
+
+    try {
+      logger.log('🔍 Verifying provider state consistency...');
+      
+      // Check surface level chain ID
+      const surfaceChainId = (await web3Auth.provider.request({
+        method: 'eth_chainId',
+      })) as string;
+      const surfaceChainIdDecimal = parseInt(surfaceChainId, 16);
+      
+      // Check if AccountAbstractionProvider is properly configured
+      const hasAAProvider = !!web3Auth?.accountAbstractionProvider;
+      
+      // Verify network support
+      const networkSupported = isPimlicoSupportedForChain(currentChainId);
+      
+      const isConsistent = surfaceChainIdDecimal === currentChainId && 
+                          (!networkSupported || hasAAProvider);
+      
+      logger.log('🔍 Provider state verification:', {
+        currentChainId,
+        surfaceChainId: surfaceChainIdDecimal,
+        hasAAProvider,
+        networkSupported,
+        isConsistent,
+      });
+      
+      return isConsistent;
+    } catch (error) {
+      logger.error('❌ Provider state verification failed:', error);
+      return false;
+    }
+  }, [web3Auth?.provider, web3Auth?.accountAbstractionProvider, currentChainId]);
+
+  const forceProviderRefreshInternal = useCallback(async (): Promise<void> => {
+    if (!web3Auth?.provider) {
+      return;
+    }
+
+    try {
+      logger.log('🔄 Forcing Web3Auth provider refresh...');
+      setProviderInitialized(false);
+      
+      // Add a delay to allow Web3Auth to stabilize
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Re-setup network info which will trigger all necessary updates
+      await setupNetworkInfo();
+      
+      // Verify the provider state after refresh
+      const isConsistent = await verifyProviderStateInternal();
+      if (!isConsistent) {
+        logger.warn('⚠️ Provider state still inconsistent after refresh');
+      } else {
+        logger.log('✅ Provider state refreshed successfully');
+        setProviderInitialized(true);
+      }
+    } catch (error) {
+      logger.error('❌ Failed to force provider refresh:', error);
+    }
+  }, [web3Auth?.provider, verifyProviderStateInternal, setupNetworkInfo]);
+
   // Deploy smart account using AccountAbstractionProvider
   const deploySmartAccount = useCallback(async (): Promise<void> => {
     if (!state.smartAccountAddress || !deploymentSupported) {
@@ -194,6 +266,19 @@ export function useWeb3AuthSmartAccount(): UseWeb3AuthSmartAccountReturn {
 
     try {
       logger.log('🚀 Starting smart account deployment via AccountAbstractionProvider...');
+      
+      // Verify provider state before deployment
+      const providerConsistent = await verifyProviderStateInternal();
+      if (!providerConsistent) {
+        logger.warn('⚠️ Provider state inconsistent, attempting refresh...');
+        await forceProviderRefreshInternal();
+        
+        // Re-verify after refresh
+        const stillInconsistent = !(await verifyProviderStateInternal());
+        if (stillInconsistent) {
+          throw new Error('Provider state inconsistent. Please refresh the page and try again.');
+        }
+      }
 
       // Check if already deployed first (safety check with bytecode)
       const alreadyDeployed = await checkDeploymentStatus();
@@ -301,6 +386,8 @@ export function useWeb3AuthSmartAccount(): UseWeb3AuthSmartAccountReturn {
     deploymentSupported,
     web3Auth?.accountAbstractionProvider,
     checkDeploymentStatus,
+    verifyProviderStateInternal,
+    forceProviderRefreshInternal,
   ]);
 
   const refreshSmartAccount = useCallback(async () => {
@@ -453,10 +540,78 @@ export function useWeb3AuthSmartAccount(): UseWeb3AuthSmartAccountReturn {
     setState((prev) => ({ ...prev, deploymentSupported }));
   }, [deploymentSupported]);
 
+  // Refresh network state after a network switch
+  const refreshNetworkState = useCallback(async () => {
+    if (!web3Auth?.provider || !isWeb3AuthConnected) {
+      return;
+    }
+
+    try {
+      logger.log('🔄 Refreshing network state after switch...');
+      
+      // Get current chain ID from Web3Auth provider
+      const chainIdHex = (await web3Auth.provider.request({
+        method: 'eth_chainId',
+      })) as string;
+      const chainIdDecimal = parseInt(chainIdHex, 16);
+
+      logger.log('🔍 [refreshNetworkState] New chain ID:', {
+        chainIdHex,
+        chainIdDecimal,
+      });
+
+      setCurrentChainId(chainIdDecimal);
+
+      // Create public client for this network
+      const networkConfig = await getNetworkConfig(chainIdDecimal);
+      if (networkConfig) {
+        const client = createPublicClient({
+          chain: networkConfig.chain,
+          transport: http(networkConfig.rpcUrl),
+        });
+        setPublicClient(client);
+
+        logger.log('🔍 [refreshNetworkState] Created new public client for network:', {
+          chainId: chainIdDecimal,
+          networkName: networkConfig.chain.name,
+        });
+      }
+
+      // Check deployment support
+      const networkSupported = isPimlicoSupportedForChain(chainIdDecimal);
+      const hasAAProvider = !!web3Auth?.accountAbstractionProvider;
+
+      logger.log('🔍 [refreshNetworkState] Updated deployment support:', {
+        chainId: chainIdDecimal,
+        networkSupported,
+        hasAAProvider,
+        deploymentSupported: networkSupported && hasAAProvider,
+      });
+
+      setDeploymentSupported(networkSupported && hasAAProvider);
+      
+      // Reset deployment status since we're on a new network
+      setState((prev) => ({
+        ...prev,
+        isDeployed: null,
+        deploymentSupported: networkSupported && hasAAProvider,
+      }));
+
+      // Refresh smart account info
+      await refreshSmartAccount();
+    } catch (error) {
+      logger.error('❌ Failed to refresh network state:', error);
+    }
+  }, [web3Auth?.provider, web3Auth?.accountAbstractionProvider, isWeb3AuthConnected, refreshSmartAccount]);
+
+
   return {
     ...state,
     refreshSmartAccount,
     checkDeploymentStatus,
     deploySmartAccount,
+    refreshNetworkState,
+    verifyProviderState: verifyProviderStateInternal,
+    forceProviderRefresh: forceProviderRefreshInternal,
   };
 }

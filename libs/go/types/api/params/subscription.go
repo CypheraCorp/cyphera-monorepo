@@ -128,6 +128,7 @@ type CreateSubscriptionWithDelegationParams struct {
 	SubscriberAddress string
 	ProductTokenID    uuid.UUID
 	TokenAmount       int64
+	Addons            []SubscriptionAddonParams // Support for product addons
 }
 
 // SubscriptionCreationResult represents the result of subscription creation
@@ -160,4 +161,11 @@ type DelegationParams struct {
 	Salt      string
 	Signature string
 	Caveats   json.RawMessage
+}
+
+// CreateSubscriptionAfterPaymentParams contains parameters for creating subscription after successful payment
+type CreateSubscriptionAfterPaymentParams struct {
+	CreateParams      CreateSubscriptionWithDelegationParams
+	TransactionHash   string
+	NormalizedAddress string
 }

@@ -526,6 +526,7 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 
 	resp := responses.SubscriptionResponse{
 		ID:                 subDetails.SubscriptionID,
+		NumID:              subDetails.SubscriptionNumID, // Add NumID field
 		WorkspaceID:        subDetails.ProductWorkspaceID,
 		Status:             string(subDetails.SubscriptionStatus),
 		CurrentPeriodStart: subDetails.SubscriptionCurrentPeriodStart.Time,
@@ -537,12 +538,17 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 		CustomerName:       subDetails.CustomerName.String,
 		CustomerEmail:      subDetails.CustomerEmail.String,
 		Product: ProductResponse{
-			ID:          subDetails.ProductID.String(),
-			Name:        subDetails.ProductName,
-			Description: subDetails.ProductDescription.String,
-			ImageURL:    subDetails.ProductImageUrl.String,
-			Active:      subDetails.ProductActive,
-			Metadata:    subDetails.ProductMetadata, // Expecting json.RawMessage
+			ID:                  subDetails.ProductID.String(),
+			Name:                subDetails.ProductName,
+			Description:         subDetails.ProductDescription.String,
+			ImageURL:            subDetails.ProductImageUrl.String,
+			Active:              subDetails.ProductActive,
+			PriceType:           string(subDetails.PriceType),
+			Currency:            subDetails.PriceCurrency,
+			UnitAmountInPennies: int64(subDetails.PriceUnitAmountInPennies),
+			IntervalType:        string(subDetails.PriceIntervalType.IntervalType),
+			TermLength:          subDetails.PriceTermLength.Int32,
+			Metadata:            subDetails.ProductMetadata, // Expecting json.RawMessage
 		},
 		ProductToken: responses.ProductTokenResponse{
 			ID:          subDetails.ProductTokenID.String(),
@@ -560,6 +566,7 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 func toSubscriptionResponseFromDBSubscription(sub db.Subscription) (responses.SubscriptionResponse, error) {
 	resp := responses.SubscriptionResponse{
 		ID:          sub.ID,
+		NumID:       sub.NumID, // Add NumID field
 		CustomerID:  sub.CustomerID,
 		WorkspaceID: sub.WorkspaceID,
 		Status:      string(sub.Status),
