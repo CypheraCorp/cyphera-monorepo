@@ -5,6 +5,8 @@ import {
   CircleRequestWithIdempotencyKeyAndToken,
   CircleTransaction,
   CircleTransactionListResponse,
+  CircleTransactionRequest,
+  CircleTransactionResponse,
   CircleUserData,
   CircleUserInitResponse,
   CircleUserResponse,
@@ -185,6 +187,32 @@ export class CircleAPI extends CypheraAPI {
       });
     } catch (error) {
       logger.error('Failed to create PIN challenge:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Creates a PIN with wallets in a single operation.
+   * This is used for users with UNSET PIN status.
+   * Requires workspaceId in the path. Uses public headers for the call to *our* backend.
+   */
+  async createUserPinWithWallets(
+    workspaceId: string,
+    request: {
+      blockchains?: string[];
+      account_type?: 'SCA' | 'EOA';
+    }
+  ): Promise<CircleCreateChallengeResponse> {
+    if (!workspaceId) throw new Error('Workspace ID is required in context');
+    try {
+      // Use workspaceId in path, use public headers
+      return await this.fetchWithRateLimit<CircleCreateChallengeResponse>(`${this.baseUrl}/admin/circle/users/${workspaceId}/pin/create-with-wallets`, {
+        method: 'POST',
+        headers: this.getPublicHeaders(),
+        body: JSON.stringify(request),
+      });
+    } catch (error) {
+      logger.error('Failed to create PIN with wallets:', error);
       throw error;
     }
   }
@@ -489,6 +517,27 @@ export class CircleAPI extends CypheraAPI {
       return 'data' in result ? result.data : result;
     } catch (error) {
       logger.error('Failed to estimate fee:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Creates a transfer transaction.
+   * Uses public headers for the call to *our* backend.
+   */
+  async createTransfer(params: CircleTransactionRequest): Promise<CircleTransactionResponse> {
+    try {
+      const result = await this.fetchWithRateLimit<{ data: CircleTransactionResponse } | CircleTransactionResponse>(
+        `${this.baseUrl}/admin/circle/transactions/transfer`,
+        {
+          method: 'POST',
+          headers: this.getPublicHeaders(),
+          body: JSON.stringify(params),
+        }
+      );
+      return 'data' in result ? result.data : result;
+    } catch (error) {
+      logger.error('Failed to create transfer:', error);
       throw error;
     }
   }

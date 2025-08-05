@@ -118,4 +118,37 @@ export class WalletsAPI extends CypheraAPI {
       throw error;
     }
   }
+
+  /**
+   * Gets all wallets for a specific address
+   * @param context - The user request context (token, IDs)
+   * @param address - The wallet address to retrieve wallets for
+   * @returns Promise with the wallets response containing all wallets for the address
+   * @throws Error if the request fails
+   */
+  async getWalletsByAddress(context: UserRequestContext, address: string): Promise<{
+    address: string;
+    wallets: Array<{
+      wallet: WalletResponse;
+      network: {
+        id: string;
+        name: string;
+        chain_id: number;
+        circle_network_type?: string;
+        is_testnet: boolean;
+        block_explorer_url?: string;
+      } | null;
+    }>;
+    count: number;
+  }> {
+    try {
+      return await this.fetchWithRateLimit(`${this.baseUrl}/wallets/address/${encodeURIComponent(address)}`, {
+        method: 'GET',
+        headers: this.getHeaders(context),
+      });
+    } catch (error) {
+      logger.error_sync('Wallets by address fetch failed:', error);
+      throw error;
+    }
+  }
 }

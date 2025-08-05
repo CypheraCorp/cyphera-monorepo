@@ -74,13 +74,19 @@ type InitializeUserRequest struct {
 // CreateWalletsRequest represents the request to create Circle wallets
 type CreateWalletsRequest struct {
 	IdempotencyKey string   `json:"idempotency_key" binding:"required"`
-	Blockchains    []string `json:"blockchains" binding:"required"`
+	Blockchains    []string `json:"blockchains"` // Optional - backend will auto-select if not provided
 	AccountType    string   `json:"account_type" binding:"required"`
 	UserToken      string   `json:"user_token" binding:"required"`
 	Metadata       []struct {
 		Name  string `json:"name"`
 		RefID string `json:"ref_id"`
 	} `json:"metadata,omitempty"`
+}
+
+// CreateUserPinWithWalletsRequest represents the request to create user PIN and wallets together
+type CreateUserPinWithWalletsRequest struct {
+	Blockchains []string `json:"blockchains"` // Optional - backend will auto-select if not provided
+	AccountType string   `json:"account_type,omitempty"`
 }
 
 // GetWalletBalanceParams represents query parameters for the wallet balance endpoint
@@ -657,6 +663,225 @@ func (h *CircleHandler) CreatePinChallenge(c *gin.Context) {
 	sendSuccess(c, http.StatusOK, pinResponse)
 }
 
+// CreateUserPinWithWallets godoc
+// @Summary Create user PIN and wallets together
+// @Description Creates a Circle user PIN and initial wallets in a single operation
+// @Tags circle
+// @Accept json
+// @Tags exclude
+func (h *CircleHandler) CreateUserPinWithWallets(c *gin.Context) {
+	// Validate workspace ID from path parameter
+	workspaceIDStr := c.Param("workspace_id")
+	workspaceID, err := uuid.Parse(workspaceIDStr)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid workspace ID format in path", err)
+		return
+	}
+
+	// Validate that the workspace exists
+	_, err = h.common.db.GetWorkspace(c.Request.Context(), workspaceID)
+	if err != nil {
+		handleDBError(c, err, "Workspace not found")
+		return
+	}
+
+	var req CreateUserPinWithWalletsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	// Get the Circle user from our database using workspaceID
+	circleUser, err := h.common.db.GetCircleUserByWorkspaceID(c.Request.Context(), workspaceID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			sendError(c, http.StatusNotFound, "Circle user not found for this workspace", err)
+		} else {
+			sendError(c, http.StatusInternalServerError, "Failed to check Circle user", err)
+		}
+		return
+	}
+
+	// If blockchains not provided, automatically select from active networks
+	blockchains := req.Blockchains
+	if len(blockchains) == 0 {
+		// Get all active networks with Circle support
+		networks, err := h.common.db.ListActiveCircleNetworks(c.Request.Context())
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, "Failed to fetch active Circle networks", err)
+			return
+		}
+
+		if len(networks) == 0 {
+			sendError(c, http.StatusBadRequest, "No active Circle networks configured", nil)
+			return
+		}
+
+		// Extract Circle network types
+		blockchains = make([]string, 0, len(networks))
+		for _, network := range networks {
+			if network.CircleNetworkType != "" {
+				blockchains = append(blockchains, string(network.CircleNetworkType))
+			}
+		}
+
+		if len(blockchains) == 0 {
+			sendError(c, http.StatusBadRequest, "No valid Circle network types found in active networks", nil)
+			return
+		}
+
+		logger.Log.Info("Auto-selected Circle networks for PIN with wallets",
+			zap.Strings("blockchains", blockchains),
+			zap.String("workspace_id", workspaceID.String()))
+	}
+
+	// Set default account type if not provided
+	accountType := req.AccountType
+	if accountType == "" {
+		accountType = "SCA"
+	}
+
+	// Get user token for the Initialize User call
+	tokenResponse, err := h.circleClient.CreateUserToken(c.Request.Context(), circleUser.ID.String())
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to create user token", err)
+		return
+	}
+	userToken := tokenResponse.Data.UserToken
+
+	// Use InitializeUser which combines PIN setup and wallet creation
+	initRequest := circle.InitializeUserRequest{
+		IdempotencyKey: uuid.New().String(),
+		AccountType:    accountType,
+		Blockchains:    blockchains,
+	}
+
+	challengeResponse, err := h.circleClient.InitializeUser(c.Request.Context(), initRequest, userToken)
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to create user PIN with wallets", err)
+		return
+	}
+
+	// Store the challenge ID for future wallet creation tracking
+	challengeID := challengeResponse.Data.ChallengeID
+
+	// Poll every second for up to one minute to check if the challenge completes
+	go func() {
+		ctx := context.Background() // Create a new context to avoid cancellation issues
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		timeout := time.After(60 * time.Second)
+
+		// Get user token for checking challenge status
+		pollingTokenResponse, err := h.circleClient.CreateUserToken(ctx, circleUser.ID.String())
+		if err != nil {
+			logger.Error("Failed to create user token for challenge polling",
+				zap.String("challenge_id", challengeID),
+				zap.Error(err))
+			return
+		}
+		pollingUserToken := pollingTokenResponse.Data.UserToken
+
+		for {
+			select {
+			case <-ticker.C:
+				// Check challenge status
+				challengeResp, err := h.circleClient.GetChallenge(ctx, challengeID, pollingUserToken)
+				if err != nil {
+					logger.Warn("Failed to check challenge status during polling",
+						zap.String("challenge_id", challengeID),
+						zap.Error(err))
+					continue
+				}
+
+				logger.Debug("Checking PIN with wallets challenge status",
+					zap.String("challenge_id", challengeID),
+					zap.String("status", challengeResp.Data.Challenge.Status))
+
+				if challengeResp.Data.Challenge.Status == "COMPLETE" {
+					logger.Info("PIN with wallets challenge completed successfully",
+						zap.String("challenge_id", challengeID),
+						zap.String("user_id", circleUser.ID.String()))
+
+					// List wallets to get their details
+					listParams := &circle.ListWalletsParams{}
+					walletsListResponse, err := h.circleClient.ListWallets(ctx, userToken, listParams)
+					if err != nil {
+						logger.Error("Failed to list wallets after PIN with wallets challenge completion",
+							zap.String("challenge_id", challengeID),
+							zap.Error(err))
+						return
+					}
+
+					if len(walletsListResponse.Data.Wallets) == 0 {
+						logger.Warn("No wallets returned after PIN with wallets challenge completion",
+							zap.String("challenge_id", challengeID))
+						return
+					}
+
+					// Get database pool
+					pool, poolErr := h.common.GetDBPool()
+					if poolErr != nil {
+						logger.Error("Failed to get database pool for wallet creation after challenge completion",
+							zap.Error(poolErr))
+						return
+					}
+
+					// Execute within transaction
+					walletCount := 0
+					txErr := helpers.WithTransaction(ctx, pool, func(tx pgx.Tx) error {
+						qtx := h.common.WithTx(tx)
+
+						// Process each wallet and create Cyphera wallet entries
+						for _, walletData := range walletsListResponse.Data.Wallets {
+							err = h.createCypheraWalletEntry(ctx, qtx, walletData, workspaceID, circleUser.ID)
+							if err != nil {
+								logger.Error("Failed to create Cyphera wallet entry during PIN with wallets challenge polling",
+									zap.String("address", walletData.Address),
+									zap.Error(err))
+								continue
+							}
+							walletCount++
+						}
+
+						return nil
+					})
+
+					if txErr != nil {
+						logger.Error("Failed to process wallet creation transaction",
+							zap.Error(txErr))
+						return
+					}
+
+					logger.Info("Successfully created wallets after PIN with wallets challenge completion",
+						zap.String("challenge_id", challengeID),
+						zap.Int("wallet_count", walletCount))
+					return
+				} else if challengeResp.Data.Challenge.Status == "FAILED" {
+					logger.Error("PIN with wallets challenge failed",
+						zap.String("challenge_id", challengeID),
+						zap.Int("error_code", challengeResp.Data.Challenge.ErrorCode),
+						zap.String("error_message", challengeResp.Data.Challenge.ErrorMessage))
+					return
+				}
+
+			case <-timeout:
+				logger.Warn("Timed out waiting for PIN with wallets challenge to complete",
+					zap.String("challenge_id", challengeID),
+					zap.String("user_id", circleUser.ID.String()))
+				return
+			}
+		}
+	}()
+
+	// Return the challenge info
+	sendSuccess(c, http.StatusOK, map[string]interface{}{
+		"challenge_id": challengeID,
+		"user_id":      circleUser.ID.String(),
+		"message":      "PIN setup with wallet creation challenge initiated. Execute the challenge to set PIN and create wallets.",
+	})
+}
+
 // UpdatePinChallenge godoc
 // @Summary Update a Circle PIN challenge
 // @Description Updates an existing Circle PIN challenge with the specified idempotency key
@@ -792,10 +1017,43 @@ func (h *CircleHandler) CreateWallets(c *gin.Context) {
 		return
 	}
 
+	// If blockchains not provided, automatically select from active networks
+	blockchains := req.Blockchains
+	if len(blockchains) == 0 {
+		// Get all active networks with Circle support
+		networks, err := h.common.db.ListActiveCircleNetworks(c.Request.Context())
+		if err != nil {
+			sendError(c, http.StatusInternalServerError, "Failed to fetch active Circle networks", err)
+			return
+		}
+
+		if len(networks) == 0 {
+			sendError(c, http.StatusBadRequest, "No active Circle networks configured", nil)
+			return
+		}
+
+		// Extract Circle network types
+		blockchains = make([]string, 0, len(networks))
+		for _, network := range networks {
+			if network.CircleNetworkType != "" {
+				blockchains = append(blockchains, string(network.CircleNetworkType))
+			}
+		}
+
+		if len(blockchains) == 0 {
+			sendError(c, http.StatusBadRequest, "No valid Circle network types found in active networks", nil)
+			return
+		}
+
+		logger.Log.Info("Auto-selected Circle networks",
+			zap.Strings("blockchains", blockchains),
+			zap.String("workspace_id", workspaceID.String()))
+	}
+
 	// Prepare the Circle API request
 	circleRequest := circle.CreateWalletsRequest{
 		IdempotencyKey: req.IdempotencyKey,
-		Blockchains:    req.Blockchains,
+		Blockchains:    blockchains,
 		AccountType:    req.AccountType,
 	}
 

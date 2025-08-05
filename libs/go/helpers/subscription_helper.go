@@ -314,11 +314,15 @@ func ToComprehensiveSubscriptionResponse(ctx context.Context, queries db.Querier
 			Object: "product",
 		},
 		ProductToken: &responses.ProductTokenResponse{
-			ID:          subscriptionDetails.ProductTokenID.String(),
-			TokenSymbol: subscriptionDetails.TokenSymbol,
-			NetworkID:   subscriptionDetails.ProductTokenID.String(),
-			CreatedAt:   time.Now().Unix(), // Default timestamp
-			UpdatedAt:   time.Now().Unix(), // Default timestamp
+			ID:            subscriptionDetails.ProductTokenID.String(),
+			TokenSymbol:   subscriptionDetails.TokenSymbol,
+			TokenAddress:  subscriptionDetails.TokenAddress,
+			TokenDecimals: subscriptionDetails.TokenDecimals,
+			ChainID:       subscriptionDetails.ChainID,
+			NetworkName:   subscriptionDetails.NetworkName,
+			NetworkID:     subscriptionDetails.ProductTokenID.String(),
+			CreatedAt:     time.Now().Unix(), // Default timestamp
+			UpdatedAt:     time.Now().Unix(), // Default timestamp
 		},
 	}
 

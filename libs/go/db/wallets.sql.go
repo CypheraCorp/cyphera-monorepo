@@ -1012,6 +1012,130 @@ func (q *Queries) ListPrimaryWalletsWithCircleDataByWorkspaceID(ctx context.Cont
 	return items, nil
 }
 
+const listWalletsByAddress = `-- name: ListWalletsByAddress :many
+SELECT 
+    w.id,
+    w.workspace_id,
+    w.wallet_type,
+    w.wallet_address,
+    w.network_type,
+    w.network_id,
+    w.nickname,
+    w.ens,
+    w.is_primary,
+    w.verified,
+    w.last_used_at,
+    w.metadata,
+    w.created_at,
+    w.updated_at,
+    w.deleted_at,
+    n.id as network_id,
+    n.name as network_name,
+    n.chain_id,
+    n.block_explorer_url,
+    n.circle_network_type,
+    n.active as network_active,
+    n.is_testnet as network_testnet,
+    cw.id as circle_wallet_table_id,
+    cw.circle_user_id,
+    cw.circle_wallet_id,
+    cw.state as circle_state,
+    cw.chain_id as circle_chain_id,
+    cw.created_at as circle_created_at
+FROM wallets w
+LEFT JOIN networks n ON w.network_id = n.id
+LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id
+WHERE w.wallet_address = $1 
+  AND w.workspace_id = $2
+  AND w.deleted_at IS NULL
+ORDER BY n.name
+`
+
+type ListWalletsByAddressParams struct {
+	WalletAddress string    `json:"wallet_address"`
+	WorkspaceID   uuid.UUID `json:"workspace_id"`
+}
+
+type ListWalletsByAddressRow struct {
+	ID                  uuid.UUID             `json:"id"`
+	WorkspaceID         uuid.UUID             `json:"workspace_id"`
+	WalletType          string                `json:"wallet_type"`
+	WalletAddress       string                `json:"wallet_address"`
+	NetworkType         NetworkType           `json:"network_type"`
+	NetworkID           pgtype.UUID           `json:"network_id"`
+	Nickname            pgtype.Text           `json:"nickname"`
+	Ens                 pgtype.Text           `json:"ens"`
+	IsPrimary           pgtype.Bool           `json:"is_primary"`
+	Verified            pgtype.Bool           `json:"verified"`
+	LastUsedAt          pgtype.Timestamptz    `json:"last_used_at"`
+	Metadata            []byte                `json:"metadata"`
+	CreatedAt           pgtype.Timestamptz    `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz    `json:"updated_at"`
+	DeletedAt           pgtype.Timestamptz    `json:"deleted_at"`
+	NetworkID_2         pgtype.UUID           `json:"network_id_2"`
+	NetworkName         pgtype.Text           `json:"network_name"`
+	ChainID             pgtype.Int4           `json:"chain_id"`
+	BlockExplorerUrl    pgtype.Text           `json:"block_explorer_url"`
+	CircleNetworkType   NullCircleNetworkType `json:"circle_network_type"`
+	NetworkActive       pgtype.Bool           `json:"network_active"`
+	NetworkTestnet      pgtype.Bool           `json:"network_testnet"`
+	CircleWalletTableID pgtype.UUID           `json:"circle_wallet_table_id"`
+	CircleUserID        pgtype.UUID           `json:"circle_user_id"`
+	CircleWalletID      pgtype.Text           `json:"circle_wallet_id"`
+	CircleState         pgtype.Text           `json:"circle_state"`
+	CircleChainID       pgtype.Int4           `json:"circle_chain_id"`
+	CircleCreatedAt     pgtype.Timestamptz    `json:"circle_created_at"`
+}
+
+func (q *Queries) ListWalletsByAddress(ctx context.Context, arg ListWalletsByAddressParams) ([]ListWalletsByAddressRow, error) {
+	rows, err := q.db.Query(ctx, listWalletsByAddress, arg.WalletAddress, arg.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWalletsByAddressRow{}
+	for rows.Next() {
+		var i ListWalletsByAddressRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.WalletType,
+			&i.WalletAddress,
+			&i.NetworkType,
+			&i.NetworkID,
+			&i.Nickname,
+			&i.Ens,
+			&i.IsPrimary,
+			&i.Verified,
+			&i.LastUsedAt,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.NetworkID_2,
+			&i.NetworkName,
+			&i.ChainID,
+			&i.BlockExplorerUrl,
+			&i.CircleNetworkType,
+			&i.NetworkActive,
+			&i.NetworkTestnet,
+			&i.CircleWalletTableID,
+			&i.CircleUserID,
+			&i.CircleWalletID,
+			&i.CircleState,
+			&i.CircleChainID,
+			&i.CircleCreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWalletsByNetworkType = `-- name: ListWalletsByNetworkType :many
 SELECT id, workspace_id, wallet_type, wallet_address, network_type, network_id, nickname, ens, is_primary, verified, last_used_at, web3auth_user_id, smart_account_type, deployment_status, metadata, created_at, updated_at, deleted_at FROM wallets
 WHERE workspace_id = $1 AND network_type = $2 AND deleted_at IS NULL

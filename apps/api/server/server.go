@@ -519,6 +519,7 @@ func InitializeRoutes(router *gin.Engine) {
 
 						// PIN management
 						circleUser.POST("/:workspace_id/pin/create", circleHandler.CreatePinChallenge)
+						circleUser.POST("/:workspace_id/pin/create-with-wallets", circleHandler.CreateUserPinWithWallets)
 						circleUser.PUT("/:workspace_id/pin/update", circleHandler.UpdatePinChallenge)
 						circleUser.POST("/:workspace_id/pin/restore", circleHandler.CreatePinRestoreChallenge)
 					}
@@ -530,6 +531,16 @@ func InitializeRoutes(router *gin.Engine) {
 						circleWallet.GET("/:workspace_id", circleHandler.ListWallets)
 						circleWallet.GET("/get/:wallet_id", circleHandler.GetWallet)
 						circleWallet.GET("/balances/:wallet_id", circleHandler.GetWalletBalance)
+					}
+
+					// Circle transaction endpoints
+					circleTransaction := circle.Group("/transactions")
+					{
+						circleTransaction.POST("/transfer/estimate-fee", circleHandler.EstimateTransferFee)
+						circleTransaction.POST("/transfer", circleHandler.CreateTransfer)
+						circleTransaction.GET("", circleHandler.ListTransactions)
+						circleTransaction.GET("/:transaction_id", circleHandler.GetTransaction)
+						circleTransaction.POST("/validate-address", circleHandler.ValidateAddress)
 					}
 
 					// Circle challenge endpoints
@@ -629,6 +640,7 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				wallets.GET("", middleware.ValidateQueryParams(middleware.ListQueryValidation), walletHandler.ListWallets)
 				wallets.POST("", middleware.ValidateInput(middleware.CreateWalletValidation), walletHandler.CreateWallet)
+				wallets.GET("/address/:address", walletHandler.GetWalletsByAddress)
 				wallets.GET("/:wallet_id", walletHandler.GetWallet)
 				wallets.DELETE("/:wallet_id", walletHandler.DeleteWallet)
 			}

@@ -336,6 +336,61 @@ func (q *Queries) GetNetworkByCircleNetworkType(ctx context.Context, circleNetwo
 	return i, err
 }
 
+const listActiveCircleNetworks = `-- name: ListActiveCircleNetworks :many
+SELECT id, name, type, network_type, circle_network_type, rpc_id, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at FROM networks
+WHERE active = true 
+  AND circle_network_type IS NOT NULL
+  AND deleted_at IS NULL
+ORDER BY name
+`
+
+func (q *Queries) ListActiveCircleNetworks(ctx context.Context) ([]Network, error) {
+	rows, err := q.db.Query(ctx, listActiveCircleNetworks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Network{}
+	for rows.Next() {
+		var i Network
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Type,
+			&i.NetworkType,
+			&i.CircleNetworkType,
+			&i.RpcID,
+			&i.BlockExplorerUrl,
+			&i.ChainID,
+			&i.IsTestnet,
+			&i.Active,
+			&i.LogoUrl,
+			&i.DisplayName,
+			&i.ChainNamespace,
+			&i.BaseFeeMultiplier,
+			&i.PriorityFeeMultiplier,
+			&i.DeploymentGasLimit,
+			&i.TokenTransferGasLimit,
+			&i.SupportsEip1559,
+			&i.GasOracleUrl,
+			&i.GasRefreshIntervalMs,
+			&i.GasPriorityLevels,
+			&i.AverageBlockTimeMs,
+			&i.PeakHoursMultiplier,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActiveNetworks = `-- name: ListActiveNetworks :many
 SELECT id, name, type, network_type, circle_network_type, rpc_id, block_explorer_url, chain_id, is_testnet, active, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, gas_oracle_url, gas_refresh_interval_ms, gas_priority_levels, average_block_time_ms, peak_hours_multiplier, created_at, updated_at, deleted_at FROM networks
 WHERE active = true AND deleted_at IS NULL

@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * Wallet type enum
  */
-export const walletTypeSchema = z.enum(['wallet', 'circle_wallet', 'web3auth']);
+export const walletTypeSchema = z.enum(['wallet', 'circle', 'web3auth']);
 
 /**
  * Network type enum
@@ -30,8 +30,8 @@ export const createWalletSchema = z.object({
   ens: z.string()
     .regex(/^[a-z0-9-]+\.eth$/, 'Invalid ENS name format')
     .optional(),
-  is_primary: z.boolean(),
-  verified: z.boolean(),
+  is_primary: z.boolean().optional(),
+  verified: z.boolean().optional(),
   metadata: z.record(z.unknown()).optional(),
   // Circle wallet specific fields
   circle_user_id: z.string().uuid().optional(),
@@ -39,8 +39,8 @@ export const createWalletSchema = z.object({
   chain_id: z.number().int().positive().optional(),
   state: circleWalletStateSchema.optional(),
 }).refine((data) => {
-  // If wallet_type is circle_wallet, circle fields are required
-  if (data.wallet_type === 'circle_wallet') {
+  // If wallet_type is circle, circle fields are required
+  if (data.wallet_type === 'circle') {
     return data.circle_user_id !== undefined && 
            data.circle_wallet_id !== undefined &&
            data.chain_id !== undefined;

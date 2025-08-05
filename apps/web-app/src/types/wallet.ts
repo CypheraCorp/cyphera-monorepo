@@ -42,13 +42,13 @@ export interface WalletListResponse {
  * Request payload for creating a wallet
  */
 export interface CreateWalletRequest {
-  wallet_type: string; // 'wallet' or 'circle_wallet' or 'web3auth'
+  wallet_type: string; // 'wallet' or 'circle' or 'web3auth'
   wallet_address: string;
   network_type: string;
   nickname?: string;
   ens?: string;
-  is_primary: boolean;
-  verified: boolean;
+  is_primary?: boolean;
+  verified?: boolean;
   metadata?: Record<string, unknown>;
   // Circle wallet specific fields
   circle_user_id?: string;

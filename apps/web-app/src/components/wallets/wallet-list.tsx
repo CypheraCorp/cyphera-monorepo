@@ -1,18 +1,69 @@
 'use client';
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
-
-import { DeleteWalletButton } from '@/components/wallets/delete-wallet-button';
+import { useRouter } from 'next/navigation';
+import { SendTransactionDialog } from '@/components/wallets/send-transaction-dialog';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { toast } from 'sonner';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import type { WalletResponse } from '@/types/wallet';
 import { generateExplorerLink } from '@/lib/utils/explorers';
 import { NetworkWithTokensResponse } from '@/types/network';
 import dynamic from 'next/dynamic';
 
-// Dynamically import lucide icon
+// Dynamically import lucide icons
 const ExternalLink = dynamic(
   () => import('lucide-react').then((mod) => ({ default: mod.ExternalLink })),
+  {
+    loading: () => <div className="h-4 w-4 bg-muted animate-pulse rounded" />,
+    ssr: false,
+  }
+);
+
+const Send = dynamic(
+  () => import('lucide-react').then((mod) => ({ default: mod.Send })),
+  {
+    loading: () => <div className="h-4 w-4 bg-muted animate-pulse rounded" />,
+    ssr: false,
+  }
+);
+
+const MoreVertical = dynamic(
+  () => import('lucide-react').then((mod) => ({ default: mod.MoreVertical })),
+  {
+    loading: () => <div className="h-4 w-4 bg-muted animate-pulse rounded" />,
+    ssr: false,
+  }
+);
+
+const Eye = dynamic(
+  () => import('lucide-react').then((mod) => ({ default: mod.Eye })),
+  {
+    loading: () => <div className="h-4 w-4 bg-muted animate-pulse rounded" />,
+    ssr: false,
+  }
+);
+
+const Trash2 = dynamic(
+  () => import('lucide-react').then((mod) => ({ default: mod.Trash2 })),
   {
     loading: () => <div className="h-4 w-4 bg-muted animate-pulse rounded" />,
     ssr: false,
@@ -29,7 +80,12 @@ interface WalletListProps {
  * Displays a list of added wallets with their details and actions using dynamic network data.
  */
 export function WalletList({ initialWallets, networks: initialNetworks }: WalletListProps) {
+  const router = useRouter();
   const [wallets, setWallets] = useState<WalletResponse[]>(initialWallets);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [selectedWallet, setSelectedWallet] = useState<WalletResponse | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [walletToDelete, setWalletToDelete] = useState<WalletResponse | null>(null);
 
   useEffect(() => {
     setWallets(initialWallets);
@@ -61,9 +117,50 @@ export function WalletList({ initialWallets, networks: initialNetworks }: Wallet
     );
   };
 
+  const handleDeleteWallet = async () => {
+    if (!walletToDelete) return;
+    
+    try {
+      // First, fetch CSRF token
+      const csrfResponse = await fetch('/api/auth/csrf');
+      if (!csrfResponse.ok) {
+        throw new Error('Failed to fetch CSRF token');
+      }
+      const { csrfToken } = await csrfResponse.json();
+
+      const response = await fetch(`/api/wallets/${walletToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          'X-CSRF-Token': csrfToken,
+        },
+      });
+
+      if (!response.ok) {
+        toast.error("There was an issue deleting the wallet. Please ensure it's not being used by any products.");
+        return;
+      }
+
+      handleWalletDeleted(walletToDelete.id);
+      setDeleteDialogOpen(false);
+      setWalletToDelete(null);
+      toast.success('Wallet deleted successfully');
+    } catch (error) {
+      console.error('Error deleting wallet:', error);
+      toast.error('There was an issue deleting the wallet. Please try again.');
+    }
+  };
+
   // Check if a wallet is a Circle wallet
   const isCircleWallet = (wallet: WalletResponse): boolean => {
     return wallet.wallet_type === 'circle_wallet' || !!wallet.circle_data;
+  };
+
+  // Check if a wallet can be deleted (not Circle or web3auth)
+  const canDeleteWallet = (wallet: WalletResponse): boolean => {
+    return wallet.wallet_type !== 'circle_wallet' && 
+           wallet.wallet_type !== 'circle' && 
+           wallet.wallet_type !== 'web3auth' && 
+           !wallet.circle_data;
   };
 
   return (
@@ -97,7 +194,15 @@ export function WalletList({ initialWallets, networks: initialNetworks }: Wallet
           );
 
           return (
-            <div key={address} className="flex items-center justify-between p-4 border rounded-lg">
+            <div 
+              key={address} 
+              className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+              onClick={(e) => {
+                // Don't navigate if clicking on buttons or links
+                if ((e.target as HTMLElement).closest('button, a')) return;
+                router.push(`/merchants/wallets/address/${encodeURIComponent(address)}`);
+              }}
+            >
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <div className="font-medium">
@@ -108,6 +213,14 @@ export function WalletList({ initialWallets, networks: initialNetworks }: Wallet
                         className="ml-2 bg-[#B4EFE8] text-[#00645A] border-[#B4EFE8]"
                       >
                         Circle Wallet
+                      </Badge>
+                    )}
+                    {primaryWallet.wallet_type === 'web3auth' && (
+                      <Badge
+                        variant="outline"
+                        className="ml-2 bg-purple-100 text-purple-700 border-purple-200"
+                      >
+                        Web3Auth Wallet
                       </Badge>
                     )}
                   </div>
@@ -158,17 +271,92 @@ export function WalletList({ initialWallets, networks: initialNetworks }: Wallet
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {!isCircleWallet(primaryWallet) && (
-                  <DeleteWalletButton
-                    walletId={primaryWallet.id}
-                    onDeleted={() => handleWalletDeleted(primaryWallet.id)}
-                  />
-                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-8 w-8">
+                      <Suspense
+                        fallback={<div className="h-4 w-4 bg-muted animate-pulse rounded" />}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Suspense>
+                      <span className="sr-only">Open menu</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => router.push(`/merchants/wallets/address/${encodeURIComponent(address)}`)}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      View Details
+                    </DropdownMenuItem>
+                    
+                    {isCircleWallet(primaryWallet) && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setSelectedWallet(primaryWallet);
+                            setSendDialogOpen(true);
+                          }}
+                        >
+                          <Send className="mr-2 h-4 w-4" />
+                          Send Transaction
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    
+                    {canDeleteWallet(primaryWallet) && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setWalletToDelete(primaryWallet);
+                            setDeleteDialogOpen(true);
+                          }}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete Wallet
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           );
         })
       )}
+      
+      {selectedWallet && sendDialogOpen && (
+        <SendTransactionDialog
+          open={sendDialogOpen}
+          onOpenChange={setSendDialogOpen}
+          wallet={selectedWallet}
+          workspaceId={selectedWallet.workspace_id}
+          networks={initialNetworks}
+        />
+      )}
+      
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete this wallet.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteWallet}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

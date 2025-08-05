@@ -286,3 +286,41 @@ SELECT
 FROM wallets w
 JOIN circle_wallets cw ON w.id = cw.wallet_id
 WHERE cw.circle_wallet_id = $1 AND w.deleted_at IS NULL;
+
+-- name: ListWalletsByAddress :many
+SELECT 
+    w.id,
+    w.workspace_id,
+    w.wallet_type,
+    w.wallet_address,
+    w.network_type,
+    w.network_id,
+    w.nickname,
+    w.ens,
+    w.is_primary,
+    w.verified,
+    w.last_used_at,
+    w.metadata,
+    w.created_at,
+    w.updated_at,
+    w.deleted_at,
+    n.id as network_id,
+    n.name as network_name,
+    n.chain_id,
+    n.block_explorer_url,
+    n.circle_network_type,
+    n.active as network_active,
+    n.is_testnet as network_testnet,
+    cw.id as circle_wallet_table_id,
+    cw.circle_user_id,
+    cw.circle_wallet_id,
+    cw.state as circle_state,
+    cw.chain_id as circle_chain_id,
+    cw.created_at as circle_created_at
+FROM wallets w
+LEFT JOIN networks n ON w.network_id = n.id
+LEFT JOIN circle_wallets cw ON w.id = cw.wallet_id
+WHERE w.wallet_address = $1 
+  AND w.workspace_id = $2
+  AND w.deleted_at IS NULL
+ORDER BY n.name;

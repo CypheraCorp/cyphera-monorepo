@@ -1591,6 +1591,20 @@ func (mr *MockSubscriptionManagementServiceMockRecorder) CancelSubscription(ctx,
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelSubscription", reflect.TypeOf((*MockSubscriptionManagementService)(nil).CancelSubscription), ctx, subscriptionID, reason, feedback)
 }
 
+// ChangePrice mocks base method.
+func (m *MockSubscriptionManagementService) ChangePrice(ctx context.Context, subscriptionID uuid.UUID, newPriceCents int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ChangePrice", ctx, subscriptionID, newPriceCents)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ChangePrice indicates an expected call of ChangePrice.
+func (mr *MockSubscriptionManagementServiceMockRecorder) ChangePrice(ctx, subscriptionID, newPriceCents any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChangePrice", reflect.TypeOf((*MockSubscriptionManagementService)(nil).ChangePrice), ctx, subscriptionID, newPriceCents)
+}
+
 // DowngradeSubscription mocks base method.
 func (m *MockSubscriptionManagementService) DowngradeSubscription(ctx context.Context, subscriptionID uuid.UUID, newLineItems []requests.LineItemUpdate, reason string) error {
 	m.ctrl.T.Helper()

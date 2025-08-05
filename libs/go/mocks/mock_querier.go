@@ -6451,6 +6451,21 @@ func (mr *MockQuerierMockRecorder) ListAccountsByUser(ctx, id any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccountsByUser", reflect.TypeOf((*MockQuerier)(nil).ListAccountsByUser), ctx, id)
 }
 
+// ListActiveCircleNetworks mocks base method.
+func (m *MockQuerier) ListActiveCircleNetworks(ctx context.Context) ([]db.Network, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListActiveCircleNetworks", ctx)
+	ret0, _ := ret[0].([]db.Network)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListActiveCircleNetworks indicates an expected call of ListActiveCircleNetworks.
+func (mr *MockQuerierMockRecorder) ListActiveCircleNetworks(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListActiveCircleNetworks", reflect.TypeOf((*MockQuerier)(nil).ListActiveCircleNetworks), ctx)
+}
+
 // ListActiveDunningEmailTemplates mocks base method.
 func (m *MockQuerier) ListActiveDunningEmailTemplates(ctx context.Context, workspaceID uuid.UUID) ([]db.DunningEmailTemplate, error) {
 	m.ctrl.T.Helper()
@@ -7604,6 +7619,21 @@ func (m *MockQuerier) ListUsersByAccount(ctx context.Context, accountID uuid.UUI
 func (mr *MockQuerierMockRecorder) ListUsersByAccount(ctx, accountID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUsersByAccount", reflect.TypeOf((*MockQuerier)(nil).ListUsersByAccount), ctx, accountID)
+}
+
+// ListWalletsByAddress mocks base method.
+func (m *MockQuerier) ListWalletsByAddress(ctx context.Context, arg db.ListWalletsByAddressParams) ([]db.ListWalletsByAddressRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListWalletsByAddress", ctx, arg)
+	ret0, _ := ret[0].([]db.ListWalletsByAddressRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListWalletsByAddress indicates an expected call of ListWalletsByAddress.
+func (mr *MockQuerierMockRecorder) ListWalletsByAddress(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListWalletsByAddress", reflect.TypeOf((*MockQuerier)(nil).ListWalletsByAddress), ctx, arg)
 }
 
 // ListWalletsByNetworkType mocks base method.

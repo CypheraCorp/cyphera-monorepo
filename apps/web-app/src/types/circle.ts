@@ -150,7 +150,7 @@ export interface CircleUserInitResponse {
 // Circle Create Wallets Request
 export interface CreateWalletsRequest {
   idempotency_key: string;
-  blockchains: string[];
+  blockchains?: string[]; // Optional - backend will handle selection
   account_type: string;
   user_token: string;
   metadata?: Array<{

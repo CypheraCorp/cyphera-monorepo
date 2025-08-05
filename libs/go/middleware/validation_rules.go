@@ -237,7 +237,7 @@ var CreateWalletValidation = ValidationConfig{
 			Field:         "wallet_type",
 			Type:          "string",
 			Required:      true,
-			AllowedValues: []string{"metamask", "circle", "web3auth"},
+			AllowedValues: []string{"wallet", "circle", "web3auth"},
 		},
 		{
 			Field:         "network_type",

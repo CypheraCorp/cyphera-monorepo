@@ -323,10 +323,9 @@ export default function MerchantSubscriptionDetailsPage({ params }: PageProps) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="flex justify-center gap-4">
                 <Button 
                   variant="outline" 
-                  className="justify-start"
                   onClick={() => setShowPauseDialog(true)}
                 >
                   <Pause className="mr-2 h-4 w-4" />
@@ -334,7 +333,7 @@ export default function MerchantSubscriptionDetailsPage({ params }: PageProps) {
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="justify-start text-destructive hover:text-destructive"
+                  className="text-destructive hover:text-destructive"
                   onClick={() => setShowCancelModal(true)}
                 >
                   <XCircle className="mr-2 h-4 w-4" />
