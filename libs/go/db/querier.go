@@ -475,6 +475,7 @@ type Querier interface {
 	GetWorkspacesNeedingReset(ctx context.Context) ([]uuid.UUID, error)
 	HardDeleteAccount(ctx context.Context, id uuid.UUID) error
 	HardDeleteWorkspace(ctx context.Context, id uuid.UUID) error
+	HasPaymentsAfterDate(ctx context.Context, arg HasPaymentsAfterDateParams) (bool, error)
 	IncrementPaymentLinkUsage(ctx context.Context, arg IncrementPaymentLinkUsageParams) (PaymentLink, error)
 	IncrementSubscriptionRedemption(ctx context.Context, arg IncrementSubscriptionRedemptionParams) (Subscription, error)
 	IsCustomerInWorkspace(ctx context.Context, arg IsCustomerInWorkspaceParams) (bool, error)
@@ -646,6 +647,7 @@ type Querier interface {
 	UpdateInvoice(ctx context.Context, arg UpdateInvoiceParams) (Invoice, error)
 	UpdateInvoiceDetails(ctx context.Context, arg UpdateInvoiceDetailsParams) (Invoice, error)
 	UpdateInvoiceLineItem(ctx context.Context, arg UpdateInvoiceLineItemParams) (InvoiceLineItem, error)
+	UpdateInvoiceMetadata(ctx context.Context, arg UpdateInvoiceMetadataParams) (Invoice, error)
 	UpdateInvoiceNotes(ctx context.Context, arg UpdateInvoiceNotesParams) (Invoice, error)
 	UpdateInvoiceNumber(ctx context.Context, arg UpdateInvoiceNumberParams) (Invoice, error)
 	UpdateInvoiceQRCode(ctx context.Context, arg UpdateInvoiceQRCodeParams) (Invoice, error)

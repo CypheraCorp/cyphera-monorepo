@@ -86,8 +86,17 @@ type SubscriptionResponse struct {
 	Metadata               map[string]interface{}         `json:"metadata,omitempty"`
 	CreatedAt              time.Time                      `json:"created_at"`
 	UpdatedAt              time.Time                      `json:"updated_at"`
-	Product                ProductResponse                `json:"product"`
-	ProductToken           ProductTokenResponse           `json:"product_token"`
+	TrialStart             *time.Time                     `json:"trial_start,omitempty"`
+	TrialEnd               *time.Time                     `json:"trial_end,omitempty"`
+	CanceledAt             *time.Time                     `json:"canceled_at,omitempty"`
+	CancelAt               *time.Time                     `json:"cancel_at,omitempty"`
+	CancellationReason     string                         `json:"cancellation_reason,omitempty"`
+	PausedAt               *time.Time                     `json:"paused_at,omitempty"`
+	PauseEndsAt            *time.Time                     `json:"pause_ends_at,omitempty"`
+	ProductID              uuid.UUID                      `json:"product_id"`
+	ProductTokenID         uuid.UUID                      `json:"product_token_id"`
+	Product                *ProductResponse               `json:"product,omitempty"`
+	ProductToken           *ProductTokenResponse          `json:"product_token,omitempty"`
 	LineItems              []SubscriptionLineItemResponse `json:"line_items,omitempty"`
 }
 

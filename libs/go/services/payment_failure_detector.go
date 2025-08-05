@@ -55,7 +55,7 @@ func (d *PaymentFailureDetector) DetectAndCreateCampaigns(ctx context.Context, l
 		Valid: true,
 	}
 	failedEvents, err := d.queries.ListRecentSubscriptionEventsByType(ctx, db.ListRecentSubscriptionEventsByTypeParams{
-		EventType:  db.SubscriptionEventTypeFailed,
+		EventType:  db.SubscriptionEventTypeFail,
 		OccurredAt: sincePgTime,
 	})
 	if err != nil {
@@ -238,9 +238,9 @@ func (d *PaymentFailureDetector) determineCampaignStrategy(ctx context.Context, 
 	var successfulPayments, failedPayments int
 	for _, event := range events {
 		switch event.EventType {
-		case db.SubscriptionEventTypeRedeemed:
+		case db.SubscriptionEventTypeRedeem:
 			successfulPayments++
-		case db.SubscriptionEventTypeFailed, db.SubscriptionEventTypeFailedRedemption:
+		case db.SubscriptionEventTypeFail, db.SubscriptionEventTypeFailRedemption:
 			failedPayments++
 		}
 	}

@@ -14,22 +14,29 @@ CREATE TYPE wallet_type AS ENUM ('wallet', 'circle_wallet', 'web3auth');
 CREATE TYPE circle_network_type AS ENUM ('ARB', 'ARB-SEPOLIA', 'ETH', 'ETH-SEPOLIA', 'MATIC', 'MATIC-AMOY', 'OP', 'OP-SEPOLIA', 'BASE', 'BASE-SEPOLIA', 'UNI', 'UNI-SEPOLIA');
 CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'overdue', 'suspended', 'failed', 'completed', 'trial');
 CREATE TYPE subscription_event_type AS ENUM (
-    'created', 
-    'redeemed', 
-    'renewed', 
-    'canceled', 
-    'expired',
-    'completed',
-    'failed',
-    'failed_validation',
-    'failed_customer_creation',
-    'failed_wallet_creation',
-    'failed_delegation_storage',
-    'failed_subscription_db',
-    'failed_redemption',
-    'failed_transaction',
-    'failed_duplicate'
+    'create', 
+    'redeem', 
+    'renew', 
+    'cancel', 
+    'expire',
+    'upgrade',
+    'downgrade',
+    'pause',
+    'resume',
+    'reactivate',
+    'complete',
+    'fail',
+    'fail_validation',
+    'fail_customer_creation',
+    'fail_wallet_creation',
+    'fail_delegation_storage',
+    'fail_subscription_db',
+    'fail_redemption',
+    'fail_transaction',
+    'fail_duplicate'
 );
+
+CREATE TYPE subscription_change_type AS ENUM ('upgrade', 'downgrade', 'cancel', 'pause', 'resume', 'modify_items', 'reactivate');
 
 -- Create Tables in dependency order
 
@@ -928,14 +935,14 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO networks (name, type, network_type, rpc_id, circle_network_type, chain_id, is_testnet, active, block_explorer_url, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, average_block_time_ms, gas_priority_levels)
 VALUES 
-    ('Ethereum Sepolia', 'Sepolia', 'evm', 'sepolia', 'ETH-SEPOLIA', 11155111, true, true, 'https://sepolia.etherscan.io', 'https://cryptologos.cc/logos/ethereum-eth-logo.png', 'Ethereum Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 12000, '{"slow":{"max_fee_per_gas":"1000000000","max_priority_fee_per_gas":"100000000"},"standard":{"max_fee_per_gas":"2000000000","max_priority_fee_per_gas":"200000000"},"fast":{"max_fee_per_gas":"5000000000","max_priority_fee_per_gas":"500000000"}}'),
+    ('Ethereum Sepolia', 'Sepolia', 'evm', 'sepolia', 'ETH-SEPOLIA', 11155111, true, false, 'https://sepolia.etherscan.io', 'https://cryptologos.cc/logos/ethereum-eth-logo.png', 'Ethereum Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 12000, '{"slow":{"max_fee_per_gas":"1000000000","max_priority_fee_per_gas":"100000000"},"standard":{"max_fee_per_gas":"2000000000","max_priority_fee_per_gas":"200000000"},"fast":{"max_fee_per_gas":"5000000000","max_priority_fee_per_gas":"500000000"}}'),
     ('Ethereum Mainnet', 'Mainnet', 'evm', 'eth', 'ETH', 1, false, false, 'https://etherscan.io', 'https://cryptologos.cc/logos/ethereum-eth-logo.png', 'Ethereum', 'eip155', 1.2, 1.1, '500000', '100000', true, 12000, '{"slow":{"max_fee_per_gas":"20000000000","max_priority_fee_per_gas":"1000000000"},"standard":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"2000000000"},"fast":{"max_fee_per_gas":"50000000000","max_priority_fee_per_gas":"3000000000"}}'),
     ('Polygon Amoy', 'Amoy', 'evm', 'amoy', 'MATIC-AMOY', 80002, true, false, 'https://www.oklink.com/amoy', 'https://cryptologos.cc/logos/polygon-matic-logo.png', 'Polygon Amoy', 'eip155', 1.3, 1.2, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"30000000000"},"standard":{"max_fee_per_gas":"35000000000","max_priority_fee_per_gas":"35000000000"},"fast":{"max_fee_per_gas":"40000000000","max_priority_fee_per_gas":"40000000000"}}'), 
     ('Polygon Mainnet', 'Mainnet', 'evm', 'polygon', 'MATIC', 137, false, false, 'https://polygonscan.com', 'https://cryptologos.cc/logos/polygon-matic-logo.png', 'Polygon', 'eip155', 1.3, 1.2, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"30000000000"},"standard":{"max_fee_per_gas":"35000000000","max_priority_fee_per_gas":"35000000000"},"fast":{"max_fee_per_gas":"40000000000","max_priority_fee_per_gas":"40000000000"}}'),
     ('Arbitrum Sepolia', 'Sepolia', 'evm', 'arbitrum-sepolia', 'ARB-SEPOLIA', 421614, true, false, 'https://sepolia.arbiscan.io', 'https://cryptologos.cc/logos/arbitrum-arb-logo.png', 'Arbitrum Sepolia', 'eip155', 1.1, 1.1, '1000000', '150000', true, 250, '{"slow":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"0"},"standard":{"max_fee_per_gas":"150000000","max_priority_fee_per_gas":"0"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"0"}}'),
     ('Arbitrum One', 'Mainnet', 'evm', 'arbitrum-mainnet', 'ARB', 42161, false, false, 'https://arbiscan.io', 'https://cryptologos.cc/logos/arbitrum-arb-logo.png', 'Arbitrum', 'eip155', 1.1, 1.1, '1000000', '150000', true, 250, '{"slow":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"0"},"standard":{"max_fee_per_gas":"150000000","max_priority_fee_per_gas":"0"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"0"}}'),
     ('Base Sepolia', 'Sepolia', 'evm', 'base-sepolia', 'BASE-SEPOLIA', 84532, true, true, 'https://sepolia.basescan.org', 'https://basescan.org/images/svg/logos/chain-light.svg', 'Base Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
-    ('Base Mainnet', 'Mainnet', 'evm', 'base-mainnet', 'BASE', 8453, false, true, 'https://basescan.org', 'https://basescan.org/images/svg/logos/chain-light.svg', 'Base', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
+    ('Base Mainnet', 'Mainnet', 'evm', 'base-mainnet', 'BASE', 8453, false, false, 'https://basescan.org', 'https://basescan.org/images/svg/logos/chain-light.svg', 'Base', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
     ('Optimism Sepolia', 'Sepolia', 'evm', 'optimism-sepolia', 'OP-SEPOLIA', 11155420, true, false, 'https://sepolia.optimism.io', 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png', 'Optimism Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
     ('Optimism Mainnet', 'Mainnet', 'evm', 'optimism-mainnet', 'OP', 10, false, false, 'https://optimistic.etherscan.io', 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png', 'Optimism', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
     ('Unichain Sepolia', 'Sepolia', 'evm', 'unichain-sepolia', 'UNI-SEPOLIA', 1301, true, false, 'https://sepolia.unichain.io', 'https://cryptologos.cc/logos/uniswap-uni-logo.png', 'Unichain Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
@@ -1692,7 +1699,7 @@ CREATE TABLE subscription_schedule_changes (
     subscription_id UUID NOT NULL REFERENCES subscriptions(id),
     
     -- Change details
-    change_type VARCHAR(50) NOT NULL CHECK (change_type IN ('upgrade', 'downgrade', 'cancel', 'pause', 'resume', 'modify_items')),
+    change_type subscription_change_type NOT NULL,
     scheduled_for TIMESTAMP WITH TIME ZONE NOT NULL,
     
     -- For upgrades/downgrades - store line items as JSONB

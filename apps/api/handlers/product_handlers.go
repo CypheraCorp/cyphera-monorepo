@@ -756,7 +756,7 @@ func (h *ProductHandler) SubscribeToProductByID(c *gin.Context) {
 		if evtErr == nil && len(events) > 0 {
 			// Find the redeemed event to get payment ID
 			for _, event := range events {
-				if event.EventType == db.SubscriptionEventTypeRedeemed && event.TransactionHash.Valid {
+				if event.EventType == db.SubscriptionEventTypeRedeem && event.TransactionHash.Valid {
 					// Get payment by transaction hash
 					payments, payErr := h.common.db.GetPaymentsByTransactionHash(ctx, event.TransactionHash)
 					if payErr == nil && len(payments) > 0 {

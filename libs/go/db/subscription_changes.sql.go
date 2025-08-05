@@ -121,17 +121,17 @@ INSERT INTO subscription_schedule_changes (
 `
 
 type CreateScheduleChangeParams struct {
-	SubscriptionID       uuid.UUID          `json:"subscription_id"`
-	ChangeType           string             `json:"change_type"`
-	ScheduledFor         pgtype.Timestamptz `json:"scheduled_for"`
-	FromLineItems        []byte             `json:"from_line_items"`
-	ToLineItems          []byte             `json:"to_line_items"`
-	ProrationAmountCents pgtype.Int8        `json:"proration_amount_cents"`
-	ProrationCalculation []byte             `json:"proration_calculation"`
-	Status               string             `json:"status"`
-	Reason               pgtype.Text        `json:"reason"`
-	InitiatedBy          pgtype.Text        `json:"initiated_by"`
-	Metadata             []byte             `json:"metadata"`
+	SubscriptionID       uuid.UUID              `json:"subscription_id"`
+	ChangeType           SubscriptionChangeType `json:"change_type"`
+	ScheduledFor         pgtype.Timestamptz     `json:"scheduled_for"`
+	FromLineItems        []byte                 `json:"from_line_items"`
+	ToLineItems          []byte                 `json:"to_line_items"`
+	ProrationAmountCents pgtype.Int8            `json:"proration_amount_cents"`
+	ProrationCalculation []byte                 `json:"proration_calculation"`
+	Status               string                 `json:"status"`
+	Reason               pgtype.Text            `json:"reason"`
+	InitiatedBy          pgtype.Text            `json:"initiated_by"`
+	Metadata             []byte                 `json:"metadata"`
 }
 
 func (q *Queries) CreateScheduleChange(ctx context.Context, arg CreateScheduleChangeParams) (SubscriptionScheduleChange, error) {

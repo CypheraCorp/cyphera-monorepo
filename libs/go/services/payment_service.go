@@ -55,7 +55,7 @@ func (s *PaymentService) CreatePaymentFromSubscriptionEvent(ctx context.Context,
 	customer := params.Customer
 
 	// Validate that this is a redeemed event
-	if event.EventType != db.SubscriptionEventTypeRedeemed {
+	if event.EventType != db.SubscriptionEventTypeRedeem {
 		return nil, fmt.Errorf("can only create payments for redeemed subscription events")
 	}
 

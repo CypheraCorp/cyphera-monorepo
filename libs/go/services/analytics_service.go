@@ -11,6 +11,7 @@ import (
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
 	"github.com/cyphera/cyphera-api/libs/go/types/business"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -44,38 +45,93 @@ func (s *AnalyticsService) GetDashboardSummary(ctx context.Context, workspaceID 
 		}
 	}
 
-	// Get latest metrics
-	latest, err := s.queries.GetLatestDashboardMetrics(ctx, db.GetLatestDashboardMetricsParams{
+	// Get latest metrics for MRR/ARR from monthly metrics
+	monthlyMetrics, err := s.queries.GetLatestDashboardMetrics(ctx, db.GetLatestDashboardMetricsParams{
 		WorkspaceID:  workspaceID,
-		MetricType:   "daily",
+		MetricType:   "monthly",
 		FiatCurrency: currency,
 	})
-	if err != nil {
+	
+	var mrrCents, arrCents int64
+	var lastUpdated time.Time
+	
+	if err == nil {
+		mrrCents = monthlyMetrics.MrrCents.Int64
+		arrCents = monthlyMetrics.ArrCents.Int64
+		lastUpdated = monthlyMetrics.UpdatedAt.Time
+	} else if err != pgx.ErrNoRows {
+		// If it's not a "no rows" error, return it
 		return nil, err
+	}
+	
+	// Get all-time totals directly from source tables
+	var totalRevenueCents int64
+	var totalCustomers int32
+	var activeSubscriptions int32
+	
+	// Query for all-time total revenue
+	err = s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(amount_in_cents), 0) 
+		FROM payments 
+		WHERE workspace_id = $1 
+			AND currency = $2 
+			AND status = 'completed'
+	`, workspaceID, currency).Scan(&totalRevenueCents)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total revenue: %w", err)
+	}
+	
+	// Query for total unique customers
+	err = s.pool.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT customer_id) 
+		FROM payments 
+		WHERE workspace_id = $1 
+			AND status = 'completed'
+	`, workspaceID).Scan(&totalCustomers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total customers: %w", err)
+	}
+	
+	// Query for active subscriptions (currently active, not completed)
+	err = s.pool.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT s.id) 
+		FROM subscriptions s
+		JOIN products p ON s.product_id = p.id
+		WHERE p.workspace_id = $1
+			AND s.status = 'active'
+			AND p.deleted_at IS NULL
+	`, workspaceID).Scan(&activeSubscriptions)
+	if err != nil && err != pgx.ErrNoRows {
+		return nil, fmt.Errorf("failed to get active subscriptions: %w", err)
+	}
+	
+	// If no monthly metrics exist yet, use current time for last updated
+	if lastUpdated.IsZero() {
+		lastUpdated = time.Now()
 	}
 
 	summary := &business.DashboardSummary{
 		MRR: business.MoneyAmount{
-			AmountCents: latest.MrrCents.Int64,
+			AmountCents: mrrCents,
 			Currency:    currency,
-			Formatted:   helpers.FormatMoney(latest.MrrCents.Int64, currency),
+			Formatted:   helpers.FormatMoney(mrrCents, currency),
 		},
 		ARR: business.MoneyAmount{
-			AmountCents: latest.ArrCents.Int64,
+			AmountCents: arrCents,
 			Currency:    currency,
-			Formatted:   helpers.FormatMoney(latest.ArrCents.Int64, currency),
+			Formatted:   helpers.FormatMoney(arrCents, currency),
 		},
 		TotalRevenue: business.MoneyAmount{
-			AmountCents: latest.TotalRevenueCents.Int64,
+			AmountCents: totalRevenueCents,
 			Currency:    currency,
-			Formatted:   helpers.FormatMoney(latest.TotalRevenueCents.Int64, currency),
+			Formatted:   helpers.FormatMoney(totalRevenueCents, currency),
 		},
-		ActiveSubscriptions: latest.ActiveSubscriptions.Int32,
-		TotalCustomers:      latest.TotalCustomers.Int32,
-		ChurnRate:           helpers.GetNumericFloat(latest.ChurnRate),
-		GrowthRate:          helpers.GetNumericFloat(latest.GrowthRate),
-		PaymentSuccessRate:  helpers.GetNumericFloat(latest.PaymentSuccessRate),
-		LastUpdated:         latest.UpdatedAt.Time,
+		ActiveSubscriptions: activeSubscriptions,
+		TotalCustomers:      totalCustomers,
+		ChurnRate:           0, // Will be calculated from metrics when available
+		GrowthRate:          0, // Will be calculated from metrics when available
+		PaymentSuccessRate:  0, // Will be calculated from metrics when available
+		LastUpdated:         lastUpdated,
 	}
 
 	// Get revenue growth

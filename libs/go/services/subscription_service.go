@@ -375,13 +375,12 @@ func (s *SubscriptionService) CreateSubscription(ctx context.Context, tx pgx.Tx,
 		return nil, fmt.Errorf("failed to check existing subscriptions: %w", err)
 	}
 
-	// Check for existing active subscription for the same price
+	// Check for existing active subscription for the same product
 	for i, existingSub := range existingSubscriptions {
-		if existingSub.Status == db.SubscriptionStatusActive {
-			// Note: We can't check PriceID directly on the subscription model, would need to join with price table
-			// For now, just check if any active subscription exists for this product
-			s.logger.Warn("Active subscription already exists",
-				zap.String("subscription_id", existingSub.ID.String()))
+		if existingSub.Status == db.SubscriptionStatusActive && existingSub.ProductID == params.ProductID {
+			s.logger.Warn("Active subscription already exists for this product",
+				zap.String("subscription_id", existingSub.ID.String()),
+				zap.String("product_id", params.ProductID.String()))
 			return nil, &SubscriptionExistsError{Subscription: &existingSubscriptions[i]}
 		}
 	}
@@ -612,7 +611,7 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 
 	subscriptionEvent, eventErr := qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
 		SubscriptionID:  redemptionParams.Subscription.ID,
-		EventType:       db.SubscriptionEventTypeRedeemed,
+		EventType:       db.SubscriptionEventTypeRedeem,
 		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		TransactionHash: pgtype.Text{String: txHash, Valid: true},
 		AmountInCents:   redemptionParams.Product.UnitAmountInPennies,
@@ -924,7 +923,7 @@ func (s *SubscriptionService) CreateSubscriptionAfterPayment(ctx context.Context
 
 	createdEvent, err := qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
 		SubscriptionID:  subscription.ID,
-		EventType:       db.SubscriptionEventTypeCreated,
+		EventType:       db.SubscriptionEventTypeCreate,
 		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		TransactionHash: pgtype.Text{Valid: false}, // No transaction for created event
 		AmountInCents:   0, // No amount for created event
@@ -964,7 +963,7 @@ func (s *SubscriptionService) CreateSubscriptionAfterPayment(ctx context.Context
 
 	subscriptionEvent, err := qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
 		SubscriptionID:  subscription.ID,
-		EventType:       db.SubscriptionEventTypeRedeemed,
+		EventType:       db.SubscriptionEventTypeRedeem,
 		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		TransactionHash: pgtype.Text{String: txHash, Valid: true},
 		AmountInCents:   createParams.Product.UnitAmountInPennies,
@@ -1105,38 +1104,41 @@ func (s *SubscriptionService) CreateInvoiceForSubscriptionPayment(ctx context.Co
 		return fmt.Errorf("failed to list invoices for subscription: %w", err)
 	}
 
-	// Find any open invoice for this subscription
-	// Per user suggestion: assume there's an open invoice and mark it as paid
+	// Find the earliest open invoice for this subscription
+	// Since invoices are ordered by created_date DESC, we need to find the last open invoice in the list
 	var existingInvoice *db.Invoice
-	for _, inv := range invoices {
+	for i := range invoices {
 		// Look for any open invoice, not period-specific
-		if inv.Status == "open" {
-			existingInvoice = &inv
-			s.logger.Info("Found open invoice to mark as paid",
-				zap.String("invoice_id", inv.ID.String()),
-				zap.String("invoice_number", inv.InvoiceNumber.String),
-				zap.String("status", inv.Status))
-			break
+		if invoices[i].Status == "open" {
+			// Keep updating to get the oldest open invoice (last in the DESC ordered list)
+			existingInvoice = &invoices[i]
+			s.logger.Info("Found open invoice",
+				zap.String("invoice_id", invoices[i].ID.String()),
+				zap.String("invoice_number", invoices[i].InvoiceNumber.String),
+				zap.String("status", invoices[i].Status),
+				zap.Time("created_date", invoices[i].CreatedDate.Time))
 		}
+	}
+	
+	if existingInvoice != nil {
+		s.logger.Info("Selected earliest open invoice to mark as paid",
+			zap.String("invoice_id", existingInvoice.ID.String()),
+			zap.String("invoice_number", existingInvoice.InvoiceNumber.String),
+			zap.Time("created_date", existingInvoice.CreatedDate.Time))
 	}
 
 	var invoice *responses.InvoiceResponse
-	var notes string
 	
-	// Get subscription details for notes
+	// Get subscription details for payment metadata
 	subscriptionDetails, err := s.queries.GetSubscriptionForInvoicing(ctx, subscriptionID)
+	var hasSubscriptionDetails bool
 	if err != nil {
-		s.logger.Error("Failed to get subscription details for invoice notes",
+		s.logger.Error("Failed to get subscription details for invoice metadata",
 			zap.Error(err),
 			zap.String("subscription_id", subscriptionID.String()))
-		// Use basic notes if we can't get wallet details
-		notes = fmt.Sprintf("Payment transaction hash: %s", transactionHash)
+		hasSubscriptionDetails = false
 	} else {
-		// Generate notes with transaction hash and wallet addresses
-		notes = fmt.Sprintf("Payment transaction hash: %s\nPayer wallet: %s\nReceiver wallet: %s",
-			transactionHash,
-			subscriptionDetails.CustomerWalletAddress.String,
-			subscriptionDetails.MerchantWalletAddress.String)
+		hasSubscriptionDetails = true
 	}
 
 	if existingInvoice != nil {
@@ -1145,15 +1147,33 @@ func (s *SubscriptionService) CreateInvoiceForSubscriptionPayment(ctx context.Co
 			zap.String("invoice_id", existingInvoice.ID.String()),
 			zap.String("subscription_id", subscriptionID.String()))
 
-		// Update invoice notes with transaction details
-		_, err = s.queries.UpdateInvoiceNotes(ctx, db.UpdateInvoiceNotesParams{
-			ID:    existingInvoice.ID,
-			Notes: pgtype.Text{String: notes, Valid: true},
-		})
+		// Create payment metadata
+		paymentMetadata := map[string]interface{}{
+			"transaction_hash": transactionHash,
+			"payment_id": paymentID.String(),
+		}
+		
+		if hasSubscriptionDetails {
+			paymentMetadata["payer_wallet"] = subscriptionDetails.CustomerWalletAddress.String
+			paymentMetadata["receiver_wallet"] = subscriptionDetails.MerchantWalletAddress.String
+		}
+		
+		metadataJSON, err := json.Marshal(paymentMetadata)
 		if err != nil {
-			s.logger.Error("Failed to update invoice notes",
+			s.logger.Error("Failed to marshal payment metadata",
 				zap.Error(err),
 				zap.String("invoice_id", existingInvoice.ID.String()))
+		} else {
+			// Update invoice metadata with payment details
+			_, err = s.queries.UpdateInvoiceMetadata(ctx, db.UpdateInvoiceMetadataParams{
+				ID:       existingInvoice.ID,
+				Metadata: metadataJSON,
+			})
+			if err != nil {
+				s.logger.Error("Failed to update invoice metadata",
+					zap.Error(err),
+					zap.String("invoice_id", existingInvoice.ID.String()))
+			}
 		}
 
 		// Mark invoice as paid
@@ -1190,13 +1210,24 @@ func (s *SubscriptionService) CreateInvoiceForSubscriptionPayment(ctx context.Co
 		zap.Time("period_start", periodStart),
 		zap.Time("period_end", periodEnd))
 
-	// Create invoice with notes
-	invoice, err = s.invoiceService.GenerateInvoiceFromSubscriptionWithNotes(ctx,
+	// Create payment metadata
+	paymentMetadata := map[string]interface{}{
+		"transaction_hash": transactionHash,
+		"payment_id": paymentID.String(),
+	}
+	
+	if hasSubscriptionDetails {
+		paymentMetadata["payer_wallet"] = subscriptionDetails.CustomerWalletAddress.String
+		paymentMetadata["receiver_wallet"] = subscriptionDetails.MerchantWalletAddress.String
+	}
+
+	// Create invoice with metadata
+	invoice, err = s.invoiceService.GenerateInvoiceFromSubscriptionWithMetadata(ctx,
 		subscriptionID,
 		periodStart,
 		periodEnd,
 		false, // Not draft, this is a paid invoice
-		notes)
+		paymentMetadata)
 
 	if err != nil {
 		s.logger.Error("Failed to create invoice after payment",
@@ -1743,7 +1774,7 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 	// Actually create the subscription event in the database
 	subEvent, err = qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
 		SubscriptionID:  subscription.ID,
-		EventType:       db.SubscriptionEventTypeRedeemed,
+		EventType:       db.SubscriptionEventTypeRedeem,
 		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		TransactionHash: pgtype.Text{String: txHash, Valid: true},
 		AmountInCents:   product.UnitAmountInPennies,
@@ -1821,7 +1852,7 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 
 		_, err = qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
 			SubscriptionID:  subscription.ID,
-			EventType:       db.SubscriptionEventTypeCompleted,
+			EventType:       db.SubscriptionEventTypeComplete,
 			OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
 			TransactionHash: pgtype.Text{String: txHash, Valid: true},
 			AmountInCents:   0, // No additional amount for completion event

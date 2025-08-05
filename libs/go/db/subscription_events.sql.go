@@ -20,7 +20,7 @@ JOIN products p ON s.product_id = p.id
 WHERE s.deleted_at IS NULL
     AND p.deleted_at IS NULL
     AND p.workspace_id = $1
-    AND se.event_type IN ('redeemed', 'failed', 'failed_redemption')
+    AND se.event_type IN ('redeem', 'fail', 'fail_redemption')
 `
 
 func (q *Queries) CountSubscriptionEventDetails(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
@@ -74,7 +74,7 @@ INSERT INTO subscription_events (
     error_message,
     metadata
 ) VALUES (
-    $1, 'failed', $2, CURRENT_TIMESTAMP, $3, $4
+    $1, 'fail', $2, CURRENT_TIMESTAMP, $3, $4
 )
 RETURNING id, subscription_id, event_type, transaction_hash, amount_in_cents, occurred_at, error_message, metadata, created_at, updated_at
 `
@@ -118,7 +118,7 @@ INSERT INTO subscription_events (
     occurred_at,
     metadata
 ) VALUES (
-    $1, 'redeemed', $2, $3, CURRENT_TIMESTAMP, $4
+    $1, 'redeem', $2, $3, CURRENT_TIMESTAMP, $4
 )
 RETURNING id, subscription_id, event_type, transaction_hash, amount_in_cents, occurred_at, error_message, metadata, created_at, updated_at
 `
@@ -321,7 +321,7 @@ func (q *Queries) GetSubscriptionEventByTransactionHash(ctx context.Context, tra
 const getSuccessfulRedemptionCount = `-- name: GetSuccessfulRedemptionCount :one
 SELECT COUNT(*) 
 FROM subscription_events
-WHERE subscription_id = $1 AND event_type = 'redeemed'
+WHERE subscription_id = $1 AND event_type = 'redeem'
 `
 
 func (q *Queries) GetSuccessfulRedemptionCount(ctx context.Context, subscriptionID uuid.UUID) (int64, error) {
@@ -334,7 +334,7 @@ func (q *Queries) GetSuccessfulRedemptionCount(ctx context.Context, subscription
 const getTotalAmountBySubscription = `-- name: GetTotalAmountBySubscription :one
 SELECT COALESCE(SUM(amount_in_cents), 0) as total_amount
 FROM subscription_events
-WHERE subscription_id = $1 AND event_type = 'redeemed'
+WHERE subscription_id = $1 AND event_type = 'redeem'
 `
 
 func (q *Queries) GetTotalAmountBySubscription(ctx context.Context, subscriptionID uuid.UUID) (interface{}, error) {
@@ -392,7 +392,7 @@ func (q *Queries) GetUnsyncedSubscriptionEventsWithTxHash(ctx context.Context, w
 
 const listFailedSubscriptionEvents = `-- name: ListFailedSubscriptionEvents :many
 SELECT id, subscription_id, event_type, transaction_hash, amount_in_cents, occurred_at, error_message, metadata, created_at, updated_at FROM subscription_events
-WHERE event_type = 'failed'
+WHERE event_type = 'fail'
 ORDER BY occurred_at DESC
 `
 
@@ -554,7 +554,7 @@ WHERE
     p.workspace_id = $1
     AND s.deleted_at IS NULL
     AND p.deleted_at IS NULL
-    AND se.event_type IN ('redeemed', 'failed', 'failed_redemption')
+    AND se.event_type IN ('redeem', 'fail', 'fail_redemption')
 ORDER BY
     se.occurred_at DESC
 LIMIT $2 OFFSET $3

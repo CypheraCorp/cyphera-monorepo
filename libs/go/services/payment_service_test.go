@@ -53,7 +53,7 @@ func TestPaymentService_CreatePaymentFromSubscriptionEvent(t *testing.T) {
 			params: params.CreatePaymentFromSubscriptionEventParams{
 				SubscriptionEvent: &db.SubscriptionEvent{
 					ID:            eventID,
-					EventType:     db.SubscriptionEventTypeRedeemed,
+					EventType:     db.SubscriptionEventTypeRedeem,
 					AmountInCents: int32(1000),
 				},
 				Subscription: &db.Subscription{
@@ -102,7 +102,7 @@ func TestPaymentService_CreatePaymentFromSubscriptionEvent(t *testing.T) {
 			params: params.CreatePaymentFromSubscriptionEventParams{
 				SubscriptionEvent: &db.SubscriptionEvent{
 					ID:            eventID,
-					EventType:     db.SubscriptionEventTypeRedeemed,
+					EventType:     db.SubscriptionEventTypeRedeem,
 					AmountInCents: int32(1000),
 				},
 				Subscription: &db.Subscription{
@@ -132,7 +132,7 @@ func TestPaymentService_CreatePaymentFromSubscriptionEvent(t *testing.T) {
 			params: params.CreatePaymentFromSubscriptionEventParams{
 				SubscriptionEvent: &db.SubscriptionEvent{
 					ID:            eventID,
-					EventType:     db.SubscriptionEventTypeCreated,
+					EventType:     db.SubscriptionEventTypeCreate,
 					AmountInCents: int32(1000),
 				},
 			},
@@ -145,7 +145,7 @@ func TestPaymentService_CreatePaymentFromSubscriptionEvent(t *testing.T) {
 			params: params.CreatePaymentFromSubscriptionEventParams{
 				SubscriptionEvent: &db.SubscriptionEvent{
 					ID:            eventID,
-					EventType:     db.SubscriptionEventTypeRedeemed,
+					EventType:     db.SubscriptionEventTypeRedeem,
 					AmountInCents: int32(1000),
 				},
 				Subscription: &db.Subscription{

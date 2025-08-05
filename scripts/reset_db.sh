@@ -44,4 +44,34 @@ echo "Database reset complete. Initializing with new schema..."
 # Run the initialization script
 PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f $INIT_SCRIPT
 
-echo "Database initialization complete!" 
+echo "Database initialization complete!"
+
+# Check if we're running locally (docker-compose environment)
+if [ "$DB_HOST" = "localhost" ] || [ -z "$DB_HOST" ]; then
+    echo "Restarting PostgreSQL to clear cached query plans..."
+    
+    # Check if docker-compose is available and postgres container is running
+    if command -v docker-compose &> /dev/null; then
+        if docker-compose ps | grep -q cyphera-db; then
+            docker-compose restart postgres
+            echo "PostgreSQL restarted. Waiting for it to be ready..."
+            sleep 3
+            
+            # Wait for PostgreSQL to be ready
+            until PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c '\q' 2>/dev/null; do
+                echo "Waiting for PostgreSQL to be ready..."
+                sleep 1
+            done
+            echo "PostgreSQL is ready!"
+        else
+            echo "PostgreSQL container not found. Skipping restart."
+        fi
+    else
+        echo "docker-compose not found. Skipping PostgreSQL restart."
+    fi
+else
+    echo "Remote database detected. Skipping PostgreSQL restart."
+    echo "Note: You may need to restart your application to clear connection pool caches."
+fi
+
+echo "Database reset and initialization complete!" 

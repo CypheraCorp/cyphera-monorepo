@@ -9,13 +9,15 @@ import (
 
 // ChangePreview shows what will happen with a subscription change
 type ChangePreview struct {
-	CurrentAmount    int64            `json:"current_amount"`
-	NewAmount        int64            `json:"new_amount"`
-	ProrationCredit  int64            `json:"proration_credit,omitempty"`
-	ImmediateCharge  int64            `json:"immediate_charge,omitempty"`
-	EffectiveDate    time.Time        `json:"effective_date"`
-	ProrationDetails *ProrationResult `json:"proration_details,omitempty"`
-	Message          string           `json:"message"`
+	CurrentAmount      int64            `json:"current_amount"`
+	NewAmount          int64            `json:"new_amount"`
+	ProrationCredit    int64            `json:"proration_credit,omitempty"`
+	ImmediateCharge    int64            `json:"immediate_charge,omitempty"`
+	EffectiveDate      time.Time        `json:"effective_date"`
+	ProrationDetails   *ProrationResult `json:"proration_details,omitempty"`
+	Message            string           `json:"message"`
+	NextIntervalAmount int64            `json:"next_interval_amount,omitempty"`
+	NextIntervalStart  *time.Time       `json:"next_interval_start,omitempty"`
 }
 
 // Note: ProrationResult will be imported from proration package

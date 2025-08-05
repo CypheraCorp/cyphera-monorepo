@@ -2,10 +2,9 @@
 
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { SubscriptionEventType } from '@/types/subscription-event';
 import { generateExplorerLink } from '@/lib/utils/explorers';
 import { useSearchParams } from 'next/navigation';
-import { useTransactions, useNetworks } from '@/hooks/data';
+import { usePayments, useNetworks } from '@/hooks/data';
 import { Suspense } from 'react';
 import { TableSkeleton } from '@/components/ui/loading-states';
 import dynamic from 'next/dynamic';
@@ -123,10 +122,10 @@ const Badge = dynamic(
   }
 );
 
-const TransactionsPagination = dynamic(
+const PaymentsPagination = dynamic(
   () =>
-    import('@/components/transactions/transactions-pagination').then((mod) => ({
-      default: mod.TransactionsPagination,
+    import('@/components/pagination/generic-pagination').then((mod) => ({
+      default: mod.GenericPagination,
     })),
   {
     loading: () => <div className="h-10 w-full bg-muted animate-pulse rounded-md" />,
@@ -136,44 +135,61 @@ const TransactionsPagination = dynamic(
 
 const ITEMS_PER_PAGE = 10;
 
-export default function TransactionsPage() {
+export default function PaymentsPage() {
   const searchParams = useSearchParams();
   const currentPage = Number(searchParams.get('page')) || 1;
 
   // Use React Query hooks instead of manual state management
   const {
-    data: transactionsData,
-    isLoading: transactionsLoading,
-    error: transactionsError,
-  } = useTransactions(currentPage, ITEMS_PER_PAGE);
+    data: paymentsData,
+    isLoading: paymentsLoading,
+    error: paymentsError,
+  } = usePayments(currentPage, ITEMS_PER_PAGE);
   const { data: networks, isLoading: networksLoading, error: networksError } = useNetworks(true);
 
-  const loading = transactionsLoading || networksLoading;
-  const error = transactionsError || networksError;
+  const loading = paymentsLoading || networksLoading;
+  const error = paymentsError || networksError;
 
-  function getEventTypeLabel(eventType: SubscriptionEventType): string {
-    switch (eventType) {
-      case 'redeemed':
-        return 'Paid';
+  function getPaymentStatusLabel(status: string): string {
+    switch (status) {
+      case 'completed':
+        return 'Completed';
+      case 'pending':
+        return 'Pending';
       case 'failed':
         return 'Failed';
-      case 'failed_redemption':
-        return 'Failed';
+      case 'processing':
+        return 'Processing';
       default:
-        return eventType;
+        return status;
     }
   }
 
-  function getEventTypeColor(eventType: SubscriptionEventType): string {
-    switch (eventType) {
-      case 'redeemed':
+  function getPaymentStatusColor(status: string): string {
+    switch (status) {
+      case 'completed':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100';
       case 'failed':
         return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100';
-      case 'failed_redemption':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100';
+      case 'processing':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100';
+    }
+  }
+
+  function getPaymentMethodLabel(method: string): string {
+    switch (method) {
+      case 'crypto':
+        return 'Crypto';
+      case 'card':
+        return 'Card';
+      case 'bank':
+        return 'Bank';
+      default:
+        return method;
     }
   }
 
@@ -205,7 +221,7 @@ export default function TransactionsPage() {
     );
   }
 
-  if (!transactionsData || !networks) {
+  if (!paymentsData || !networks) {
     return (
       <div className="flex h-[200px] items-center justify-center">
         <div className="text-center">
@@ -224,27 +240,30 @@ export default function TransactionsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Transaction</TableHead>
-                  <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Product</TableHead>
+                  <TableHead>Method</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactionsData?.data?.map((transaction) => {
-                  const explorerLink = generateExplorerLink(
-                    networks,
-                    transaction.network.chain_id,
-                    'tx',
-                    transaction.transaction_hash
-                  );
+                {paymentsData?.data?.map((payment) => {
+                  const explorerLink = payment.network && payment.transaction_hash
+                    ? generateExplorerLink(
+                        networks,
+                        payment.network.chain_id,
+                        'tx',
+                        payment.transaction_hash
+                      )
+                    : null;
 
                   return (
-                    <TableRow key={transaction.id}>
+                    <TableRow key={payment.id}>
                       <TableCell>
-                        {transaction.transaction_hash ? (
+                        {payment.transaction_hash ? (
                           <a
                             href={explorerLink || '#'}
                             target="_blank"
@@ -253,9 +272,9 @@ export default function TransactionsPage() {
                             title={explorerLink ? 'View on explorer' : 'Explorer link unavailable'}
                           >
                             <span className="text-sm truncate max-w-[120px]">
-                              {transaction.transaction_hash.substring(0, 8)}...
-                              {transaction.transaction_hash.substring(
-                                transaction.transaction_hash.length - 6
+                              {payment.transaction_hash.substring(0, 8)}...
+                              {payment.transaction_hash.substring(
+                                payment.transaction_hash.length - 6
                               )}
                             </span>
                             {explorerLink && (
@@ -271,9 +290,9 @@ export default function TransactionsPage() {
                         ) : (
                           <span className="text-sm text-muted-foreground">No transaction</span>
                         )}
-                        {transaction.error_message && (
+                        {payment.error_message && (
                           <div className="text-xs text-red-500 mt-1">
-                            Error: {transaction.error_message}
+                            Error: {payment.error_message}
                           </div>
                         )}
                       </TableCell>
@@ -281,8 +300,8 @@ export default function TransactionsPage() {
                         <Suspense
                           fallback={<div className="h-5 w-12 bg-muted animate-pulse rounded-md" />}
                         >
-                          <Badge className={getEventTypeColor(transaction.event_type)}>
-                            {getEventTypeLabel(transaction.event_type)}
+                          <Badge className={getPaymentStatusColor(payment.status)}>
+                            {getPaymentStatusLabel(payment.status)}
                           </Badge>
                         </Suspense>
                       </TableCell>
@@ -294,33 +313,46 @@ export default function TransactionsPage() {
                             <Calendar className="h-3 w-3" />
                           </Suspense>
                           <span className="text-sm">
-                            {format(new Date(transaction.event_occurred_at), 'MMM d, yyyy')}
+                            {format(new Date(payment.created_at), 'MMM d, yyyy')}
                           </span>
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {format(new Date(transaction.event_occurred_at), 'h:mm a')}
+                          {format(new Date(payment.created_at), 'h:mm a')}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium">
-                            {transaction.customer.name || 'Unknown'}
+                            {payment.customer?.name || 'Unknown'}
                           </span>
                           <span className="text-sm text-muted-foreground">
-                            {transaction.customer.email || 'No email'}
+                            {payment.customer?.email || 'No email'}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-medium">{transaction.product_name}</span>
-                          <span className="text-sm text-muted-foreground">
-                            {transaction.product_token.token_symbol} on {transaction.network.name}
-                          </span>
+                          {payment.product_name ? (
+                            <>
+                              <span className="font-medium">{payment.product_name}</span>
+                              {payment.network && payment.token && (
+                                <span className="text-sm text-muted-foreground">
+                                  {payment.token.symbol} on {payment.network.name}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">No product</span>
+                          )}
                         </div>
                       </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {getPaymentMethodLabel(payment.payment_method)}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right font-medium">
-                        ${(transaction.event_amount_in_cents / 100).toFixed(2)}
+                        {payment.formatted_amount || `$${(payment.amount_in_cents / 100).toFixed(2)}`}
                       </TableCell>
                       <TableCell>
                         <Suspense
@@ -366,14 +398,14 @@ export default function TransactionsPage() {
         </div>
 
         <div className="text-sm text-muted-foreground">
-          {transactionsData?.data?.length || 0} transactions found
+          {paymentsData?.data?.length || 0} payments found
         </div>
       </div>
 
-      {transactionsData && (
+      {paymentsData && (
         <div className="mt-8 pt-4">
           <Suspense fallback={<div className="h-10 w-32 bg-muted animate-pulse rounded-md" />}>
-            <TransactionsPagination pageData={transactionsData} />
+            <PaymentsPagination pageData={paymentsData} basePath="/merchants/payments" />
           </Suspense>
         </div>
       )}

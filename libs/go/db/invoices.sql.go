@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -2584,6 +2585,77 @@ func (q *Queries) UpdateInvoiceDetails(ctx context.Context, arg UpdateInvoiceDet
 		arg.CustomerJurisdictionID,
 		arg.ReverseChargeApplies,
 	)
+	var i Invoice
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.CustomerID,
+		&i.SubscriptionID,
+		&i.ExternalID,
+		&i.ExternalCustomerID,
+		&i.ExternalSubscriptionID,
+		&i.Status,
+		&i.CollectionMethod,
+		&i.AmountDue,
+		&i.AmountPaid,
+		&i.AmountRemaining,
+		&i.Currency,
+		&i.DueDate,
+		&i.PaidAt,
+		&i.CreatedDate,
+		&i.InvoicePdf,
+		&i.HostedInvoiceUrl,
+		&i.ChargeID,
+		&i.PaymentIntentID,
+		&i.LineItems,
+		&i.TaxAmount,
+		&i.TotalTaxAmounts,
+		&i.BillingReason,
+		&i.PaidOutOfBand,
+		&i.PaymentProvider,
+		&i.PaymentSyncStatus,
+		&i.PaymentSyncedAt,
+		&i.AttemptCount,
+		&i.NextPaymentAttempt,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.InvoiceNumber,
+		&i.SubtotalCents,
+		&i.DiscountCents,
+		&i.PaymentLinkID,
+		&i.DelegationAddress,
+		&i.QrCodeData,
+		&i.TaxAmountCents,
+		&i.TaxDetails,
+		&i.CustomerTaxID,
+		&i.CustomerJurisdictionID,
+		&i.ReverseChargeApplies,
+		&i.ReminderSentAt,
+		&i.ReminderCount,
+		&i.Notes,
+		&i.Terms,
+		&i.Footer,
+	)
+	return i, err
+}
+
+const updateInvoiceMetadata = `-- name: UpdateInvoiceMetadata :one
+UPDATE invoices SET
+    metadata = metadata || $1::jsonb,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $2 AND deleted_at IS NULL
+RETURNING id, workspace_id, customer_id, subscription_id, external_id, external_customer_id, external_subscription_id, status, collection_method, amount_due, amount_paid, amount_remaining, currency, due_date, paid_at, created_date, invoice_pdf, hosted_invoice_url, charge_id, payment_intent_id, line_items, tax_amount, total_tax_amounts, billing_reason, paid_out_of_band, payment_provider, payment_sync_status, payment_synced_at, attempt_count, next_payment_attempt, metadata, created_at, updated_at, deleted_at, invoice_number, subtotal_cents, discount_cents, payment_link_id, delegation_address, qr_code_data, tax_amount_cents, tax_details, customer_tax_id, customer_jurisdiction_id, reverse_charge_applies, reminder_sent_at, reminder_count, notes, terms, footer
+`
+
+type UpdateInvoiceMetadataParams struct {
+	Metadata json.RawMessage `json:"metadata"`
+	ID       uuid.UUID       `json:"id"`
+}
+
+func (q *Queries) UpdateInvoiceMetadata(ctx context.Context, arg UpdateInvoiceMetadataParams) (Invoice, error) {
+	row := q.db.QueryRow(ctx, updateInvoiceMetadata, arg.Metadata, arg.ID)
 	var i Invoice
 	err := row.Scan(
 		&i.ID,

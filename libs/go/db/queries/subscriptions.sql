@@ -27,6 +27,7 @@ SELECT
     cw.wallet_address as subscriber_wallet_address,
     cw.network_type as subscriber_network_type,
     t.symbol as token_symbol,
+    t.decimals as token_decimals,
     n.name as network_name,
     n.chain_id,
     p.price_type AS price_type,

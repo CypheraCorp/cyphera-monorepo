@@ -46,48 +46,24 @@ export function useDashboardSummary(options?: UseAnalyticsOptions) {
   const workspaceId = workspace?.id;
   const currency = options?.currency || defaultCurrency?.code;
 
-  return useQuery<DashboardSummary & { is_calculating?: boolean }>({
+  return useQuery<DashboardSummary>({
     queryKey: ['dashboard-summary', workspaceId, currency],
     queryFn: async () => {
       if (!workspaceId) throw new Error('No workspace ID');
-      try {
-        const data = await analyticsService.getDashboardSummary({ workspaceId, currency });
-        // Mark as not calculating when we have real data
-        return { ...data, is_calculating: false };
-      } catch (error: any) {
-        // Handle 404 specifically - return empty data structure with calculating flag
-        if (error?.status === 404 || error?.response?.status === 404 || 
-            error?.error?.includes('No metrics available')) {
-          const currencyCode = currency || 'USD';
-          return {
-            mrr: { amount_cents: 0, currency: currencyCode, formatted: '$0.00' },
-            arr: { amount_cents: 0, currency: currencyCode, formatted: '$0.00' },
-            total_revenue: { amount_cents: 0, currency: currencyCode, formatted: '$0.00' },
-            active_subscriptions: 0,
-            total_customers: 0,
-            churn_rate: 0,
-            growth_rate: 0,
-            payment_success_rate: 0,
-            last_updated: new Date().toISOString(),
-            is_calculating: true, // Add flag to indicate metrics are being calculated
-          };
-        }
-        throw error;
-      }
+      const data = await analyticsService.getDashboardSummary({ workspaceId, currency });
+      return data;
     },
     enabled: isReady && !!workspaceId,
     refetchInterval: (query) => {
-      // Smart polling: more frequent when calculating, less frequent when data is available
+      // More relaxed polling intervals
       const data = query.state.data;
-      if (data?.is_calculating) {
-        return 5000; // Poll every 5 seconds when calculating
-      } else if (data && !data.is_calculating) {
-        return 60000; // Poll every minute when data is available
+      if (data?.is_calculating || data?.is_stale) {
+        return 30000; // Poll every 30 seconds when calculating or stale
       }
-      return 10000; // Default: poll every 10 seconds for initial load
+      return 5 * 60 * 1000; // Poll every 5 minutes when data exists
     },
     refetchIntervalInBackground: true,
-    staleTime: 0, // Always consider data stale to ensure fresh fetches
+    staleTime: 60 * 1000, // Consider data fresh for 1 minute
     retry: (failureCount, error: any) => {
       // Don't retry 404s
       if (error?.status === 404 || error?.response?.status === 404) {

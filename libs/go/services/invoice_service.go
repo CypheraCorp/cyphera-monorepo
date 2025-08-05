@@ -478,9 +478,186 @@ func (s *InvoiceService) generateInvoiceFromSubscriptionWithNotes(ctx context.Co
 	return s.GetInvoiceWithDetails(ctx, invoice.WorkspaceID, invoice.ID)
 }
 
+func (s *InvoiceService) generateInvoiceFromSubscriptionWithMetadata(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool, metadata map[string]interface{}) (*responses.InvoiceResponse, error) {
+	// Get subscription with line items
+	subscriptionRows, err := s.queries.GetSubscriptionWithLineItems(ctx, subscriptionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription with line items: %w", err)
+	}
+
+	if len(subscriptionRows) == 0 {
+		return nil, fmt.Errorf("subscription %s has no active line items", subscriptionID)
+	}
+
+	// Get subscription and customer details
+	subscriptionDetails, err := s.queries.GetSubscriptionForInvoicing(ctx, subscriptionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription details: %w", err)
+	}
+
+	// Check if invoice already exists for this period
+	exists, err := s.queries.CheckInvoiceExistsForPeriod(ctx, db.CheckInvoiceExistsForPeriodParams{
+		SubscriptionID: pgtype.UUID{Bytes: subscriptionID, Valid: true},
+		WorkspaceID:    subscriptionDetails.WorkspaceID,
+		PeriodStart:    timeToPgtype(&periodStart),
+		PeriodEnd:      timeToPgtype(&periodEnd),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing invoice: %w", err)
+	}
+
+	if exists {
+		return nil, fmt.Errorf("invoice already exists for subscription %s for period %s to %s", 
+			subscriptionID, periodStart.Format("2006-01-02"), periodEnd.Format("2006-01-02"))
+	}
+
+	// Determine currency from base line item
+	var currency string
+	var subtotalCents int64
+	for _, row := range subscriptionRows {
+		if row.LineItemType == "base" {
+			currency = row.LineItemCurrency
+		}
+		subtotalCents += int64(row.TotalAmountInPennies)
+	}
+
+	// Generate invoice number
+	invoiceNumber, err := s.generateInvoiceNumber(ctx, subscriptionDetails.WorkspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate invoice number: %w", err)
+	}
+
+	// Calculate tax
+	taxCalculation, err := s.taxService.CalculateTax(ctx, params.TaxCalculationParams{
+		CustomerID:   subscriptionDetails.CustomerID,
+		WorkspaceID:  subscriptionDetails.WorkspaceID,
+		AmountCents:  subtotalCents,
+		Currency:     currency,
+		ProductID:    &subscriptionDetails.ProductID,
+	})
+	if err != nil {
+		// If tax calculation fails, log but continue with zero tax
+		s.logger.Warn("Failed to calculate tax for invoice, continuing with zero tax",
+			zap.Error(err),
+			zap.String("subscription_id", subscriptionID.String()))
+		taxCalculation = &responses.TaxCalculationResult{
+			TotalTaxCents: 0,
+			TaxBreakdown:  []business.TaxLineItem{},
+		}
+	}
+
+	// Calculate total amount
+	totalAmount := subtotalCents + int64(taxCalculation.TotalTaxCents)
+
+	// Determine status based on isDraft
+	status := "open"
+	if isDraft {
+		status = "draft"
+	}
+
+	// Calculate due date - 30 days from period end
+	dueDate := periodEnd.AddDate(0, 0, 30)
+
+	// Convert tax details to JSON
+	taxDetailsJSON, err := json.Marshal(taxCalculation.TaxBreakdown)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal tax details: %w", err)
+	}
+
+	// Generate external ID for internal invoice
+	externalID := fmt.Sprintf("cyp_inv_%s", uuid.New().String())
+
+	// Add base metadata
+	if metadata == nil {
+		metadata = make(map[string]interface{})
+	}
+	metadata["generated_from"] = "subscription"
+	
+	metadataJSON, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	// Create invoice
+	invoice, err := s.queries.CreateInvoiceWithDetails(ctx, db.CreateInvoiceWithDetailsParams{
+		WorkspaceID:            subscriptionDetails.WorkspaceID,
+		CustomerID:             pgtype.UUID{Bytes: subscriptionDetails.CustomerID, Valid: true},
+		SubscriptionID:         pgtype.UUID{Bytes: subscriptionID, Valid: true},
+		ExternalID:             externalID,
+		InvoiceNumber:          pgtype.Text{String: invoiceNumber, Valid: true},
+		Status:                 status,
+		AmountDue:              int32(totalAmount),
+		Currency:               currency,
+		SubtotalCents:          pgtype.Int8{Int64: subtotalCents, Valid: true},
+		DiscountCents:          pgtype.Int8{Int64: 0, Valid: true},
+		TaxAmountCents:         taxCalculation.TotalTaxCents,
+		TaxDetails:             taxDetailsJSON,
+		DueDate:                timeToPgtype(&dueDate),
+		CustomerTaxID:          pgtype.Text{String: subscriptionDetails.TaxID.String, Valid: subscriptionDetails.TaxID.Valid},
+		CustomerJurisdictionID: pgtype.UUID{Valid: false},
+		ReverseChargeApplies:   pgtype.Bool{Bool: false, Valid: true},
+		Metadata:               metadataJSON,
+		Notes:                  pgtype.Text{Valid: false},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create invoice: %w", err)
+	}
+
+	// Create line items from subscription line items
+	for _, row := range subscriptionRows {
+		description := fmt.Sprintf("%s - %s", row.ProductName.String, row.ProductDescription.String)
+		if row.LineItemType == "addon" {
+			description = fmt.Sprintf("Add-on: %s", description)
+		}
+
+		// Calculate crypto amount if available
+		var cryptoAmount pgtype.Numeric
+		var exchangeRate pgtype.Numeric
+		// TODO: Get network and token info from product_tokens table
+		cryptoAmount = pgtype.Numeric{Valid: false}
+		exchangeRate = pgtype.Numeric{Valid: false}
+
+		_, err = s.queries.CreateInvoiceLineItem(ctx, db.CreateInvoiceLineItemParams{
+			InvoiceID:         invoice.ID,
+			Description:       description,
+			Quantity:          pgtype.Numeric{Int: big.NewInt(int64(row.Quantity)), Exp: 0, Valid: true},
+			UnitAmountInCents: int64(row.UnitAmountInPennies),
+			AmountInCents:     int64(row.TotalAmountInPennies),
+			FiatCurrency:      currency,
+			SubscriptionID:    pgtype.UUID{Bytes: subscriptionID, Valid: true},
+			ProductID:         pgtype.UUID{Bytes: row.ProductID, Valid: true},
+			NetworkID:         pgtype.UUID{Valid: false},
+			TokenID:           pgtype.UUID{Valid: false},
+			CryptoAmount:      cryptoAmount,
+			ExchangeRate:      exchangeRate,
+			TaxRate:           pgtype.Numeric{Valid: false}, // Calculated at invoice level
+			TaxAmountInCents:  pgtype.Int8{Valid: false},    // Calculated at invoice level
+			PeriodStart:       timeToPgtype(&periodStart),
+			PeriodEnd:         timeToPgtype(&periodEnd),
+			LineItemType:      pgtype.Text{String: row.LineItemType, Valid: true},
+			Metadata:          []byte("{}"),
+		})
+		if err != nil {
+			s.logger.Error("Failed to create invoice line item",
+				zap.Error(err),
+				zap.String("product_id", row.ProductID.String()),
+				zap.String("line_item_type", row.LineItemType))
+			// Continue with other line items
+		}
+	}
+
+	// Get the created invoice with line items
+	return s.GetInvoiceWithDetails(ctx, invoice.WorkspaceID, invoice.ID)
+}
+
 // GenerateInvoiceFromSubscriptionWithNotes creates an invoice from a subscription with custom notes
 func (s *InvoiceService) GenerateInvoiceFromSubscriptionWithNotes(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool, notes string) (*responses.InvoiceResponse, error) {
 	return s.generateInvoiceFromSubscriptionWithNotes(ctx, subscriptionID, periodStart, periodEnd, isDraft, notes)
+}
+
+// GenerateInvoiceFromSubscriptionWithMetadata creates an invoice from a subscription with custom metadata
+func (s *InvoiceService) GenerateInvoiceFromSubscriptionWithMetadata(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool, metadata map[string]interface{}) (*responses.InvoiceResponse, error) {
+	return s.generateInvoiceFromSubscriptionWithMetadata(ctx, subscriptionID, periodStart, periodEnd, isDraft, metadata)
 }
 
 // FinalizeInvoice marks an invoice as finalized and ready for payment
@@ -1198,6 +1375,44 @@ func convertToInvoiceResponse(details *business.InvoiceWithDetails) *responses.I
 		}
 	}
 
+	// Parse metadata
+	var metadata map[string]interface{}
+	if len(details.Invoice.Metadata) > 0 {
+		if err := json.Unmarshal(details.Invoice.Metadata, &metadata); err != nil {
+			// Log error but continue - metadata is optional
+			metadata = nil
+		}
+	}
+
+	// Convert optional fields
+	var notes, terms, footer *string
+	if details.Invoice.Notes.Valid && details.Invoice.Notes.String != "" {
+		notes = &details.Invoice.Notes.String
+	}
+	if details.Invoice.Terms.Valid && details.Invoice.Terms.String != "" {
+		terms = &details.Invoice.Terms.String
+	}
+	if details.Invoice.Footer.Valid && details.Invoice.Footer.String != "" {
+		footer = &details.Invoice.Footer.String
+	}
+
+	var reminderSentAt *time.Time
+	if details.Invoice.ReminderSentAt.Valid {
+		reminderSentAt = &details.Invoice.ReminderSentAt.Time
+	}
+
+	// Get period dates from line items if available
+	var periodStart, periodEnd *time.Time
+	for _, item := range details.LineItems {
+		if item.PeriodStart.Valid && item.PeriodEnd.Valid {
+			start := item.PeriodStart.Time
+			end := item.PeriodEnd.Time
+			periodStart = &start
+			periodEnd = &end
+			break
+		}
+	}
+
 	return &responses.InvoiceResponse{
 		ID:               details.Invoice.ID,
 		WorkspaceID:      details.Invoice.WorkspaceID,
@@ -1218,6 +1433,14 @@ func convertToInvoiceResponse(details *business.InvoiceWithDetails) *responses.I
 		TaxDetails:       taxDetails,
 		PaymentLinkID:    nil, // TODO: Add if available
 		PaymentLinkURL:   nil, // TODO: Add if available
+		PeriodStart:      periodStart,
+		PeriodEnd:        periodEnd,
+		ReminderSentAt:   reminderSentAt,
+		ReminderCount:    details.Invoice.ReminderCount.Int32,
+		Notes:            notes,
+		Terms:            terms,
+		Footer:           footer,
+		Metadata:         metadata,
 		CreatedAt:        details.Invoice.CreatedAt.Time,
 		UpdatedAt:        details.Invoice.UpdatedAt.Time,
 	}

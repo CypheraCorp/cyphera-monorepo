@@ -387,6 +387,15 @@ func (f *HandlerFactory) NewNetworkHandler() *NetworkHandler {
 	)
 }
 
+// NewPaymentsHandler creates a new payments handler
+func (f *HandlerFactory) NewPaymentsHandler() *PaymentsHandler {
+	return NewPaymentsHandler(
+		f.commonServices,
+		f.paymentService,
+		f.logger,
+	)
+}
+
 // NewPaymentFailureWebhookHandler creates a new payment failure webhook handler
 func (f *HandlerFactory) NewPaymentFailureWebhookHandler() *PaymentFailureWebhookHandler {
 	return NewPaymentFailureWebhookHandler(

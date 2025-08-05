@@ -521,7 +521,7 @@ func (s *CustomerService) CreateCustomerFromWallet(
 			Valid:  false,
 		},
 		Name: pgtype.Text{
-			String: "Wallet Customer: " + params.WalletAddress,
+			String: params.WalletAddress,
 			Valid:  true,
 		},
 		Description: pgtype.Text{

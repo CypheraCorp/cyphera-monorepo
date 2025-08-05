@@ -556,6 +556,21 @@ func (mr *MockInvoiceServiceMockRecorder) GenerateInvoiceFromSubscription(ctx, s
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateInvoiceFromSubscription", reflect.TypeOf((*MockInvoiceService)(nil).GenerateInvoiceFromSubscription), ctx, subscriptionID, periodStart, periodEnd, isDraft)
 }
 
+// GenerateInvoiceFromSubscriptionWithMetadata mocks base method.
+func (m *MockInvoiceService) GenerateInvoiceFromSubscriptionWithMetadata(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool, metadata map[string]any) (*responses.InvoiceResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GenerateInvoiceFromSubscriptionWithMetadata", ctx, subscriptionID, periodStart, periodEnd, isDraft, metadata)
+	ret0, _ := ret[0].(*responses.InvoiceResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GenerateInvoiceFromSubscriptionWithMetadata indicates an expected call of GenerateInvoiceFromSubscriptionWithMetadata.
+func (mr *MockInvoiceServiceMockRecorder) GenerateInvoiceFromSubscriptionWithMetadata(ctx, subscriptionID, periodStart, periodEnd, isDraft, metadata any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateInvoiceFromSubscriptionWithMetadata", reflect.TypeOf((*MockInvoiceService)(nil).GenerateInvoiceFromSubscriptionWithMetadata), ctx, subscriptionID, periodStart, periodEnd, isDraft, metadata)
+}
+
 // GenerateInvoiceFromSubscriptionWithNotes mocks base method.
 func (m *MockInvoiceService) GenerateInvoiceFromSubscriptionWithNotes(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool, notes string) (*responses.InvoiceResponse, error) {
 	m.ctrl.T.Helper()

@@ -7,6 +7,7 @@ import { useSubscriptions } from '@/hooks/data';
 import { Suspense } from 'react';
 import { TableSkeleton } from '@/components/ui/loading-states';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 
 // Dynamically import lucide-react icons
 
@@ -307,8 +308,16 @@ export default function SubscriptionsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>View Details</DropdownMenuItem>
-                              <DropdownMenuItem>Cancel Subscription</DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href={`/merchants/subscriptions/${subscription.id}`}>
+                                  View Details
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href={`/merchants/subscriptions/${subscription.id}?action=cancel`}>
+                                  Manage Subscription
+                                </Link>
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </Suspense>

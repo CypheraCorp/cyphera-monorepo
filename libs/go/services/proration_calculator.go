@@ -4,7 +4,6 @@ import (
 	"math"
 	"time"
 
-	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/types/business"
 )
 
@@ -132,9 +131,9 @@ func (pc *ProrationCalculator) ScheduleDowngrade(
 	// No proration needed as customer keeps current service until then
 	message := ""
 	switch changeType {
-	case constants.DowngradeAction:
+	case "downgrade":
 		message = "Downgrade scheduled for end of billing period. You'll continue with current plan until then."
-	case constants.CancelAction:
+	case "cancel":
 		message = "Cancellation scheduled for end of billing period. You'll have access until then."
 	default:
 		message = "Change scheduled for end of billing period."

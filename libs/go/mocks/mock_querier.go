@@ -6301,6 +6301,21 @@ func (mr *MockQuerierMockRecorder) HardDeleteWorkspace(ctx, id any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HardDeleteWorkspace", reflect.TypeOf((*MockQuerier)(nil).HardDeleteWorkspace), ctx, id)
 }
 
+// HasPaymentsAfterDate mocks base method.
+func (m *MockQuerier) HasPaymentsAfterDate(ctx context.Context, arg db.HasPaymentsAfterDateParams) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasPaymentsAfterDate", ctx, arg)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasPaymentsAfterDate indicates an expected call of HasPaymentsAfterDate.
+func (mr *MockQuerierMockRecorder) HasPaymentsAfterDate(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasPaymentsAfterDate", reflect.TypeOf((*MockQuerier)(nil).HasPaymentsAfterDate), ctx, arg)
+}
+
 // IncrementPaymentLinkUsage mocks base method.
 func (m *MockQuerier) IncrementPaymentLinkUsage(ctx context.Context, arg db.IncrementPaymentLinkUsageParams) (db.PaymentLink, error) {
 	m.ctrl.T.Helper()
@@ -8646,6 +8661,21 @@ func (m *MockQuerier) UpdateInvoiceLineItem(ctx context.Context, arg db.UpdateIn
 func (mr *MockQuerierMockRecorder) UpdateInvoiceLineItem(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateInvoiceLineItem", reflect.TypeOf((*MockQuerier)(nil).UpdateInvoiceLineItem), ctx, arg)
+}
+
+// UpdateInvoiceMetadata mocks base method.
+func (m *MockQuerier) UpdateInvoiceMetadata(ctx context.Context, arg db.UpdateInvoiceMetadataParams) (db.Invoice, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateInvoiceMetadata", ctx, arg)
+	ret0, _ := ret[0].(db.Invoice)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateInvoiceMetadata indicates an expected call of UpdateInvoiceMetadata.
+func (mr *MockQuerierMockRecorder) UpdateInvoiceMetadata(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateInvoiceMetadata", reflect.TypeOf((*MockQuerier)(nil).UpdateInvoiceMetadata), ctx, arg)
 }
 
 // UpdateInvoiceNotes mocks base method.

@@ -54,7 +54,6 @@ class AnalyticsService extends CypheraAPI {
     }
 
     const url = `${this.baseUrl}/analytics/dashboard${queryParams.toString() ? `?${queryParams}` : ''}`;
-    console.log('DEBUG: Dashboard summary URL:', url);
     const response = await this.fetchWithRateLimit<DashboardSummary>(
       url,
       {

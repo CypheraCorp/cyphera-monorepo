@@ -66,6 +66,7 @@ type InvoiceService interface {
 	GetInvoiceActivity(ctx context.Context, workspaceID, invoiceID uuid.UUID, limit, offset int32) ([]db.InvoiceActivity, error)
 	GenerateInvoiceFromSubscription(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool) (*responses.InvoiceResponse, error)
 	GenerateInvoiceFromSubscriptionWithNotes(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool, notes string) (*responses.InvoiceResponse, error)
+	GenerateInvoiceFromSubscriptionWithMetadata(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool, metadata map[string]interface{}) (*responses.InvoiceResponse, error)
 	BulkGenerateInvoices(ctx context.Context, workspaceID uuid.UUID, endDate time.Time, maxInvoices int32) (*responses.BulkInvoiceGenerationResult, error)
 	GetInvoiceStats(ctx context.Context, workspaceID uuid.UUID, startDate, endDate time.Time) (*responses.InvoiceStatsResponse, error)
 }
@@ -167,6 +168,7 @@ type SubscriptionManagementService interface {
 	PreviewChange(ctx context.Context, subscriptionID uuid.UUID, changeType string, lineItems []requests.LineItemUpdate) (*business.ChangePreview, error)
 	GetSubscriptionHistory(ctx context.Context, subscriptionID uuid.UUID, limit int32) ([]db.SubscriptionStateHistory, error)
 	ProcessScheduledChanges(ctx context.Context) error
+	ChangePrice(ctx context.Context, subscriptionID uuid.UUID, newPriceCents int64) error
 }
 
 // CustomerService handles customer operations

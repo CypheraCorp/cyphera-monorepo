@@ -120,7 +120,7 @@ func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 			CreatedAt:          subDetails.CustomerCreatedAt.Time,
 			UpdatedAt:          subDetails.CustomerUpdatedAt.Time,
 		},
-		Product: responses.ProductResponse{
+		Product: &responses.ProductResponse{
 			ID:          subDetails.ProductID.String(),
 			Name:        subDetails.ProductName,
 			Description: subDetails.ProductDescription.String,
@@ -128,7 +128,7 @@ func ToSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 			Active:      subDetails.ProductActive,
 			Metadata:    subDetails.ProductMetadata, // Expecting json.RawMessage
 		},
-		ProductToken: responses.ProductTokenResponse{
+		ProductToken: &responses.ProductTokenResponse{
 			ID:          subDetails.ProductTokenID.String(),
 			TokenID:     subDetails.ProductTokenTokenID.String(),
 			TokenSymbol: subDetails.TokenSymbol,
@@ -194,19 +194,19 @@ func CalculateSubscriptionPeriods(product db.Product) (time.Time, time.Time, tim
 func DetermineErrorType(err error) db.SubscriptionEventType {
 	errorMsg := err.Error()
 	if strings.Contains(errorMsg, "validation") {
-		return db.SubscriptionEventTypeFailedValidation
+		return db.SubscriptionEventTypeFailValidation
 	} else if strings.Contains(errorMsg, "customer") && strings.Contains(errorMsg, "create") {
-		return db.SubscriptionEventTypeFailedCustomerCreation
+		return db.SubscriptionEventTypeFailCustomerCreation
 	} else if strings.Contains(errorMsg, "wallet") && strings.Contains(errorMsg, "create") {
-		return db.SubscriptionEventTypeFailedWalletCreation
+		return db.SubscriptionEventTypeFailWalletCreation
 	} else if strings.Contains(errorMsg, "delegation") {
-		return db.SubscriptionEventTypeFailedDelegationStorage
+		return db.SubscriptionEventTypeFailDelegationStorage
 	} else if strings.Contains(errorMsg, "subscription already exists") {
-		return db.SubscriptionEventTypeFailedDuplicate
+		return db.SubscriptionEventTypeFailDuplicate
 	} else if strings.Contains(errorMsg, "database") || strings.Contains(errorMsg, "db") {
-		return db.SubscriptionEventTypeFailedSubscriptionDb
+		return db.SubscriptionEventTypeFailSubscriptionDb
 	} else {
-		return db.SubscriptionEventTypeFailed
+		return db.SubscriptionEventTypeFail
 	}
 }
 
@@ -247,7 +247,7 @@ func ToComprehensiveSubscriptionResponse(ctx context.Context, queries db.Querier
 			zap.Int("events_count", len(events)))
 
 		for _, event := range events {
-			if event.EventType == db.SubscriptionEventTypeRedeemed && event.TransactionHash.Valid {
+			if event.EventType == db.SubscriptionEventTypeRedeem && event.TransactionHash.Valid {
 				initialTxHash = event.TransactionHash.String
 				break
 			}
@@ -307,13 +307,13 @@ func ToComprehensiveSubscriptionResponse(ctx context.Context, queries db.Querier
 			CreatedAt:          subscriptionDetails.CustomerCreatedAt.Time,
 			UpdatedAt:          subscriptionDetails.CustomerUpdatedAt.Time,
 		},
-		Product: responses.ProductResponse{
+		Product: &responses.ProductResponse{
 			ID:     subscriptionDetails.ProductID.String(),
 			Name:   subscriptionDetails.ProductName,
 			Active: true, // Assuming active for subscriptions
 			Object: "product",
 		},
-		ProductToken: responses.ProductTokenResponse{
+		ProductToken: &responses.ProductTokenResponse{
 			ID:          subscriptionDetails.ProductTokenID.String(),
 			TokenSymbol: subscriptionDetails.TokenSymbol,
 			NetworkID:   subscriptionDetails.ProductTokenID.String(),

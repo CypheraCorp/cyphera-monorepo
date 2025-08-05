@@ -283,24 +283,76 @@ func (ns NullPriceType) Value() (driver.Value, error) {
 	return string(ns.PriceType), nil
 }
 
+type SubscriptionChangeType string
+
+const (
+	SubscriptionChangeTypeUpgrade     SubscriptionChangeType = "upgrade"
+	SubscriptionChangeTypeDowngrade   SubscriptionChangeType = "downgrade"
+	SubscriptionChangeTypeCancel      SubscriptionChangeType = "cancel"
+	SubscriptionChangeTypePause       SubscriptionChangeType = "pause"
+	SubscriptionChangeTypeResume      SubscriptionChangeType = "resume"
+	SubscriptionChangeTypeModifyItems SubscriptionChangeType = "modify_items"
+	SubscriptionChangeTypeReactivate  SubscriptionChangeType = "reactivate"
+)
+
+func (e *SubscriptionChangeType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SubscriptionChangeType(s)
+	case string:
+		*e = SubscriptionChangeType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SubscriptionChangeType: %T", src)
+	}
+	return nil
+}
+
+type NullSubscriptionChangeType struct {
+	SubscriptionChangeType SubscriptionChangeType `json:"subscription_change_type"`
+	Valid                  bool                   `json:"valid"` // Valid is true if SubscriptionChangeType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSubscriptionChangeType) Scan(value interface{}) error {
+	if value == nil {
+		ns.SubscriptionChangeType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SubscriptionChangeType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSubscriptionChangeType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SubscriptionChangeType), nil
+}
+
 type SubscriptionEventType string
 
 const (
-	SubscriptionEventTypeCreated                 SubscriptionEventType = "created"
-	SubscriptionEventTypeRedeemed                SubscriptionEventType = "redeemed"
-	SubscriptionEventTypeRenewed                 SubscriptionEventType = "renewed"
-	SubscriptionEventTypeCanceled                SubscriptionEventType = "canceled"
-	SubscriptionEventTypeExpired                 SubscriptionEventType = "expired"
-	SubscriptionEventTypeCompleted               SubscriptionEventType = "completed"
-	SubscriptionEventTypeFailed                  SubscriptionEventType = "failed"
-	SubscriptionEventTypeFailedValidation        SubscriptionEventType = "failed_validation"
-	SubscriptionEventTypeFailedCustomerCreation  SubscriptionEventType = "failed_customer_creation"
-	SubscriptionEventTypeFailedWalletCreation    SubscriptionEventType = "failed_wallet_creation"
-	SubscriptionEventTypeFailedDelegationStorage SubscriptionEventType = "failed_delegation_storage"
-	SubscriptionEventTypeFailedSubscriptionDb    SubscriptionEventType = "failed_subscription_db"
-	SubscriptionEventTypeFailedRedemption        SubscriptionEventType = "failed_redemption"
-	SubscriptionEventTypeFailedTransaction       SubscriptionEventType = "failed_transaction"
-	SubscriptionEventTypeFailedDuplicate         SubscriptionEventType = "failed_duplicate"
+	SubscriptionEventTypeCreate                SubscriptionEventType = "create"
+	SubscriptionEventTypeRedeem                SubscriptionEventType = "redeem"
+	SubscriptionEventTypeRenew                 SubscriptionEventType = "renew"
+	SubscriptionEventTypeCancel                SubscriptionEventType = "cancel"
+	SubscriptionEventTypeExpire                SubscriptionEventType = "expire"
+	SubscriptionEventTypeUpgrade               SubscriptionEventType = "upgrade"
+	SubscriptionEventTypeDowngrade             SubscriptionEventType = "downgrade"
+	SubscriptionEventTypePause                 SubscriptionEventType = "pause"
+	SubscriptionEventTypeResume                SubscriptionEventType = "resume"
+	SubscriptionEventTypeReactivate            SubscriptionEventType = "reactivate"
+	SubscriptionEventTypeComplete              SubscriptionEventType = "complete"
+	SubscriptionEventTypeFail                  SubscriptionEventType = "fail"
+	SubscriptionEventTypeFailValidation        SubscriptionEventType = "fail_validation"
+	SubscriptionEventTypeFailCustomerCreation  SubscriptionEventType = "fail_customer_creation"
+	SubscriptionEventTypeFailWalletCreation    SubscriptionEventType = "fail_wallet_creation"
+	SubscriptionEventTypeFailDelegationStorage SubscriptionEventType = "fail_delegation_storage"
+	SubscriptionEventTypeFailSubscriptionDb    SubscriptionEventType = "fail_subscription_db"
+	SubscriptionEventTypeFailRedemption        SubscriptionEventType = "fail_redemption"
+	SubscriptionEventTypeFailTransaction       SubscriptionEventType = "fail_transaction"
+	SubscriptionEventTypeFailDuplicate         SubscriptionEventType = "fail_duplicate"
 )
 
 func (e *SubscriptionEventType) Scan(src interface{}) error {
@@ -1209,22 +1261,22 @@ type SubscriptionProration struct {
 }
 
 type SubscriptionScheduleChange struct {
-	ID                   uuid.UUID          `json:"id"`
-	SubscriptionID       uuid.UUID          `json:"subscription_id"`
-	ChangeType           string             `json:"change_type"`
-	ScheduledFor         pgtype.Timestamptz `json:"scheduled_for"`
-	FromLineItems        []byte             `json:"from_line_items"`
-	ToLineItems          []byte             `json:"to_line_items"`
-	ProrationAmountCents pgtype.Int8        `json:"proration_amount_cents"`
-	ProrationCalculation []byte             `json:"proration_calculation"`
-	Status               string             `json:"status"`
-	ProcessedAt          pgtype.Timestamptz `json:"processed_at"`
-	ErrorMessage         pgtype.Text        `json:"error_message"`
-	Reason               pgtype.Text        `json:"reason"`
-	InitiatedBy          pgtype.Text        `json:"initiated_by"`
-	Metadata             []byte             `json:"metadata"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	ID                   uuid.UUID              `json:"id"`
+	SubscriptionID       uuid.UUID              `json:"subscription_id"`
+	ChangeType           SubscriptionChangeType `json:"change_type"`
+	ScheduledFor         pgtype.Timestamptz     `json:"scheduled_for"`
+	FromLineItems        []byte                 `json:"from_line_items"`
+	ToLineItems          []byte                 `json:"to_line_items"`
+	ProrationAmountCents pgtype.Int8            `json:"proration_amount_cents"`
+	ProrationCalculation []byte                 `json:"proration_calculation"`
+	Status               string                 `json:"status"`
+	ProcessedAt          pgtype.Timestamptz     `json:"processed_at"`
+	ErrorMessage         pgtype.Text            `json:"error_message"`
+	Reason               pgtype.Text            `json:"reason"`
+	InitiatedBy          pgtype.Text            `json:"initiated_by"`
+	Metadata             []byte                 `json:"metadata"`
+	CreatedAt            pgtype.Timestamptz     `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz     `json:"updated_at"`
 }
 
 type SubscriptionStateHistory struct {

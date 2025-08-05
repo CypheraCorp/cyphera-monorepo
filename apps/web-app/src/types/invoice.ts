@@ -2,6 +2,15 @@
 
 export type InvoiceStatus = 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
 
+export interface InvoiceMetadata {
+  generated_from?: string;
+  transaction_hash?: string;
+  payment_id?: string;
+  payer_wallet?: string;
+  receiver_wallet?: string;
+  [key: string]: any;
+}
+
 export interface InvoiceLineItem {
   id: string;
   invoice_id: string;
@@ -57,6 +66,7 @@ export interface Invoice {
   notes?: string;
   terms?: string;
   footer?: string;
+  metadata?: InvoiceMetadata;
   created_at: string;
   updated_at: string;
 }

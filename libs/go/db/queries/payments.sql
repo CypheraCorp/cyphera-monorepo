@@ -241,3 +241,12 @@ SET
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2
 RETURNING *;
+
+-- name: HasPaymentsAfterDate :one
+SELECT EXISTS(
+    SELECT 1 FROM payments
+    WHERE workspace_id = $1
+    AND created_at > $2
+    AND status = 'succeeded'
+    AND deleted_at IS NULL
+) as has_recent_payments;

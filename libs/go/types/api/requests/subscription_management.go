@@ -42,3 +42,8 @@ type PreviewChangeRequest struct {
 	ChangeType string           `json:"change_type" binding:"required,oneof=upgrade downgrade cancel"`
 	LineItems  []LineItemUpdate `json:"line_items,omitempty"`
 }
+
+// ChangePriceRequest represents the request to change subscription price
+type ChangePriceRequest struct {
+	NewPriceCents int64 `json:"new_price_cents" binding:"required,min=1"`
+}

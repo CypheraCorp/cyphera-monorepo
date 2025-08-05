@@ -1232,6 +1232,28 @@ func (q *Queries) GetUnreconciledPayments(ctx context.Context, arg GetUnreconcil
 	return items, nil
 }
 
+const hasPaymentsAfterDate = `-- name: HasPaymentsAfterDate :one
+SELECT EXISTS(
+    SELECT 1 FROM payments
+    WHERE workspace_id = $1
+    AND created_at > $2
+    AND status = 'succeeded'
+    AND deleted_at IS NULL
+) as has_recent_payments
+`
+
+type HasPaymentsAfterDateParams struct {
+	WorkspaceID uuid.UUID          `json:"workspace_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) HasPaymentsAfterDate(ctx context.Context, arg HasPaymentsAfterDateParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasPaymentsAfterDate, arg.WorkspaceID, arg.CreatedAt)
+	var has_recent_payments bool
+	err := row.Scan(&has_recent_payments)
+	return has_recent_payments, err
+}
+
 const linkPaymentToInvoice = `-- name: LinkPaymentToInvoice :one
 UPDATE payments
 SET 

@@ -473,6 +473,13 @@ UPDATE invoices SET
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
 
+-- name: UpdateInvoiceMetadata :one
+UPDATE invoices SET
+    metadata = metadata || sqlc.arg(metadata)::jsonb,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id) AND deleted_at IS NULL
+RETURNING *;
+
 -- name: GetSubscriptionsForBulkInvoicing :many
 SELECT 
     s.id,

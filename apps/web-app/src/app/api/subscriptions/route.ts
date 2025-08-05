@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getAPIContextFromSession } from '@/lib/api/server/server-api';
 import { requireAuth } from '@/lib/auth/guards/require-auth';
 import logger from '@/lib/core/logger/logger';

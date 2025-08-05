@@ -47,6 +47,7 @@ var (
 	subscriptionEventHandler      *handlers.SubscriptionEventHandler
 	subscriptionManagementHandler *handlers.SubscriptionManagementHandler
 	paymentSyncHandler            *handlers.PaymentSyncHandlers
+	paymentsHandler               *handlers.PaymentsHandler
 	delegationClient              *dsClient.DelegationClient
 	redemptionProcessor           *services.RedemptionProcessor
 	circleHandler                 *handlers.CircleHandler
@@ -368,6 +369,9 @@ func InitializeHandlers() {
 	// Note: Stripe services are now configured per-workspace dynamically,
 	// no global Stripe service configuration needed
 	paymentSyncHandler = handlers.NewPaymentSyncHandlers(commonServices, paymentSyncClient)
+	
+	// Payments handler
+	paymentsHandler = handlerFactory.NewPaymentsHandler()
 
 	// Analytics handler
 	analyticsHandler = handlerFactory.NewAnalyticsHandler()
@@ -654,6 +658,7 @@ func InitializeRoutes(router *gin.Engine) {
 				subscriptions.POST("/:subscription_id/resume", subscriptionManagementHandler.ResumeSubscription)
 				subscriptions.POST("/:subscription_id/reactivate", subscriptionManagementHandler.ReactivateSubscription)
 				subscriptions.POST("/:subscription_id/preview-change", subscriptionManagementHandler.PreviewChange)
+				subscriptions.POST("/:subscription_id/change-price", subscriptionManagementHandler.ChangePrice)
 				subscriptions.GET("/:subscription_id/history", subscriptionManagementHandler.GetSubscriptionHistory)
 
 				// Subscription analytics
@@ -677,6 +682,13 @@ func InitializeRoutes(router *gin.Engine) {
 				// subEvents.GET("/type/:event_type", subscriptionEventHandler.ListSubscriptionEventsByType)
 				// subEvents.GET("/failed", subscriptionEventHandler.ListFailedSubscriptionEvents)
 				// subEvents.GET("/recent", subscriptionEventHandler.ListRecentSubscriptionEvents)
+			}
+
+			// Payments
+			payments := protected.Group("/payments")
+			{
+				payments.GET("", paymentsHandler.ListPayments)
+				payments.GET("/:id", paymentsHandler.GetPayment)
 			}
 
 			// Failed subscription attempts

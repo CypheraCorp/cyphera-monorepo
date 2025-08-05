@@ -6,10 +6,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
 )
 
@@ -84,14 +86,94 @@ func (h *AnalyticsHandler) GetDashboardSummary(c *gin.Context) {
 					h.logger.Error("Failed to calculate metrics", zap.Error(err))
 				}
 			}()
-			sendError(c, http.StatusNotFound, "No metrics available yet. Calculation in progress.", nil)
+			
+			// Return empty summary with calculating flag
+			c.JSON(http.StatusOK, gin.H{
+				"mrr": gin.H{
+					"amount_cents": 0,
+					"currency":     currency,
+					"formatted":    "$0.00",
+				},
+				"arr": gin.H{
+					"amount_cents": 0,
+					"currency":     currency,
+					"formatted":    "$0.00",
+				},
+				"total_revenue": gin.H{
+					"amount_cents": 0,
+					"currency":     currency,
+					"formatted":    "$0.00",
+				},
+				"active_subscriptions": 0,
+				"total_customers":      0,
+				"churn_rate":           0,
+				"growth_rate":          0,
+				"payment_success_rate": 0,
+				"last_updated":         time.Now().Format(time.RFC3339),
+				"is_calculating":       true,
+				"is_stale":             false,
+			})
 			return
 		}
 		handleDBError(c, err, "Failed to get dashboard metrics")
 		return
 	}
 
-	c.JSON(http.StatusOK, summary)
+	// Check if metrics are stale (older than 15 minutes)
+	staleThreshold := 15 * time.Minute
+	isStale := time.Since(summary.LastUpdated) > staleThreshold
+	
+	// Additionally check if there are new payments since last update
+	hasRecentPayments := false
+	if !isStale {
+		// Only check for recent payments if metrics aren't already stale by time
+		hasRecentPayments, err = h.common.GetDB().HasPaymentsAfterDate(c.Request.Context(), db.HasPaymentsAfterDateParams{
+			WorkspaceID: workspaceID,
+			CreatedAt:   pgtype.Timestamptz{Time: summary.LastUpdated, Valid: true},
+		})
+		if err != nil {
+			h.logger.Warn("Failed to check for recent payments", zap.Error(err))
+		}
+	}
+	
+	// Metrics are stale if either condition is true
+	isStale = isStale || hasRecentPayments
+	
+	// Check if we should trigger a refresh
+	if isStale {
+		h.logger.Info("Dashboard metrics are stale, triggering refresh",
+			zap.String("workspace_id", workspaceID.String()),
+			zap.Time("last_updated", summary.LastUpdated),
+			zap.Duration("age", time.Since(summary.LastUpdated)),
+			zap.Bool("has_recent_payments", hasRecentPayments),
+		)
+		
+		// Trigger async refresh
+		go func() {
+			ctx := context.Background()
+			if err := h.service.TriggerMetricsRefresh(ctx, workspaceID, time.Now()); err != nil {
+				h.logger.Error("Failed to refresh stale metrics", zap.Error(err))
+			}
+		}()
+	}
+
+	// Add staleness info to response
+	response := gin.H{
+		"mrr":                  summary.MRR,
+		"arr":                  summary.ARR,
+		"total_revenue":        summary.TotalRevenue,
+		"active_subscriptions": summary.ActiveSubscriptions,
+		"total_customers":      summary.TotalCustomers,
+		"churn_rate":           summary.ChurnRate,
+		"growth_rate":          summary.GrowthRate,
+		"payment_success_rate": summary.PaymentSuccessRate,
+		"last_updated":         summary.LastUpdated.Format(time.RFC3339),
+		"revenue_growth":       summary.RevenueGrowth,
+		"is_stale":             isStale,
+		"is_calculating":       isStale, // If stale, we're triggering calculation
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // GetRevenueChart returns revenue data for charting

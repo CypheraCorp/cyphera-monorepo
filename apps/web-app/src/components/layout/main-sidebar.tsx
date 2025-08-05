@@ -148,12 +148,12 @@ export function MainSidebar() {
       onClick: () => router.push('/merchants/subscriptions'),
     },
     {
-      label: 'Transactions',
-      href: '/merchants/transactions',
+      label: 'Payments',
+      href: '/merchants/payments',
       icon: (
         <motion.div whileHover="hover" initial="initial" variants={iconAnimation}>
           <Receipt
-            className={`h-5 w-5 flex-shrink-0 ${pathname === '/merchants/transactions' ? 'text-gray-400' : 'text-neutral-700 dark:text-neutral-200'}`}
+            className={`h-5 w-5 flex-shrink-0 ${pathname === '/merchants/payments' ? 'text-gray-400' : 'text-neutral-700 dark:text-neutral-200'}`}
           />
         </motion.div>
       ),

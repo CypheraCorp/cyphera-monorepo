@@ -22,6 +22,8 @@ export interface DashboardSummary {
   payment_success_rate: number;
   last_updated: string;
   revenue_growth?: RevenueGrowth;
+  is_stale?: boolean;
+  is_calculating?: boolean;
 }
 
 export interface ChartDataPoint {

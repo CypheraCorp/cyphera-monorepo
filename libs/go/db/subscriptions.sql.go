@@ -591,6 +591,7 @@ SELECT
     cw.wallet_address as subscriber_wallet_address,
     cw.network_type as subscriber_network_type,
     t.symbol as token_symbol,
+    t.decimals as token_decimals,
     n.name as network_name,
     n.chain_id,
     p.price_type AS price_type,
@@ -660,6 +661,7 @@ type GetSubscriptionWithDetailsRow struct {
 	SubscriberWalletAddress    pgtype.Text        `json:"subscriber_wallet_address"`
 	SubscriberNetworkType      NullNetworkType    `json:"subscriber_network_type"`
 	TokenSymbol                string             `json:"token_symbol"`
+	TokenDecimals              int32              `json:"token_decimals"`
 	NetworkName                string             `json:"network_name"`
 	ChainID                    int32              `json:"chain_id"`
 	PriceType                  PriceType          `json:"price_type"`
@@ -719,6 +721,7 @@ func (q *Queries) GetSubscriptionWithDetails(ctx context.Context, arg GetSubscri
 		&i.SubscriberWalletAddress,
 		&i.SubscriberNetworkType,
 		&i.TokenSymbol,
+		&i.TokenDecimals,
 		&i.NetworkName,
 		&i.ChainID,
 		&i.PriceType,
