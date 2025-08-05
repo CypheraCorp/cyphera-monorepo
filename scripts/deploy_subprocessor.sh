@@ -34,6 +34,10 @@ PARAM_RDS_ENDPOINT_NAME="/cyphera/rds-endpoint-${STAGE}"   # Name of the SSM par
 PARAM_DB_NAME_NAME="/cyphera/rds-db-name-${STAGE}"        # Name of the SSM param holding the DB Name (Optional, could be env var)
 PARAM_SMART_WALLET_NAME="/cyphera/wallet/smart-wallet-address-${STAGE}"
 PARAM_DELEGATION_DNS_NAME="/cyphera/delegation-server-alb-dns-${STAGE}" # ADDED - ALB DNS Name parameter
+# ADDED - Dunning/Email parameters
+PARAM_RESEND_API_KEY_ARN_NAME="/cyphera/resend-api-key-arn-${STAGE}"
+PARAM_EMAIL_FROM_ADDRESS="${EMAIL_FROM_ADDRESS:-noreply@cypherapay.com}"
+PARAM_EMAIL_FROM_NAME="${EMAIL_FROM_NAME:-Cyphera}"
 
 # Add DB Name parameter if it doesn't exist (using default 'cyphera_api' if not set via TF)
 # You might manage this via Terraform instead
@@ -54,6 +58,8 @@ PARAM_RDS_ENDPOINT_VALUE=$(fetch_ssm_param "${PARAM_RDS_ENDPOINT_NAME}")
 PARAM_DB_NAME_VALUE=$(fetch_ssm_param "${PARAM_DB_NAME_NAME}")
 PARAM_SMART_WALLET_VALUE=$(fetch_ssm_param "${PARAM_SMART_WALLET_NAME}" "--with-decryption")
 PARAM_DELEGATION_DNS_VALUE=$(fetch_ssm_param "${PARAM_DELEGATION_DNS_NAME}")
+# ADDED - Fetch Resend API Key ARN
+PARAM_RESEND_API_KEY_ARN_VALUE=$(fetch_ssm_param "${PARAM_RESEND_API_KEY_ARN_NAME}")
 
 echo "Successfully fetched all parameters for Subscription Processor."
 
@@ -69,6 +75,10 @@ OVERRIDES="${OVERRIDES} DbNameValue=${PARAM_DB_NAME_VALUE}"
 OVERRIDES="${OVERRIDES} SmartWalletAddressValue=${PARAM_SMART_WALLET_VALUE}"
 # Pass the ALB DNS name parameter instead of the constructed address
 OVERRIDES="${OVERRIDES} ParamDelegationServerAlbDns=${PARAM_DELEGATION_DNS_VALUE}"
+# ADDED - Dunning/Email parameters
+OVERRIDES="${OVERRIDES} ResendAPIKeyArn=${PARAM_RESEND_API_KEY_ARN_VALUE}"
+OVERRIDES="${OVERRIDES} EmailFromAddress=${PARAM_EMAIL_FROM_ADDRESS}"
+OVERRIDES="${OVERRIDES} EmailFromName=${PARAM_EMAIL_FROM_NAME}"
 
 # Add other parameters required by template-subprocessor.yaml if any
 

@@ -86,10 +86,7 @@ This document outlines all the tests that run in GitHub Actions and how they val
 #### Subscription Processor (`subscription-processor.yml`)
 - Tests and deploys background job processor
 - Validates subscription payment processing
-
-#### Dunning Processor (`dunning-processor.yml`)
-- Tests dunning campaign functionality
-- Validates automated retry logic
+- Includes dunning campaign functionality and automated retry logic
 
 #### Webhooks (`webhooks.yml`)
 - Tests webhook receiver and processor

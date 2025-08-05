@@ -198,11 +198,6 @@ sam-build-processor:
 	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
 		$(GO) build -o ./apps/subscription-processor/bootstrap ./apps/subscription-processor/cmd/main.go
 
-sam-build-dunning:
-	@echo "🔨 Building dunning processor for SAM..."
-	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-		$(GO) build -o ./apps/dunning-processor/bin/bootstrap ./apps/dunning-processor/cmd/main.go
-
 # Individual Lambda function build targets for GitHub Actions
 build-WebhookReceiverFunction:
 	@echo "🔨 Building WebhookReceiverFunction for SAM..."

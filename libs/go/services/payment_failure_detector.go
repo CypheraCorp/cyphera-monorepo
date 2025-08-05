@@ -154,13 +154,13 @@ func (d *PaymentFailureDetector) processFailedEvent(ctx context.Context, event d
 		SubscriptionID:    subscription.ID,
 		ConfigurationID:   config.ID,
 		TriggerReason:     "Payment failed - subscription event",
-		OutstandingAmount: int64(product.UnitAmountInPennies) * 100, // Convert pennies to cents
+		OutstandingAmount: int64(product.UnitAmountInPennies), // Already in smallest unit (pennies/cents)
 		Currency:          string(product.Currency),
 		InitialPaymentID:  nil,
 	}
 
 	// Determine campaign strategy based on customer history
-	strategy := d.determineCampaignStrategy(ctx, &customer, &subscription, int64(product.UnitAmountInPennies)*100)
+	strategy := d.determineCampaignStrategy(ctx, &customer, &subscription, int64(product.UnitAmountInPennies))
 
 	// Create the campaign
 	campaign, err := d.dunningService.CreateCampaign(ctx, campaignParams)
@@ -204,14 +204,35 @@ func (d *PaymentFailureDetector) getOrCreateDefaultConfiguration(ctx context.Con
 
 	// Create default configuration if none exists
 	desc := "Automatically created configuration for failed payment recovery"
+	
+	// Define attempt actions for each retry
+	attemptActions := []map[string]interface{}{
+		{"attempt": 1, "actions": []string{"retry_payment", "email"}, "email_template_id": nil},
+		{"attempt": 2, "actions": []string{"retry_payment", "email"}, "email_template_id": nil},
+		{"attempt": 3, "actions": []string{"retry_payment", "email"}, "email_template_id": nil},
+		{"attempt": 4, "actions": []string{"retry_payment", "email"}, "email_template_id": nil},
+	}
+	attemptActionsJSON, _ := json.Marshal(attemptActions)
+	
+	// Define final action config (empty for now)
+	finalActionConfig := map[string]interface{}{}
+	finalActionConfigJSON, _ := json.Marshal(finalActionConfig)
+	
 	config, err := d.dunningService.CreateConfiguration(ctx, params.DunningConfigParams{
-		WorkspaceID:       workspaceID,
-		Name:              "Default Auto-Created Configuration",
-		Description:       &desc,
-		MaxRetryAttempts:  4,
-		RetryIntervalDays: []int32{3, 7, 7, 7},
-		GracePeriodHours:  24,
-		IsActive:          true,
+		WorkspaceID:            workspaceID,
+		Name:                   "Default Auto-Created Configuration",
+		Description:            &desc,
+		MaxRetryAttempts:       4,
+		RetryIntervalDays:      []int32{3, 7, 7, 7},
+		AttemptActions:         attemptActionsJSON,
+		FinalAction:            "cancel",
+		FinalActionConfig:      finalActionConfigJSON,
+		GracePeriodHours:       24,
+		IsActive:               true,
+		IsDefault:              false,
+		SendPreDunningReminder: false,
+		PreDunningDays:         0,
+		AllowCustomerRetry:     true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create default configuration: %w", err)
