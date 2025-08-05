@@ -8,16 +8,27 @@ import (
 
 // CreateProductParams contains parameters for creating a product
 type CreateProductParams struct {
-	WorkspaceID   uuid.UUID
-	WalletID      uuid.UUID
-	Name          string
-	Description   string
-	ImageURL      string
-	URL           string
-	Active        bool
-	Metadata      json.RawMessage
-	Prices        []CreatePriceParams
-	ProductTokens []CreateProductTokenParams
+	WorkspaceID         uuid.UUID
+	WalletID            uuid.UUID
+	Name                string
+	Description         string
+	ImageURL            string
+	URL                 string
+	Active              bool
+	ProductType         string // 'base' or 'addon'
+	ProductGroup        string // Groups related products
+	PriceType           string // 'recurring' or 'one_time'
+	Currency            string
+	UnitAmountInPennies int32
+	IntervalType        string // 'month', 'year', etc.
+	TermLength          int32  // Number of intervals
+	PriceNickname       string
+	PriceExternalID     string
+	Metadata            json.RawMessage
+	PaymentProvider     string
+	ProductTokens       []CreateProductTokenParams
+	// Deprecated: Use embedded pricing fields instead
+	Prices []CreatePriceParams
 }
 
 // CreatePriceParams contains parameters for creating a price
@@ -87,10 +98,19 @@ type Product struct {
 // ValidateSubscriptionParams contains parameters for validating a subscription request
 type ValidateSubscriptionParams struct {
 	SubscriberAddress         string
-	PriceID                   string
+	ProductID                 string
 	ProductTokenID            string
 	TokenAmount               string
-	ProductID                 uuid.UUID
 	Delegation                DelegationParams
 	CypheraSmartWalletAddress string // The expected delegate address
+}
+
+// CreateProductAddonRelationshipParams contains parameters for creating a product addon relationship
+type CreateProductAddonRelationshipParams struct {
+	AddonProductID uuid.UUID
+	IsRequired     bool
+	MaxQuantity    *int32
+	MinQuantity    int32
+	DisplayOrder   int32
+	Metadata       json.RawMessage
 }

@@ -9,8 +9,7 @@ import (
 type CreatePaymentFromSubscriptionEventParams struct {
 	SubscriptionEvent *db.SubscriptionEvent
 	Subscription      *db.Subscription
-	Product           *db.Product
-	Price             *db.Price
+	Product           *db.Product // Product now contains pricing info
 	Customer          *db.Customer
 	TransactionHash   string
 	NetworkID         uuid.UUID
@@ -19,6 +18,7 @@ type CreatePaymentFromSubscriptionEventParams struct {
 	ExchangeRate      string // Decimal as string
 	GasFeeUSDCents    int64
 	GasSponsored      bool
+	InvoiceID         *uuid.UUID // Optional invoice ID to link payment to invoice
 }
 
 // CreateComprehensivePaymentParams contains parameters for creating a comprehensive payment

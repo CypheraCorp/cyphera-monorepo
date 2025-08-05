@@ -53,7 +53,7 @@ func TestPaymentService_CreatePaymentFromSubscriptionEvent(t *testing.T) {
 			params: params.CreatePaymentFromSubscriptionEventParams{
 				SubscriptionEvent: &db.SubscriptionEvent{
 					ID:            eventID,
-					EventType:     db.SubscriptionEventTypeRedeemed,
+					EventType:     db.SubscriptionEventTypeRedeem,
 					AmountInCents: int32(1000),
 				},
 				Subscription: &db.Subscription{
@@ -61,9 +61,7 @@ func TestPaymentService_CreatePaymentFromSubscriptionEvent(t *testing.T) {
 					WorkspaceID: workspaceID,
 				},
 				Product: &db.Product{
-					ID: productID,
-				},
-				Price: &db.Price{
+					ID:       productID,
 					Currency: "USD",
 				},
 				Customer: &db.Customer{
@@ -104,7 +102,7 @@ func TestPaymentService_CreatePaymentFromSubscriptionEvent(t *testing.T) {
 			params: params.CreatePaymentFromSubscriptionEventParams{
 				SubscriptionEvent: &db.SubscriptionEvent{
 					ID:            eventID,
-					EventType:     db.SubscriptionEventTypeRedeemed,
+					EventType:     db.SubscriptionEventTypeRedeem,
 					AmountInCents: int32(1000),
 				},
 				Subscription: &db.Subscription{
@@ -134,7 +132,7 @@ func TestPaymentService_CreatePaymentFromSubscriptionEvent(t *testing.T) {
 			params: params.CreatePaymentFromSubscriptionEventParams{
 				SubscriptionEvent: &db.SubscriptionEvent{
 					ID:            eventID,
-					EventType:     db.SubscriptionEventTypeCreated,
+					EventType:     db.SubscriptionEventTypeCreate,
 					AmountInCents: int32(1000),
 				},
 			},
@@ -147,14 +145,15 @@ func TestPaymentService_CreatePaymentFromSubscriptionEvent(t *testing.T) {
 			params: params.CreatePaymentFromSubscriptionEventParams{
 				SubscriptionEvent: &db.SubscriptionEvent{
 					ID:            eventID,
-					EventType:     db.SubscriptionEventTypeRedeemed,
+					EventType:     db.SubscriptionEventTypeRedeem,
 					AmountInCents: int32(1000),
 				},
 				Subscription: &db.Subscription{
 					ID:          subscriptionID,
 					WorkspaceID: workspaceID,
 				},
-				Price: &db.Price{
+				Product: &db.Product{
+					ID:       productID,
 					Currency: "USD",
 				},
 				Customer: &db.Customer{

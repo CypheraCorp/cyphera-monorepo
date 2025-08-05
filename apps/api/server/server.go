@@ -47,6 +47,7 @@ var (
 	subscriptionEventHandler      *handlers.SubscriptionEventHandler
 	subscriptionManagementHandler *handlers.SubscriptionManagementHandler
 	paymentSyncHandler            *handlers.PaymentSyncHandlers
+	paymentsHandler               *handlers.PaymentsHandler
 	delegationClient              *dsClient.DelegationClient
 	redemptionProcessor           *services.RedemptionProcessor
 	circleHandler                 *handlers.CircleHandler
@@ -368,6 +369,9 @@ func InitializeHandlers() {
 	// Note: Stripe services are now configured per-workspace dynamically,
 	// no global Stripe service configuration needed
 	paymentSyncHandler = handlers.NewPaymentSyncHandlers(commonServices, paymentSyncClient)
+	
+	// Payments handler
+	paymentsHandler = handlerFactory.NewPaymentsHandler()
 
 	// Analytics handler
 	analyticsHandler = handlerFactory.NewAnalyticsHandler()
@@ -468,10 +472,10 @@ func InitializeRoutes(router *gin.Engine) {
 				// Apply stricter rate limiting for auth endpoints
 				admin.POST("/accounts/signin", middleware.StrictRateLimiter.Middleware(), accountHandler.SignInRegisterAccount)
 				admin.POST("/customers/signin", middleware.StrictRateLimiter.Middleware(), customerHandler.SignInRegisterCustomer)
-				admin.GET("/prices/:price_id", productHandler.GetPublicProductByPriceID)
+				admin.GET("/products/:product_id", productHandler.GetPublicProductByID)
 
 				// subscribe to a product
-				admin.POST("/prices/:price_id/subscribe", middleware.ValidateInput(middleware.CreateDelegationSubscriptionValidation), productHandler.SubscribeToProductByPriceID)
+				admin.POST("/products/:product_id/subscribe", middleware.ValidateInput(middleware.CreateDelegationSubscriptionValidation), productHandler.SubscribeToProductByID)
 
 				// Account management
 				admin.GET("/accounts", accountHandler.ListAccounts)
@@ -515,6 +519,7 @@ func InitializeRoutes(router *gin.Engine) {
 
 						// PIN management
 						circleUser.POST("/:workspace_id/pin/create", circleHandler.CreatePinChallenge)
+						circleUser.POST("/:workspace_id/pin/create-with-wallets", circleHandler.CreateUserPinWithWallets)
 						circleUser.PUT("/:workspace_id/pin/update", circleHandler.UpdatePinChallenge)
 						circleUser.POST("/:workspace_id/pin/restore", circleHandler.CreatePinRestoreChallenge)
 					}
@@ -526,6 +531,16 @@ func InitializeRoutes(router *gin.Engine) {
 						circleWallet.GET("/:workspace_id", circleHandler.ListWallets)
 						circleWallet.GET("/get/:wallet_id", circleHandler.GetWallet)
 						circleWallet.GET("/balances/:wallet_id", circleHandler.GetWalletBalance)
+					}
+
+					// Circle transaction endpoints
+					circleTransaction := circle.Group("/transactions")
+					{
+						circleTransaction.POST("/transfer/estimate-fee", circleHandler.EstimateTransferFee)
+						circleTransaction.POST("/transfer", circleHandler.CreateTransfer)
+						circleTransaction.GET("", circleHandler.ListTransactions)
+						circleTransaction.GET("/:transaction_id", circleHandler.GetTransaction)
+						circleTransaction.POST("/validate-address", circleHandler.ValidateAddress)
 					}
 
 					// Circle challenge endpoints
@@ -625,6 +640,7 @@ func InitializeRoutes(router *gin.Engine) {
 			{
 				wallets.GET("", middleware.ValidateQueryParams(middleware.ListQueryValidation), walletHandler.ListWallets)
 				wallets.POST("", middleware.ValidateInput(middleware.CreateWalletValidation), walletHandler.CreateWallet)
+				wallets.GET("/address/:address", walletHandler.GetWalletsByAddress)
 				wallets.GET("/:wallet_id", walletHandler.GetWallet)
 				wallets.DELETE("/:wallet_id", walletHandler.DeleteWallet)
 			}
@@ -654,6 +670,7 @@ func InitializeRoutes(router *gin.Engine) {
 				subscriptions.POST("/:subscription_id/resume", subscriptionManagementHandler.ResumeSubscription)
 				subscriptions.POST("/:subscription_id/reactivate", subscriptionManagementHandler.ReactivateSubscription)
 				subscriptions.POST("/:subscription_id/preview-change", subscriptionManagementHandler.PreviewChange)
+				subscriptions.POST("/:subscription_id/change-price", subscriptionManagementHandler.ChangePrice)
 				subscriptions.GET("/:subscription_id/history", subscriptionManagementHandler.GetSubscriptionHistory)
 
 				// Subscription analytics
@@ -677,6 +694,13 @@ func InitializeRoutes(router *gin.Engine) {
 				// subEvents.GET("/type/:event_type", subscriptionEventHandler.ListSubscriptionEventsByType)
 				// subEvents.GET("/failed", subscriptionEventHandler.ListFailedSubscriptionEvents)
 				// subEvents.GET("/recent", subscriptionEventHandler.ListRecentSubscriptionEvents)
+			}
+
+			// Payments
+			payments := protected.Group("/payments")
+			{
+				payments.GET("", paymentsHandler.ListPayments)
+				payments.GET("/:id", paymentsHandler.GetPayment)
 			}
 
 			// Failed subscription attempts
@@ -765,10 +789,17 @@ func InitializeRoutes(router *gin.Engine) {
 				// Invoice management
 				invoices.GET("", invoiceHandler.ListInvoices)
 				invoices.POST("", middleware.ValidateInput(middleware.CreateInvoiceValidation), invoiceHandler.CreateInvoice)
+				invoices.POST("/bulk-generate", invoiceHandler.BulkGenerateInvoices)
+				invoices.GET("/stats", invoiceHandler.GetInvoiceStats)
 				invoices.GET("/:invoice_id", invoiceHandler.GetInvoice)
 				invoices.GET("/:invoice_id/preview", invoiceHandler.PreviewInvoice)
 				invoices.POST("/:invoice_id/finalize", invoiceHandler.FinalizeInvoice)
 				invoices.POST("/:invoice_id/send", invoiceHandler.SendInvoice)
+				invoices.POST("/:invoice_id/void", invoiceHandler.VoidInvoice)
+				invoices.POST("/:invoice_id/mark-paid", invoiceHandler.MarkInvoicePaid)
+				invoices.POST("/:invoice_id/mark-uncollectible", invoiceHandler.MarkInvoiceUncollectible)
+				invoices.POST("/:invoice_id/duplicate", invoiceHandler.DuplicateInvoice)
+				invoices.GET("/:invoice_id/activity", invoiceHandler.GetInvoiceActivity)
 				invoices.GET("/:invoice_id/payment-link", invoiceHandler.GetInvoicePaymentLink)
 				// Create payment link for invoice
 				invoices.POST("/:invoice_id/payment-link", paymentLinkHandler.CreateInvoicePaymentLink)

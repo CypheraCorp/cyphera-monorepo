@@ -29,8 +29,9 @@ type Application struct {
 	scheduledChangesProcessor *processor.ScheduledChangesProcessor
 	// Add other dependencies here if HandleRequest needs them directly
 	// e.g., dbPool *pgxpool.Pool, delegationClient *dsClient.DelegationClient
-	failureDetector *services.PaymentFailureDetector
-	dunningService  *services.DunningService
+	failureDetector    *services.PaymentFailureDetector
+	dunningService     *services.DunningService
+	dunningRetryEngine *services.DunningRetryEngine
 }
 
 // HandleRequest is the actual Lambda handler function
@@ -69,6 +70,26 @@ func (app *Application) HandleRequest(ctx context.Context /*, event MyEvent - if
 				zap.Int("campaign_ids", len(detectionResult.CampaignIDs)),
 				zap.Int("errors", len(detectionResult.Errors)),
 			)
+
+			// Process newly created dunning campaigns immediately
+			if detectionResult.NewCampaigns > 0 && app.dunningRetryEngine != nil {
+				logger.Info("Processing newly created dunning campaigns...")
+				// Process campaigns with a limit of 100
+				if err := app.dunningRetryEngine.ProcessDueCampaigns(ctx, 100); err != nil {
+					logger.Error("Error processing dunning campaigns", zap.Error(err))
+					// Don't fail the entire Lambda execution, just log the error
+				}
+			}
+		}
+	}
+
+	// --- Process Any Other Due Dunning Campaigns ---
+	// This handles campaigns that were created in previous runs but are now due for retry
+	if app.dunningRetryEngine != nil {
+		logger.Info("Processing any other due dunning campaigns...")
+		if err := app.dunningRetryEngine.ProcessDueCampaigns(ctx, 50); err != nil {
+			logger.Error("Error processing due dunning campaigns", zap.Error(err))
+			// Don't fail the entire Lambda execution, just log the error
 		}
 	}
 
@@ -116,6 +137,26 @@ func (a *Application) LocalHandleRequest(ctx context.Context) error {
 				zap.Int("campaign_ids", len(detectionResult.CampaignIDs)),
 				zap.Int("errors", len(detectionResult.Errors)),
 			)
+
+			// Process newly created dunning campaigns immediately
+			if detectionResult.NewCampaigns > 0 && a.dunningRetryEngine != nil {
+				logger.Info("Processing newly created dunning campaigns...")
+				// Process campaigns with a limit of 100
+				if err := a.dunningRetryEngine.ProcessDueCampaigns(ctx, 100); err != nil {
+					logger.Error("Error processing dunning campaigns", zap.Error(err))
+					// Don't fail the entire execution, just log the error
+				}
+			}
+		}
+	}
+
+	// --- Process Any Other Due Dunning Campaigns ---
+	// This handles campaigns that were created in previous runs but are now due for retry
+	if a.dunningRetryEngine != nil {
+		logger.Info("Processing any other due dunning campaigns...")
+		if err := a.dunningRetryEngine.ProcessDueCampaigns(ctx, 50); err != nil {
+			logger.Error("Error processing due dunning campaigns", zap.Error(err))
+			// Don't fail the entire execution, just log the error
 		}
 	}
 
@@ -286,7 +327,13 @@ func main() {
 	// --- Create Handler and Application Struct ---
 	// Initialize email service if API key is available
 	var emailService *services.EmailService
-	resendAPIKey := os.Getenv("RESEND_API_KEY")
+	// Get Resend API key from secrets or environment
+	resendAPIKey, err := secretsClient.GetSecretString(ctx, "RESEND_API_KEY_ARN", "RESEND_API_KEY")
+	if err != nil {
+		logger.Warn("Failed to get RESEND_API_KEY, email service will not be available", zap.Error(err))
+		resendAPIKey = ""
+	}
+	
 	if resendAPIKey != "" {
 		fromEmail := os.Getenv("EMAIL_FROM_ADDRESS")
 		if fromEmail == "" {
@@ -308,6 +355,16 @@ func main() {
 	// Create the payment failure detector
 	failureDetector := services.NewPaymentFailureDetector(dbQueries, logger.Log, dunningService)
 
+	// Create the dunning retry engine
+	var dunningRetryEngine *services.DunningRetryEngine
+	if emailService != nil {
+		// DunningRetryEngine needs the delegation client for payment retries
+		dunningRetryEngine = services.NewDunningRetryEngine(dbQueries, logger.Log, dunningService, emailService, delegationClient)
+		logger.Info("Dunning retry engine initialized")
+	} else {
+		logger.Warn("Email service not available, dunning retry engine will not be initialized")
+	}
+
 	// Initialize payment service for subscription management
 	cmcApiKey := os.Getenv("CMC_API_KEY")
 	paymentService := services.NewPaymentService(dbQueries, cmcApiKey)
@@ -315,8 +372,16 @@ func main() {
 	// Initialize customer service
 	customerService := services.NewCustomerService(dbQueries)
 
+	// Initialize services for invoice creation
+	taxService := services.NewTaxService(dbQueries)
+	discountService := services.NewDiscountService(dbQueries)
+	gasSponsorshipService := services.NewGasSponsorshipService(dbQueries)
+	currencyService := services.NewCurrencyService(dbQueries)
+	exchangeRateService := services.NewExchangeRateService(dbQueries, "")
+	invoiceService := services.NewInvoiceService(dbQueries, logger.Log, taxService, discountService, gasSponsorshipService, currencyService, exchangeRateService)
+
 	// Initialize subscription service
-	subscriptionService := services.NewSubscriptionService(dbQueries, delegationClient, paymentService, customerService)
+	subscriptionService := services.NewSubscriptionService(dbQueries, delegationClient, paymentService, customerService, invoiceService)
 
 	// Create the scheduled changes processor
 	var scheduledChangesProcessor *processor.ScheduledChangesProcessor
@@ -330,6 +395,7 @@ func main() {
 		scheduledChangesProcessor: scheduledChangesProcessor,
 		failureDetector:           failureDetector,
 		dunningService:            dunningService,
+		dunningRetryEngine:        dunningRetryEngine,
 		// Store connPool and delegationClient in App struct if HandleRequest needs to close them,
 		// though typically you don't close them between warm invocations.
 	}

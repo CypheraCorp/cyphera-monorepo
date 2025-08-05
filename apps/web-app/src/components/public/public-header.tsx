@@ -34,6 +34,11 @@ export function PublicHeader({}: PublicHeaderProps) {
         logger.log('🔄 Starting Web3Auth connection...');
         await connect();
         logger.log('✅ Web3Auth connection initiated');
+        
+        // Add a stabilization delay after login to ensure provider is fully initialized
+        logger.log('⏳ Allowing Web3Auth provider to stabilize...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        logger.log('✅ Web3Auth provider stabilization complete');
       } else {
         logger.warn('⚠️ Web3Auth connect function not available');
       }

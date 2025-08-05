@@ -8,7 +8,6 @@ INSERT INTO invoice_line_items (
     fiat_currency,
     subscription_id,
     product_id,
-    price_id,
     network_id,
     token_id,
     crypto_amount,
@@ -25,7 +24,7 @@ INSERT INTO invoice_line_items (
     gas_sponsor_name,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
 )
 RETURNING *;
 
@@ -68,12 +67,12 @@ WHERE invoice_id = $1;
 
 -- name: GetInvoiceSubtotal :one
 SELECT 
-    SUM(amount_in_cents) FILTER (WHERE line_item_type = 'product') as product_subtotal,
-    SUM(amount_in_cents) FILTER (WHERE line_item_type = 'gas_fee' AND NOT is_gas_sponsored) as customer_gas_fees,
-    SUM(amount_in_cents) FILTER (WHERE line_item_type = 'gas_fee' AND is_gas_sponsored) as sponsored_gas_fees,
-    SUM(tax_amount_in_cents) as total_tax,
-    SUM(amount_in_cents) FILTER (WHERE line_item_type = 'discount') as total_discount,
-    SUM(amount_in_cents) - COALESCE(SUM(amount_in_cents) FILTER (WHERE is_gas_sponsored), 0) as customer_total
+    COALESCE(SUM(amount_in_cents) FILTER (WHERE line_item_type = 'product'), 0)::BIGINT as product_subtotal,
+    COALESCE(SUM(amount_in_cents) FILTER (WHERE line_item_type = 'gas_fee' AND NOT is_gas_sponsored), 0)::BIGINT as customer_gas_fees,
+    COALESCE(SUM(amount_in_cents) FILTER (WHERE line_item_type = 'gas_fee' AND is_gas_sponsored), 0)::BIGINT as sponsored_gas_fees,
+    COALESCE(SUM(tax_amount_in_cents), 0)::BIGINT as total_tax,
+    COALESCE(SUM(amount_in_cents) FILTER (WHERE line_item_type = 'discount'), 0)::BIGINT as total_discount,
+    (COALESCE(SUM(amount_in_cents), 0) - COALESCE(SUM(amount_in_cents) FILTER (WHERE is_gas_sponsored), 0))::BIGINT as customer_total
 FROM invoice_line_items
 WHERE invoice_id = $1;
 
@@ -97,21 +96,19 @@ INSERT INTO invoice_line_items (
     amount_in_cents,
     fiat_currency,
     product_id,
-    price_id,
     line_item_type
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8
 );
 
 -- name: GetProductLineItemsByInvoice :many
 SELECT 
     ili.*,
     p.name as product_name,
-    pr.interval_type,
-    pr.term_length
+    p.interval_type,
+    p.term_length
 FROM invoice_line_items ili
 LEFT JOIN products p ON ili.product_id = p.id
-LEFT JOIN prices pr ON ili.price_id = pr.id
 WHERE ili.invoice_id = $1
     AND ili.line_item_type = 'product'
 ORDER BY ili.created_at ASC;
@@ -150,3 +147,51 @@ LIMIT $2 OFFSET $3;
 SELECT * FROM invoice_line_items
 WHERE invoice_id = $1 AND fiat_currency = $2
 ORDER BY created_at ASC;
+
+-- name: CreateInvoiceLineItemFromSubscription :one
+INSERT INTO invoice_line_items (
+    invoice_id,
+    subscription_id,
+    product_id,
+    description,
+    quantity,
+    unit_amount_in_cents,
+    amount_in_cents,
+    fiat_currency,
+    line_item_type,
+    period_start,
+    period_end,
+    metadata
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+) RETURNING *;
+
+-- name: BulkCreateInvoiceLineItemsFromSubscription :copyfrom
+INSERT INTO invoice_line_items (
+    invoice_id,
+    subscription_id,
+    product_id,
+    description,
+    quantity,
+    unit_amount_in_cents,
+    amount_in_cents,
+    fiat_currency,
+    line_item_type,
+    period_start,
+    period_end
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+);
+
+-- name: GetInvoiceLineItemsBySubscription :many
+SELECT * FROM invoice_line_items
+WHERE subscription_id = $1 AND invoice_id = $2
+ORDER BY 
+    CASE 
+        WHEN line_item_type = 'product' THEN 1
+        WHEN line_item_type = 'gas_fee' THEN 2
+        WHEN line_item_type = 'discount' THEN 3
+        WHEN line_item_type = 'tax' THEN 4
+        ELSE 5
+    END,
+    created_at ASC;

@@ -1,4 +1,4 @@
-import type { PublicProductResponse, PriceResponse } from '@/types/product';
+import type { PublicProductResponse } from '@/types/product';
 import { CypheraAPI } from './api';
 import type { AccountAccessResponse, AccountRequest } from '@/types/account';
 import type { CustomerSignInRequest, CustomerSignInResponse } from '@/types/customer';
@@ -9,37 +9,17 @@ import { clientLogger } from '@/lib/core/logger/logger-client';
  * Extends the base CypheraAPI class (STATELESS regarding user)
  */
 export class PublicAPI extends CypheraAPI {
-  /**
-   * Gets public price information by price ID
-   * @param priceId - The ID of the price to fetch
-   * @returns Promise with the price response
-   * @throws Error if the request fails
-   */
-  async getPublicPrice(priceId: string): Promise<PriceResponse> {
-    try {
-      return await this.fetchWithRateLimit<PriceResponse>(`${this.baseUrl}/public/prices/${priceId}`, {
-        method: 'GET',
-        headers: this.getPublicHeaders(),
-        // Removed cache: 'no-store' to allow HTTP caching
-      });
-    } catch (error) {
-      clientLogger.error('Public price fetch failed', {
-        error: error instanceof Error ? error.message : error,
-      });
-      throw error;
-    }
-  }
 
   /**
-   * Get a public product by Price ID
+   * Get a public product by Product ID (using productId route for URL compatibility)
    * Uses the public API key.
-   * @param priceId - The ID of the price to get
+   * @param productId - The ID of the product to get
    * @returns Promise<PublicProductResponse>
    * @throws Error if the API call fails
    */
-  async getPublicProductByPriceId(priceId: string): Promise<PublicProductResponse> {
+  async getPublicProductById(productId: string): Promise<PublicProductResponse> {
     try {
-      return await this.fetchWithRateLimit<PublicProductResponse>(`${this.baseUrl}/admin/prices/${priceId}`, {
+      return await this.fetchWithRateLimit<PublicProductResponse>(`${this.baseUrl}/admin/products/${productId}`, {
         method: 'GET',
         headers: this.getPublicHeaders(),
       });
@@ -119,6 +99,37 @@ export class PublicAPI extends CypheraAPI {
     } catch (error) {
       clientLogger.error('Customer signin failed', {
         error: error instanceof Error ? error.message : error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Fetches a public product using its product ID from the new pay API route
+   * @param productId - The product ID
+   * @returns Promise with the public product response
+   * @throws Error if the request fails
+   */
+  async getPublicProduct(productId: string): Promise<PublicProductResponse> {
+    try {
+      // Use relative URL to call our own API route
+      const response = await fetch(`/api/pay/${productId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store', // Ensure fresh data
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      clientLogger.error('Public product fetch failed', {
+        error: error instanceof Error ? error.message : error,
+        productId,
       });
       throw error;
     }

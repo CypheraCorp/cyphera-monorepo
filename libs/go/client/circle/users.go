@@ -213,6 +213,46 @@ func (c *CircleClient) InitializeUser(ctx context.Context, request InitializeUse
 	return &response, nil
 }
 
+// CreateUserPinWithWallets creates a user PIN and wallets in a single operation
+// This is used during initial user setup to create PIN and wallets together
+func (c *CircleClient) CreateUserPinWithWallets(ctx context.Context, userID string, blockchains []string, accountType string) (*PinChallengeResponse, error) {
+	// Validate blockchains
+	if err := ValidateBlockchains(blockchains); err != nil {
+		return nil, err
+	}
+
+	// Prepare request payload
+	request := struct {
+		UserID      string   `json:"userId"`
+		Blockchains []string `json:"blockchains"`
+		AccountType string   `json:"accountType"`
+	}{
+		UserID:      userID,
+		Blockchains: blockchains,
+		AccountType: accountType,
+	}
+
+	resp, err := c.httpClient.Post(
+		ctx,
+		"user/pin/wallets", 
+		request,
+		httpClient.WithBearerToken(c.apiKey),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user PIN with wallets: %w", err)
+	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
+
+	var response PinChallengeResponse
+	if err := c.httpClient.ProcessJSONResponse(resp, &response); err != nil {
+		return nil, fmt.Errorf("failed to process create PIN with wallets response: %w", err)
+	}
+
+	return &response, nil
+}
+
 // CreateUserToken generates a user session token and encryption key
 func (c *CircleClient) CreateUserToken(ctx context.Context, userID string) (*UserTokenResponse, error) {
 	if userID == "" {

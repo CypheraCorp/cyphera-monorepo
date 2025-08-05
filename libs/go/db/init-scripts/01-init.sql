@@ -6,30 +6,37 @@ CREATE TYPE api_key_level AS ENUM ('read', 'write', 'admin');
 CREATE TYPE account_type AS ENUM ('admin', 'merchant');
 CREATE TYPE user_role AS ENUM ('admin', 'support', 'developer');
 CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended', 'pending');
-CREATE TYPE price_type AS ENUM ('recurring', 'one_off');
+CREATE TYPE price_type AS ENUM ('recurring', 'one_time');
 CREATE TYPE interval_type AS ENUM ('1min', '5mins', 'daily', 'week', 'month', 'year');
 CREATE TYPE network_type AS ENUM ('evm', 'solana', 'cosmos', 'bitcoin', 'polkadot');
 -- Currency enum removed - using fiat_currencies table instead
 CREATE TYPE wallet_type AS ENUM ('wallet', 'circle_wallet', 'web3auth');
 CREATE TYPE circle_network_type AS ENUM ('ARB', 'ARB-SEPOLIA', 'ETH', 'ETH-SEPOLIA', 'MATIC', 'MATIC-AMOY', 'OP', 'OP-SEPOLIA', 'BASE', 'BASE-SEPOLIA', 'UNI', 'UNI-SEPOLIA');
-CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'overdue', 'suspended', 'failed', 'completed');
+CREATE TYPE subscription_status AS ENUM ('active', 'canceled', 'expired', 'overdue', 'suspended', 'failed', 'completed', 'trial');
 CREATE TYPE subscription_event_type AS ENUM (
-    'created', 
-    'redeemed', 
-    'renewed', 
-    'canceled', 
-    'expired',
-    'completed',
-    'failed',
-    'failed_validation',
-    'failed_customer_creation',
-    'failed_wallet_creation',
-    'failed_delegation_storage',
-    'failed_subscription_db',
-    'failed_redemption',
-    'failed_transaction',
-    'failed_duplicate'
+    'create', 
+    'redeem', 
+    'renew', 
+    'cancel', 
+    'expire',
+    'upgrade',
+    'downgrade',
+    'pause',
+    'resume',
+    'reactivate',
+    'complete',
+    'fail',
+    'fail_validation',
+    'fail_customer_creation',
+    'fail_wallet_creation',
+    'fail_delegation_storage',
+    'fail_subscription_db',
+    'fail_redemption',
+    'fail_transaction',
+    'fail_duplicate'
 );
+
+CREATE TYPE subscription_change_type AS ENUM ('upgrade', 'downgrade', 'cancel', 'pause', 'resume', 'modify_items', 'reactivate');
 
 -- Create Tables in dependency order
 
@@ -164,6 +171,7 @@ CREATE TABLE IF NOT EXISTS circle_users (
 -- Customers table (depends on workspaces) - WITH PAYMENT SYNC COLUMNS
 CREATE TABLE IF NOT EXISTS customers (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    num_id BIGSERIAL UNIQUE NOT NULL,
     web3auth_id VARCHAR(255) UNIQUE,
     external_id VARCHAR(255),
     email VARCHAR(255),
@@ -288,57 +296,54 @@ CREATE TABLE customer_wallets (
     deleted_at TIMESTAMP WITH TIME ZONE
 );
 
--- Products table (depends on workspaces, wallets) - WITH PAYMENT SYNC COLUMNS
+-- Products table (depends on workspaces, wallets) - WITH MERGED PRICE DATA
 CREATE TABLE products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
     wallet_id UUID NOT NULL REFERENCES wallets(id),
     external_id VARCHAR(255), -- Provider's ID (Stripe ID, etc.)
+    
+    -- Product details
     name TEXT NOT NULL,
     description TEXT,
     image_url TEXT,
     url TEXT,
     active BOOLEAN NOT NULL DEFAULT true,
+    
+    -- Product categorization
+    product_type VARCHAR(50) DEFAULT 'base', -- 'base' or 'addon'
+    product_group VARCHAR(100), -- Groups related products (e.g., "pro_plan" for monthly/yearly variants)
+    
+    -- Merged price fields (previously in prices table)
+    price_type price_type NOT NULL DEFAULT 'recurring', -- 'recurring' or 'one_time'
+    currency VARCHAR(3) NOT NULL REFERENCES fiat_currencies(code), -- ISO 4217 currency code
+    unit_amount_in_pennies INTEGER NOT NULL,
+    interval_type interval_type, -- 'daily', 'weekly', 'monthly', 'yearly' (NULL for one_time)
+    term_length INTEGER, -- Number of intervals, e.g., 12 for 12 months (NULL for one_time)
+    price_nickname TEXT, -- Optional friendly name for the price
+    price_external_id VARCHAR(255), -- Provider's price ID (e.g., Stripe price ID)
+    
+    -- Metadata
     metadata JSONB DEFAULT '{}'::jsonb,
+    
     -- Payment sync tracking columns
     payment_sync_status VARCHAR(20) DEFAULT 'pending', 
     payment_synced_at TIMESTAMP WITH TIME ZONE,
     payment_sync_version INTEGER DEFAULT 1,
     payment_provider VARCHAR(50), -- 'stripe', 'chargebee', etc.
+    
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Constraints
+    CONSTRAINT products_price_type_check CHECK (
+        (price_type = 'recurring' AND interval_type IS NOT NULL AND term_length IS NOT NULL AND term_length > 0) OR
+        (price_type = 'one_time' AND interval_type IS NULL AND term_length IS NULL)
+    ),
+    
     -- Add unique constraint for external_id per workspace and provider
     UNIQUE(workspace_id, external_id, payment_provider)
-);
-
--- Prices table (depends on products) - WITH PAYMENT SYNC COLUMNS
-CREATE TABLE prices (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    product_id UUID NOT NULL REFERENCES products(id),
-    external_id VARCHAR(255), -- Provider's ID (Stripe ID, etc.)
-    active BOOLEAN NOT NULL DEFAULT true,
-    type price_type NOT NULL, -- 'recurring' or 'one_off'
-    nickname TEXT,
-    currency VARCHAR(3) NOT NULL REFERENCES fiat_currencies(code), -- ISO 4217 currency code
-    unit_amount_in_pennies INTEGER NOT NULL,
-    interval_type interval_type NOT NULL,
-    term_length INTEGER NOT NULL, -- Nullable, for 'recurring' type, e.g., 12 for 12 months
-    metadata JSONB DEFAULT '{}'::jsonb,
-    -- Payment sync tracking columns
-    payment_sync_status VARCHAR(20) DEFAULT 'pending',
-    payment_synced_at TIMESTAMP WITH TIME ZONE, 
-    payment_sync_version INTEGER DEFAULT 1,
-    payment_provider VARCHAR(50), -- 'stripe', 'chargebee', etc.
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE,
-    CONSTRAINT prices_recurring_fields_check CHECK (
-        (type = 'recurring' AND interval_type IS NOT NULL AND term_length IS NOT NULL AND term_length > 0) OR
-        (type = 'one_off' AND interval_type IS NULL AND term_length IS NULL)
-    ),
-    -- Add unique constraint for external_id per provider
-    UNIQUE(external_id, payment_provider)
 );
 
 -- Tokens table (depends on networks)
@@ -370,6 +375,39 @@ CREATE TABLE products_tokens (
     UNIQUE(product_id, network_id, token_id)
 );
 
+-- Product Addon Relationships table
+-- Manages the relationships between base products and their available addons
+CREATE TABLE product_addon_relationships (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    base_product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    addon_product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    
+    -- Relationship details
+    is_required BOOLEAN DEFAULT FALSE, -- Whether this addon is required with the base product
+    max_quantity INTEGER, -- Maximum quantity allowed (NULL = unlimited)
+    min_quantity INTEGER DEFAULT 0, -- Minimum quantity required
+    
+    -- Display order
+    display_order INTEGER DEFAULT 0,
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}'::jsonb,
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Ensure unique relationships
+    UNIQUE(base_product_id, addon_product_id),
+    -- Ensure base products can't be addons to themselves
+    CONSTRAINT different_products CHECK (base_product_id != addon_product_id),
+    -- Ensure min/max quantity constraints are valid
+    CONSTRAINT valid_quantity_range CHECK (
+        (max_quantity IS NULL OR max_quantity > 0) AND
+        min_quantity >= 0 AND
+        (max_quantity IS NULL OR min_quantity <= max_quantity)
+    )
+);
+
 -- Delegation Data table (no dependencies)
 CREATE TABLE delegation_data (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -387,10 +425,11 @@ CREATE TABLE delegation_data (
 -- Subscriptions table (depends on customers, products, products_tokens, delegation_data, customer_wallets) - WITH PAYMENT SYNC COLUMNS
 CREATE TABLE subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    num_id BIGSERIAL UNIQUE NOT NULL,
     customer_id UUID NOT NULL REFERENCES customers(id),
     product_id UUID NOT NULL REFERENCES products(id),
     workspace_id UUID NOT NULL REFERENCES workspaces(id),
-    price_id UUID NOT NULL REFERENCES prices(id),
+    -- price_id removed - pricing is now in products table
     product_token_id UUID NOT NULL REFERENCES products_tokens(id),
     external_id VARCHAR(255), -- Provider's ID (Stripe ID, etc.)
     token_amount INTEGER NOT NULL,
@@ -427,6 +466,39 @@ CREATE TABLE subscription_events (
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Subscription Line Items table
+-- Tracks individual line items within a subscription (base product + addons)
+CREATE TABLE subscription_line_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+    product_id UUID NOT NULL REFERENCES products(id),
+    
+    -- Line item details
+    line_item_type VARCHAR(50) NOT NULL DEFAULT 'base', -- 'base' or 'addon'
+    quantity INTEGER NOT NULL DEFAULT 1,
+    
+    -- Pricing at time of subscription (snapshot)
+    unit_amount_in_pennies INTEGER NOT NULL,
+    currency VARCHAR(3) NOT NULL REFERENCES fiat_currencies(code),
+    price_type price_type NOT NULL,
+    interval_type interval_type,
+    
+    -- Total calculation
+    total_amount_in_pennies INTEGER NOT NULL, -- quantity * unit_amount
+    
+    -- Status
+    is_active BOOLEAN DEFAULT TRUE,
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}'::jsonb,
+    
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Ensure line item type matches product type
+    CONSTRAINT valid_line_item_type CHECK (line_item_type IN ('base', 'addon'))
 );
 
 -- Invoices table (NEW - for storing payment invoices from providers)
@@ -660,6 +732,7 @@ CREATE INDEX idx_circle_users_workspace_id ON circle_users(workspace_id);
 
 -- customers
 CREATE INDEX idx_customers_web3auth_id ON customers(web3auth_id);
+CREATE INDEX idx_customers_num_id ON customers(num_id);
 
 -- Workspace-Customer Association Table (Many-to-Many)
 CREATE TABLE IF NOT EXISTS workspace_customers (
@@ -719,16 +792,21 @@ CREATE INDEX idx_products_created_at ON products(created_at);
 CREATE INDEX idx_products_payment_provider ON products(payment_provider) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_payment_sync_status ON products(payment_sync_status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_external_id ON products(external_id) WHERE deleted_at IS NULL;
+-- New indexes for merged price fields
+CREATE INDEX idx_products_price_type ON products(price_type);
+CREATE INDEX idx_products_currency ON products(currency);
+CREATE INDEX idx_products_product_type ON products(product_type);
+CREATE INDEX idx_products_product_group ON products(product_group) WHERE product_group IS NOT NULL;
 
--- prices
-CREATE INDEX idx_prices_product_id ON prices(product_id);
-CREATE INDEX idx_prices_active ON prices(active) WHERE deleted_at IS NULL;
-CREATE INDEX idx_prices_type ON prices(type);
-CREATE INDEX idx_prices_currency ON prices(currency);
+-- prices indexes removed - pricing is now in products table
+-- CREATE INDEX idx_prices_product_id ON prices(product_id);
+-- CREATE INDEX idx_prices_active ON prices(active) WHERE deleted_at IS NULL;
+-- CREATE INDEX idx_prices_type ON prices(type);
+-- CREATE INDEX idx_prices_currency ON prices(currency);
 CREATE INDEX idx_fiat_currencies_active ON fiat_currencies(is_active, code);
-CREATE INDEX idx_prices_payment_provider ON prices(payment_provider) WHERE deleted_at IS NULL;
-CREATE INDEX idx_prices_payment_sync_status ON prices(payment_sync_status) WHERE deleted_at IS NULL;
-CREATE INDEX idx_prices_external_id ON prices(external_id) WHERE deleted_at IS NULL;
+-- CREATE INDEX idx_prices_payment_provider ON prices(payment_provider) WHERE deleted_at IS NULL;
+-- CREATE INDEX idx_prices_payment_sync_status ON prices(payment_sync_status) WHERE deleted_at IS NULL;
+-- CREATE INDEX idx_prices_external_id ON prices(external_id) WHERE deleted_at IS NULL;
 
 -- tokens
 CREATE INDEX idx_tokens_network_id ON tokens(network_id);
@@ -742,6 +820,11 @@ CREATE INDEX idx_products_tokens_token_id ON products_tokens(token_id);
 CREATE INDEX idx_products_tokens_active ON products_tokens(active) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_tokens_composite ON products_tokens(product_id, network_id, active) WHERE deleted_at IS NULL;
 
+-- product_addon_relationships
+CREATE INDEX idx_product_addon_base ON product_addon_relationships(base_product_id);
+CREATE INDEX idx_product_addon_addon ON product_addon_relationships(addon_product_id);
+CREATE INDEX idx_product_addon_required ON product_addon_relationships(is_required) WHERE is_required = TRUE;
+
 -- delegation_data
 CREATE INDEX idx_delegation_data_delegator ON delegation_data(delegator);
 CREATE INDEX idx_delegation_data_delegate ON delegation_data(delegate);
@@ -752,18 +835,25 @@ CREATE INDEX idx_subscriptions_product_id ON subscriptions(product_id);
 CREATE INDEX idx_subscriptions_product_token_id ON subscriptions(product_token_id);
 CREATE INDEX idx_subscriptions_delegation_id ON subscriptions(delegation_id);
 CREATE INDEX idx_subscriptions_customer_wallet_id ON subscriptions(customer_wallet_id);
-CREATE INDEX idx_subscriptions_price_id ON subscriptions(price_id);
+-- CREATE INDEX idx_subscriptions_price_id ON subscriptions(price_id); -- Removed: price_id is now in products table
 CREATE INDEX idx_subscriptions_status ON subscriptions(status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_subscriptions_next_redemption_date ON subscriptions(next_redemption_date) WHERE status = 'active' AND deleted_at IS NULL;
 CREATE INDEX idx_subscriptions_payment_provider ON subscriptions(payment_provider) WHERE deleted_at IS NULL;
 CREATE INDEX idx_subscriptions_payment_sync_status ON subscriptions(payment_sync_status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_subscriptions_external_id ON subscriptions(external_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_subscriptions_num_id ON subscriptions(num_id);
 
 -- subscription_events
 CREATE INDEX idx_subscription_events_subscription_id ON subscription_events(subscription_id);
 CREATE INDEX idx_subscription_events_event_type ON subscription_events(event_type);
 CREATE INDEX idx_subscription_events_transaction_hash ON subscription_events(transaction_hash);
 CREATE INDEX idx_subscription_events_occurred_at ON subscription_events(occurred_at);
+
+-- subscription_line_items
+CREATE INDEX idx_subscription_line_items_subscription ON subscription_line_items(subscription_id);
+CREATE INDEX idx_subscription_line_items_product ON subscription_line_items(product_id);
+CREATE INDEX idx_subscription_line_items_type ON subscription_line_items(line_item_type);
+CREATE INDEX idx_subscription_line_items_active ON subscription_line_items(is_active) WHERE is_active = TRUE;
 
 -- failed_subscription_attempts
 CREATE INDEX idx_failed_subscription_attempts_customer_id ON failed_subscription_attempts(customer_id);
@@ -845,14 +935,14 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO networks (name, type, network_type, rpc_id, circle_network_type, chain_id, is_testnet, active, block_explorer_url, logo_url, display_name, chain_namespace, base_fee_multiplier, priority_fee_multiplier, deployment_gas_limit, token_transfer_gas_limit, supports_eip1559, average_block_time_ms, gas_priority_levels)
 VALUES 
-    ('Ethereum Sepolia', 'Sepolia', 'evm', 'sepolia', 'ETH-SEPOLIA', 11155111, true, true, 'https://sepolia.etherscan.io', 'https://cryptologos.cc/logos/ethereum-eth-logo.png', 'Ethereum Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 12000, '{"slow":{"max_fee_per_gas":"1000000000","max_priority_fee_per_gas":"100000000"},"standard":{"max_fee_per_gas":"2000000000","max_priority_fee_per_gas":"200000000"},"fast":{"max_fee_per_gas":"5000000000","max_priority_fee_per_gas":"500000000"}}'),
+    ('Ethereum Sepolia', 'Sepolia', 'evm', 'sepolia', 'ETH-SEPOLIA', 11155111, true, false, 'https://sepolia.etherscan.io', 'https://cryptologos.cc/logos/ethereum-eth-logo.png', 'Ethereum Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 12000, '{"slow":{"max_fee_per_gas":"1000000000","max_priority_fee_per_gas":"100000000"},"standard":{"max_fee_per_gas":"2000000000","max_priority_fee_per_gas":"200000000"},"fast":{"max_fee_per_gas":"5000000000","max_priority_fee_per_gas":"500000000"}}'),
     ('Ethereum Mainnet', 'Mainnet', 'evm', 'eth', 'ETH', 1, false, false, 'https://etherscan.io', 'https://cryptologos.cc/logos/ethereum-eth-logo.png', 'Ethereum', 'eip155', 1.2, 1.1, '500000', '100000', true, 12000, '{"slow":{"max_fee_per_gas":"20000000000","max_priority_fee_per_gas":"1000000000"},"standard":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"2000000000"},"fast":{"max_fee_per_gas":"50000000000","max_priority_fee_per_gas":"3000000000"}}'),
     ('Polygon Amoy', 'Amoy', 'evm', 'amoy', 'MATIC-AMOY', 80002, true, false, 'https://www.oklink.com/amoy', 'https://cryptologos.cc/logos/polygon-matic-logo.png', 'Polygon Amoy', 'eip155', 1.3, 1.2, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"30000000000"},"standard":{"max_fee_per_gas":"35000000000","max_priority_fee_per_gas":"35000000000"},"fast":{"max_fee_per_gas":"40000000000","max_priority_fee_per_gas":"40000000000"}}'), 
     ('Polygon Mainnet', 'Mainnet', 'evm', 'polygon', 'MATIC', 137, false, false, 'https://polygonscan.com', 'https://cryptologos.cc/logos/polygon-matic-logo.png', 'Polygon', 'eip155', 1.3, 1.2, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"30000000000","max_priority_fee_per_gas":"30000000000"},"standard":{"max_fee_per_gas":"35000000000","max_priority_fee_per_gas":"35000000000"},"fast":{"max_fee_per_gas":"40000000000","max_priority_fee_per_gas":"40000000000"}}'),
     ('Arbitrum Sepolia', 'Sepolia', 'evm', 'arbitrum-sepolia', 'ARB-SEPOLIA', 421614, true, false, 'https://sepolia.arbiscan.io', 'https://cryptologos.cc/logos/arbitrum-arb-logo.png', 'Arbitrum Sepolia', 'eip155', 1.1, 1.1, '1000000', '150000', true, 250, '{"slow":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"0"},"standard":{"max_fee_per_gas":"150000000","max_priority_fee_per_gas":"0"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"0"}}'),
     ('Arbitrum One', 'Mainnet', 'evm', 'arbitrum-mainnet', 'ARB', 42161, false, false, 'https://arbiscan.io', 'https://cryptologos.cc/logos/arbitrum-arb-logo.png', 'Arbitrum', 'eip155', 1.1, 1.1, '1000000', '150000', true, 250, '{"slow":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"0"},"standard":{"max_fee_per_gas":"150000000","max_priority_fee_per_gas":"0"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"0"}}'),
     ('Base Sepolia', 'Sepolia', 'evm', 'base-sepolia', 'BASE-SEPOLIA', 84532, true, true, 'https://sepolia.basescan.org', 'https://basescan.org/images/svg/logos/chain-light.svg', 'Base Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
-    ('Base Mainnet', 'Mainnet', 'evm', 'base-mainnet', 'BASE', 8453, false, true, 'https://basescan.org', 'https://basescan.org/images/svg/logos/chain-light.svg', 'Base', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
+    ('Base Mainnet', 'Mainnet', 'evm', 'base-mainnet', 'BASE', 8453, false, false, 'https://basescan.org', 'https://basescan.org/images/svg/logos/chain-light.svg', 'Base', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
     ('Optimism Sepolia', 'Sepolia', 'evm', 'optimism-sepolia', 'OP-SEPOLIA', 11155420, true, false, 'https://sepolia.optimism.io', 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png', 'Optimism Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
     ('Optimism Mainnet', 'Mainnet', 'evm', 'optimism-mainnet', 'OP', 10, false, false, 'https://optimistic.etherscan.io', 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.png', 'Optimism', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
     ('Unichain Sepolia', 'Sepolia', 'evm', 'unichain-sepolia', 'UNI-SEPOLIA', 1301, true, false, 'https://sepolia.unichain.io', 'https://cryptologos.cc/logos/uniswap-uni-logo.png', 'Unichain Sepolia', 'eip155', 1.2, 1.1, '500000', '100000', true, 2000, '{"slow":{"max_fee_per_gas":"50000000","max_priority_fee_per_gas":"50000000"},"standard":{"max_fee_per_gas":"100000000","max_priority_fee_per_gas":"100000000"},"fast":{"max_fee_per_gas":"200000000","max_priority_fee_per_gas":"150000000"}}'),
@@ -929,6 +1019,11 @@ CREATE TRIGGER set_products_tokens_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 
+CREATE TRIGGER set_product_addon_relationships_updated_at
+    BEFORE UPDATE ON product_addon_relationships
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
 CREATE TRIGGER set_delegation_data_updated_at
     BEFORE UPDATE ON delegation_data
     FOR EACH ROW
@@ -941,6 +1036,11 @@ CREATE TRIGGER set_subscriptions_updated_at
 
 CREATE TRIGGER set_subscription_events_updated_at
     BEFORE UPDATE ON subscription_events
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_set_updated_at();
+
+CREATE TRIGGER set_subscription_line_items_updated_at
+    BEFORE UPDATE ON subscription_line_items
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 
@@ -964,10 +1064,10 @@ CREATE TRIGGER set_circle_wallets_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
 
-CREATE TRIGGER set_prices_updated_at
-    BEFORE UPDATE ON prices
-    FOR EACH ROW
-    EXECUTE FUNCTION trigger_set_updated_at();
+-- CREATE TRIGGER set_prices_updated_at
+--     BEFORE UPDATE ON prices
+--     FOR EACH ROW
+--     EXECUTE FUNCTION trigger_set_updated_at();
 
 CREATE TRIGGER set_invoices_updated_at
     BEFORE UPDATE ON invoices
@@ -1063,7 +1163,7 @@ CREATE TABLE invoice_line_items (
     -- References
     subscription_id UUID REFERENCES subscriptions(id),
     product_id UUID REFERENCES products(id),
-    price_id UUID REFERENCES prices(id),
+    -- price_id removed - pricing is now in products table
     
     -- Crypto payment details
     network_id UUID REFERENCES networks(id),
@@ -1183,7 +1283,7 @@ CREATE TABLE payment_links (
     
     -- Payment configuration
     product_id UUID REFERENCES products(id),
-    price_id UUID REFERENCES prices(id),
+    -- price_id removed - pricing is now in products table
     amount_in_cents BIGINT, -- For one-time custom amounts
     currency VARCHAR(3) REFERENCES fiat_currencies(code),
     payment_type VARCHAR(50) DEFAULT 'one_time', -- one_time, recurring
@@ -1319,6 +1419,10 @@ ADD COLUMN IF NOT EXISTS reverse_charge_applies BOOLEAN DEFAULT FALSE;
 ALTER TABLE invoices 
 ADD CONSTRAINT unique_workspace_invoice_number 
 UNIQUE(workspace_id, invoice_number);
+
+-- Add currency to subscriptions table
+ALTER TABLE subscriptions
+ADD COLUMN IF NOT EXISTS currency VARCHAR(3) REFERENCES fiat_currencies(code);
 
 -- Update customers table for tax support
 ALTER TABLE customers 
@@ -1595,7 +1699,7 @@ CREATE TABLE subscription_schedule_changes (
     subscription_id UUID NOT NULL REFERENCES subscriptions(id),
     
     -- Change details
-    change_type VARCHAR(50) NOT NULL CHECK (change_type IN ('upgrade', 'downgrade', 'cancel', 'pause', 'resume', 'modify_items')),
+    change_type subscription_change_type NOT NULL,
     scheduled_for TIMESTAMP WITH TIME ZONE NOT NULL,
     
     -- For upgrades/downgrades - store line items as JSONB
@@ -1688,4 +1792,30 @@ CREATE TRIGGER set_subscription_schedule_changes_updated_at
     BEFORE UPDATE ON subscription_schedule_changes
     FOR EACH ROW
     EXECUTE FUNCTION trigger_set_updated_at();
+
+-- Invoice activities table for audit trail
+CREATE TABLE IF NOT EXISTS invoice_activities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    activity_type VARCHAR(50) NOT NULL, -- 'created', 'status_changed', 'sent', 'viewed', 'paid', 'reminder_sent', etc.
+    from_status VARCHAR(50),
+    to_status VARCHAR(50),
+    performed_by UUID REFERENCES users(id),
+    description TEXT,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for invoice activities
+CREATE INDEX idx_invoice_activities_invoice_id ON invoice_activities(invoice_id);
+CREATE INDEX idx_invoice_activities_created_at ON invoice_activities(created_at);
+
+-- Add reminder fields to invoices table
+ALTER TABLE invoices
+ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS reminder_count INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS notes TEXT,
+ADD COLUMN IF NOT EXISTS terms TEXT,
+ADD COLUMN IF NOT EXISTS footer TEXT;
 

@@ -6,10 +6,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
 )
 
@@ -51,12 +53,16 @@ func (h *AnalyticsHandler) checkService(c *gin.Context) bool {
 // @Tags Analytics
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param X-Workspace-ID header string true "Workspace ID"
 // @Param currency query string false "Currency code (default: workspace default)"
 // @Success 200 {object} services.DashboardSummary
-// @Router /api/v1/workspaces/{workspace_id}/analytics/dashboard [get]
+// @Router /api/v1/analytics/dashboard [get]
 func (h *AnalyticsHandler) GetDashboardSummary(c *gin.Context) {
-	workspaceIDStr := c.Param("workspace_id")
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	if workspaceIDStr == "" {
+		sendError(c, http.StatusBadRequest, "X-Workspace-ID header is required", nil)
+		return
+	}
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)
@@ -80,14 +86,94 @@ func (h *AnalyticsHandler) GetDashboardSummary(c *gin.Context) {
 					h.logger.Error("Failed to calculate metrics", zap.Error(err))
 				}
 			}()
-			sendError(c, http.StatusNotFound, "No metrics available yet. Calculation in progress.", nil)
+			
+			// Return empty summary with calculating flag
+			c.JSON(http.StatusOK, gin.H{
+				"mrr": gin.H{
+					"amount_cents": 0,
+					"currency":     currency,
+					"formatted":    "$0.00",
+				},
+				"arr": gin.H{
+					"amount_cents": 0,
+					"currency":     currency,
+					"formatted":    "$0.00",
+				},
+				"total_revenue": gin.H{
+					"amount_cents": 0,
+					"currency":     currency,
+					"formatted":    "$0.00",
+				},
+				"active_subscriptions": 0,
+				"total_customers":      0,
+				"churn_rate":           0,
+				"growth_rate":          0,
+				"payment_success_rate": 0,
+				"last_updated":         time.Now().Format(time.RFC3339),
+				"is_calculating":       true,
+				"is_stale":             false,
+			})
 			return
 		}
 		handleDBError(c, err, "Failed to get dashboard metrics")
 		return
 	}
 
-	c.JSON(http.StatusOK, summary)
+	// Check if metrics are stale (older than 15 minutes)
+	staleThreshold := 15 * time.Minute
+	isStale := time.Since(summary.LastUpdated) > staleThreshold
+	
+	// Additionally check if there are new payments since last update
+	hasRecentPayments := false
+	if !isStale {
+		// Only check for recent payments if metrics aren't already stale by time
+		hasRecentPayments, err = h.common.GetDB().HasPaymentsAfterDate(c.Request.Context(), db.HasPaymentsAfterDateParams{
+			WorkspaceID: workspaceID,
+			CreatedAt:   pgtype.Timestamptz{Time: summary.LastUpdated, Valid: true},
+		})
+		if err != nil {
+			h.logger.Warn("Failed to check for recent payments", zap.Error(err))
+		}
+	}
+	
+	// Metrics are stale if either condition is true
+	isStale = isStale || hasRecentPayments
+	
+	// Check if we should trigger a refresh
+	if isStale {
+		h.logger.Info("Dashboard metrics are stale, triggering refresh",
+			zap.String("workspace_id", workspaceID.String()),
+			zap.Time("last_updated", summary.LastUpdated),
+			zap.Duration("age", time.Since(summary.LastUpdated)),
+			zap.Bool("has_recent_payments", hasRecentPayments),
+		)
+		
+		// Trigger async refresh
+		go func() {
+			ctx := context.Background()
+			if err := h.service.TriggerMetricsRefresh(ctx, workspaceID, time.Now()); err != nil {
+				h.logger.Error("Failed to refresh stale metrics", zap.Error(err))
+			}
+		}()
+	}
+
+	// Add staleness info to response
+	response := gin.H{
+		"mrr":                  summary.MRR,
+		"arr":                  summary.ARR,
+		"total_revenue":        summary.TotalRevenue,
+		"active_subscriptions": summary.ActiveSubscriptions,
+		"total_customers":      summary.TotalCustomers,
+		"churn_rate":           summary.ChurnRate,
+		"growth_rate":          summary.GrowthRate,
+		"payment_success_rate": summary.PaymentSuccessRate,
+		"last_updated":         summary.LastUpdated.Format(time.RFC3339),
+		"revenue_growth":       summary.RevenueGrowth,
+		"is_stale":             isStale,
+		"is_calculating":       isStale, // If stale, we're triggering calculation
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // GetRevenueChart returns revenue data for charting
@@ -96,14 +182,18 @@ func (h *AnalyticsHandler) GetDashboardSummary(c *gin.Context) {
 // @Tags Analytics
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param X-Workspace-ID header string true "Workspace ID"
 // @Param period query string false "Period: daily, weekly, monthly (default: daily)"
 // @Param days query int false "Number of days to include (default: 30)"
 // @Param currency query string false "Currency code"
 // @Success 200 {object} services.ChartData
-// @Router /api/v1/workspaces/{workspace_id}/analytics/revenue-chart [get]
+// @Router /api/v1/analytics/revenue-chart [get]
 func (h *AnalyticsHandler) GetRevenueChart(c *gin.Context) {
-	workspaceIDStr := c.Param("workspace_id")
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	if workspaceIDStr == "" {
+		sendError(c, http.StatusBadRequest, "X-Workspace-ID header is required", nil)
+		return
+	}
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)
@@ -139,14 +229,18 @@ func (h *AnalyticsHandler) GetRevenueChart(c *gin.Context) {
 // @Tags Analytics
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param X-Workspace-ID header string true "Workspace ID"
 // @Param metric query string false "Metric: total, new, churned, growth_rate (default: total)"
 // @Param period query string false "Period: daily, weekly, monthly (default: daily)"
 // @Param days query int false "Number of days to include (default: 30)"
 // @Success 200 {object} services.ChartData
-// @Router /api/v1/workspaces/{workspace_id}/analytics/customer-chart [get]
+// @Router /api/v1/analytics/customer-chart [get]
 func (h *AnalyticsHandler) GetCustomerChart(c *gin.Context) {
-	workspaceIDStr := c.Param("workspace_id")
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	if workspaceIDStr == "" {
+		sendError(c, http.StatusBadRequest, "X-Workspace-ID header is required", nil)
+		return
+	}
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)
@@ -183,12 +277,16 @@ func (h *AnalyticsHandler) GetCustomerChart(c *gin.Context) {
 // @Tags Analytics
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param X-Workspace-ID header string true "Workspace ID"
 // @Param days query int false "Number of days to include (default: 30)"
 // @Success 200 {object} services.PaymentMetrics
-// @Router /api/v1/workspaces/{workspace_id}/analytics/payment-metrics [get]
+// @Router /api/v1/analytics/payment-metrics [get]
 func (h *AnalyticsHandler) GetPaymentMetrics(c *gin.Context) {
-	workspaceIDStr := c.Param("workspace_id")
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	if workspaceIDStr == "" {
+		sendError(c, http.StatusBadRequest, "X-Workspace-ID header is required", nil)
+		return
+	}
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)
@@ -223,12 +321,16 @@ func (h *AnalyticsHandler) GetPaymentMetrics(c *gin.Context) {
 // @Tags Analytics
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param X-Workspace-ID header string true "Workspace ID"
 // @Param date query string false "Date (YYYY-MM-DD, default: today)"
 // @Success 200 {object} services.NetworkBreakdown
-// @Router /api/v1/workspaces/{workspace_id}/analytics/network-breakdown [get]
+// @Router /api/v1/analytics/network-breakdown [get]
 func (h *AnalyticsHandler) GetNetworkBreakdown(c *gin.Context) {
-	workspaceIDStr := c.Param("workspace_id")
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	if workspaceIDStr == "" {
+		sendError(c, http.StatusBadRequest, "X-Workspace-ID header is required", nil)
+		return
+	}
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)
@@ -269,12 +371,16 @@ func (h *AnalyticsHandler) GetNetworkBreakdown(c *gin.Context) {
 // @Tags Analytics
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param X-Workspace-ID header string true "Workspace ID"
 // @Param date query string false "Date to recalculate (YYYY-MM-DD, default: today)"
 // @Success 200 {object} MessageResponse
-// @Router /api/v1/workspaces/{workspace_id}/analytics/refresh [post]
+// @Router /api/v1/analytics/refresh [post]
 func (h *AnalyticsHandler) RefreshMetrics(c *gin.Context) {
-	workspaceIDStr := c.Param("workspace_id")
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	if workspaceIDStr == "" {
+		sendError(c, http.StatusBadRequest, "X-Workspace-ID header is required", nil)
+		return
+	}
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)
@@ -319,14 +425,18 @@ func (h *AnalyticsHandler) RefreshMetrics(c *gin.Context) {
 // @Tags Analytics
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param X-Workspace-ID header string true "Workspace ID"
 // @Param metric query string false "Metric: active, new, cancelled, churn_rate (default: active)"
 // @Param period query string false "Period: daily, weekly, monthly (default: daily)"
 // @Param days query int false "Number of days to include (default: 30)"
 // @Success 200 {object} services.ChartData
-// @Router /api/v1/workspaces/{workspace_id}/analytics/subscription-chart [get]
+// @Router /api/v1/analytics/subscription-chart [get]
 func (h *AnalyticsHandler) GetSubscriptionChart(c *gin.Context) {
-	workspaceIDStr := c.Param("workspace_id")
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	if workspaceIDStr == "" {
+		sendError(c, http.StatusBadRequest, "X-Workspace-ID header is required", nil)
+		return
+	}
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)
@@ -363,14 +473,18 @@ func (h *AnalyticsHandler) GetSubscriptionChart(c *gin.Context) {
 // @Tags Analytics
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param X-Workspace-ID header string true "Workspace ID"
 // @Param metric query string false "Metric: mrr, arr (default: mrr)"
 // @Param period query string false "Period: daily, weekly, monthly (default: monthly)"
 // @Param months query int false "Number of months to include (default: 12)"
 // @Success 200 {object} services.ChartData
-// @Router /api/v1/workspaces/{workspace_id}/analytics/mrr-chart [get]
+// @Router /api/v1/analytics/mrr-chart [get]
 func (h *AnalyticsHandler) GetMRRChart(c *gin.Context) {
-	workspaceIDStr := c.Param("workspace_id")
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	if workspaceIDStr == "" {
+		sendError(c, http.StatusBadRequest, "X-Workspace-ID header is required", nil)
+		return
+	}
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)
@@ -407,12 +521,16 @@ func (h *AnalyticsHandler) GetMRRChart(c *gin.Context) {
 // @Tags Analytics
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param X-Workspace-ID header string true "Workspace ID"
 // @Param days query int false "Number of days to include (default: 30)"
 // @Success 200 {object} services.PieChartData
-// @Router /api/v1/workspaces/{workspace_id}/analytics/gas-fee-pie [get]
+// @Router /api/v1/analytics/gas-fee-pie [get]
 func (h *AnalyticsHandler) GetGasFeePieChart(c *gin.Context) {
-	workspaceIDStr := c.Param("workspace_id")
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	if workspaceIDStr == "" {
+		sendError(c, http.StatusBadRequest, "X-Workspace-ID header is required", nil)
+		return
+	}
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)
@@ -447,11 +565,15 @@ func (h *AnalyticsHandler) GetGasFeePieChart(c *gin.Context) {
 // @Tags Analytics
 // @Accept json
 // @Produce json
-// @Param workspace_id path string true "Workspace ID"
+// @Param X-Workspace-ID header string true "Workspace ID"
 // @Success 200 {object} services.HourlyMetrics
-// @Router /api/v1/workspaces/{workspace_id}/analytics/hourly [get]
+// @Router /api/v1/analytics/hourly [get]
 func (h *AnalyticsHandler) GetHourlyMetrics(c *gin.Context) {
-	workspaceIDStr := c.Param("workspace_id")
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	if workspaceIDStr == "" {
+		sendError(c, http.StatusBadRequest, "X-Workspace-ID header is required", nil)
+		return
+	}
 	workspaceID, err := uuid.Parse(workspaceIDStr)
 	if err != nil {
 		sendError(c, http.StatusBadRequest, "Invalid workspace ID", nil)

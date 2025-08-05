@@ -15,26 +15,30 @@ import (
 type Querier interface {
 	ActivateFiatCurrency(ctx context.Context, code string) error
 	ActivateNetwork(ctx context.Context, id uuid.UUID) (Network, error)
-	ActivatePrice(ctx context.Context, id uuid.UUID) (Price, error)
 	ActivateProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	ActivateProductToken(ctx context.Context, id uuid.UUID) (ProductsToken, error)
+	ActivateSubscriptionLineItem(ctx context.Context, id uuid.UUID) (SubscriptionLineItem, error)
 	ActivateToken(ctx context.Context, id uuid.UUID) (Token, error)
 	AddCustomerToWorkspace(ctx context.Context, arg AddCustomerToWorkspaceParams) (WorkspaceCustomer, error)
 	AddWorkspaceSupportedCurrency(ctx context.Context, arg AddWorkspaceSupportedCurrencyParams) error
 	ApplyProrationToInvoice(ctx context.Context, arg ApplyProrationToInvoiceParams) (SubscriptionProration, error)
 	ApplyProrationToPayment(ctx context.Context, arg ApplyProrationToPaymentParams) (SubscriptionProration, error)
+	BatchCreateSubscriptionLineItems(ctx context.Context, arg []BatchCreateSubscriptionLineItemsParams) (int64, error)
+	BulkCreateInvoiceLineItemsFromSubscription(ctx context.Context, arg []BulkCreateInvoiceLineItemsFromSubscriptionParams) (int64, error)
 	// Bulk Operations for Initial Sync
 	BulkUpdateCustomerSyncStatus(ctx context.Context, arg BulkUpdateCustomerSyncStatusParams) error
 	BulkUpdateInvoiceSyncStatus(ctx context.Context, arg BulkUpdateInvoiceSyncStatusParams) error
-	BulkUpdatePriceSyncStatus(ctx context.Context, arg BulkUpdatePriceSyncStatusParams) error
 	BulkUpdateProductSyncStatus(ctx context.Context, arg BulkUpdateProductSyncStatusParams) error
+	// BulkUpdatePriceSyncStatus removed - pricing is now in products table
 	BulkUpdateSubscriptionSyncStatus(ctx context.Context, arg BulkUpdateSubscriptionSyncStatusParams) error
+	CalculateSubscriptionTotal(ctx context.Context, subscriptionID uuid.UUID) (interface{}, error)
 	CancelScheduledChange(ctx context.Context, id uuid.UUID) (SubscriptionScheduleChange, error)
 	CancelSubscription(ctx context.Context, id uuid.UUID) (Subscription, error)
 	CancelSubscriptionImmediately(ctx context.Context, arg CancelSubscriptionImmediatelyParams) (Subscription, error)
 	// Check if there's an active dunning campaign for a subscription
 	CheckExistingDunningCampaign(ctx context.Context, arg CheckExistingDunningCampaignParams) (bool, error)
 	CheckGasSponsorshipEligibility(ctx context.Context, workspaceID uuid.UUID) (CheckGasSponsorshipEligibilityRow, error)
+	CheckInvoiceExistsForPeriod(ctx context.Context, arg CheckInvoiceExistsForPeriodParams) (bool, error)
 	CheckSlugExists(ctx context.Context, slug string) (bool, error)
 	// Validation and utility queries
 	CheckWorkspaceHasPaymentProvider(ctx context.Context, arg CheckWorkspaceHasPaymentProviderParams) (bool, error)
@@ -50,8 +54,7 @@ type Querier interface {
 	CountInvoicesByStatus(ctx context.Context, arg CountInvoicesByStatusParams) (int64, error)
 	CountInvoicesByWorkspace(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountPaymentsByWorkspace(ctx context.Context, workspaceID uuid.UUID) (int64, error)
-	CountPricesByProduct(ctx context.Context, productID uuid.UUID) (int64, error)
-	CountPricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) (int64, error)
+	CountProductAddons(ctx context.Context, baseProductID uuid.UUID) (int64, error)
 	CountProducts(ctx context.Context, workspaceID uuid.UUID) (int64, error)
 	CountProviderAccountsByProvider(ctx context.Context, providerName string) (int64, error)
 	CountProviderAccountsByWorkspace(ctx context.Context, workspaceID uuid.UUID) (int64, error)
@@ -59,6 +62,7 @@ type Querier interface {
 	CountSubscriptionEvents(ctx context.Context) (int64, error)
 	CountSubscriptionEventsBySubscription(ctx context.Context, subscriptionID uuid.UUID) (int64, error)
 	CountSubscriptionEventsByType(ctx context.Context, eventType SubscriptionEventType) (int64, error)
+	CountSubscriptionLineItems(ctx context.Context, subscriptionID uuid.UUID) (int64, error)
 	CountSubscriptions(ctx context.Context) (int64, error)
 	CountSubscriptionsByStatus(ctx context.Context, status SubscriptionStatus) (int64, error)
 	CountSuccessfulAttempts(ctx context.Context, campaignID uuid.UUID) (int64, error)
@@ -91,17 +95,18 @@ type Querier interface {
 	CreateGasFeePayment(ctx context.Context, arg CreateGasFeePaymentParams) (GasFeePayment, error)
 	CreateGasSponsorshipConfig(ctx context.Context, arg CreateGasSponsorshipConfigParams) (GasSponsorshipConfig, error)
 	CreateInvoice(ctx context.Context, arg CreateInvoiceParams) (Invoice, error)
+	CreateInvoiceActivity(ctx context.Context, arg CreateInvoiceActivityParams) (InvoiceActivity, error)
 	CreateInvoiceLineItem(ctx context.Context, arg CreateInvoiceLineItemParams) (InvoiceLineItem, error)
 	CreateInvoiceLineItemBatch(ctx context.Context, arg []CreateInvoiceLineItemBatchParams) (int64, error)
+	CreateInvoiceLineItemFromSubscription(ctx context.Context, arg CreateInvoiceLineItemFromSubscriptionParams) (InvoiceLineItem, error)
 	CreateInvoiceWithDetails(ctx context.Context, arg CreateInvoiceWithDetailsParams) (Invoice, error)
 	CreateNetwork(ctx context.Context, arg CreateNetworkParams) (Network, error)
 	CreateOrUpdateDunningAnalytics(ctx context.Context, arg CreateOrUpdateDunningAnalyticsParams) (DunningAnalytic, error)
 	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
 	CreatePaymentBatch(ctx context.Context, arg []CreatePaymentBatchParams) (int64, error)
 	CreatePaymentLink(ctx context.Context, arg CreatePaymentLinkParams) (PaymentLink, error)
-	CreatePrice(ctx context.Context, arg CreatePriceParams) (Price, error)
-	CreatePriceWithSync(ctx context.Context, arg CreatePriceWithSyncParams) (Price, error)
 	CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error)
+	CreateProductAddonRelationship(ctx context.Context, arg CreateProductAddonRelationshipParams) (ProductAddonRelationship, error)
 	CreateProductToken(ctx context.Context, arg CreateProductTokenParams) (ProductsToken, error)
 	CreateProductWithSync(ctx context.Context, arg CreateProductWithSyncParams) (Product, error)
 	CreateProrationRecord(ctx context.Context, arg CreateProrationRecordParams) (SubscriptionProration, error)
@@ -109,6 +114,7 @@ type Querier interface {
 	CreateScheduleChange(ctx context.Context, arg CreateScheduleChangeParams) (SubscriptionScheduleChange, error)
 	CreateSubscription(ctx context.Context, arg CreateSubscriptionParams) (Subscription, error)
 	CreateSubscriptionEvent(ctx context.Context, arg CreateSubscriptionEventParams) (SubscriptionEvent, error)
+	CreateSubscriptionLineItem(ctx context.Context, arg CreateSubscriptionLineItemParams) (SubscriptionLineItem, error)
 	CreateSubscriptionWithSync(ctx context.Context, arg CreateSubscriptionWithSyncParams) (Subscription, error)
 	// Payment Sync Events Queries
 	CreateSyncEvent(ctx context.Context, arg CreateSyncEventParams) (PaymentSyncEvent, error)
@@ -130,15 +136,17 @@ type Querier interface {
 	DeactivateFiatCurrency(ctx context.Context, code string) error
 	DeactivateNetwork(ctx context.Context, id uuid.UUID) (Network, error)
 	DeactivatePaymentLink(ctx context.Context, arg DeactivatePaymentLinkParams) (PaymentLink, error)
-	DeactivatePrice(ctx context.Context, id uuid.UUID) (Price, error)
 	DeactivateProduct(ctx context.Context, id uuid.UUID) (Product, error)
 	DeactivateProductToken(ctx context.Context, id uuid.UUID) (ProductsToken, error)
+	DeactivateSubscriptionLineItem(ctx context.Context, id uuid.UUID) (SubscriptionLineItem, error)
 	DeactivateTemplatesByType(ctx context.Context, arg DeactivateTemplatesByTypeParams) error
 	DeactivateToken(ctx context.Context, id uuid.UUID) (Token, error)
 	DeactivateWorkspacePaymentConfiguration(ctx context.Context, arg DeactivateWorkspacePaymentConfigurationParams) (WorkspacePaymentConfiguration, error)
 	DeactivateWorkspaceProviderAccount(ctx context.Context, arg DeactivateWorkspaceProviderAccountParams) (WorkspaceProviderAccount, error)
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) error
 	DeleteAccount(ctx context.Context, id uuid.UUID) error
+	DeleteAllAddonsForProduct(ctx context.Context, baseProductID uuid.UUID) error
+	DeleteAllSubscriptionLineItems(ctx context.Context, subscriptionID uuid.UUID) error
 	DeleteCircleUser(ctx context.Context, id uuid.UUID) error
 	DeleteCircleUserByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) error
 	DeleteCustomer(ctx context.Context, id uuid.UUID) error
@@ -154,12 +162,14 @@ type Querier interface {
 	DeleteNetwork(ctx context.Context, id uuid.UUID) error
 	DeleteOldMetrics(ctx context.Context, arg DeleteOldMetricsParams) error
 	DeletePaymentLink(ctx context.Context, arg DeletePaymentLinkParams) (PaymentLink, error)
-	DeletePrice(ctx context.Context, id uuid.UUID) error
 	DeleteProduct(ctx context.Context, arg DeleteProductParams) error
+	DeleteProductAddonRelationship(ctx context.Context, id uuid.UUID) error
+	DeleteProductAddonRelationshipByProducts(ctx context.Context, arg DeleteProductAddonRelationshipByProductsParams) error
 	DeleteProductToken(ctx context.Context, id uuid.UUID) error
 	DeleteProductTokenByIds(ctx context.Context, arg DeleteProductTokenByIdsParams) error
 	DeleteProductTokensByProduct(ctx context.Context, productID uuid.UUID) error
 	DeleteSubscription(ctx context.Context, id uuid.UUID) error
+	DeleteSubscriptionLineItem(ctx context.Context, id uuid.UUID) error
 	DeleteSyncEventsBySession(ctx context.Context, sessionID uuid.UUID) error
 	DeleteSyncSession(ctx context.Context, arg DeleteSyncSessionParams) error
 	DeleteToken(ctx context.Context, id uuid.UUID) error
@@ -185,6 +195,7 @@ type Querier interface {
 	GetActiveProductTokensByProduct(ctx context.Context, productID uuid.UUID) ([]GetActiveProductTokensByProductRow, error)
 	GetActiveProductsByWalletID(ctx context.Context, walletID uuid.UUID) ([]Product, error)
 	GetActiveSyncSessionsByProvider(ctx context.Context, arg GetActiveSyncSessionsByProviderParams) ([]PaymentSyncSession, error)
+	GetAddonProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	GetAllAPIKeys(ctx context.Context) ([]ApiKey, error)
 	GetAllAccounts(ctx context.Context) ([]Account, error)
 	// Used for authentication - retrieves all active API keys for bcrypt comparison
@@ -192,6 +203,7 @@ type Querier interface {
 	GetAllCustomers(ctx context.Context) ([]Customer, error)
 	GetAllWorkspaces(ctx context.Context) ([]Workspace, error)
 	GetAttemptsByType(ctx context.Context, campaignID uuid.UUID) ([]GetAttemptsByTypeRow, error)
+	GetBaseProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	GetBusinessCustomers(ctx context.Context, arg GetBusinessCustomersParams) ([]Customer, error)
 	GetCampaignsNeedingFinalAction(ctx context.Context) ([]GetCampaignsNeedingFinalActionRow, error)
 	GetCircleUserByID(ctx context.Context, id uuid.UUID) (CircleUser, error)
@@ -204,6 +216,7 @@ type Querier interface {
 	GetCustomerByEmail(ctx context.Context, email pgtype.Text) (Customer, error)
 	GetCustomerByExternalID(ctx context.Context, externalID pgtype.Text) (Customer, error)
 	GetCustomerByExternalIDAndProvider(ctx context.Context, arg GetCustomerByExternalIDAndProviderParams) (GetCustomerByExternalIDAndProviderRow, error)
+	GetCustomerByNumID(ctx context.Context, numID int64) (Customer, error)
 	GetCustomerByTaxId(ctx context.Context, arg GetCustomerByTaxIdParams) (Customer, error)
 	GetCustomerByWeb3AuthID(ctx context.Context, web3authID pgtype.Text) (Customer, error)
 	GetCustomerGasPayments(ctx context.Context, arg GetCustomerGasPaymentsParams) ([]GetCustomerGasPaymentsRow, error)
@@ -271,13 +284,19 @@ type Querier interface {
 	GetGasSponsorshipsByProduct(ctx context.Context, arg GetGasSponsorshipsByProductParams) (GetGasSponsorshipsByProductRow, error)
 	GetGasToken(ctx context.Context, networkID uuid.UUID) (Token, error)
 	GetHourlyMetrics(ctx context.Context, arg GetHourlyMetricsParams) ([]DashboardMetric, error)
+	GetInvoiceActivities(ctx context.Context, arg GetInvoiceActivitiesParams) ([]InvoiceActivity, error)
+	GetInvoiceActivitiesByType(ctx context.Context, arg GetInvoiceActivitiesByTypeParams) ([]InvoiceActivity, error)
+	GetInvoiceActivityCount(ctx context.Context, invoiceID uuid.UUID) (int64, error)
 	GetInvoiceByExternalID(ctx context.Context, arg GetInvoiceByExternalIDParams) (Invoice, error)
 	GetInvoiceByID(ctx context.Context, arg GetInvoiceByIDParams) (Invoice, error)
 	GetInvoiceByNumber(ctx context.Context, arg GetInvoiceByNumberParams) (Invoice, error)
 	GetInvoiceCryptoAmounts(ctx context.Context, invoiceID uuid.UUID) ([]GetInvoiceCryptoAmountsRow, error)
 	GetInvoiceLineItem(ctx context.Context, id uuid.UUID) (InvoiceLineItem, error)
 	GetInvoiceLineItems(ctx context.Context, invoiceID uuid.UUID) ([]InvoiceLineItem, error)
+	GetInvoiceLineItemsBySubscription(ctx context.Context, arg GetInvoiceLineItemsBySubscriptionParams) ([]InvoiceLineItem, error)
 	GetInvoiceLineItemsByType(ctx context.Context, arg GetInvoiceLineItemsByTypeParams) ([]InvoiceLineItem, error)
+	GetInvoiceStatsByWorkspace(ctx context.Context, arg GetInvoiceStatsByWorkspaceParams) (GetInvoiceStatsByWorkspaceRow, error)
+	GetInvoiceStatusHistory(ctx context.Context, invoiceID uuid.UUID) ([]GetInvoiceStatusHistoryRow, error)
 	GetInvoiceSubtotal(ctx context.Context, invoiceID uuid.UUID) (GetInvoiceSubtotalRow, error)
 	GetInvoiceWithLineItems(ctx context.Context, arg GetInvoiceWithLineItemsParams) (GetInvoiceWithLineItemsRow, error)
 	GetInvoicesByExternalCustomerID(ctx context.Context, arg GetInvoicesByExternalCustomerIDParams) ([]Invoice, error)
@@ -319,18 +338,13 @@ type Querier interface {
 	GetPaymentsByInvoice(ctx context.Context, arg GetPaymentsByInvoiceParams) ([]Payment, error)
 	GetPaymentsByStatus(ctx context.Context, arg GetPaymentsByStatusParams) ([]Payment, error)
 	GetPaymentsBySubscription(ctx context.Context, arg GetPaymentsBySubscriptionParams) ([]Payment, error)
+	GetPaymentsByTransactionHash(ctx context.Context, transactionHash pgtype.Text) ([]Payment, error)
 	GetPaymentsByWorkspace(ctx context.Context, arg GetPaymentsByWorkspaceParams) ([]Payment, error)
-	GetPrice(ctx context.Context, id uuid.UUID) (Price, error)
-	GetPriceByExternalID(ctx context.Context, arg GetPriceByExternalIDParams) (Price, error)
-	GetPriceWithProduct(ctx context.Context, id uuid.UUID) (GetPriceWithProductRow, error)
-	GetPricesByPaymentProvider(ctx context.Context, arg GetPricesByPaymentProviderParams) ([]Price, error)
-	GetPricesByPaymentSyncStatus(ctx context.Context, arg GetPricesByPaymentSyncStatusParams) ([]Price, error)
-	// Payment Sync Related Price Queries
-	GetPricesNeedingSync(ctx context.Context, workspaceID uuid.UUID) ([]Price, error)
-	GetPricesSyncedByProvider(ctx context.Context, arg GetPricesSyncedByProviderParams) ([]Price, error)
-	GetPricesWithSyncConflicts(ctx context.Context, workspaceID uuid.UUID) ([]Price, error)
+	GetPendingInvoicesForGeneration(ctx context.Context, nextRedemptionDate pgtype.Timestamptz) ([]GetPendingInvoicesForGenerationRow, error)
 	GetPrimaryCustomerWallet(ctx context.Context, customerID uuid.UUID) (CustomerWallet, error)
 	GetProduct(ctx context.Context, arg GetProductParams) (Product, error)
+	GetProductAddonRelationship(ctx context.Context, id uuid.UUID) (ProductAddonRelationship, error)
+	GetProductAddonRelationshipByProducts(ctx context.Context, arg GetProductAddonRelationshipByProductsParams) (ProductAddonRelationship, error)
 	GetProductByExternalID(ctx context.Context, arg GetProductByExternalIDParams) (Product, error)
 	GetProductLineItemsByInvoice(ctx context.Context, invoiceID uuid.UUID) ([]GetProductLineItemsByInvoiceRow, error)
 	GetProductNetworks(ctx context.Context, productID uuid.UUID) ([]GetProductNetworksRow, error)
@@ -339,8 +353,10 @@ type Querier interface {
 	GetProductTokensByNetwork(ctx context.Context, arg GetProductTokensByNetworkParams) ([]GetProductTokensByNetworkRow, error)
 	GetProductTokensByProduct(ctx context.Context, productID uuid.UUID) ([]GetProductTokensByProductRow, error)
 	GetProductWithoutWorkspaceId(ctx context.Context, id uuid.UUID) (Product, error)
+	GetProductsByGroup(ctx context.Context, arg GetProductsByGroupParams) ([]Product, error)
 	GetProductsByPaymentProvider(ctx context.Context, arg GetProductsByPaymentProviderParams) ([]Product, error)
 	GetProductsByPaymentSyncStatus(ctx context.Context, arg GetProductsByPaymentSyncStatusParams) ([]Product, error)
+	GetProductsByType(ctx context.Context, arg GetProductsByTypeParams) ([]Product, error)
 	// Payment Sync Related Product Queries
 	GetProductsNeedingSync(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	GetProductsSyncedByProvider(ctx context.Context, arg GetProductsSyncedByProviderParams) ([]Product, error)
@@ -351,6 +367,7 @@ type Querier interface {
 	// Get a specific provider account for a workspace
 	GetProviderAccountByWorkspace(ctx context.Context, arg GetProviderAccountByWorkspaceParams) (WorkspaceProviderAccount, error)
 	GetProviderSyncStatusByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]GetProviderSyncStatusByWorkspaceRow, error)
+	GetRecentInvoiceActivities(ctx context.Context, arg GetRecentInvoiceActivitiesParams) ([]InvoiceActivity, error)
 	GetRecentInvoices(ctx context.Context, arg GetRecentInvoicesParams) ([]Invoice, error)
 	// Get recent webhook processing errors for monitoring
 	GetRecentWebhookErrors(ctx context.Context, arg GetRecentWebhookErrorsParams) ([]GetRecentWebhookErrorsRow, error)
@@ -362,10 +379,15 @@ type Querier interface {
 	GetStateChangesByDateRange(ctx context.Context, arg GetStateChangesByDateRangeParams) ([]SubscriptionStateHistory, error)
 	GetStateChangesByScheduleChange(ctx context.Context, scheduleChangeID pgtype.UUID) ([]SubscriptionStateHistory, error)
 	GetSubscription(ctx context.Context, id uuid.UUID) (Subscription, error)
+	GetSubscriptionBaseLineItem(ctx context.Context, subscriptionID uuid.UUID) (GetSubscriptionBaseLineItemRow, error)
 	GetSubscriptionByExternalID(ctx context.Context, arg GetSubscriptionByExternalIDParams) (Subscription, error)
+	GetSubscriptionByNumID(ctx context.Context, numID int64) (Subscription, error)
 	GetSubscriptionEvent(ctx context.Context, id uuid.UUID) (SubscriptionEvent, error)
 	GetSubscriptionEventByTransactionHash(ctx context.Context, transactionHash pgtype.Text) (SubscriptionEvent, error)
+	GetSubscriptionForInvoicing(ctx context.Context, id uuid.UUID) (GetSubscriptionForInvoicingRow, error)
 	GetSubscriptionLifecycleEvents(ctx context.Context, subscriptionID uuid.UUID) ([]GetSubscriptionLifecycleEventsRow, error)
+	GetSubscriptionLineItem(ctx context.Context, id uuid.UUID) (SubscriptionLineItem, error)
+	GetSubscriptionLineItemByProduct(ctx context.Context, arg GetSubscriptionLineItemByProductParams) (SubscriptionLineItem, error)
 	// Get payment history for campaign strategy determination
 	GetSubscriptionPaymentHistory(ctx context.Context, subscriptionID uuid.UUID) ([]GetSubscriptionPaymentHistoryRow, error)
 	GetSubscriptionProrations(ctx context.Context, subscriptionID uuid.UUID) ([]SubscriptionProration, error)
@@ -373,12 +395,15 @@ type Querier interface {
 	GetSubscriptionStateHistory(ctx context.Context, arg GetSubscriptionStateHistoryParams) ([]SubscriptionStateHistory, error)
 	GetSubscriptionWithCustomerDetails(ctx context.Context, id uuid.UUID) (GetSubscriptionWithCustomerDetailsRow, error)
 	GetSubscriptionWithDetails(ctx context.Context, arg GetSubscriptionWithDetailsParams) (GetSubscriptionWithDetailsRow, error)
+	GetSubscriptionWithLineItems(ctx context.Context, id uuid.UUID) ([]GetSubscriptionWithLineItemsRow, error)
 	GetSubscriptionWithWorkspace(ctx context.Context, arg GetSubscriptionWithWorkspaceParams) (Subscription, error)
 	GetSubscriptionsByDelegation(ctx context.Context, delegationID uuid.UUID) ([]Subscription, error)
+	// Prices queries removed - pricing is now in products table
 	GetSubscriptionsByPaymentProvider(ctx context.Context, arg GetSubscriptionsByPaymentProviderParams) ([]Subscription, error)
 	GetSubscriptionsByPaymentSyncStatus(ctx context.Context, arg GetSubscriptionsByPaymentSyncStatusParams) ([]Subscription, error)
 	GetSubscriptionsDueForCancellation(ctx context.Context, cancelAt pgtype.Timestamptz) ([]Subscription, error)
 	GetSubscriptionsDueForResumption(ctx context.Context, pauseEndsAt pgtype.Timestamptz) ([]Subscription, error)
+	GetSubscriptionsForBulkInvoicing(ctx context.Context, arg GetSubscriptionsForBulkInvoicingParams) ([]GetSubscriptionsForBulkInvoicingRow, error)
 	// Payment Sync Related Subscription Queries
 	GetSubscriptionsNeedingSync(ctx context.Context, workspaceID uuid.UUID) ([]Subscription, error)
 	GetSubscriptionsSyncedByProvider(ctx context.Context, arg GetSubscriptionsSyncedByProviderParams) ([]Subscription, error)
@@ -450,6 +475,7 @@ type Querier interface {
 	GetWorkspacesNeedingReset(ctx context.Context) ([]uuid.UUID, error)
 	HardDeleteAccount(ctx context.Context, id uuid.UUID) error
 	HardDeleteWorkspace(ctx context.Context, id uuid.UUID) error
+	HasPaymentsAfterDate(ctx context.Context, arg HasPaymentsAfterDateParams) (bool, error)
 	IncrementPaymentLinkUsage(ctx context.Context, arg IncrementPaymentLinkUsageParams) (PaymentLink, error)
 	IncrementSubscriptionRedemption(ctx context.Context, arg IncrementSubscriptionRedemptionParams) (Subscription, error)
 	IsCustomerInWorkspace(ctx context.Context, arg IsCustomerInWorkspaceParams) (bool, error)
@@ -459,18 +485,19 @@ type Querier interface {
 	ListAccounts(ctx context.Context) ([]Account, error)
 	ListAccountsByType(ctx context.Context, accountType AccountType) ([]Account, error)
 	ListAccountsByUser(ctx context.Context, id uuid.UUID) ([]Account, error)
+	ListActiveCircleNetworks(ctx context.Context) ([]Network, error)
 	ListActiveDunningEmailTemplates(ctx context.Context, workspaceID uuid.UUID) ([]DunningEmailTemplate, error)
 	ListActiveFiatCurrencies(ctx context.Context) ([]FiatCurrency, error)
 	ListActiveNetworks(ctx context.Context) ([]Network, error)
-	ListActivePricesByProduct(ctx context.Context, productID uuid.UUID) ([]Price, error)
-	ListActivePricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]Price, error)
 	ListActiveProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	// Get list of active providers for a workspace
 	ListActiveProviders(ctx context.Context, workspaceID uuid.UUID) ([]string, error)
+	ListActiveSubscriptionLineItems(ctx context.Context, subscriptionID uuid.UUID) ([]ListActiveSubscriptionLineItemsRow, error)
 	ListActiveSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListActiveTokensByNetwork(ctx context.Context, networkID uuid.UUID) ([]Token, error)
 	ListActiveWorkspacePaymentConfigurations(ctx context.Context, workspaceID uuid.UUID) ([]WorkspacePaymentConfiguration, error)
 	ListAllFiatCurrencies(ctx context.Context) ([]FiatCurrency, error)
+	ListBaseProductsForAddon(ctx context.Context, addonProductID uuid.UUID) ([]ListBaseProductsForAddonRow, error)
 	ListCircleUsers(ctx context.Context) ([]CircleUser, error)
 	ListCircleWalletsByCircleUserID(ctx context.Context, circleUserID uuid.UUID) ([]ListCircleWalletsByCircleUserIDRow, error)
 	ListCircleWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListCircleWalletsByWorkspaceIDRow, error)
@@ -501,11 +528,10 @@ type Querier interface {
 	ListInvoicesBySyncStatus(ctx context.Context, arg ListInvoicesBySyncStatusParams) ([]Invoice, error)
 	ListInvoicesByWorkspace(ctx context.Context, arg ListInvoicesByWorkspaceParams) ([]Invoice, error)
 	ListNetworks(ctx context.Context, arg ListNetworksParams) ([]Network, error)
-	ListPricesByProduct(ctx context.Context, productID uuid.UUID) ([]Price, error)
-	ListPricesByWorkspace(ctx context.Context, workspaceID uuid.UUID) ([]Price, error)
 	ListPrimaryCustomerWallets(ctx context.Context) ([]CustomerWallet, error)
 	ListPrimaryWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]Wallet, error)
 	ListPrimaryWalletsWithCircleDataByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]ListPrimaryWalletsWithCircleDataByWorkspaceIDRow, error)
+	ListProductAddons(ctx context.Context, baseProductID uuid.UUID) ([]ListProductAddonsRow, error)
 	ListProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error)
 	ListProductsWithPagination(ctx context.Context, arg ListProductsWithPaginationParams) ([]Product, error)
 	// List all accounts for a specific provider across workspaces
@@ -517,12 +543,15 @@ type Querier interface {
 	ListRecentFailedSubscriptionAttempts(ctx context.Context, occurredAt pgtype.Timestamptz) ([]FailedSubscriptionAttempt, error)
 	ListRecentSubscriptionEvents(ctx context.Context, occurredAt pgtype.Timestamptz) ([]SubscriptionEvent, error)
 	ListRecentSubscriptionEventsByType(ctx context.Context, arg ListRecentSubscriptionEventsByTypeParams) ([]SubscriptionEvent, error)
+	ListRequiredProductAddons(ctx context.Context, baseProductID uuid.UUID) ([]ListRequiredProductAddonsRow, error)
+	ListSubscriptionAddonLineItems(ctx context.Context, subscriptionID uuid.UUID) ([]ListSubscriptionAddonLineItemsRow, error)
 	ListSubscriptionDetailsWithPagination(ctx context.Context, arg ListSubscriptionDetailsWithPaginationParams) ([]ListSubscriptionDetailsWithPaginationRow, error)
 	ListSubscriptionEventDetailsWithPagination(ctx context.Context, arg ListSubscriptionEventDetailsWithPaginationParams) ([]ListSubscriptionEventDetailsWithPaginationRow, error)
 	ListSubscriptionEvents(ctx context.Context) ([]SubscriptionEvent, error)
 	ListSubscriptionEventsBySubscription(ctx context.Context, subscriptionID uuid.UUID) ([]SubscriptionEvent, error)
 	ListSubscriptionEventsByType(ctx context.Context, eventType SubscriptionEventType) ([]SubscriptionEvent, error)
 	ListSubscriptionEventsWithPagination(ctx context.Context, arg ListSubscriptionEventsWithPaginationParams) ([]SubscriptionEvent, error)
+	ListSubscriptionLineItems(ctx context.Context, subscriptionID uuid.UUID) ([]ListSubscriptionLineItemsRow, error)
 	ListSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListSubscriptionsByCustomer(ctx context.Context, arg ListSubscriptionsByCustomerParams) ([]Subscription, error)
 	ListSubscriptionsByProduct(ctx context.Context, arg ListSubscriptionsByProductParams) ([]Subscription, error)
@@ -539,6 +568,7 @@ type Querier interface {
 	ListTokensByNetwork(ctx context.Context, networkID uuid.UUID) ([]Token, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	ListUsersByAccount(ctx context.Context, accountID uuid.UUID) ([]User, error)
+	ListWalletsByAddress(ctx context.Context, arg ListWalletsByAddressParams) ([]ListWalletsByAddressRow, error)
 	ListWalletsByNetworkType(ctx context.Context, arg ListWalletsByNetworkTypeParams) ([]Wallet, error)
 	ListWalletsByWalletType(ctx context.Context, arg ListWalletsByWalletTypeParams) ([]Wallet, error)
 	ListWalletsByWorkspaceID(ctx context.Context, workspaceID uuid.UUID) ([]Wallet, error)
@@ -549,6 +579,7 @@ type Querier interface {
 	ListWorkspaceCustomers(ctx context.Context, workspaceID uuid.UUID) ([]Customer, error)
 	ListWorkspaceCustomersWithInfo(ctx context.Context, workspaceID uuid.UUID) ([]ListWorkspaceCustomersWithInfoRow, error)
 	ListWorkspaceCustomersWithPagination(ctx context.Context, arg ListWorkspaceCustomersWithPaginationParams) ([]Customer, error)
+	ListWorkspaceCustomersWithRevenue(ctx context.Context, arg ListWorkspaceCustomersWithRevenueParams) ([]ListWorkspaceCustomersWithRevenueRow, error)
 	ListWorkspacePaymentConfigurations(ctx context.Context, arg ListWorkspacePaymentConfigurationsParams) ([]WorkspacePaymentConfiguration, error)
 	ListWorkspacePaymentConfigurationsByProvider(ctx context.Context, providerName string) ([]WorkspacePaymentConfiguration, error)
 	ListWorkspaceSupportedCurrencies(ctx context.Context, id uuid.UUID) ([]FiatCurrency, error)
@@ -561,11 +592,15 @@ type Querier interface {
 	LogWebhookReceived(ctx context.Context, arg LogWebhookReceivedParams) (PaymentSyncEvent, error)
 	// Set a specific customer wallet as primary
 	MarkCustomerWalletAsPrimary(ctx context.Context, id uuid.UUID) (CustomerWallet, error)
+	MarkInvoicePaid(ctx context.Context, arg MarkInvoicePaidParams) (Invoice, error)
 	// Mark a webhook event for retry processing
 	MarkWebhookForRetry(ctx context.Context, id uuid.UUID) (PaymentSyncEvent, error)
 	PauseDunningCampaign(ctx context.Context, id uuid.UUID) (DunningCampaign, error)
 	PauseSubscription(ctx context.Context, arg PauseSubscriptionParams) (Subscription, error)
 	ReactivateScheduledCancellation(ctx context.Context, id uuid.UUID) (Subscription, error)
+	RecordInvoiceCreation(ctx context.Context, arg RecordInvoiceCreationParams) (InvoiceActivity, error)
+	RecordInvoiceReminder(ctx context.Context, arg RecordInvoiceReminderParams) (InvoiceActivity, error)
+	RecordInvoiceStatusChange(ctx context.Context, arg RecordInvoiceStatusChangeParams) (InvoiceActivity, error)
 	RecordStateChange(ctx context.Context, arg RecordStateChangeParams) (SubscriptionStateHistory, error)
 	RecoverDunningCampaign(ctx context.Context, arg RecoverDunningCampaignParams) (DunningCampaign, error)
 	RefundPayment(ctx context.Context, arg RefundPaymentParams) (Payment, error)
@@ -614,8 +649,11 @@ type Querier interface {
 	UpdateInvoice(ctx context.Context, arg UpdateInvoiceParams) (Invoice, error)
 	UpdateInvoiceDetails(ctx context.Context, arg UpdateInvoiceDetailsParams) (Invoice, error)
 	UpdateInvoiceLineItem(ctx context.Context, arg UpdateInvoiceLineItemParams) (InvoiceLineItem, error)
+	UpdateInvoiceMetadata(ctx context.Context, arg UpdateInvoiceMetadataParams) (Invoice, error)
+	UpdateInvoiceNotes(ctx context.Context, arg UpdateInvoiceNotesParams) (Invoice, error)
 	UpdateInvoiceNumber(ctx context.Context, arg UpdateInvoiceNumberParams) (Invoice, error)
 	UpdateInvoiceQRCode(ctx context.Context, arg UpdateInvoiceQRCodeParams) (Invoice, error)
+	UpdateInvoiceStatus(ctx context.Context, arg UpdateInvoiceStatusParams) (Invoice, error)
 	UpdateInvoiceSyncStatus(ctx context.Context, arg UpdateInvoiceSyncStatusParams) (Invoice, error)
 	// Update the last webhook received time for a workspace configuration
 	UpdateLastWebhookTime(ctx context.Context, arg UpdateLastWebhookTimeParams) error
@@ -624,15 +662,13 @@ type Querier interface {
 	UpdateNetwork(ctx context.Context, arg UpdateNetworkParams) (Network, error)
 	UpdatePaymentGasDetails(ctx context.Context, arg UpdatePaymentGasDetailsParams) (Payment, error)
 	UpdatePaymentGasSponsorship(ctx context.Context, arg UpdatePaymentGasSponsorshipParams) (Payment, error)
+	UpdatePaymentInvoiceID(ctx context.Context, arg UpdatePaymentInvoiceIDParams) (Payment, error)
 	UpdatePaymentLink(ctx context.Context, arg UpdatePaymentLinkParams) (PaymentLink, error)
 	UpdatePaymentLinkQRCode(ctx context.Context, arg UpdatePaymentLinkQRCodeParams) (PaymentLink, error)
 	UpdatePaymentStatus(ctx context.Context, arg UpdatePaymentStatusParams) (Payment, error)
 	UpdatePaymentWithBlockchainData(ctx context.Context, arg UpdatePaymentWithBlockchainDataParams) (Payment, error)
-	UpdatePrice(ctx context.Context, arg UpdatePriceParams) (Price, error)
-	UpdatePricePaymentSyncStatus(ctx context.Context, arg UpdatePricePaymentSyncStatusParams) (Price, error)
-	UpdatePriceSyncStatus(ctx context.Context, arg UpdatePriceSyncStatusParams) (Price, error)
-	UpdatePriceWithSync(ctx context.Context, arg UpdatePriceWithSyncParams) (Price, error)
 	UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error)
+	UpdateProductAddonRelationship(ctx context.Context, arg UpdateProductAddonRelationshipParams) (ProductAddonRelationship, error)
 	UpdateProductPaymentSyncStatus(ctx context.Context, arg UpdateProductPaymentSyncStatusParams) (Product, error)
 	UpdateProductSyncStatus(ctx context.Context, arg UpdateProductSyncStatusParams) (Product, error)
 	UpdateProductToken(ctx context.Context, arg UpdateProductTokenParams) (ProductsToken, error)
@@ -641,8 +677,10 @@ type Querier interface {
 	UpdateSubscription(ctx context.Context, arg UpdateSubscriptionParams) (Subscription, error)
 	UpdateSubscriptionEvent(ctx context.Context, arg UpdateSubscriptionEventParams) (SubscriptionEvent, error)
 	UpdateSubscriptionForUpgrade(ctx context.Context, arg UpdateSubscriptionForUpgradeParams) (Subscription, error)
+	UpdateSubscriptionLineItemQuantity(ctx context.Context, arg UpdateSubscriptionLineItemQuantityParams) (SubscriptionLineItem, error)
 	UpdateSubscriptionPaymentSyncStatus(ctx context.Context, arg UpdateSubscriptionPaymentSyncStatusParams) (Subscription, error)
 	UpdateSubscriptionStatus(ctx context.Context, arg UpdateSubscriptionStatusParams) (Subscription, error)
+	// UpdatePriceSyncStatus removed - pricing is now in products table
 	UpdateSubscriptionSyncStatus(ctx context.Context, arg UpdateSubscriptionSyncStatusParams) (Subscription, error)
 	UpdateSubscriptionWithSync(ctx context.Context, arg UpdateSubscriptionWithSyncParams) (Subscription, error)
 	UpdateSyncSessionError(ctx context.Context, arg UpdateSyncSessionErrorParams) (PaymentSyncSession, error)
@@ -668,9 +706,11 @@ type Querier interface {
 	UpdateWorkspaceProviderConfig(ctx context.Context, arg UpdateWorkspaceProviderConfigParams) (Workspace, error)
 	UpdateWorkspaceSupportedCurrencies(ctx context.Context, arg UpdateWorkspaceSupportedCurrenciesParams) error
 	UpsertInvoice(ctx context.Context, arg UpsertInvoiceParams) (Invoice, error)
+	ValidateAddonForProduct(ctx context.Context, arg ValidateAddonForProductParams) (bool, error)
 	// Check if provider account ID already exists (for constraint validation)
 	ValidateProviderAccountUnique(ctx context.Context, arg ValidateProviderAccountUniqueParams) (int64, error)
 	VerifyCustomerWallet(ctx context.Context, id uuid.UUID) (CustomerWallet, error)
+	VoidInvoice(ctx context.Context, arg VoidInvoiceParams) (Invoice, error)
 }
 
 var _ Querier = (*Queries)(nil)

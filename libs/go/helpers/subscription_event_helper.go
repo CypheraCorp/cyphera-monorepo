@@ -43,12 +43,19 @@ func ToSubscriptionEventResponsePagination(ctx context.Context, eventDetails db.
 			Name:  eventDetails.CustomerName.String,
 		},
 		PriceInfo: responses.SubscriptionEventPriceInfo{
-			ID:                  eventDetails.PriceID,
+			ID:                  eventDetails.ProductID, // Using product ID as price ID
 			Type:                string(eventDetails.PriceType),
 			Currency:            string(eventDetails.PriceCurrency),
 			UnitAmountInPennies: int64(eventDetails.PriceUnitAmountInPennies),
-			IntervalType:        string(eventDetails.PriceIntervalType),
-			TermLength:          int32(eventDetails.PriceTermLength),
+			IntervalType: func() string {
+				if eventDetails.PriceIntervalType.Valid {
+					return string(eventDetails.PriceIntervalType.IntervalType)
+				}
+				return ""
+			}(),
+			TermLength: eventDetails.PriceTermLength.Int32,
+			CreatedAt:  eventDetails.EventCreatedAt.Time.Unix(),
+			UpdatedAt:  eventDetails.EventCreatedAt.Time.Unix(),
 		},
 		ProductToken: responses.ProductTokenResponse{
 			ID:          eventDetails.ProductTokenID.String(),

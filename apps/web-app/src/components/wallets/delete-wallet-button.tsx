@@ -29,8 +29,19 @@ export function DeleteWalletButton({ walletId, onDeleted }: DeleteWalletButtonPr
   const handleDelete = async () => {
     try {
       setIsDeleting(true);
+      
+      // First, fetch CSRF token
+      const csrfResponse = await fetch('/api/auth/csrf');
+      if (!csrfResponse.ok) {
+        throw new Error('Failed to fetch CSRF token');
+      }
+      const { csrfToken } = await csrfResponse.json();
+
       const response = await fetch(`/api/wallets/${walletId}`, {
         method: 'DELETE',
+        headers: {
+          'X-CSRF-Token': csrfToken,
+        },
       });
 
       if (!response.ok) {

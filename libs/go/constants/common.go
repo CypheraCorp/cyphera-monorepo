@@ -18,11 +18,6 @@ const (
 	// Status values
 	FailedStatus = "failed"
 
-	// Subscription actions
-	CancelAction    = "cancel"
-	DowngradeAction = "downgrade"
-	ResumeAction    = "resume"
-
 	// Currencies
 	USDCurrency = "USD"
 

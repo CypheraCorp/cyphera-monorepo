@@ -39,6 +39,7 @@ type DowngradeSubscriptionRequest = requests.DowngradeSubscriptionRequest
 type CancelSubscriptionRequest = requests.CancelSubscriptionRequest
 type PauseSubscriptionRequest = requests.PauseSubscriptionRequest
 type PreviewChangeRequest = requests.PreviewChangeRequest
+type ChangePriceRequest = requests.ChangePriceRequest
 
 // Helper functions to convert between request and service types
 func toServicesLineItemUpdate(reqItem requests.LineItemUpdate) requests.LineItemUpdate {
@@ -426,6 +427,52 @@ func (h *SubscriptionManagementHandler) GetSubscriptionHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"history": history,
 		"count":   len(history),
+	})
+}
+
+// @Summary Change subscription price
+// @Description Change subscription price - automatically handles upgrade/downgrade logic
+// @Tags subscriptions
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param subscription_id path string true "Subscription ID"
+// @Param request body ChangePriceRequest true "New price details"
+// @Success 200 {object} SuccessResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/subscriptions/{subscription_id}/change-price [post]
+func (h *SubscriptionManagementHandler) ChangePrice(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	subscriptionIDStr := c.Param("subscription_id")
+	subscriptionID, err := uuid.Parse(subscriptionIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid subscription ID"})
+		return
+	}
+
+	var req ChangePriceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	err = h.service.ChangePrice(ctx, subscriptionID, req.NewPriceCents)
+	if err != nil {
+		h.logger.Error("Failed to change subscription price",
+			zap.String("subscription_id", subscriptionID.String()),
+			zap.Int64("new_price_cents", req.NewPriceCents),
+			zap.Error(err))
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":         "Subscription price changed successfully",
+		"subscription_id": subscriptionID,
 	})
 }
 

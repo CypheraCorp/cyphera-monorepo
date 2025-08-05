@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // WalletHandler handles wallet-related operations
@@ -244,8 +245,8 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 	}
 
 	// Validate wallet type - only allow non-Circle wallets
-	if req.WalletType != "wallet" {
-		sendError(c, http.StatusBadRequest, "Invalid wallet type. Circle wallets should be created using the Circle API endpoints.", nil)
+	if req.WalletType == "circle" {
+		sendError(c, http.StatusBadRequest, "Circle wallets should be created using the Circle API endpoints.", nil)
 		return
 	}
 
@@ -552,6 +553,23 @@ func (h *WalletHandler) DeleteWallet(c *gin.Context) {
 		return
 	}
 
+	// First, get the wallet to check its type
+	wallet, err := h.walletService.GetWallet(c.Request.Context(), parsedUUID, parsedWorkspaceID)
+	if err != nil {
+		if err.Error() == constants.WalletNotFound {
+			sendError(c, http.StatusNotFound, "Wallet not found", nil)
+			return
+		}
+		sendError(c, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	// Prevent deletion of web3auth and circle wallets
+	if wallet.WalletType == "web3auth" || wallet.WalletType == "circle" || wallet.WalletType == "circle_wallet" {
+		sendError(c, http.StatusBadRequest, "Cannot delete system-managed wallets", nil)
+		return
+	}
+
 	// Delete wallet using the service
 	err = h.walletService.DeleteWallet(c.Request.Context(), parsedUUID, parsedWorkspaceID)
 	if err != nil {
@@ -569,4 +587,157 @@ func (h *WalletHandler) DeleteWallet(c *gin.Context) {
 	}
 
 	sendSuccess(c, http.StatusNoContent, nil)
+}
+
+// GetWalletsByAddress godoc
+// @Summary Get all wallets for a specific address
+// @Description Get all wallets associated with a given wallet address across different networks
+// @Tags wallets
+// @Accept json
+// @Produce json
+// @Param address path string true "Wallet address"
+// @Success 200 {object} WalletsByAddressResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Security ApiKeyAuth
+// @Router /wallets/address/{address} [get]
+func (h *WalletHandler) GetWalletsByAddress(c *gin.Context) {
+	// Get workspace ID from header
+	workspaceIDStr := c.GetHeader("X-Workspace-ID")
+	parsedWorkspaceID, err := uuid.Parse(workspaceIDStr)
+	if err != nil {
+		sendError(c, http.StatusBadRequest, "Invalid or missing X-Workspace-ID header", err)
+		return
+	}
+
+	// Get wallet address from URL parameter
+	walletAddress := c.Param("address")
+	if walletAddress == "" {
+		sendError(c, http.StatusBadRequest, "Wallet address is required", nil)
+		return
+	}
+
+	// Validate the address format (basic Ethereum address validation)
+	if len(walletAddress) != 42 || walletAddress[:2] != "0x" {
+		sendError(c, http.StatusBadRequest, "Invalid wallet address format", nil)
+		return
+	}
+
+	// Get all wallets for this address
+	wallets, err := h.common.db.ListWalletsByAddress(c.Request.Context(), db.ListWalletsByAddressParams{
+		WalletAddress: walletAddress,
+		WorkspaceID:   parsedWorkspaceID,
+	})
+	if err != nil {
+		sendError(c, http.StatusInternalServerError, "Failed to fetch wallets", err)
+		return
+	}
+
+	if len(wallets) == 0 {
+		sendError(c, http.StatusNotFound, "No wallets found for this address", nil)
+		return
+	}
+
+	// Group wallets by network for response
+	type NetworkInfo struct {
+		ID                uuid.UUID                 `json:"id"`
+		Name              string                    `json:"name"`
+		ChainID           int32                     `json:"chain_id"`
+		CircleNetworkType db.CircleNetworkType      `json:"circle_network_type,omitempty"`
+		IsTestnet         bool                      `json:"is_testnet"`
+		BlockExplorerURL  pgtype.Text               `json:"block_explorer_url,omitempty"`
+	}
+
+	type WalletWithNetwork struct {
+		Wallet  responses.WalletResponse `json:"wallet"`
+		Network *NetworkInfo            `json:"network"`
+	}
+
+	walletsWithNetworks := make([]WalletWithNetwork, 0, len(wallets))
+
+	for _, w := range wallets {
+		// Parse metadata
+		var metadata map[string]interface{}
+		if len(w.Metadata) > 0 {
+			json.Unmarshal(w.Metadata, &metadata)
+		}
+
+		// Convert pgtype values
+		var networkIDStr string
+		if w.NetworkID.Valid {
+			networkUUID := uuid.UUID(w.NetworkID.Bytes)
+			networkIDStr = networkUUID.String()
+		}
+
+		var lastUsedAt *int64
+		if w.LastUsedAt.Valid {
+			unix := w.LastUsedAt.Time.Unix()
+			lastUsedAt = &unix
+		}
+
+		walletResponse := responses.WalletResponse{
+			ID:            w.ID.String(),
+			WorkspaceID:   w.WorkspaceID.String(),
+			WalletType:    w.WalletType,
+			WalletAddress: w.WalletAddress,
+			NetworkType:   string(w.NetworkType),
+			NetworkID:     networkIDStr,
+			Nickname:      w.Nickname.String,
+			ENS:           w.Ens.String,
+			IsPrimary:     w.IsPrimary.Bool,
+			Verified:      w.Verified.Bool,
+			LastUsedAt:    lastUsedAt,
+			Metadata:      metadata,
+			CreatedAt:     w.CreatedAt.Time.Unix(),
+			UpdatedAt:     w.UpdatedAt.Time.Unix(),
+		}
+
+		// Add Circle data if available
+		if w.CircleWalletTableID.Valid {
+			var circleUserIDStr string
+			if w.CircleUserID.Valid {
+				circleUserUUID := uuid.UUID(w.CircleUserID.Bytes)
+				circleUserIDStr = circleUserUUID.String()
+			}
+			
+			walletResponse.CircleData = &responses.CircleWalletData{
+				CircleWalletID: w.CircleWalletID.String,
+				CircleUserID:   circleUserIDStr,
+				ChainID:        w.CircleChainID.Int32,
+				State:          w.CircleState.String,
+			}
+		}
+
+		// Add network info if available
+		var networkInfo *NetworkInfo
+		if w.NetworkID_2.Valid {
+			networkInfo = &NetworkInfo{
+				ID:                w.NetworkID_2.Bytes,
+				Name:              w.NetworkName.String,
+				ChainID:           w.ChainID.Int32,
+				CircleNetworkType: w.CircleNetworkType.CircleNetworkType,
+				IsTestnet:         w.NetworkTestnet.Bool,
+				BlockExplorerURL:  w.BlockExplorerUrl,
+			}
+		}
+
+		walletsWithNetworks = append(walletsWithNetworks, WalletWithNetwork{
+			Wallet:  walletResponse,
+			Network: networkInfo,
+		})
+	}
+
+	// Response structure
+	type WalletsByAddressResponse struct {
+		Address string              `json:"address"`
+		Wallets []WalletWithNetwork `json:"wallets"`
+		Count   int                 `json:"count"`
+	}
+
+	sendSuccess(c, http.StatusOK, WalletsByAddressResponse{
+		Address: walletAddress,
+		Wallets: walletsWithNetworks,
+		Count:   len(walletsWithNetworks),
+	})
 }

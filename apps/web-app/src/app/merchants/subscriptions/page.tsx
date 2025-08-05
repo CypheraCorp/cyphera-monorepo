@@ -7,6 +7,7 @@ import { useSubscriptions } from '@/hooks/data';
 import { Suspense } from 'react';
 import { TableSkeleton } from '@/components/ui/loading-states';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 
 // Dynamically import lucide-react icons
 
@@ -209,6 +210,7 @@ export default function SubscriptionsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[100px]">ID</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Product</TableHead>
                   <TableHead>Status</TableHead>
@@ -220,21 +222,31 @@ export default function SubscriptionsPage() {
               <TableBody>
                 {subscriptions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       <div className="text-muted-foreground">No subscriptions found</div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   subscriptions.map((subscription) => (
                     <TableRow key={subscription.id}>
+                      <TableCell className="font-mono text-sm">
+                        #{subscription.num_id}
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium">
                             {subscription.customer_name || 'Unknown'}
                           </span>
-                          <span className="text-sm text-muted-foreground">
-                            {subscription.customer_email || 'No email'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">
+                              {subscription.customer_email || 'No email'}
+                            </span>
+                            {subscription.customer?.num_id && (
+                              <span className="text-xs text-muted-foreground font-mono">
+                                (#{subscription.customer.num_id})
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -258,10 +270,14 @@ export default function SubscriptionsPage() {
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium">
-                            ${(subscription.price.unit_amount_in_pennies / 100).toFixed(2)}
+                            ${((subscription.product.unit_amount_in_pennies || 0) / 100).toFixed(2)}
+                            <span className="text-sm text-muted-foreground">
+                              /{subscription.product.interval_type || 'month'}
+                            </span>
                           </span>
                           <span className="text-sm text-muted-foreground">
-                            {subscription.price.currency?.toUpperCase() || 'USD'}
+                            Total: ${(((subscription.product.unit_amount_in_pennies || 0) * (subscription.product.term_length || 1)) / 100).toFixed(2)}
+                            {' '}{subscription.product.currency?.toUpperCase() || 'USD'}
                           </span>
                         </div>
                       </TableCell>
@@ -292,8 +308,16 @@ export default function SubscriptionsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>View Details</DropdownMenuItem>
-                              <DropdownMenuItem>Cancel Subscription</DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href={`/merchants/subscriptions/${subscription.id}`}>
+                                  View Details
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href={`/merchants/subscriptions/${subscription.id}?action=cancel`}>
+                                  Manage Subscription
+                                </Link>
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </Suspense>

@@ -36,7 +36,6 @@ var (
 const (
 	RequestIDKey = "request_id"
 	AccountIDKey = "X-Account-ID" // Note: This might conflict if you have a different AccountIDKey in this package already.
-	UserIDKey    = "X-User-ID"
 )
 
 // Web3AuthWallet represents a wallet in the Web3Auth ID token (actual structure from example)
@@ -767,7 +766,6 @@ func LogRequest() gin.HandlerFunc {
 			ClientIP:  c.ClientIP(),
 			RequestID: c.GetHeader(RequestIDKey),
 			AccountID: c.GetHeader(AccountIDKey),
-			UserID:    c.GetHeader(UserIDKey),
 			Timestamp: start.UTC(),
 		}
 

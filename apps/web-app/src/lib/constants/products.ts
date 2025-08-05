@@ -1,5 +1,5 @@
 export const PRICE_TYPES = {
-  ONE_OFF: 'one_off',
+  ONE_TIME: 'one_time',
   RECURRING: 'recurring',
 } as const;
 

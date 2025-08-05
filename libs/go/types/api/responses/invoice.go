@@ -36,6 +36,14 @@ type InvoiceResponse struct {
 	TaxDetails       []TaxDetail               `json:"tax_details"`
 	PaymentLinkID    *uuid.UUID                `json:"payment_link_id,omitempty"`
 	PaymentLinkURL   *string                   `json:"payment_link_url,omitempty"`
+	PeriodStart      *time.Time                `json:"period_start,omitempty"`
+	PeriodEnd        *time.Time                `json:"period_end,omitempty"`
+	ReminderSentAt   *time.Time                `json:"reminder_sent_at,omitempty"`
+	ReminderCount    int32                     `json:"reminder_count"`
+	Notes            *string                   `json:"notes,omitempty"`
+	Terms            *string                   `json:"terms,omitempty"`
+	Footer           *string                   `json:"footer,omitempty"`
+	Metadata         map[string]interface{}    `json:"metadata,omitempty"`
 	CreatedAt        time.Time                 `json:"created_at"`
 	UpdatedAt        time.Time                 `json:"updated_at"`
 }

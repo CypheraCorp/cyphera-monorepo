@@ -161,16 +161,14 @@ func (s *DashboardMetricsService) calculateRevenueMetrics(ctx context.Context, m
 			END) as mrr_cents,
 			COUNT(DISTINCT s.id) as subscription_count
 		FROM subscriptions s
-		JOIN prices p ON s.price_id = p.id
-		JOIN products pr ON s.product_id = pr.id
+		JOIN products p ON s.product_id = p.id
 		WHERE s.status = 'active'
-			AND pr.workspace_id = $1
+			AND p.workspace_id = $1
 			AND p.currency = $2
 			AND s.current_period_start <= $3
 			AND (s.current_period_end IS NULL OR s.current_period_end > $3)
 			AND s.deleted_at IS NULL
 			AND p.deleted_at IS NULL
-			AND pr.deleted_at IS NULL
 	`
 
 	var mrrCents pgtype.Int8

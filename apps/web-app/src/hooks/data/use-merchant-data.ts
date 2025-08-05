@@ -10,6 +10,7 @@ import type { NetworkWithTokensResponse } from '@/types/network';
 import type { CustomerResponse } from '@/types/customer';
 import type { SubscriptionResponse } from '@/types/subscription';
 import type { SubscriptionEventFullResponse } from '@/types/subscription-event';
+import type { PaymentResponse } from '@/types/payment';
 
 // Query keys for consistent caching
 export const queryKeys = {
@@ -19,6 +20,7 @@ export const queryKeys = {
   customers: (page?: number, limit?: number) => ['customers', { page, limit }] as const,
   subscriptions: (page?: number, limit?: number) => ['subscriptions', { page, limit }] as const,
   transactions: (page?: number, limit?: number) => ['transactions', { page, limit }] as const,
+  payments: (page?: number, limit?: number) => ['payments', { page, limit }] as const,
 };
 
 // Products hooks
@@ -109,6 +111,21 @@ export function useTransactions(page = 1, limit = 10) {
       return response.json();
     },
     staleTime: CACHE_DURATIONS.transactions,
+  });
+}
+
+// Payments hooks
+export function usePayments(page = 1, limit = 10) {
+  return useQuery({
+    queryKey: queryKeys.payments(page, limit),
+    queryFn: async (): Promise<PaginatedResponse<PaymentResponse>> => {
+      const response = await fetch(`/api/payments?page=${page}&limit=${limit}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch payments: ${response.statusText}`);
+      }
+      return response.json();
+    },
+    staleTime: CACHE_DURATIONS.transactions, // Use same duration as transactions
   });
 }
 

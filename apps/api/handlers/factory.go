@@ -196,7 +196,7 @@ func CreateDefaultFactory(
 	invoiceService := services.NewInvoiceService(db, logger, taxService, discountService, gasSponsorshipService, currencyService, exchangeRateService)
 	productService := services.NewProductService(db)
 	customerService := services.NewCustomerService(db)
-	subscriptionService := services.NewSubscriptionService(db, delegationClient, paymentService, customerService)
+	subscriptionService := services.NewSubscriptionService(db, delegationClient, paymentService, customerService, invoiceService)
 	workspaceService := services.NewWorkspaceService(db)
 	accountService := services.NewAccountService(db)
 	userService := services.NewUserService(db)
@@ -384,6 +384,15 @@ func (f *HandlerFactory) NewNetworkHandler() *NetworkHandler {
 	return NewNetworkHandler(
 		f.commonServices,
 		f.networkService,
+	)
+}
+
+// NewPaymentsHandler creates a new payments handler
+func (f *HandlerFactory) NewPaymentsHandler() *PaymentsHandler {
+	return NewPaymentsHandler(
+		f.commonServices,
+		f.paymentService,
+		f.logger,
 	)
 }
 

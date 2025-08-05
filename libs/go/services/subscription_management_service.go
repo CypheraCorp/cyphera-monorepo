@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
@@ -96,7 +95,6 @@ func (sms *SubscriptionManagementService) UpgradeSubscription(
 	// Create schedule change record
 	fromLineItems, _ := json.Marshal(map[string]interface{}{
 		"product_id": sub.ProductID,
-		"price_id":   sub.PriceID,
 		"amount":     oldTotal,
 	})
 	toLineItems, _ := json.Marshal(newLineItems)
@@ -104,7 +102,7 @@ func (sms *SubscriptionManagementService) UpgradeSubscription(
 
 	scheduleChange, err := sms.db.CreateScheduleChange(ctx, db.CreateScheduleChangeParams{
 		SubscriptionID:       subscriptionID,
-		ChangeType:           "upgrade",
+		ChangeType:           db.SubscriptionChangeTypeUpgrade,
 		ScheduledFor:         pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		FromLineItems:        fromLineItems,
 		ToLineItems:          toLineItems,
@@ -123,7 +121,7 @@ func (sms *SubscriptionManagementService) UpgradeSubscription(
 	// In real implementation, would update line items properly
 	_, err = sms.db.UpdateSubscriptionForUpgrade(ctx, db.UpdateSubscriptionForUpgradeParams{
 		ID:                 subscriptionID,
-		PriceID:            sub.PriceID, // Would be updated in real implementation
+		ProductID:          sub.ProductID, // Would be updated in real implementation
 		TotalAmountInCents: int32(newTotal),
 	})
 	if err != nil {
@@ -184,6 +182,27 @@ func (sms *SubscriptionManagementService) UpgradeSubscription(
 		sms.logger.Error("Failed to update schedule change status", zap.Error(err))
 	}
 
+	// Create subscription event for upgrade
+	eventMetadata, _ := json.Marshal(map[string]interface{}{
+		"change_type":      "upgrade",
+		"old_amount":       oldTotal,
+		"new_amount":       newTotal,
+		"proration_amount": proration.NetAmount,
+		"reason":           reason,
+	})
+	_, err = sms.db.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+		SubscriptionID:  subscriptionID,
+		EventType:       db.SubscriptionEventTypeUpgrade,
+		TransactionHash: pgtype.Text{Valid: false},
+		AmountInCents:   int32(proration.NetAmount),
+		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		ErrorMessage:    pgtype.Text{Valid: false},
+		Metadata:        eventMetadata,
+	})
+	if err != nil {
+		sms.logger.Error("Failed to create subscription upgrade event", zap.Error(err))
+	}
+
 	// Send confirmation email
 	if sms.emailService != nil {
 		if err := sms.sendSubscriptionChangeEmail(ctx, sub, "upgrade", oldTotal, newTotal, proration.NetAmount); err != nil {
@@ -219,19 +238,18 @@ func (sms *SubscriptionManagementService) DowngradeSubscription(
 	}
 
 	// Schedule for end of period
-	scheduleResult := sms.calculator.ScheduleDowngrade(sub.CurrentPeriodEnd.Time, constants.DowngradeAction)
+	scheduleResult := sms.calculator.ScheduleDowngrade(sub.CurrentPeriodEnd.Time, string(db.SubscriptionChangeTypeDowngrade))
 
 	// Create schedule change record
 	fromLineItems, _ := json.Marshal(map[string]interface{}{
 		"product_id": sub.ProductID,
-		"price_id":   sub.PriceID,
 		"amount":     sub.TotalAmountInCents,
 	})
 	toLineItems, _ := json.Marshal(newLineItems)
 
 	_, err = sms.db.CreateScheduleChange(ctx, db.CreateScheduleChangeParams{
 		SubscriptionID:       subscriptionID,
-		ChangeType:           constants.DowngradeAction,
+		ChangeType:           db.SubscriptionChangeTypeDowngrade,
 		ScheduledFor:         pgtype.Timestamptz{Time: scheduleResult.ScheduledFor, Valid: true},
 		FromLineItems:        fromLineItems,
 		ToLineItems:          toLineItems,
@@ -246,11 +264,31 @@ func (sms *SubscriptionManagementService) DowngradeSubscription(
 		return fmt.Errorf("failed to create schedule change: %w", err)
 	}
 
+	// Create subscription event for downgrade
+	newTotal := sms.calculateNewTotal(ctx, newLineItems)
+	eventMetadata, _ := json.Marshal(map[string]interface{}{
+		"action":         "downgraded",
+		"old_amount":     sub.TotalAmountInCents,
+		"new_amount":     newTotal,
+		"effective_date": scheduleResult.ScheduledFor,
+		"reason":         reason,
+	})
+	_, err = sms.db.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+		SubscriptionID:  subscriptionID,
+		EventType:       db.SubscriptionEventTypeDowngrade,
+		TransactionHash: pgtype.Text{Valid: false},
+		AmountInCents:   int32(newTotal),
+		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		ErrorMessage:    pgtype.Text{Valid: false},
+		Metadata:        eventMetadata,
+	})
+	if err != nil {
+		sms.logger.Error("Failed to create subscription downgrade event", zap.Error(err))
+	}
+
 	// Send confirmation email
 	if sms.emailService != nil {
-		// Calculate new total for email
-		newTotal := sms.calculateNewTotal(ctx, newLineItems)
-		if err := sms.sendSubscriptionChangeEmail(ctx, sub, constants.DowngradeAction, int64(sub.TotalAmountInCents), newTotal, 0); err != nil {
+		if err := sms.sendSubscriptionChangeEmail(ctx, sub, string(db.SubscriptionChangeTypeDowngrade), int64(sub.TotalAmountInCents), newTotal, 0); err != nil {
 			sms.logger.Error("Failed to send downgrade email", zap.Error(err))
 		}
 	}
@@ -297,7 +335,7 @@ func (sms *SubscriptionManagementService) CancelSubscription(
 	metadata, _ := json.Marshal(map[string]string{"feedback": feedback})
 	_, err = sms.db.CreateScheduleChange(ctx, db.CreateScheduleChangeParams{
 		SubscriptionID:       subscriptionID,
-		ChangeType:           constants.CancelAction,
+		ChangeType:           db.SubscriptionChangeTypeCancel,
 		ScheduledFor:         pgtype.Timestamptz{Time: cancelDate, Valid: true},
 		FromLineItems:        []byte("{}"),
 		ToLineItems:          []byte("{}"),
@@ -312,9 +350,31 @@ func (sms *SubscriptionManagementService) CancelSubscription(
 		sms.logger.Error("Failed to create schedule change for cancellation", zap.Error(err))
 	}
 
+	// Create subscription event for cancellation
+	eventMetadata, _ := json.Marshal(map[string]interface{}{
+		"action":      "cancel",
+		"cancel_date": cancelDate,
+		"reason":      reason,
+		"feedback":    feedback,
+	})
+	_, err = sms.db.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+		SubscriptionID:  subscriptionID,
+		EventType:       db.SubscriptionEventTypeCancel,
+		TransactionHash: pgtype.Text{Valid: false},
+		AmountInCents:   0,
+		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		ErrorMessage:    pgtype.Text{Valid: false},
+		Metadata:        eventMetadata,
+	})
+	if err != nil {
+		sms.logger.Error("Failed to create cancellation event",
+			zap.String("subscription_id", subscriptionID.String()),
+			zap.Error(err))
+	}
+
 	// Send confirmation email
 	if sms.emailService != nil {
-		if err := sms.sendSubscriptionChangeEmail(ctx, sub, constants.CancelAction, int64(sub.TotalAmountInCents), 0, 0); err != nil {
+		if err := sms.sendSubscriptionChangeEmail(ctx, sub, string(db.SubscriptionChangeTypeCancel), int64(sub.TotalAmountInCents), 0, 0); err != nil {
 			sms.logger.Error("Failed to send cancellation email", zap.Error(err))
 		}
 	}
@@ -369,7 +429,7 @@ func (sms *SubscriptionManagementService) PauseSubscription(
 	if pauseUntil != nil {
 		_, err = sms.db.CreateScheduleChange(ctx, db.CreateScheduleChangeParams{
 			SubscriptionID:       subscriptionID,
-			ChangeType:           constants.ResumeAction,
+			ChangeType:           db.SubscriptionChangeTypeResume,
 			ScheduledFor:         pgtype.Timestamptz{Time: *pauseUntil, Valid: true},
 			FromLineItems:        []byte("{}"),
 			ToLineItems:          []byte("{}"),
@@ -405,6 +465,31 @@ func (sms *SubscriptionManagementService) PauseSubscription(
 		if err != nil {
 			sms.logger.Error("Failed to create pause credit record", zap.Error(err))
 		}
+	}
+
+	// Create subscription event for pause
+	eventMetadata, _ := json.Marshal(map[string]interface{}{
+		"action":         "pause",
+		"pause_until":    pauseUntil,
+		"credit_amount":  pauseCredit.CreditAmount,
+		"days_total":     pauseCredit.DaysTotal,
+		"days_used":      pauseCredit.DaysUsed,
+		"days_remaining": pauseCredit.DaysRemaining,
+		"reason":         reason,
+	})
+	_, err = sms.db.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+		SubscriptionID:  subscriptionID,
+		EventType:       db.SubscriptionEventTypePause,
+		TransactionHash: pgtype.Text{Valid: false},
+		AmountInCents:   int32(pauseCredit.CreditAmount),
+		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		ErrorMessage:    pgtype.Text{Valid: false},
+		Metadata:        eventMetadata,
+	})
+	if err != nil {
+		sms.logger.Error("Failed to create pause event",
+			zap.String("subscription_id", subscriptionID.String()),
+			zap.Error(err))
 	}
 
 	// Send confirmation email
@@ -471,9 +556,30 @@ func (sms *SubscriptionManagementService) ResumeSubscription(
 			zap.Error(err))
 	}
 
+	// Create subscription event for resume
+	eventMetadata, _ := json.Marshal(map[string]interface{}{
+		"action":           "resume",
+		"new_period_start": newPeriodStart,
+		"new_period_end":   newPeriodEnd,
+	})
+	_, err = sms.db.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+		SubscriptionID:  subscriptionID,
+		EventType:       db.SubscriptionEventTypeResume,
+		TransactionHash: pgtype.Text{Valid: false},
+		AmountInCents:   sub.TotalAmountInCents,
+		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		ErrorMessage:    pgtype.Text{Valid: false},
+		Metadata:        eventMetadata,
+	})
+	if err != nil {
+		sms.logger.Error("Failed to create resume event",
+			zap.String("subscription_id", subscriptionID.String()),
+			zap.Error(err))
+	}
+
 	// Send confirmation email
 	if sms.emailService != nil {
-		if err := sms.sendSubscriptionChangeEmail(ctx, sub, constants.ResumeAction, 0, int64(sub.TotalAmountInCents), 0); err != nil {
+		if err := sms.sendSubscriptionChangeEmail(ctx, sub, string(db.SubscriptionChangeTypeResume), 0, int64(sub.TotalAmountInCents), 0); err != nil {
 			sms.logger.Error("Failed to send resume email", zap.Error(err))
 		}
 	}
@@ -503,7 +609,7 @@ func (sms *SubscriptionManagementService) ReactivateCancelledSubscription(
 	changes, err := sms.db.GetSubscriptionScheduledChanges(ctx, subscriptionID)
 	if err == nil {
 		for _, change := range changes {
-			if change.ChangeType == constants.CancelAction && change.Status == "scheduled" {
+			if change.ChangeType == db.SubscriptionChangeTypeCancel && change.Status == "scheduled" {
 				_, err = sms.db.CancelScheduledChange(ctx, change.ID)
 				if err != nil {
 					sms.logger.Error("Failed to cancel scheduled change", zap.Error(err))
@@ -512,11 +618,32 @@ func (sms *SubscriptionManagementService) ReactivateCancelledSubscription(
 		}
 	}
 
-	// Send confirmation email
-	if sms.emailService != nil {
-		// Get subscription details for email
-		sub, err := sms.db.GetSubscription(ctx, subscriptionID)
-		if err == nil {
+	// Get subscription details for event and email
+	sub, err := sms.db.GetSubscription(ctx, subscriptionID)
+	if err != nil {
+		sms.logger.Error("Failed to get subscription for reactivation event", zap.Error(err))
+	} else {
+		// Create subscription event for reactivation
+		eventMetadata, _ := json.Marshal(map[string]interface{}{
+			"action": "reactivate",
+		})
+		_, err = sms.db.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+			SubscriptionID:  subscriptionID,
+			EventType:       db.SubscriptionEventTypeReactivate,
+			TransactionHash: pgtype.Text{Valid: false},
+			AmountInCents:   sub.TotalAmountInCents,
+			OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
+			ErrorMessage:    pgtype.Text{Valid: false},
+			Metadata:        eventMetadata,
+		})
+		if err != nil {
+			sms.logger.Error("Failed to create reactivation event",
+				zap.String("subscription_id", subscriptionID.String()),
+				zap.Error(err))
+		}
+
+		// Send confirmation email
+		if sms.emailService != nil {
 			if err := sms.sendSubscriptionChangeEmail(ctx, sub, "reactivate", int64(sub.TotalAmountInCents), int64(sub.TotalAmountInCents), 0); err != nil {
 				sms.logger.Error("Failed to send reactivation email", zap.Error(err))
 			}
@@ -549,6 +676,11 @@ func (sms *SubscriptionManagementService) PreviewChange(
 		NewAmount:     newAmount,
 	}
 
+	// Set next interval information
+	nextIntervalStart := sub.CurrentPeriodEnd.Time
+	preview.NextIntervalStart = &nextIntervalStart
+	preview.NextIntervalAmount = newAmount
+
 	switch changeType {
 	case "upgrade":
 		proration := sms.calculator.CalculateUpgradeProration(
@@ -562,15 +694,35 @@ func (sms *SubscriptionManagementService) PreviewChange(
 		preview.ImmediateCharge = proration.NetAmount
 		preview.EffectiveDate = time.Now()
 		preview.ProrationDetails = proration
-		preview.Message = sms.calculator.FormatProrationExplanation(proration)
 
-	case constants.DowngradeAction:
-		preview.EffectiveDate = sub.CurrentPeriodEnd.Time
-		preview.Message = "Downgrade will take effect at the end of your current billing period. You'll continue with your current plan until then."
+		// Enhanced message showing full timeline
+		preview.Message = fmt.Sprintf(
+			"You'll be charged %s today for the upgrade (prorated for %d days remaining). Starting %s, you'll pay %s per %s.",
+			formatCents(proration.NetAmount),
+			proration.DaysRemaining,
+			nextIntervalStart.Format("Jan 2, 2006"),
+			formatCents(newAmount),
+			"month", // In production, get from product interval type
+		)
 
-	case constants.CancelAction:
+	case string(db.SubscriptionChangeTypeDowngrade):
 		preview.EffectiveDate = sub.CurrentPeriodEnd.Time
-		preview.Message = "Your subscription will be cancelled at the end of your current billing period. You'll have access until then."
+		preview.Message = fmt.Sprintf(
+			"You'll continue paying %s until %s. Starting %s, you'll pay %s per %s.",
+			formatCents(currentAmount),
+			sub.CurrentPeriodEnd.Time.Format("Jan 2, 2006"),
+			nextIntervalStart.Format("Jan 2, 2006"),
+			formatCents(newAmount),
+			"month", // In production, get from product interval type
+		)
+
+	case string(db.SubscriptionChangeTypeCancel):
+		preview.EffectiveDate = sub.CurrentPeriodEnd.Time
+		preview.NextIntervalAmount = 0
+		preview.Message = fmt.Sprintf(
+			"Your subscription will be cancelled at the end of your current billing period (%s). You'll have access until then.",
+			sub.CurrentPeriodEnd.Time.Format("Jan 2, 2006"),
+		)
 	}
 
 	return preview, nil
@@ -599,11 +751,11 @@ func (sms *SubscriptionManagementService) ProcessScheduledChanges(ctx context.Co
 		// Process based on change type
 		var processErr error
 		switch change.ChangeType {
-		case constants.DowngradeAction:
+		case db.SubscriptionChangeTypeDowngrade:
 			processErr = sms.executeDowngrade(ctx, change)
-		case constants.CancelAction:
+		case db.SubscriptionChangeTypeCancel:
 			processErr = sms.executeCancellation(ctx, change)
-		case constants.ResumeAction:
+		case db.SubscriptionChangeTypeResume:
 			processErr = sms.executeResume(ctx, change)
 		}
 
@@ -611,12 +763,12 @@ func (sms *SubscriptionManagementService) ProcessScheduledChanges(ctx context.Co
 		if processErr != nil {
 			sms.logger.Error("Failed to process scheduled change",
 				zap.String("change_id", change.ID.String()),
-				zap.String("change_type", change.ChangeType),
+				zap.String("change_type", string(change.ChangeType)),
 				zap.Error(processErr))
 
 			_, updateErr := sms.db.UpdateScheduleChangeStatus(ctx, db.UpdateScheduleChangeStatusParams{
 				ID:           change.ID,
-				Status:       constants.FailedStatus,
+				Status:       "failed",
 				ErrorMessage: pgtype.Text{String: processErr.Error(), Valid: true},
 			})
 			if updateErr != nil {
@@ -642,6 +794,11 @@ func (sms *SubscriptionManagementService) ProcessScheduledChanges(ctx context.Co
 }
 
 // Helper methods
+
+// formatCents formats cents to a currency string
+func formatCents(cents int64) string {
+	return fmt.Sprintf("$%.2f", float64(cents)/100)
+}
 
 func (sms *SubscriptionManagementService) calculateNewTotal(ctx context.Context, lineItems []requests.LineItemUpdate) int64 {
 	// Simplified calculation - in real implementation would look up prices and calculate properly
@@ -758,7 +915,7 @@ func (sms *SubscriptionManagementService) sendSubscriptionChangeEmail(ctx contex
 			}(),
 			workspace.Name)
 
-	case constants.DowngradeAction:
+	case string(db.SubscriptionChangeTypeDowngrade):
 		subject = fmt.Sprintf("Subscription Downgrade Scheduled - %s", product.Name)
 		htmlBody = fmt.Sprintf(`
 <!DOCTYPE html>
@@ -795,7 +952,7 @@ func (sms *SubscriptionManagementService) sendSubscriptionChangeEmail(ctx contex
 </html>`,
 			customer.Name.String, product.Name, formatAmount(oldAmount), formatAmount(newAmount), workspace.Name)
 
-	case constants.CancelAction:
+	case string(db.SubscriptionChangeTypeCancel):
 		subject = fmt.Sprintf("Subscription Cancellation Scheduled - %s", product.Name)
 		htmlBody = fmt.Sprintf(`
 <!DOCTYPE html>
@@ -963,4 +1120,49 @@ func (sms *SubscriptionManagementService) sendSubscriptionChangeEmail(ctx contex
 	}
 
 	return sms.emailService.SendTransactionalEmail(ctx, params)
+}
+
+// ChangePrice handles intelligent price changes - upgrades immediately, downgrades at period end
+func (sms *SubscriptionManagementService) ChangePrice(ctx context.Context, subscriptionID uuid.UUID, newPriceCents int64) error {
+	// Get current subscription details
+	sub, err := sms.db.GetSubscription(ctx, subscriptionID)
+	if err != nil {
+		return fmt.Errorf("failed to get subscription: %w", err)
+	}
+
+	// Validate subscription can be changed
+	if sub.Status != db.SubscriptionStatusActive {
+		return fmt.Errorf("can only change price for active subscriptions, current status: %s", sub.Status)
+	}
+
+	// Get current price from total amount (this is simplified - in production would get from product)
+	currentPriceCents := int64(sub.TotalAmountInCents)
+
+	// Determine if this is an upgrade or downgrade
+	if newPriceCents > currentPriceCents {
+		// Upgrade - apply immediately
+		lineItems := []requests.LineItemUpdate{
+			{
+				Action:     "update",
+				ProductID:  sub.ProductID,
+				UnitAmount: newPriceCents,
+				Quantity:   1,
+			},
+		}
+		return sms.UpgradeSubscription(ctx, subscriptionID, lineItems, "Price increase")
+	} else if newPriceCents < currentPriceCents {
+		// Downgrade - schedule for next period
+		lineItems := []requests.LineItemUpdate{
+			{
+				Action:     "update",
+				ProductID:  sub.ProductID,
+				UnitAmount: newPriceCents,
+				Quantity:   1,
+			},
+		}
+		return sms.DowngradeSubscription(ctx, subscriptionID, lineItems, "Price decrease")
+	}
+
+	// No change
+	return fmt.Errorf("new price must be different from current price")
 }

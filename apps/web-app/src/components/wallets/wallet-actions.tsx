@@ -14,7 +14,16 @@ import { useRouter } from 'next/navigation';
 import type { NetworkWithTokensResponse } from '@/types/network';
 import dynamic from 'next/dynamic';
 
-// AddWalletDialog was removed - functionality moved elsewhere
+const AddWalletDialog = dynamic(
+  () =>
+    import('./add-wallet-dialog').then((mod) => ({
+      default: mod.AddWalletDialog,
+    })),
+  {
+    loading: () => null,
+    ssr: false,
+  }
+);
 
 const CreateCircleWalletDialog = dynamic(
   () =>
@@ -28,8 +37,8 @@ const CreateCircleWalletDialog = dynamic(
 );
 
 // Dynamically import lucide icons
-const MoreVertical = dynamic(
-  () => import('lucide-react').then((mod) => ({ default: mod.MoreVertical })),
+const Plus = dynamic(
+  () => import('lucide-react').then((mod) => ({ default: mod.Plus })),
   {
     loading: () => <div className="h-4 w-4 bg-muted animate-pulse rounded" />,
     ssr: false,
@@ -44,7 +53,13 @@ const CircleIcon = dynamic(
   }
 );
 
-// WalletIcon removed as Add Existing Wallet functionality is disabled
+const WalletIcon = dynamic(
+  () => import('lucide-react').then((mod) => ({ default: mod.Wallet })),
+  {
+    loading: () => <div className="h-4 w-4 bg-muted animate-pulse rounded" />,
+    ssr: false,
+  }
+);
 
 // Define props interface
 interface WalletActionsProps {
@@ -60,6 +75,7 @@ interface WalletActionsProps {
  */
 export function WalletActions({ networks }: WalletActionsProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [showAddWallet, setShowAddWallet] = useState(false);
   const [showCreateCircle, setShowCreateCircle] = useState(false);
   const router = useRouter();
 
@@ -82,14 +98,25 @@ export function WalletActions({ networks }: WalletActionsProps) {
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="icon">
             <Suspense fallback={<div className="h-4 w-4 bg-muted animate-pulse rounded" />}>
-              <MoreVertical className="h-4 w-4" />
+              <Plus className="h-4 w-4" />
             </Suspense>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Add Wallet</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {/* Add Existing Wallet functionality temporarily disabled */}
+          <DropdownMenuItem
+            onClick={() => {
+              setShowAddWallet(true);
+              setIsOpen(false);
+            }}
+            className="flex items-center cursor-pointer"
+          >
+            <Suspense fallback={<div className="mr-2 h-4 w-4 bg-muted animate-pulse rounded" />}>
+              <WalletIcon className="mr-2 h-4 w-4" />
+            </Suspense>
+            Add Existing Wallet
+          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
               setShowCreateCircle(true);
@@ -105,7 +132,15 @@ export function WalletActions({ networks }: WalletActionsProps) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* AddWalletDialog removed - connect wallet functionality moved elsewhere */}
+      {showAddWallet && (
+        <Suspense fallback={null}>
+          <AddWalletDialog
+            isOpen={showAddWallet}
+            onOpenChange={setShowAddWallet}
+            onWalletAdded={handleWalletCreated}
+          />
+        </Suspense>
+      )}
 
       {showCreateCircle && (
         <Suspense fallback={null}>

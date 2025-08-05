@@ -3,6 +3,7 @@ package responses
 // CustomerResponse represents the standardized API response for customer operations
 type CustomerResponse struct {
 	ID                 string                 `json:"id"`
+	NumID              int64                  `json:"num_id"`
 	Object             string                 `json:"object"`
 	ExternalID         string                 `json:"external_id,omitempty"`
 	Email              string                 `json:"email"`
@@ -11,6 +12,7 @@ type CustomerResponse struct {
 	Description        string                 `json:"description,omitempty"`
 	FinishedOnboarding bool                   `json:"finished_onboarding"`
 	Metadata           map[string]interface{} `json:"metadata,omitempty"`
+	TotalRevenue       int64                  `json:"total_revenue,omitempty"`
 	CreatedAt          int64                  `json:"created_at"`
 	UpdatedAt          int64                  `json:"updated_at"`
 }

@@ -70,7 +70,7 @@ CREATE TABLE prices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id UUID NOT NULL REFERENCES products(id),
     active BOOLEAN NOT NULL DEFAULT true,
-    type price_type NOT NULL, -- 'recurring' or 'one_off'
+    type price_type NOT NULL, -- 'recurring' or 'one_time'
     nickname TEXT,
     currency currency NOT NULL, -- 'USD', 'EUR'
     unit_amount_in_pennies INTEGER NOT NULL,
@@ -87,7 +87,7 @@ CREATE TABLE prices (
     deleted_at TIMESTAMP WITH TIME ZONE,
     CONSTRAINT prices_recurring_fields_check CHECK (
         (type = 'recurring' AND interval_type IS NOT NULL AND term_length IS NOT NULL AND term_length > 0) OR
-        (type = 'one_off' AND interval_type IS NULL AND term_length IS NULL)
+        (type = 'one_time' AND interval_type IS NULL AND term_length IS NULL)
     )
 );
 ```

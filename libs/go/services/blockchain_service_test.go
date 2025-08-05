@@ -694,7 +694,6 @@ func TestBlockchainService_EdgeCases(t *testing.T) {
 							WorkspaceID:    uuid.New(),
 							CustomerID:     uuid.New(),
 							ProductID:      uuid.New(),
-							PriceID:        uuid.New(),
 							ProductTokenID: productTokenID,
 							DelegationID:   uuid.New(),
 						}, nil).

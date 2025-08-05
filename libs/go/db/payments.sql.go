@@ -1036,6 +1036,63 @@ func (q *Queries) GetPaymentsBySubscription(ctx context.Context, arg GetPayments
 	return items, nil
 }
 
+const getPaymentsByTransactionHash = `-- name: GetPaymentsByTransactionHash :many
+SELECT id, workspace_id, invoice_id, subscription_id, subscription_event, customer_id, amount_in_cents, currency, status, payment_method, transaction_hash, network_id, token_id, crypto_amount, exchange_rate, has_gas_fee, gas_fee_usd_cents, gas_sponsored, external_payment_id, payment_provider, product_amount_cents, tax_amount_cents, gas_amount_cents, discount_amount_cents, initiated_at, completed_at, failed_at, error_message, metadata, created_at, updated_at FROM payments
+WHERE transaction_hash = $1
+`
+
+func (q *Queries) GetPaymentsByTransactionHash(ctx context.Context, transactionHash pgtype.Text) ([]Payment, error) {
+	rows, err := q.db.Query(ctx, getPaymentsByTransactionHash, transactionHash)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Payment{}
+	for rows.Next() {
+		var i Payment
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.InvoiceID,
+			&i.SubscriptionID,
+			&i.SubscriptionEvent,
+			&i.CustomerID,
+			&i.AmountInCents,
+			&i.Currency,
+			&i.Status,
+			&i.PaymentMethod,
+			&i.TransactionHash,
+			&i.NetworkID,
+			&i.TokenID,
+			&i.CryptoAmount,
+			&i.ExchangeRate,
+			&i.HasGasFee,
+			&i.GasFeeUsdCents,
+			&i.GasSponsored,
+			&i.ExternalPaymentID,
+			&i.PaymentProvider,
+			&i.ProductAmountCents,
+			&i.TaxAmountCents,
+			&i.GasAmountCents,
+			&i.DiscountAmountCents,
+			&i.InitiatedAt,
+			&i.CompletedAt,
+			&i.FailedAt,
+			&i.ErrorMessage,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPaymentsByWorkspace = `-- name: GetPaymentsByWorkspace :many
 SELECT id, workspace_id, invoice_id, subscription_id, subscription_event, customer_id, amount_in_cents, currency, status, payment_method, transaction_hash, network_id, token_id, crypto_amount, exchange_rate, has_gas_fee, gas_fee_usd_cents, gas_sponsored, external_payment_id, payment_provider, product_amount_cents, tax_amount_cents, gas_amount_cents, discount_amount_cents, initiated_at, completed_at, failed_at, error_message, metadata, created_at, updated_at FROM payments
 WHERE workspace_id = $1
@@ -1173,6 +1230,28 @@ func (q *Queries) GetUnreconciledPayments(ctx context.Context, arg GetUnreconcil
 		return nil, err
 	}
 	return items, nil
+}
+
+const hasPaymentsAfterDate = `-- name: HasPaymentsAfterDate :one
+SELECT EXISTS(
+    SELECT 1 FROM payments
+    WHERE workspace_id = $1
+    AND created_at > $2
+    AND status = 'succeeded'
+    AND deleted_at IS NULL
+) as has_recent_payments
+`
+
+type HasPaymentsAfterDateParams struct {
+	WorkspaceID uuid.UUID          `json:"workspace_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) HasPaymentsAfterDate(ctx context.Context, arg HasPaymentsAfterDateParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasPaymentsAfterDate, arg.WorkspaceID, arg.CreatedAt)
+	var has_recent_payments bool
+	err := row.Scan(&has_recent_payments)
+	return has_recent_payments, err
 }
 
 const linkPaymentToInvoice = `-- name: LinkPaymentToInvoice :one
@@ -1364,6 +1443,58 @@ type UpdatePaymentGasSponsorshipParams struct {
 
 func (q *Queries) UpdatePaymentGasSponsorship(ctx context.Context, arg UpdatePaymentGasSponsorshipParams) (Payment, error) {
 	row := q.db.QueryRow(ctx, updatePaymentGasSponsorship, arg.ID, arg.WorkspaceID, arg.GasSponsored)
+	var i Payment
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.InvoiceID,
+		&i.SubscriptionID,
+		&i.SubscriptionEvent,
+		&i.CustomerID,
+		&i.AmountInCents,
+		&i.Currency,
+		&i.Status,
+		&i.PaymentMethod,
+		&i.TransactionHash,
+		&i.NetworkID,
+		&i.TokenID,
+		&i.CryptoAmount,
+		&i.ExchangeRate,
+		&i.HasGasFee,
+		&i.GasFeeUsdCents,
+		&i.GasSponsored,
+		&i.ExternalPaymentID,
+		&i.PaymentProvider,
+		&i.ProductAmountCents,
+		&i.TaxAmountCents,
+		&i.GasAmountCents,
+		&i.DiscountAmountCents,
+		&i.InitiatedAt,
+		&i.CompletedAt,
+		&i.FailedAt,
+		&i.ErrorMessage,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updatePaymentInvoiceID = `-- name: UpdatePaymentInvoiceID :one
+UPDATE payments
+SET invoice_id = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, workspace_id, invoice_id, subscription_id, subscription_event, customer_id, amount_in_cents, currency, status, payment_method, transaction_hash, network_id, token_id, crypto_amount, exchange_rate, has_gas_fee, gas_fee_usd_cents, gas_sponsored, external_payment_id, payment_provider, product_amount_cents, tax_amount_cents, gas_amount_cents, discount_amount_cents, initiated_at, completed_at, failed_at, error_message, metadata, created_at, updated_at
+`
+
+type UpdatePaymentInvoiceIDParams struct {
+	ID        uuid.UUID   `json:"id"`
+	InvoiceID pgtype.UUID `json:"invoice_id"`
+}
+
+func (q *Queries) UpdatePaymentInvoiceID(ctx context.Context, arg UpdatePaymentInvoiceIDParams) (Payment, error) {
+	row := q.db.QueryRow(ctx, updatePaymentInvoiceID, arg.ID, arg.InvoiceID)
 	var i Payment
 	err := row.Scan(
 		&i.ID,

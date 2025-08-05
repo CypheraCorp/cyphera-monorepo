@@ -66,9 +66,6 @@ export class CypheraAPI {
     if (context.workspace_id) {
       headers['X-Workspace-ID'] = context.workspace_id;
     }
-    if (context.user_id) {
-      headers['X-User-ID'] = context.user_id;
-    }
 
     // Add correlation ID support
     headers = createHeadersWithCorrelationId(headers);
@@ -173,9 +170,11 @@ export class CypheraAPI {
         errorData?.message ||
         `API Error: ${response.status}`;
       
-      const error = {
+      const error: any = {
         error: message,
         correlation_id: correlationId,
+        status: response.status,
+        response: { status: response.status },
       };
       
       logErrorWithCorrelation('API Error Response', error, {

@@ -464,18 +464,13 @@ func (rp *RedemptionProcessor) createPaymentFromRedemption(
 		return fmt.Errorf("failed to get customer: %w", err)
 	}
 
-	// Get the price for the subscription
-	price, err := rp.dbQueries.GetPrice(ctx, subscription.PriceID)
-	if err != nil {
-		return fmt.Errorf("failed to get price: %w", err)
-	}
+	// Product already contains pricing information
 
 	// Create payment from subscription event parameters
 	params := params.CreatePaymentFromSubscriptionEventParams{
 		SubscriptionEvent: &event,
 		Subscription:      &subscription,
 		Product:           &product,
-		Price:             &price,
 		Customer:          &customer,
 		TransactionHash:   txHash,
 		NetworkID:         network.ID,

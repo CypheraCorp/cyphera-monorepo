@@ -258,24 +258,28 @@ INSERT INTO invoices (
     workspace_id,
     customer_id,
     subscription_id,
+    external_id,
     invoice_number,
     status,
     amount_due,
+    amount_remaining,
     currency,
     subtotal_cents,
     discount_cents,
     tax_amount_cents,
     tax_details,
     due_date,
+    created_date,
     payment_link_id,
     delegation_address,
     qr_code_data,
     customer_tax_id,
     customer_jurisdiction_id,
     reverse_charge_applies,
-    metadata
+    metadata,
+    notes
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+    $1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, $14, $15, $16, $17, $18, $19, $20, $21
 ) RETURNING *;
 
 -- name: UpdateInvoiceDetails :one
@@ -340,4 +344,182 @@ WHERE workspace_id = $1
 -- name: GetInvoicesByPaymentLink :many
 SELECT * FROM invoices
 WHERE workspace_id = $1 AND payment_link_id = $2 AND deleted_at IS NULL
-ORDER BY created_at DESC; 
+ORDER BY created_at DESC;
+
+-- name: GetSubscriptionWithLineItems :many
+SELECT 
+    s.id as subscription_id,
+    s.workspace_id,
+    s.customer_id,
+    s.status as subscription_status,
+    s.current_period_start,
+    s.current_period_end,
+    s.next_redemption_date,
+    s.total_amount_in_cents,
+    sli.id as line_item_id,
+    sli.product_id,
+    sli.quantity,
+    sli.unit_amount_in_pennies,
+    sli.total_amount_in_pennies,
+    sli.line_item_type,
+    sli.currency as line_item_currency,
+    sli.price_type,
+    sli.interval_type as line_item_interval_type,
+    p.name as product_name,
+    p.description as product_description,
+    p.product_type,
+    p.interval_type as product_interval_type,
+    p.term_length
+FROM subscriptions s
+JOIN subscription_line_items sli ON s.id = sli.subscription_id
+LEFT JOIN products p ON sli.product_id = p.id
+WHERE s.id = $1 
+AND sli.is_active = true
+ORDER BY 
+    CASE WHEN sli.line_item_type = 'base' THEN 0 ELSE 1 END,
+    sli.created_at;
+
+-- name: CheckInvoiceExistsForPeriod :one
+SELECT EXISTS (
+    SELECT 1 FROM invoices i
+    JOIN invoice_line_items ili ON i.id = ili.invoice_id
+    WHERE i.subscription_id = $1 
+    AND i.workspace_id = $2
+    AND ili.period_start = $3
+    AND ili.period_end = $4
+    AND i.deleted_at IS NULL
+    AND i.status != 'void'
+);
+
+-- name: GetSubscriptionForInvoicing :one
+SELECT 
+    s.*,
+    c.id as cust_id,
+    c.name as customer_name,
+    c.email as customer_email,
+    c.is_business,
+    c.business_name,
+    c.tax_id,
+    c.billing_country,
+    c.billing_state,
+    c.billing_city,
+    c.billing_postal_code,
+    cw.wallet_address as customer_wallet_address,
+    p.wallet_id as merchant_wallet_id,
+    w.wallet_address as merchant_wallet_address
+FROM subscriptions s
+JOIN customers c ON s.customer_id = c.id
+LEFT JOIN customer_wallets cw ON s.customer_wallet_id = cw.id
+JOIN products p ON s.product_id = p.id
+LEFT JOIN wallets w ON p.wallet_id = w.id
+WHERE s.id = $1
+AND s.deleted_at IS NULL;
+
+-- name: VoidInvoice :one
+UPDATE invoices SET
+    status = 'void',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND workspace_id = $2 
+AND status IN ('draft', 'open')
+AND deleted_at IS NULL
+RETURNING *;
+
+-- name: MarkInvoicePaid :one
+UPDATE invoices SET
+    status = 'paid',
+    amount_paid = amount_due,
+    amount_remaining = 0,
+    paid_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND workspace_id = $2 
+AND status = 'open'
+AND deleted_at IS NULL
+RETURNING *;
+
+-- name: GetPendingInvoicesForGeneration :many
+SELECT DISTINCT
+    s.id as subscription_id,
+    s.workspace_id,
+    s.customer_id,
+    s.next_redemption_date,
+    s.current_period_end,
+    s.total_amount_in_cents,
+    sli.currency
+FROM subscriptions s
+JOIN subscription_line_items sli ON s.id = sli.subscription_id AND sli.line_item_type = 'base' AND sli.is_active = true
+WHERE s.status = 'active'
+AND s.next_redemption_date <= $1  -- Within look-ahead period
+AND s.deleted_at IS NULL
+AND NOT EXISTS (
+    SELECT 1 FROM invoices i
+    WHERE i.subscription_id = s.id
+    AND i.status != 'void'
+    AND i.created_at >= s.current_period_start
+    AND i.deleted_at IS NULL
+)
+ORDER BY s.next_redemption_date;
+
+-- name: UpdateInvoiceStatus :one
+UPDATE invoices SET
+    status = $3,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: UpdateInvoiceNotes :one
+UPDATE invoices SET
+    notes = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: UpdateInvoiceMetadata :one
+UPDATE invoices SET
+    metadata = metadata || sqlc.arg(metadata)::jsonb,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id) AND deleted_at IS NULL
+RETURNING *;
+
+-- name: GetSubscriptionsForBulkInvoicing :many
+SELECT 
+    s.id,
+    s.workspace_id,
+    s.customer_id,
+    s.status,
+    s.current_period_start,
+    s.current_period_end,
+    s.next_redemption_date,
+    s.total_amount_in_cents,
+    s.currency,
+    c.email as customer_email,
+    c.name as customer_name
+FROM subscriptions s
+JOIN customers c ON s.customer_id = c.id
+WHERE s.workspace_id = $1
+    AND s.status IN ('active', 'trialing')
+    AND s.current_period_end <= $2
+    AND NOT EXISTS (
+        SELECT 1 FROM invoices i
+        WHERE i.subscription_id = s.id
+        AND i.period_start = s.current_period_start
+        AND i.period_end = s.current_period_end
+        AND i.status != 'void'
+    )
+ORDER BY s.current_period_end ASC
+LIMIT $3;
+
+-- name: GetInvoiceStatsByWorkspace :one
+SELECT 
+    COUNT(*) FILTER (WHERE status = 'draft') as draft_count,
+    COUNT(*) FILTER (WHERE status = 'open') as open_count,
+    COUNT(*) FILTER (WHERE status = 'paid') as paid_count,
+    COUNT(*) FILTER (WHERE status = 'void') as void_count,
+    COUNT(*) FILTER (WHERE status = 'uncollectible') as uncollectible_count,
+    COUNT(*) as total_count,
+    COALESCE(SUM(amount_due) FILTER (WHERE status = 'open'), 0) as total_outstanding_cents,
+    COALESCE(SUM(amount_paid) FILTER (WHERE status = 'paid'), 0) as total_paid_cents,
+    COALESCE(SUM(amount_due) FILTER (WHERE status = 'uncollectible'), 0) as total_uncollectible_cents
+FROM invoices
+WHERE workspace_id = $1
+    AND created_at >= $2
+    AND created_at <= $3; 

@@ -42,45 +42,10 @@ export interface CreateProductTokenWithoutIdRequest {
 }
 
 /**
- * Request payload for updating a product token (existing, assumed to be aligned or separately handled)
+ * Request payload for updating a product token
  */
 export interface UpdateProductTokenRequest {
   active: boolean;
-}
-
-/**
- * Represents a price object in API responses
- */
-export interface PriceResponse {
-  id: string;
-  object: string;
-  product_id: string;
-  active: boolean;
-  type: string;
-  nickname?: string;
-  currency: string;
-  unit_amount_in_pennies: number;
-  interval_type?: string;
-  interval_count?: number;
-  term_length?: number;
-  metadata?: Record<string, unknown> | null; // json.RawMessage can be null
-  created_at: number;
-  updated_at: number;
-}
-
-/**
- * Request payload for creating a new price
- */
-export interface CreatePriceRequest {
-  active: boolean;
-  type: string;
-  nickname?: string; // Not omitempty in Go struct -> make optional
-  currency: string;
-  unit_amount_in_pennies: number;
-  interval_type?: string; // Not omitempty in Go struct -> make optional
-  interval_count?: number; // Not omitempty in Go struct -> make optional
-  term_length?: number; // Not omitempty in Go struct -> make optional
-  metadata?: Record<string, unknown> | null; // json.RawMessage can be null
 }
 
 /**
@@ -99,8 +64,16 @@ export interface ProductResponse {
   metadata?: Record<string, unknown> | null; // json.RawMessage can be null
   created_at: number;
   updated_at: number;
-  prices?: PriceResponse[];
   product_tokens?: ProductTokenResponse[];
+  // Embedded price fields
+  product_type?: string;
+  product_group?: string;
+  price_type?: string;
+  currency?: string;
+  unit_amount_in_pennies?: number;
+  interval_type?: string;
+  term_length?: number;
+  available_addons?: ProductAddonResponse[];
 }
 
 /**
@@ -115,8 +88,18 @@ export interface CreateProductRequest {
   url?: string;
   active: boolean;
   metadata?: Record<string, unknown> | null; // json.RawMessage can be null
-  prices: CreatePriceRequest[]; // Required, has dive binding
   product_tokens?: CreateProductTokenWithoutIdRequest[];
+  // Embedded price fields (now part of product)
+  product_type?: string;
+  product_group?: string;
+  price_type: string;
+  currency: string;
+  unit_amount_in_pennies: number;
+  interval_type?: string;
+  term_length?: number;
+  price_nickname?: string;
+  price_external_id?: string;
+  payment_provider?: string;
 }
 
 /**
@@ -167,7 +150,7 @@ export interface GetPublicProductByPriceIdParams {
 }
 
 /**
- * Public Product Response from the API
+ * Public Product Response from the API with embedded pricing
  */
 export interface PublicProductResponse {
   id: string;
@@ -179,10 +162,18 @@ export interface PublicProductResponse {
   image_url?: string;
   url?: string;
   product_tokens?: PublicProductTokenResponse[];
-  price: PriceResponse; // Assuming PriceResponse is already defined in this file
   smart_account_address?: string;
   smart_account_explorer_url?: string;
   smart_account_network?: string;
+  // Embedded price fields
+  product_type?: string;
+  product_group?: string;
+  price_type: string;
+  currency: string;
+  unit_amount_in_pennies: number;
+  interval_type?: string;
+  term_length?: number;
+  available_addons?: ProductAddonResponse[];
 }
 
 /**
@@ -192,4 +183,65 @@ export interface PublishProductResponse {
   message: string;
   cyphera_product_id: string;
   cyphera_product_token_id: string;
+}
+
+/**
+ * Product addon relationship response
+ */
+export interface ProductAddonRelationshipResponse {
+  id: string;
+  object: string;
+  base_product_id: string;
+  addon_product_id: string;
+  is_required: boolean;
+  max_quantity?: number | null;
+  min_quantity: number;
+  display_order: number;
+  metadata?: Record<string, unknown> | null;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * Product addon response with full product details
+ */
+export interface ProductAddonResponse extends ProductAddonRelationshipResponse {
+  addon_product: ProductResponse;
+}
+
+/**
+ * Product with available addons
+ */
+export interface ProductWithAddonsResponse extends ProductResponse {
+  available_addons?: ProductAddonResponse[];
+}
+
+/**
+ * Request payload for creating a product addon relationship
+ */
+export interface CreateProductAddonRelationshipRequest {
+  addon_product_id: string;
+  is_required?: boolean;
+  max_quantity?: number | null;
+  min_quantity?: number;
+  display_order?: number;
+  metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Request payload for updating a product addon relationship
+ */
+export interface UpdateProductAddonRelationshipRequest {
+  is_required?: boolean;
+  max_quantity?: number | null;
+  min_quantity?: number;
+  display_order?: number;
+  metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Request payload for bulk setting product addons
+ */
+export interface BulkSetProductAddonsRequest {
+  addons: CreateProductAddonRelationshipRequest[];
 }

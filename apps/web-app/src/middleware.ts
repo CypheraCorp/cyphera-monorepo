@@ -72,7 +72,7 @@ export async function middleware(request: NextRequest) {
   const hasCustomerSession = session && isCustomerSession(session);
 
   // Check route types
-  const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/public/prices');
+  const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/public/prices') || pathname.startsWith('/pay/');
   const isMerchantProtectedRoute = merchantProtectedRoutes.some((route) =>
     pathname.startsWith(route)
   );
@@ -138,9 +138,9 @@ export async function middleware(request: NextRequest) {
       if (session.workspace_id) {
         response.headers.set('x-workspace-id', session.workspace_id);
       }
-      if (session.user_id) {
-        response.headers.set('x-user-id', session.user_id);
-      }
+      // if (session.user_id) {
+      //   response.headers.set('x-user-id', session.user_id);
+      // }
     }
 
     logger.debug('Session validated and headers injected for API route', {

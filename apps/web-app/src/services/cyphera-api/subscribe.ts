@@ -27,12 +27,13 @@ export class SubscribeAPI extends CypheraAPI {
    * Submits a subscription request to the Golang backend
    * @param productId - The ID of the product being subscribed to
    * @param productTokenId - The specific token ID for the product/network combination
+   * @param tokenAmount - The amount of tokens for the subscription
    * @param delegation - The signed delegation from the smart account
    * @param smartAccountAddress - The subscriber's smart account address
    * @returns Promise with the result of the subscription request
    */
   async submitSubscription(
-    priceId: string,
+    productId: string,
     productTokenId: string,
     tokenAmount: string,
     delegation: MetaMaskDelegationStruct,
@@ -41,7 +42,7 @@ export class SubscribeAPI extends CypheraAPI {
     // Validate input (keep existing checks)
     if (!delegation) throw new Error('Delegation is required for subscription');
     if (!smartAccountAddress) throw new Error('Smart account address is required for subscription');
-    if (!priceId) throw new Error('Price ID is required for subscription');
+    if (!productId) throw new Error('Product ID is required for subscription');
     if (!productTokenId) throw new Error('Product Token ID is required for subscription');
 
     try {
@@ -49,12 +50,12 @@ export class SubscribeAPI extends CypheraAPI {
       const subscribeRequest: SubscribeRequest = {
         subscriber_address: smartAccountAddress,
         product_token_id: productTokenId,
-        price_id: priceId,
+        product_id: productId,
         delegation: serializedDelegation,
         token_amount: tokenAmount,
       };
 
-      const apiEndpoint = `/admin/prices/${priceId}/subscribe`;
+      const apiEndpoint = `/admin/products/${productId}/subscribe`;
       const url = `${this.baseUrl}${apiEndpoint}`;
 
       const responseData = await this.fetchWithRateLimit<SubscriptionResponse>(url, {
@@ -70,10 +71,10 @@ export class SubscribeAPI extends CypheraAPI {
       };
     } catch (error) {
       // Log the error and return a structured failure response
-      logger.error(`Subscription submission failed for price ${priceId}:`, error);
+      logger.error(`Subscription submission failed for product ${productId}:`, error);
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to subscribe to price',
+        message: error instanceof Error ? error.message : 'Failed to subscribe to product',
       };
     }
   }

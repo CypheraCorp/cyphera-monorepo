@@ -38,6 +38,10 @@ WHERE id = $1 AND workspace_id = $2;
 SELECT * FROM payments
 WHERE transaction_hash = $1;
 
+-- name: GetPaymentsByTransactionHash :many
+SELECT * FROM payments
+WHERE transaction_hash = $1;
+
 -- name: GetPaymentsByWorkspace :many
 SELECT * FROM payments
 WHERE workspace_id = $1
@@ -157,6 +161,13 @@ WHERE workspace_id = $1
     AND external_payment_id = $2
     AND payment_provider = $3;
 
+-- name: UpdatePaymentInvoiceID :one
+UPDATE payments
+SET invoice_id = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING *;
+
 -- name: CreatePaymentBatch :copyfrom
 INSERT INTO payments (
     workspace_id,
@@ -230,3 +241,12 @@ SET
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2
 RETURNING *;
+
+-- name: HasPaymentsAfterDate :one
+SELECT EXISTS(
+    SELECT 1 FROM payments
+    WHERE workspace_id = $1
+    AND created_at > $2
+    AND status = 'succeeded'
+    AND deleted_at IS NULL
+) as has_recent_payments;

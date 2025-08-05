@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
 
-	"github.com/cyphera/cyphera-api/libs/go/constants"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 )
@@ -237,19 +236,34 @@ func (s *DunningService) executeFinalAction(ctx context.Context, campaign *db.Du
 	case "cancel":
 		// Cancel the subscription associated with the campaign
 		if campaign.SubscriptionID.Valid {
-			s.logger.Info("Cancelling subscription due to failed dunning campaign",
+			s.logger.Info("Scheduling subscription cancellation due to failed dunning campaign",
 				zap.String("campaign_id", campaign.ID.String()),
 				zap.String("subscription_id", uuid.UUID(campaign.SubscriptionID.Bytes).String()))
 
-			// Schedule cancellation for end of period (give customer benefit of their paid period)
-			_, err := s.queries.ScheduleSubscriptionCancellation(ctx, db.ScheduleSubscriptionCancellationParams{
+			// Get subscription to find the current period end
+			subscription, err := s.queries.GetSubscription(ctx, campaign.SubscriptionID.Bytes)
+			if err != nil {
+				return fmt.Errorf("failed to get subscription: %w", err)
+			}
+
+			// Schedule cancellation for end of current period (give customer benefit of their paid period)
+			cancelAt := time.Now()
+			if subscription.CurrentPeriodEnd.Valid {
+				cancelAt = subscription.CurrentPeriodEnd.Time
+			}
+
+			_, err = s.queries.ScheduleSubscriptionCancellation(ctx, db.ScheduleSubscriptionCancellationParams{
 				ID:                 campaign.SubscriptionID.Bytes,
-				CancelAt:           pgtype.Timestamptz{Time: time.Now(), Valid: true}, // Will be processed by scheduled changes processor
+				CancelAt:           pgtype.Timestamptz{Time: cancelAt, Valid: true}, // Will be processed by scheduled changes processor
 				CancellationReason: pgtype.Text{String: "Failed dunning process - automatic cancellation", Valid: true},
 			})
 			if err != nil {
-				return fmt.Errorf("failed to cancel subscription: %w", err)
+				return fmt.Errorf("failed to schedule subscription cancellation: %w", err)
 			}
+
+			s.logger.Info("Subscription cancellation scheduled",
+				zap.String("subscription_id", uuid.UUID(campaign.SubscriptionID.Bytes).String()),
+				zap.Time("cancel_at", cancelAt))
 
 			// Record state change for audit trail
 			_, err = s.queries.RecordStateChange(ctx, db.RecordStateChangeParams{
@@ -265,10 +279,40 @@ func (s *DunningService) executeFinalAction(ctx context.Context, campaign *db.Du
 		}
 		return nil
 	case "pause":
-		// TODO: Pause subscription
+		// Pause the subscription associated with the campaign
+		if campaign.SubscriptionID.Valid {
+			s.logger.Info("Pausing subscription due to failed dunning campaign",
+				zap.String("campaign_id", campaign.ID.String()),
+				zap.String("subscription_id", uuid.UUID(campaign.SubscriptionID.Bytes).String()))
+
+			// TODO: Implement subscription pausing
+			// 1. Update subscription status to 'paused'
+			// 2. Set paused_at timestamp
+			// 3. Stop processing future payments
+			// 4. Send pause notification to customer
+			// 5. Allow customer to resume when payment issue is resolved
+			
+			s.logger.Warn("Subscription pause not yet implemented",
+				zap.String("subscription_id", uuid.UUID(campaign.SubscriptionID.Bytes).String()))
+		}
 		return nil
-	case constants.DowngradeAction:
-		// TODO: Downgrade subscription based on config
+	case "downgrade":
+		// Downgrade the subscription to a lower tier
+		if campaign.SubscriptionID.Valid {
+			s.logger.Info("Downgrading subscription due to failed dunning campaign",
+				zap.String("campaign_id", campaign.ID.String()),
+				zap.String("subscription_id", uuid.UUID(campaign.SubscriptionID.Bytes).String()))
+
+			// TODO: Implement subscription downgrade
+			// 1. Parse final_action_config to get target product/plan
+			// 2. Schedule a subscription change to the lower tier
+			// 3. Calculate and apply prorations if needed
+			// 4. Send downgrade notification to customer
+			// 5. Allow customer to upgrade when payment issue is resolved
+			
+			s.logger.Warn("Subscription downgrade not yet implemented",
+				zap.String("subscription_id", uuid.UUID(campaign.SubscriptionID.Bytes).String()))
+		}
 		return nil
 	default:
 		return fmt.Errorf("unknown final action: %s", action)
@@ -289,6 +333,12 @@ func (s *DunningService) CreateEmailTemplate(ctx context.Context, params params.
 		}
 	}
 
+	// Convert Variables slice to JSON
+	variablesJSON, err := json.Marshal(params.Variables)
+	if err != nil {
+		variablesJSON = []byte("[]") // Default to empty array on error
+	}
+
 	template, err := s.queries.CreateDunningEmailTemplate(ctx, db.CreateDunningEmailTemplateParams{
 		WorkspaceID:        params.WorkspaceID,
 		Name:               params.TemplateName,
@@ -296,7 +346,7 @@ func (s *DunningService) CreateEmailTemplate(ctx context.Context, params params.
 		Subject:            params.Subject,
 		BodyHtml:           params.BodyHtml,
 		BodyText:           textToPgtype(&params.BodyText),
-		AvailableVariables: json.RawMessage("[]"), // Convert Variables slice to JSON
+		AvailableVariables: variablesJSON,
 		IsActive:           pgtype.Bool{Bool: params.IsActive, Valid: true},
 	})
 	if err != nil {

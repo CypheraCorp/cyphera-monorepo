@@ -6,6 +6,11 @@ import type {
   UpdateProductTokenRequest,
   ProductTokenResponse,
   CreateProductRequest,
+  ProductAddonResponse,
+  CreateProductAddonRelationshipRequest,
+  UpdateProductAddonRelationshipRequest,
+  BulkSetProductAddonsRequest,
+  ProductWithAddonsResponse,
 } from '@/types/product';
 import { clientLogger } from '@/lib/core/logger/logger-client';
 
@@ -230,6 +235,182 @@ export class ProductsAPI extends CypheraAPI {
       );
     } catch (error) {
       clientLogger.error('Product token deletion failed', {
+        error: error instanceof Error ? error.message : error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Gets a product with its available addons
+   * @param context - The user request context (token, IDs)
+   * @param productId - The ID of the product
+   * @returns Promise with the product and its addons
+   * @throws Error if the request fails
+   */
+  async getProductWithAddons(
+    context: UserRequestContext,
+    productId: string
+  ): Promise<ProductWithAddonsResponse> {
+    try {
+      return await this.fetchWithRateLimit<ProductWithAddonsResponse>(
+        `${this.baseUrl}/products/${productId}/with-addons`,
+        {
+          method: 'GET',
+          headers: this.getHeaders(context),
+        }
+      );
+    } catch (error) {
+      clientLogger.error('Product with addons fetch failed', {
+        error: error instanceof Error ? error.message : error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Gets addons for a product
+   * @param context - The user request context (token, IDs)
+   * @param productId - The ID of the base product
+   * @returns Promise with the product addons
+   * @throws Error if the request fails
+   */
+  async getProductAddons(
+    context: UserRequestContext,
+    productId: string
+  ): Promise<ProductAddonResponse[]> {
+    try {
+      const response = await this.fetchWithRateLimit<{ data: ProductAddonResponse[] }>(
+        `${this.baseUrl}/products/${productId}/addons`,
+        {
+          method: 'GET',
+          headers: this.getHeaders(context),
+        }
+      );
+      return response.data;
+    } catch (error) {
+      clientLogger.error('Product addons fetch failed', {
+        error: error instanceof Error ? error.message : error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Creates a product addon relationship
+   * @param context - The user request context (token, IDs)
+   * @param productId - The ID of the base product
+   * @param addonData - The addon relationship data
+   * @returns Promise with the created addon relationship
+   * @throws Error if the request fails
+   */
+  async createProductAddon(
+    context: UserRequestContext,
+    productId: string,
+    addonData: CreateProductAddonRelationshipRequest
+  ): Promise<ProductAddonResponse> {
+    try {
+      return await this.fetchWithRateLimit<ProductAddonResponse>(
+        `${this.baseUrl}/products/${productId}/addons`,
+        {
+          method: 'POST',
+          headers: this.getHeaders(context),
+          body: JSON.stringify(addonData),
+        }
+      );
+    } catch (error) {
+      clientLogger.error('Product addon creation failed', {
+        error: error instanceof Error ? error.message : error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Updates a product addon relationship
+   * @param context - The user request context (token, IDs)
+   * @param productId - The ID of the base product
+   * @param addonProductId - The ID of the addon product
+   * @param addonData - The addon relationship data to update
+   * @returns Promise with the updated addon relationship
+   * @throws Error if the request fails
+   */
+  async updateProductAddon(
+    context: UserRequestContext,
+    productId: string,
+    addonProductId: string,
+    addonData: UpdateProductAddonRelationshipRequest
+  ): Promise<ProductAddonResponse> {
+    try {
+      return await this.fetchWithRateLimit<ProductAddonResponse>(
+        `${this.baseUrl}/products/${productId}/addons/${addonProductId}`,
+        {
+          method: 'PUT',
+          headers: this.getHeaders(context),
+          body: JSON.stringify(addonData),
+        }
+      );
+    } catch (error) {
+      clientLogger.error('Product addon update failed', {
+        error: error instanceof Error ? error.message : error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Deletes a product addon relationship
+   * @param context - The user request context (token, IDs)
+   * @param productId - The ID of the base product
+   * @param addonProductId - The ID of the addon product
+   * @returns Promise<void>
+   * @throws Error if the request fails
+   */
+  async deleteProductAddon(
+    context: UserRequestContext,
+    productId: string,
+    addonProductId: string
+  ): Promise<void> {
+    try {
+      await this.fetchWithRateLimit<void>(
+        `${this.baseUrl}/products/${productId}/addons/${addonProductId}`,
+        {
+          method: 'DELETE',
+          headers: this.getHeaders(context),
+        }
+      );
+    } catch (error) {
+      clientLogger.error('Product addon deletion failed', {
+        error: error instanceof Error ? error.message : error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Bulk sets all addons for a product (replaces existing)
+   * @param context - The user request context (token, IDs)
+   * @param productId - The ID of the base product
+   * @param addonsData - The addon relationships to set
+   * @returns Promise<void>
+   * @throws Error if the request fails
+   */
+  async bulkSetProductAddons(
+    context: UserRequestContext,
+    productId: string,
+    addonsData: BulkSetProductAddonsRequest
+  ): Promise<void> {
+    try {
+      await this.fetchWithRateLimit<void>(
+        `${this.baseUrl}/products/${productId}/addons/bulk`,
+        {
+          method: 'PUT',
+          headers: this.getHeaders(context),
+          body: JSON.stringify(addonsData),
+        }
+      );
+    } catch (error) {
+      clientLogger.error('Product addons bulk set failed', {
         error: error instanceof Error ? error.message : error,
       });
       throw error;

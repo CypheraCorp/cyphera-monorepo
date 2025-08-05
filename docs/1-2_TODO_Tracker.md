@@ -99,9 +99,9 @@ This document tracks all TODO comments in the codebase and cross-references them
 - `/libs/go/services/dunning_retry_engine.go:458` - Query for failed payments that don't have active dunning campaigns
 - **Status:** Workspace integration and notification system needed
 
-#### Dunning Processor
-- `/apps/dunning-processor/internal/processor/processor.go:46` - Implement proper statistics tracking
-- **Status:** Analytics integration needed
+#### Dunning Processing (Integrated into Subscription Processor)
+- Dunning functionality has been integrated directly into the subscription processor
+- **Status:** Integrated and operational - no longer requires separate processor
 
 ### Invoice System
 

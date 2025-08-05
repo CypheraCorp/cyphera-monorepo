@@ -134,19 +134,19 @@ ORDER BY ssh.occurred_at DESC
 `
 
 type GetSubscriptionLifecycleEventsRow struct {
-	ID                   uuid.UUID              `json:"id"`
-	SubscriptionID       uuid.UUID              `json:"subscription_id"`
-	FromStatus           NullSubscriptionStatus `json:"from_status"`
-	ToStatus             SubscriptionStatus     `json:"to_status"`
-	FromAmountCents      pgtype.Int8            `json:"from_amount_cents"`
-	ToAmountCents        pgtype.Int8            `json:"to_amount_cents"`
-	LineItemsSnapshot    []byte                 `json:"line_items_snapshot"`
-	ChangeReason         pgtype.Text            `json:"change_reason"`
-	ScheduleChangeID     pgtype.UUID            `json:"schedule_change_id"`
-	InitiatedBy          pgtype.Text            `json:"initiated_by"`
-	OccurredAt           pgtype.Timestamptz     `json:"occurred_at"`
-	ScheduleChangeType   pgtype.Text            `json:"schedule_change_type"`
-	ProrationAmountCents pgtype.Int8            `json:"proration_amount_cents"`
+	ID                   uuid.UUID                  `json:"id"`
+	SubscriptionID       uuid.UUID                  `json:"subscription_id"`
+	FromStatus           NullSubscriptionStatus     `json:"from_status"`
+	ToStatus             SubscriptionStatus         `json:"to_status"`
+	FromAmountCents      pgtype.Int8                `json:"from_amount_cents"`
+	ToAmountCents        pgtype.Int8                `json:"to_amount_cents"`
+	LineItemsSnapshot    []byte                     `json:"line_items_snapshot"`
+	ChangeReason         pgtype.Text                `json:"change_reason"`
+	ScheduleChangeID     pgtype.UUID                `json:"schedule_change_id"`
+	InitiatedBy          pgtype.Text                `json:"initiated_by"`
+	OccurredAt           pgtype.Timestamptz         `json:"occurred_at"`
+	ScheduleChangeType   NullSubscriptionChangeType `json:"schedule_change_type"`
+	ProrationAmountCents pgtype.Int8                `json:"proration_amount_cents"`
 }
 
 func (q *Queries) GetSubscriptionLifecycleEvents(ctx context.Context, subscriptionID uuid.UUID) ([]GetSubscriptionLifecycleEventsRow, error) {

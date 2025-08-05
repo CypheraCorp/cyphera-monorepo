@@ -47,16 +47,16 @@ export function useWeb3AuthInitialization() {
         return;
       }
 
-      // Give Web3Auth more time to initialize (increased from 3s to 8s)
+      // Give Web3Auth more time to initialize (increased from 3s to 12s)
       if (!hasInitialized) {
         timeoutId = setTimeout(() => {
           logger.log(
-            '🕐 Web3Auth initialization timeout reached after 8s, proceeding with status:',
+            '🕐 Web3Auth initialization timeout reached after 12s, proceeding with status:',
             status
           );
           setIsInitializing(false);
           setHasInitialized(true);
-        }, 8000);
+        }, 12000);
       }
     };
 

@@ -36,37 +36,6 @@ func (q *Queries) BulkUpdateCustomerSyncStatus(ctx context.Context, arg BulkUpda
 	return err
 }
 
-const bulkUpdatePriceSyncStatus = `-- name: BulkUpdatePriceSyncStatus :exec
-UPDATE prices 
-SET payment_sync_status = $2, 
-    payment_synced_at = CURRENT_TIMESTAMP, 
-    payment_sync_version = payment_sync_version + 1, 
-    payment_provider = $3, 
-    updated_at = CURRENT_TIMESTAMP
-FROM products p
-WHERE prices.product_id = p.id
-  AND p.workspace_id = $1 
-  AND prices.external_id = ANY($4::text[])
-  AND prices.deleted_at IS NULL
-`
-
-type BulkUpdatePriceSyncStatusParams struct {
-	WorkspaceID       uuid.UUID   `json:"workspace_id"`
-	PaymentSyncStatus pgtype.Text `json:"payment_sync_status"`
-	PaymentProvider   pgtype.Text `json:"payment_provider"`
-	Column4           []string    `json:"column_4"`
-}
-
-func (q *Queries) BulkUpdatePriceSyncStatus(ctx context.Context, arg BulkUpdatePriceSyncStatusParams) error {
-	_, err := q.db.Exec(ctx, bulkUpdatePriceSyncStatus,
-		arg.WorkspaceID,
-		arg.PaymentSyncStatus,
-		arg.PaymentProvider,
-		arg.Column4,
-	)
-	return err
-}
-
 const bulkUpdateProductSyncStatus = `-- name: BulkUpdateProductSyncStatus :exec
 UPDATE products 
 SET payment_sync_status = $2, 
@@ -97,6 +66,7 @@ func (q *Queries) BulkUpdateProductSyncStatus(ctx context.Context, arg BulkUpdat
 }
 
 const bulkUpdateSubscriptionSyncStatus = `-- name: BulkUpdateSubscriptionSyncStatus :exec
+
 UPDATE subscriptions 
 SET payment_sync_status = $2, 
     payment_synced_at = CURRENT_TIMESTAMP, 
@@ -115,6 +85,7 @@ type BulkUpdateSubscriptionSyncStatusParams struct {
 	Column4           []string    `json:"column_4"`
 }
 
+// BulkUpdatePriceSyncStatus removed - pricing is now in products table
 func (q *Queries) BulkUpdateSubscriptionSyncStatus(ctx context.Context, arg BulkUpdateSubscriptionSyncStatusParams) error {
 	_, err := q.db.Exec(ctx, bulkUpdateSubscriptionSyncStatus,
 		arg.WorkspaceID,
@@ -523,7 +494,7 @@ func (q *Queries) GetCustomerByExternalIDAndProvider(ctx context.Context, arg Ge
 
 const getCustomersByPaymentProvider = `-- name: GetCustomersByPaymentProvider :many
 
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers 
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers 
 WHERE payment_provider = $1 AND deleted_at IS NULL
 `
 
@@ -539,6 +510,7 @@ func (q *Queries) GetCustomersByPaymentProvider(ctx context.Context, paymentProv
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -577,7 +549,7 @@ func (q *Queries) GetCustomersByPaymentProvider(ctx context.Context, paymentProv
 }
 
 const getCustomersByPaymentSyncStatus = `-- name: GetCustomersByPaymentSyncStatus :many
-SELECT id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers 
+SELECT id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code FROM customers 
 WHERE payment_sync_status = $1 AND deleted_at IS NULL
 `
 
@@ -592,6 +564,7 @@ func (q *Queries) GetCustomersByPaymentSyncStatus(ctx context.Context, paymentSy
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -656,19 +629,6 @@ WHERE p.workspace_id = $1 AND p.payment_provider = $2 AND p.payment_sync_status 
 UNION ALL
 
 SELECT 
-    'price' as entity_type,
-    pr.id as entity_id,
-    pr.external_id,
-    pr.payment_sync_status,
-    pr.payment_synced_at,
-    pr.payment_provider
-FROM prices pr
-JOIN products prod ON pr.product_id = prod.id
-WHERE prod.workspace_id = $1 AND pr.payment_provider = $2 AND pr.payment_sync_status = $3 AND pr.deleted_at IS NULL AND prod.deleted_at IS NULL
-
-UNION ALL
-
-SELECT 
     'subscription' as entity_type,
     s.id as entity_id,
     s.external_id,
@@ -728,27 +688,22 @@ const getEntityByExternalIDWithWorkspace = `-- name: GetEntityByExternalIDWithWo
 SELECT 
     CASE 
         WHEN p.id IS NOT NULL THEN 'product'
-        WHEN pr.id IS NOT NULL THEN 'price'
         WHEN s.id IS NOT NULL THEN 'subscription'
         ELSE 'unknown'
     END as entity_type,
-    COALESCE(p.id, pr.id, s.id) as entity_id,
-    COALESCE(p.external_id, pr.external_id, s.external_id) as external_id,
-    COALESCE(p.payment_provider, pr.payment_provider, s.payment_provider) as payment_provider
+    COALESCE(p.id, s.id) as entity_id,
+    COALESCE(p.external_id, s.external_id) as external_id,
+    COALESCE(p.payment_provider, s.payment_provider) as payment_provider
 FROM (SELECT $1 as workspace_id, $2 as external_id, $3 as payment_provider) params
 LEFT JOIN products p ON p.workspace_id = params.workspace_id 
     AND p.external_id = params.external_id 
     AND p.payment_provider = params.payment_provider 
     AND p.deleted_at IS NULL
-LEFT JOIN prices pr ON pr.external_id = params.external_id 
-    AND pr.payment_provider = params.payment_provider 
-    AND pr.deleted_at IS NULL
-    AND EXISTS (SELECT 1 FROM products prod WHERE prod.id = pr.product_id AND prod.workspace_id = params.workspace_id AND prod.deleted_at IS NULL)
 LEFT JOIN subscriptions s ON s.workspace_id = params.workspace_id 
     AND s.external_id = params.external_id 
     AND s.payment_provider = params.payment_provider 
     AND s.deleted_at IS NULL
-WHERE COALESCE(p.id, pr.id, s.id) IS NOT NULL
+WHERE COALESCE(p.id, s.id) IS NOT NULL
 LIMIT 1
 `
 
@@ -857,108 +812,8 @@ func (q *Queries) GetLatestSyncSessionByProvider(ctx context.Context, arg GetLat
 	return i, err
 }
 
-const getPricesByPaymentProvider = `-- name: GetPricesByPaymentProvider :many
-SELECT p.id, p.product_id, p.external_id, p.active, p.type, p.nickname, p.currency, p.unit_amount_in_pennies, p.interval_type, p.term_length, p.metadata, p.payment_sync_status, p.payment_synced_at, p.payment_sync_version, p.payment_provider, p.created_at, p.updated_at, p.deleted_at FROM prices p
-JOIN products pr ON p.product_id = pr.id
-WHERE pr.workspace_id = $1 AND p.payment_provider = $2 AND p.deleted_at IS NULL AND pr.deleted_at IS NULL
-`
-
-type GetPricesByPaymentProviderParams struct {
-	WorkspaceID     uuid.UUID   `json:"workspace_id"`
-	PaymentProvider pgtype.Text `json:"payment_provider"`
-}
-
-func (q *Queries) GetPricesByPaymentProvider(ctx context.Context, arg GetPricesByPaymentProviderParams) ([]Price, error) {
-	rows, err := q.db.Query(ctx, getPricesByPaymentProvider, arg.WorkspaceID, arg.PaymentProvider)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Price{}
-	for rows.Next() {
-		var i Price
-		if err := rows.Scan(
-			&i.ID,
-			&i.ProductID,
-			&i.ExternalID,
-			&i.Active,
-			&i.Type,
-			&i.Nickname,
-			&i.Currency,
-			&i.UnitAmountInPennies,
-			&i.IntervalType,
-			&i.TermLength,
-			&i.Metadata,
-			&i.PaymentSyncStatus,
-			&i.PaymentSyncedAt,
-			&i.PaymentSyncVersion,
-			&i.PaymentProvider,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getPricesByPaymentSyncStatus = `-- name: GetPricesByPaymentSyncStatus :many
-SELECT p.id, p.product_id, p.external_id, p.active, p.type, p.nickname, p.currency, p.unit_amount_in_pennies, p.interval_type, p.term_length, p.metadata, p.payment_sync_status, p.payment_synced_at, p.payment_sync_version, p.payment_provider, p.created_at, p.updated_at, p.deleted_at FROM prices p
-JOIN products pr ON p.product_id = pr.id
-WHERE pr.workspace_id = $1 AND p.payment_sync_status = $2 AND p.deleted_at IS NULL AND pr.deleted_at IS NULL
-`
-
-type GetPricesByPaymentSyncStatusParams struct {
-	WorkspaceID       uuid.UUID   `json:"workspace_id"`
-	PaymentSyncStatus pgtype.Text `json:"payment_sync_status"`
-}
-
-func (q *Queries) GetPricesByPaymentSyncStatus(ctx context.Context, arg GetPricesByPaymentSyncStatusParams) ([]Price, error) {
-	rows, err := q.db.Query(ctx, getPricesByPaymentSyncStatus, arg.WorkspaceID, arg.PaymentSyncStatus)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Price{}
-	for rows.Next() {
-		var i Price
-		if err := rows.Scan(
-			&i.ID,
-			&i.ProductID,
-			&i.ExternalID,
-			&i.Active,
-			&i.Type,
-			&i.Nickname,
-			&i.Currency,
-			&i.UnitAmountInPennies,
-			&i.IntervalType,
-			&i.TermLength,
-			&i.Metadata,
-			&i.PaymentSyncStatus,
-			&i.PaymentSyncedAt,
-			&i.PaymentSyncVersion,
-			&i.PaymentProvider,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getProductsByPaymentProvider = `-- name: GetProductsByPaymentProvider :many
-SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products 
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products 
 WHERE workspace_id = $1 AND payment_provider = $2 AND deleted_at IS NULL
 `
 
@@ -986,6 +841,15 @@ func (q *Queries) GetProductsByPaymentProvider(ctx context.Context, arg GetProdu
 			&i.ImageUrl,
 			&i.Url,
 			&i.Active,
+			&i.ProductType,
+			&i.ProductGroup,
+			&i.PriceType,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceNickname,
+			&i.PriceExternalID,
 			&i.Metadata,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
@@ -1006,7 +870,7 @@ func (q *Queries) GetProductsByPaymentProvider(ctx context.Context, arg GetProdu
 }
 
 const getProductsByPaymentSyncStatus = `-- name: GetProductsByPaymentSyncStatus :many
-SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products 
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products 
 WHERE workspace_id = $1 AND payment_sync_status = $2 AND deleted_at IS NULL
 `
 
@@ -1034,6 +898,15 @@ func (q *Queries) GetProductsByPaymentSyncStatus(ctx context.Context, arg GetPro
 			&i.ImageUrl,
 			&i.Url,
 			&i.Active,
+			&i.ProductType,
+			&i.ProductGroup,
+			&i.PriceType,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceNickname,
+			&i.PriceExternalID,
 			&i.Metadata,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
@@ -1107,7 +980,8 @@ func (q *Queries) GetProviderSyncStatusByWorkspace(ctx context.Context, workspac
 }
 
 const getSubscriptionsByPaymentProvider = `-- name: GetSubscriptionsByPaymentProvider :many
-SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions 
+
+SELECT id, num_id, customer_id, product_id, workspace_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, currency, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions 
 WHERE workspace_id = $1 AND payment_provider = $2 AND deleted_at IS NULL
 `
 
@@ -1116,6 +990,7 @@ type GetSubscriptionsByPaymentProviderParams struct {
 	PaymentProvider pgtype.Text `json:"payment_provider"`
 }
 
+// Prices queries removed - pricing is now in products table
 func (q *Queries) GetSubscriptionsByPaymentProvider(ctx context.Context, arg GetSubscriptionsByPaymentProviderParams) ([]Subscription, error) {
 	rows, err := q.db.Query(ctx, getSubscriptionsByPaymentProvider, arg.WorkspaceID, arg.PaymentProvider)
 	if err != nil {
@@ -1127,10 +1002,10 @@ func (q *Queries) GetSubscriptionsByPaymentProvider(ctx context.Context, arg Get
 		var i Subscription
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.CustomerID,
 			&i.ProductID,
 			&i.WorkspaceID,
-			&i.PriceID,
 			&i.ProductTokenID,
 			&i.ExternalID,
 			&i.TokenAmount,
@@ -1150,6 +1025,7 @@ func (q *Queries) GetSubscriptionsByPaymentProvider(ctx context.Context, arg Get
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.Currency,
 			&i.CancelAt,
 			&i.CancelledAt,
 			&i.CancellationReason,
@@ -1169,7 +1045,7 @@ func (q *Queries) GetSubscriptionsByPaymentProvider(ctx context.Context, arg Get
 }
 
 const getSubscriptionsByPaymentSyncStatus = `-- name: GetSubscriptionsByPaymentSyncStatus :many
-SELECT id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions 
+SELECT id, num_id, customer_id, product_id, workspace_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, currency, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end FROM subscriptions 
 WHERE workspace_id = $1 AND payment_sync_status = $2 AND deleted_at IS NULL
 `
 
@@ -1189,10 +1065,10 @@ func (q *Queries) GetSubscriptionsByPaymentSyncStatus(ctx context.Context, arg G
 		var i Subscription
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.CustomerID,
 			&i.ProductID,
 			&i.WorkspaceID,
-			&i.PriceID,
 			&i.ProductTokenID,
 			&i.ExternalID,
 			&i.TokenAmount,
@@ -1212,6 +1088,7 @@ func (q *Queries) GetSubscriptionsByPaymentSyncStatus(ctx context.Context, arg G
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.Currency,
 			&i.CancelAt,
 			&i.CancelledAt,
 			&i.CancellationReason,
@@ -1536,7 +1413,7 @@ func (q *Queries) GetWebhookEventsSummaryByProvider(ctx context.Context, arg Get
 }
 
 const getWorkspaceCustomersByPaymentProvider = `-- name: GetWorkspaceCustomersByPaymentProvider :many
-SELECT c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at, c.tax_jurisdiction_id, c.tax_id, c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, c.business_name, c.billing_country, c.billing_state, c.billing_city, c.billing_postal_code FROM customers c
+SELECT c.id, c.num_id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at, c.tax_jurisdiction_id, c.tax_id, c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, c.business_name, c.billing_country, c.billing_state, c.billing_city, c.billing_postal_code FROM customers c
 INNER JOIN workspace_customers wc ON c.id = wc.customer_id
 WHERE wc.workspace_id = $1 AND c.payment_provider = $2 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL
 `
@@ -1557,6 +1434,7 @@ func (q *Queries) GetWorkspaceCustomersByPaymentProvider(ctx context.Context, ar
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -1595,7 +1473,7 @@ func (q *Queries) GetWorkspaceCustomersByPaymentProvider(ctx context.Context, ar
 }
 
 const getWorkspaceCustomersByPaymentSyncStatus = `-- name: GetWorkspaceCustomersByPaymentSyncStatus :many
-SELECT c.id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at, c.tax_jurisdiction_id, c.tax_id, c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, c.business_name, c.billing_country, c.billing_state, c.billing_city, c.billing_postal_code FROM customers c
+SELECT c.id, c.num_id, c.web3auth_id, c.external_id, c.email, c.name, c.phone, c.description, c.metadata, c.finished_onboarding, c.payment_sync_status, c.payment_synced_at, c.payment_sync_version, c.payment_provider, c.created_at, c.updated_at, c.deleted_at, c.tax_jurisdiction_id, c.tax_id, c.tax_id_type, c.tax_id_verified, c.tax_id_verified_at, c.is_business, c.business_name, c.billing_country, c.billing_state, c.billing_city, c.billing_postal_code FROM customers c
 INNER JOIN workspace_customers wc ON c.id = wc.customer_id
 WHERE wc.workspace_id = $1 AND c.payment_sync_status = $2 AND wc.deleted_at IS NULL AND c.deleted_at IS NULL
 `
@@ -1616,6 +1494,7 @@ func (q *Queries) GetWorkspaceCustomersByPaymentSyncStatus(ctx context.Context, 
 		var i Customer
 		if err := rows.Scan(
 			&i.ID,
+			&i.NumID,
 			&i.Web3authID,
 			&i.ExternalID,
 			&i.Email,
@@ -1688,7 +1567,6 @@ SELECT
     COUNT(DISTINCT CASE WHEN pss.status IN ('pending', 'running') THEN pss.id END) as active_sessions,
     COUNT(DISTINCT CASE WHEN c.payment_sync_status = 'synced' THEN c.id END) as synced_customers,
     COUNT(DISTINCT CASE WHEN p.payment_sync_status = 'synced' THEN p.id END) as synced_products,
-    COUNT(DISTINCT CASE WHEN pr.payment_sync_status = 'synced' THEN pr.id END) as synced_prices,
     COUNT(DISTINCT CASE WHEN s.payment_sync_status = 'synced' THEN s.id END) as synced_subscriptions,
     MAX(pss.completed_at) as last_successful_sync
 FROM workspaces w
@@ -1696,7 +1574,6 @@ LEFT JOIN payment_sync_sessions pss ON w.id = pss.workspace_id AND pss.deleted_a
 LEFT JOIN workspace_customers wc ON w.id = wc.workspace_id AND wc.deleted_at IS NULL
 LEFT JOIN customers c ON wc.customer_id = c.id AND c.deleted_at IS NULL
 LEFT JOIN products p ON w.id = p.workspace_id AND p.deleted_at IS NULL
-LEFT JOIN prices pr ON p.id = pr.product_id AND pr.deleted_at IS NULL
 LEFT JOIN subscriptions s ON w.id = s.workspace_id AND s.deleted_at IS NULL
 WHERE w.id = $1 AND w.deleted_at IS NULL
 GROUP BY w.id, w.name
@@ -1711,7 +1588,6 @@ type GetWorkspaceSyncSummaryRow struct {
 	ActiveSessions      int64       `json:"active_sessions"`
 	SyncedCustomers     int64       `json:"synced_customers"`
 	SyncedProducts      int64       `json:"synced_products"`
-	SyncedPrices        int64       `json:"synced_prices"`
 	SyncedSubscriptions int64       `json:"synced_subscriptions"`
 	LastSuccessfulSync  interface{} `json:"last_successful_sync"`
 }
@@ -1729,7 +1605,6 @@ func (q *Queries) GetWorkspaceSyncSummary(ctx context.Context, id uuid.UUID) (Ge
 		&i.ActiveSessions,
 		&i.SyncedCustomers,
 		&i.SyncedProducts,
-		&i.SyncedPrices,
 		&i.SyncedSubscriptions,
 		&i.LastSuccessfulSync,
 	)
@@ -2282,7 +2157,7 @@ UPDATE customers
 SET payment_sync_status = $2, payment_synced_at = CURRENT_TIMESTAMP, 
     payment_sync_version = payment_sync_version + 1, payment_provider = $3, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 
-RETURNING id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
+RETURNING id, num_id, web3auth_id, external_id, email, name, phone, description, metadata, finished_onboarding, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, tax_jurisdiction_id, tax_id, tax_id_type, tax_id_verified, tax_id_verified_at, is_business, business_name, billing_country, billing_state, billing_city, billing_postal_code
 `
 
 type UpdateCustomerSyncStatusParams struct {
@@ -2296,6 +2171,7 @@ func (q *Queries) UpdateCustomerSyncStatus(ctx context.Context, arg UpdateCustom
 	var i Customer
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.Web3authID,
 		&i.ExternalID,
 		&i.Email,
@@ -2326,52 +2202,12 @@ func (q *Queries) UpdateCustomerSyncStatus(ctx context.Context, arg UpdateCustom
 	return i, err
 }
 
-const updatePriceSyncStatus = `-- name: UpdatePriceSyncStatus :one
-UPDATE prices 
-SET payment_sync_status = $2, payment_synced_at = CURRENT_TIMESTAMP, 
-    payment_sync_version = payment_sync_version + 1, payment_provider = $3, updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 
-RETURNING id, product_id, external_id, active, type, nickname, currency, unit_amount_in_pennies, interval_type, term_length, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
-`
-
-type UpdatePriceSyncStatusParams struct {
-	ID                uuid.UUID   `json:"id"`
-	PaymentSyncStatus pgtype.Text `json:"payment_sync_status"`
-	PaymentProvider   pgtype.Text `json:"payment_provider"`
-}
-
-func (q *Queries) UpdatePriceSyncStatus(ctx context.Context, arg UpdatePriceSyncStatusParams) (Price, error) {
-	row := q.db.QueryRow(ctx, updatePriceSyncStatus, arg.ID, arg.PaymentSyncStatus, arg.PaymentProvider)
-	var i Price
-	err := row.Scan(
-		&i.ID,
-		&i.ProductID,
-		&i.ExternalID,
-		&i.Active,
-		&i.Type,
-		&i.Nickname,
-		&i.Currency,
-		&i.UnitAmountInPennies,
-		&i.IntervalType,
-		&i.TermLength,
-		&i.Metadata,
-		&i.PaymentSyncStatus,
-		&i.PaymentSyncedAt,
-		&i.PaymentSyncVersion,
-		&i.PaymentProvider,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
 const updateProductSyncStatus = `-- name: UpdateProductSyncStatus :one
 UPDATE products 
 SET payment_sync_status = $2, payment_synced_at = CURRENT_TIMESTAMP, 
     payment_sync_version = payment_sync_version + 1, payment_provider = $3, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 
-RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type UpdateProductSyncStatusParams struct {
@@ -2393,6 +2229,15 @@ func (q *Queries) UpdateProductSyncStatus(ctx context.Context, arg UpdateProduct
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
+		&i.ProductType,
+		&i.ProductGroup,
+		&i.PriceType,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.PriceNickname,
+		&i.PriceExternalID,
 		&i.Metadata,
 		&i.PaymentSyncStatus,
 		&i.PaymentSyncedAt,
@@ -2406,11 +2251,12 @@ func (q *Queries) UpdateProductSyncStatus(ctx context.Context, arg UpdateProduct
 }
 
 const updateSubscriptionSyncStatus = `-- name: UpdateSubscriptionSyncStatus :one
+
 UPDATE subscriptions 
 SET payment_sync_status = $2, payment_synced_at = CURRENT_TIMESTAMP, 
     payment_sync_version = payment_sync_version + 1, payment_provider = $3, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 
-RETURNING id, customer_id, product_id, workspace_id, price_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end
+RETURNING id, num_id, customer_id, product_id, workspace_id, product_token_id, external_id, token_amount, delegation_id, customer_wallet_id, status, current_period_start, current_period_end, next_redemption_date, total_redemptions, total_amount_in_cents, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at, currency, cancel_at, cancelled_at, cancellation_reason, paused_at, pause_ends_at, trial_start, trial_end
 `
 
 type UpdateSubscriptionSyncStatusParams struct {
@@ -2419,15 +2265,16 @@ type UpdateSubscriptionSyncStatusParams struct {
 	PaymentProvider   pgtype.Text `json:"payment_provider"`
 }
 
+// UpdatePriceSyncStatus removed - pricing is now in products table
 func (q *Queries) UpdateSubscriptionSyncStatus(ctx context.Context, arg UpdateSubscriptionSyncStatusParams) (Subscription, error) {
 	row := q.db.QueryRow(ctx, updateSubscriptionSyncStatus, arg.ID, arg.PaymentSyncStatus, arg.PaymentProvider)
 	var i Subscription
 	err := row.Scan(
 		&i.ID,
+		&i.NumID,
 		&i.CustomerID,
 		&i.ProductID,
 		&i.WorkspaceID,
-		&i.PriceID,
 		&i.ProductTokenID,
 		&i.ExternalID,
 		&i.TokenAmount,
@@ -2447,6 +2294,7 @@ func (q *Queries) UpdateSubscriptionSyncStatus(ctx context.Context, arg UpdateSu
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Currency,
 		&i.CancelAt,
 		&i.CancelledAt,
 		&i.CancellationReason,

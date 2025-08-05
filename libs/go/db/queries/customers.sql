@@ -130,6 +130,10 @@ WHERE email = $1 AND deleted_at IS NULL LIMIT 1;
 SELECT * FROM customers
 WHERE web3auth_id = $1 AND deleted_at IS NULL LIMIT 1;
 
+-- name: GetCustomerByNumID :one
+SELECT * FROM customers
+WHERE num_id = $1 AND deleted_at IS NULL LIMIT 1;
+
 -- name: CountCustomers :one
 SELECT COUNT(*) FROM customers
 WHERE deleted_at IS NULL;

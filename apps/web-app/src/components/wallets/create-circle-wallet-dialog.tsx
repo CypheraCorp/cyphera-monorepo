@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { useCircleSDK } from '@/hooks/web3';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { Loader2, Plus, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NetworkWithTokensResponse } from '@/types/network';
@@ -30,10 +30,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { SetupPinDialog } from './setup-pin-dialog';
 import { CircleUserData, CreateWalletsRequest } from '@/types/circle';
 import { logger } from '@/lib/core/logger/logger-utils';
 // Zod schema for validating Circle user response
@@ -63,7 +60,6 @@ const formSchema = z.object({
     .string()
     .min(1, 'Wallet name is required')
     .max(30, 'Wallet name must be 30 characters or less'),
-  blockchains: z.array(z.string()).min(1, 'At least one blockchain is required'),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -94,33 +90,20 @@ export function CreateCircleWalletDialog({
   const [isCreating, setIsCreating] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isPinSetupOpen, setIsPinSetupOpen] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<FormValues | null>(null);
   const [savedUserToken, setSavedUserToken] = useState<string>('');
   const [validatedUserData, setValidatedUserData] = useState<CircleUserData | null>(null);
   const { client, isAuthenticated, authenticateUser } = useCircleSDK();
-  const { toast } = useToast();
   const router = useRouter();
 
   // Determine if we're using controlled or uncontrolled state
   const isControlled = controlledIsOpen !== undefined && onOpenChange !== undefined;
   const isOpen = isControlled ? controlledIsOpen : internalIsOpen;
 
-  // Memoize filtered networks for performance and clarity
-  // Assumes parent component filtered for Circle compatibility
-  const testnetNetworks = useMemo(() => {
-    return networks.filter((network) => network.network.is_testnet);
-  }, [networks]);
-
-  const mainnetNetworks = useMemo(() => {
-    return networks.filter((network) => !network.network.is_testnet);
-  }, [networks]);
-
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: '',
-      blockchains: [],
     },
   });
 
@@ -140,22 +123,10 @@ export function CreateCircleWalletDialog({
 
   const handleCreateWallet = async (data: FormValues) => {
     if (!client) {
-      toast({
-        title: 'SDK Not Ready',
-        description: 'Circle SDK is not initialized',
-        variant: 'destructive',
-      });
+      toast.error('Circle SDK is not initialized');
       return;
     }
 
-    if (data.blockchains.length === 0) {
-      toast({
-        title: 'No Blockchain Selected',
-        description: 'Please select at least one blockchain',
-        variant: 'destructive',
-      });
-      return;
-    }
 
     try {
       setIsCreating(true);
@@ -172,11 +143,19 @@ export function CreateCircleWalletDialog({
         const externalUserId = uuidv4();
 
         try {
+          // First fetch CSRF token
+          const csrfResponse = await fetch('/api/auth/csrf');
+          if (!csrfResponse.ok) {
+            throw new Error('Failed to fetch CSRF token');
+          }
+          const { csrfToken } = await csrfResponse.json();
+
           // Create the Circle user through our API endpoint
           const response = await fetch(`/api/circle/users`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'X-CSRF-Token': csrfToken,
             },
             body: JSON.stringify({ external_user_id: externalUserId }),
           });
@@ -224,11 +203,7 @@ export function CreateCircleWalletDialog({
 
             // Check PIN status and handle accordingly
             if (validatedResponse.pinStatus === 'LOCKED') {
-              toast({
-                title: 'PIN Locked',
-                description: 'Your PIN is currently locked. Please try again later.',
-                variant: 'destructive',
-              });
+              toast.error('Your PIN is currently locked. Please try again later.');
               handleOpenChange(false);
               setIsCreating(false);
               setIsCreatingUser(false);
@@ -239,17 +214,51 @@ export function CreateCircleWalletDialog({
             setPendingFormData(data);
 
             if (validatedResponse.pinStatus === 'UNSET') {
-              // Close the wallet creation dialog first
-              handleOpenChange(false);
+              // For users with UNSET PIN, we need to use the PIN with wallets flow
+              // Create the PIN with wallets challenge
+              const pinWithWalletsResponse = await fetch(`/api/circle/users/pin/create-with-wallets`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRF-Token': csrfToken,
+                },
+                body: JSON.stringify({
+                  // Backend will auto-select blockchains if not provided
+                  account_type: 'SCA',
+                }),
+              });
 
-              // Then open the PIN setup dialog
-              setTimeout(() => {
-                setIsPinSetupOpen(true);
-              }, 100);
+              if (!pinWithWalletsResponse.ok) {
+                const errorData = await pinWithWalletsResponse.json();
+                throw new Error(errorData.error || 'Failed to create PIN with wallets');
+              }
 
-              // Stop here until PIN setup is complete
-              setIsCreating(false);
-              setIsCreatingUser(false);
+              const pinWithWalletsData = await pinWithWalletsResponse.json();
+              const pinChallengeId = pinWithWalletsData.challenge_id;
+
+              if (!pinChallengeId) {
+                throw new Error('Failed to get challenge ID for PIN with wallets');
+              }
+
+              // Execute the PIN with wallets challenge
+              client.execute(pinChallengeId, (error) => {
+                setIsCreating(false);
+                setIsCreatingUser(false);
+                
+                if (error) {
+                  setErrorMessage('Failed to complete PIN setup with wallets. Please try again.');
+                  return;
+                }
+
+                // PIN setup and wallet creation completed successfully
+                toast.success('Your PIN has been set up and wallets created successfully!');
+                handleOpenChange(false);
+                form.reset();
+                onWalletCreated?.();
+                router.refresh();
+              });
+
+              // Stop here - the challenge execution will handle everything
               return;
             }
 
@@ -294,7 +303,7 @@ export function CreateCircleWalletDialog({
       const errorMsg =
         error instanceof Error ? error.message : 'There was an error creating your wallet';
       setErrorMessage(errorMsg);
-      toast({ title: 'Wallet Creation Failed', description: errorMsg, variant: 'destructive' });
+      toast.error(errorMsg);
     } finally {
       setIsCreating(false);
     }
@@ -306,39 +315,11 @@ export function CreateCircleWalletDialog({
       setIsCreating(true);
       setErrorMessage(null);
 
-      // 1. Create a map from network ID to Circle network type
-      const circleNetworkIdMap = networks.reduce(
-        (acc, net) => {
-          if (net.network.circle_network_type) {
-            // Ensure type exists
-            acc[net.network.id] = net.network.circle_network_type;
-          }
-          return acc;
-        },
-        {} as Record<string, string>
-      ); // Type assertion for accumulator
-
-      // 2. Map selected form network IDs to Circle IDs
-      const circleBlockchains = data.blockchains
-        .map((networkId) => circleNetworkIdMap[networkId]) // Get Circle ID using the map
-        .filter((id): id is string => !!id); // Filter out undefined/null & add type guard
-
-      // 3. Validation: Check if any valid Circle blockchains were found
-      if (circleBlockchains.length === 0) {
-        throw new Error('No valid Circle blockchains could be derived from the selection.');
-      }
-      // Optional: Warn if some selections couldn't be mapped
-      if (circleBlockchains.length !== data.blockchains.length) {
-        logger.warn('Some selected networks could not be mapped to Circle blockchain IDs.');
-        // Potentially inform user non-critically?
-      }
-
-      // 4. Create the request payload using the mapped IDs
+      // Create the request payload - backend will handle blockchain selection
       const idempotencyKey = uuidv4();
       const requestBody: CreateWalletsRequest = {
         account_type: 'SCA',
         idempotency_key: idempotencyKey,
-        blockchains: circleBlockchains, // Use the mapped Circle IDs
         user_token: userToken, // Pass the user token
         metadata: [
           {
@@ -397,7 +378,7 @@ export function CreateCircleWalletDialog({
           });
         });
 
-        toast({ title: 'Wallet Created', description: `${data.name} wallet created successfully` });
+        toast.success(`${data.name} wallet created successfully`);
         handleOpenChange(false);
         form.reset();
         await onWalletCreated?.();
@@ -407,10 +388,7 @@ export function CreateCircleWalletDialog({
         logger.warn('Wallet creation response did not contain a challenge ID.', createResponse);
         // Assume success if no challenge needed? Or throw error?
         // For now, let's assume success if ok and no challenge
-        toast({
-          title: 'Wallet Created (No Challenge)',
-          description: `${data.name} wallet created`,
-        });
+        toast.success(`${data.name} wallet created`);
         handleOpenChange(false);
         form.reset();
         await onWalletCreated?.();
@@ -428,37 +406,6 @@ export function CreateCircleWalletDialog({
     }
   };
 
-  // Handle PIN setup completion
-  const handlePinSetupComplete = async () => {
-    setIsPinSetupOpen(false); // Close PIN dialog first
-    if (pendingFormData) {
-      try {
-        if (!savedUserToken) {
-          throw new Error('User token missing after PIN setup.');
-        }
-        // Call createWalletAfterPinSetup with pending data and saved token
-        await createWalletAfterPinSetup(pendingFormData, savedUserToken);
-        setPendingFormData(null); // Clear pending data on success
-      } catch (error) {
-        logger.error('Error creating wallet after PIN setup:', error);
-        const errorMsg =
-          error instanceof Error ? error.message : 'There was an error creating your wallet';
-        setErrorMessage(errorMsg);
-        toast({ title: 'Wallet Creation Failed', description: errorMsg, variant: 'destructive' });
-        // Optionally reopen this dialog? Or rely on error message shown.
-        // handleOpenChange(true); // Reopen to show error inline
-        setIsCreating(false); // Ensure loading stops if PIN setup callback fails
-      }
-    } else {
-      logger.warn('PIN setup complete but no pending form data found.');
-      // Maybe show a generic success message for PIN setup?
-      toast({
-        title: 'PIN Setup Complete',
-        description: 'You can now try creating the wallet again.',
-      });
-      setIsCreating(false); // Stop loading if we aren't proceeding
-    }
-  };
 
   return (
     <>
@@ -476,7 +423,7 @@ export function CreateCircleWalletDialog({
           <DialogHeader>
             <DialogTitle>Create Circle Wallet</DialogTitle>
             <DialogDescription>
-              Create a new user-controlled wallet on your preferred blockchain.
+              Create a new user-controlled wallet. The wallet will be created on all supported networks.
             </DialogDescription>
           </DialogHeader>
 
@@ -504,127 +451,11 @@ export function CreateCircleWalletDialog({
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="blockchains"
-                render={() => (
-                  <FormItem>
-                    <FormLabel>Blockchains</FormLabel>
-                    <FormDescription>
-                      Select the blockchain networks for this wallet.
-                    </FormDescription>
-                    <ScrollArea className="h-40 rounded-md border p-4 mt-2">
-                      <div className="space-y-4">
-                        {mainnetNetworks.length > 0 && (
-                          <div>
-                            <h4 className="mb-2 text-sm font-medium text-muted-foreground">
-                              Mainnets
-                            </h4>
-                            <div className="space-y-2">
-                              {mainnetNetworks.map((network) => (
-                                <FormField
-                                  key={network.network.id}
-                                  control={form.control}
-                                  name="blockchains"
-                                  render={({ field }) => {
-                                    return (
-                                      <FormItem
-                                        key={network.network.id}
-                                        className="flex flex-row items-start space-x-3 space-y-0"
-                                      >
-                                        <FormControl>
-                                          <Checkbox
-                                            checked={field.value?.includes(network.network.id)}
-                                            onCheckedChange={(checked) => {
-                                              const currentValues = field.value || [];
-                                              return checked
-                                                ? field.onChange([
-                                                    ...currentValues,
-                                                    network.network.id,
-                                                  ])
-                                                : field.onChange(
-                                                    currentValues.filter(
-                                                      (value) => value !== network.network.id
-                                                    )
-                                                  );
-                                            }}
-                                          />
-                                        </FormControl>
-                                        <FormLabel className="font-normal">
-                                          {network.network.name}
-                                        </FormLabel>
-                                      </FormItem>
-                                    );
-                                  }}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {testnetNetworks.length > 0 && (
-                          <div>
-                            <h4 className="mb-2 text-sm font-medium text-muted-foreground">
-                              Testnets
-                            </h4>
-                            <div className="space-y-2">
-                              {testnetNetworks.map((network) => (
-                                <FormField
-                                  key={network.network.id}
-                                  control={form.control}
-                                  name="blockchains"
-                                  render={({ field }) => {
-                                    return (
-                                      <FormItem
-                                        key={network.network.id}
-                                        className="flex flex-row items-start space-x-3 space-y-0"
-                                      >
-                                        <FormControl>
-                                          <Checkbox
-                                            checked={field.value?.includes(network.network.id)}
-                                            onCheckedChange={(checked) => {
-                                              const currentValues = field.value || [];
-                                              return checked
-                                                ? field.onChange([
-                                                    ...currentValues,
-                                                    network.network.id,
-                                                  ])
-                                                : field.onChange(
-                                                    currentValues.filter(
-                                                      (value) => value !== network.network.id
-                                                    )
-                                                  );
-                                            }}
-                                          />
-                                        </FormControl>
-                                        <FormLabel className="font-normal">
-                                          {network.network.name}
-                                        </FormLabel>
-                                      </FormItem>
-                                    );
-                                  }}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {networks.length === 0 && (
-                          <p className="text-sm text-muted-foreground text-center py-4">
-                            No Circle-compatible networks available.
-                          </p>
-                        )}
-                      </div>
-                    </ScrollArea>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
               <DialogFooter>
                 <Button
                   type="submit"
-                  disabled={isCreating || isCreatingUser || networks.length === 0}
+                  disabled={isCreating || isCreatingUser}
                 >
                   {isCreatingUser ? (
                     <>
@@ -645,16 +476,6 @@ export function CreateCircleWalletDialog({
           </Form>
         </DialogContent>
       </Dialog>
-
-      {/* PIN Setup Dialog */}
-      {validatedUserData && (
-        <SetupPinDialog
-          open={isPinSetupOpen}
-          onOpenChange={setIsPinSetupOpen}
-          onComplete={handlePinSetupComplete}
-          userData={validatedUserData}
-        />
-      )}
     </>
   );
 }

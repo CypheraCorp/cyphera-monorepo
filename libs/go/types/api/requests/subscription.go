@@ -22,9 +22,16 @@ type UpdateSubscriptionRequest struct {
 
 // SubscribeRequest represents the request body for subscribing to a product
 type SubscribeRequest struct {
-	SubscriberAddress string                    `json:"subscriber_address" binding:"required"`
-	PriceID           string                    `json:"price_id" binding:"required"`
-	ProductTokenID    string                    `json:"product_token_id" binding:"required"`
-	TokenAmount       string                    `json:"token_amount" binding:"required"`
-	Delegation        business.DelegationStruct `json:"delegation" binding:"required"`
+	SubscriberAddress string                     `json:"subscriber_address" binding:"required"`
+	ProductID         string                     `json:"product_id" binding:"required"`
+	ProductTokenID    string                     `json:"product_token_id" binding:"required"`
+	TokenAmount       string                     `json:"token_amount" binding:"required"`
+	Delegation        business.DelegationStruct  `json:"delegation" binding:"required"`
+	Addons            []SubscriptionAddonRequest `json:"addons,omitempty"`
+}
+
+// SubscriptionAddonRequest represents an addon to be included in a subscription
+type SubscriptionAddonRequest struct {
+	ProductID string `json:"product_id" binding:"required"`
+	Quantity  int32  `json:"quantity" binding:"required,min=1"`
 }

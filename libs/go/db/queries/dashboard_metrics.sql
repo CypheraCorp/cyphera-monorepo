@@ -104,7 +104,7 @@ WHERE workspace_id = $1
     AND metric_date <= $3
     AND metric_type = $4
     AND fiat_currency = $5
-ORDER BY metric_date DESC, metric_hour DESC NULLS LAST;
+ORDER BY metric_date ASC, metric_hour ASC NULLS LAST;
 
 -- name: GetHourlyMetrics :many
 SELECT * FROM dashboard_metrics

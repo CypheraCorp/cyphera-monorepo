@@ -48,6 +48,19 @@ Parameters:
   ParamDelegationServerAlbDns:
     Type: String
     Description: DNS Name of the Delegation Server ALB (from SSM)
+  # ADDED: Parameters for Dunning/Email functionality
+  ResendAPIKeyArn:
+    Type: String
+    Description: ARN of the Resend API key secret in Secrets Manager
+    NoEcho: true
+  EmailFromAddress:
+    Type: String
+    Default: noreply@cypherapay.com
+    Description: From email address for dunning emails
+  EmailFromName:
+    Type: String
+    Default: Cyphera
+    Description: From name for dunning emails
 
 Resources:
   SubscriptionProcessorFunction:
@@ -76,6 +89,10 @@ Resources:
           # Pass only the ALB DNS name; Go code will append port
           DELEGATION_SERVER_URL: !Ref ParamDelegationServerAlbDns
           DB_SSLMODE: require # Set directly, or add another parameter if it needs to vary
+          # Dunning/Email related environment variables
+          RESEND_API_KEY_ARN: !Ref ResendAPIKeyArn
+          EMAIL_FROM_ADDRESS: !Ref EmailFromAddress
+          EMAIL_FROM_NAME: !Ref EmailFromName
 
           # Note: The function code now expects these exact environment variables
       # VPC Configuration (Required for accessing private resources like RDS)
@@ -90,13 +107,19 @@ Resources:
         # Use standard managed policies + specific permissions
         - AWSLambdaBasicExecutionRole # Includes basic logging permissions (CloudWatch Logs)
         - AWSLambdaVPCAccessExecutionRole # Includes permissions for ENI management in VPC
-        # Add specific permission for the RDS Secret
+        # Add specific permission for the RDS Secret and Resend API Key
         - Statement:
             - Effect: Allow
               Action:
                 - secretsmanager:GetSecretValue
               Resource:
                 - !Ref RdsSecretArnValue # Reference the ARN passed in
+                - !Ref ResendAPIKeyArn # Reference the Resend API key ARN
+            # Add CloudWatch metrics permissions for dunning metrics
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: '*'
             # Add any other specific permissions needed here
 
     Metadata:

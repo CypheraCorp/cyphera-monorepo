@@ -35,7 +35,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { PRICE_TYPES, INTERVAL_TYPES } from '@/lib/constants/products';
 
 import type { WalletResponse } from '@/types/wallet';
-import { CreateProductRequest, CreatePriceRequest } from '@/types/product';
+import { CreateProductRequest } from '@/types/product';
 import { Badge } from '@/components/ui/badge';
 import { NetworkWithTokensResponse } from '@/types/network';
 import { PricingPreviewCard } from '@/components/ui/pricing-preview-card';
@@ -118,7 +118,7 @@ const productFormSchema = z
     active: z.boolean(),
 
     priceDetails: z.object({
-      type: z.enum([PRICE_TYPES.RECURRING, PRICE_TYPES.ONE_OFF]),
+      type: z.enum([PRICE_TYPES.RECURRING, PRICE_TYPES.ONE_TIME]),
       nickname: z.string().optional(),
       currency: z.string().min(1, 'Currency is required'),
       unit_amount_in_pennies: z.coerce.number().min(0, 'Price must be >= 0'),
@@ -361,37 +361,29 @@ export function CreateProductMultiStepDialog({
         })
       );
 
-      const priceToCreate: CreatePriceRequest = {
-        type: data.priceDetails.type,
-        nickname: data.priceDetails.nickname || undefined,
-        currency: data.priceDetails.currency,
-        unit_amount_in_pennies: data.priceDetails.unit_amount_in_pennies,
-        interval_type:
-          data.priceDetails.type === PRICE_TYPES.RECURRING
-            ? data.priceDetails.interval_type!
-            : undefined,
-        interval_count:
-          data.priceDetails.type === PRICE_TYPES.RECURRING
-            ? (data.priceDetails.interval_count || 1)
-            : undefined,
-        term_length:
-          data.priceDetails.type === PRICE_TYPES.RECURRING
-            ? data.priceDetails.term_length!
-            : undefined,
-        active: data.priceDetails.active,
-        metadata: undefined,
-      };
-
+      // Create product with embedded price fields (prices table merged into products)
       const finalProductData: CreateProductRequest = {
         name: data.name,
         description: data.description || undefined,
-        prices: [priceToCreate],
         active: data.active,
         wallet_id: finalWalletId!,
         product_tokens: productTokensPayload,
         image_url: data.image_url || undefined,
         url: data.url || undefined,
         metadata: data.metadata || undefined,
+        // Embedded price fields (now part of product)
+        price_type: data.priceDetails.type,
+        currency: data.priceDetails.currency,
+        unit_amount_in_pennies: data.priceDetails.unit_amount_in_pennies,
+        interval_type:
+          data.priceDetails.type === PRICE_TYPES.RECURRING
+            ? data.priceDetails.interval_type!
+            : undefined,
+        term_length:
+          data.priceDetails.type === PRICE_TYPES.RECURRING
+            ? data.priceDetails.term_length!
+            : undefined,
+        price_nickname: data.priceDetails.nickname || undefined,
       };
 
       await createProductMutation.mutateAsync(finalProductData);
@@ -614,7 +606,7 @@ function PricingBillingStep({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value={PRICE_TYPES.ONE_OFF}>One-Time Purchase</SelectItem>
+                    <SelectItem value={PRICE_TYPES.ONE_TIME}>One-Time Purchase</SelectItem>
                     <SelectItem value={PRICE_TYPES.RECURRING}>Subscription</SelectItem>
                   </SelectContent>
                 </Select>

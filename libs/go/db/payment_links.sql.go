@@ -32,7 +32,6 @@ INSERT INTO payment_links (
     slug,
     status,
     product_id,
-    price_id,
     amount_in_cents,
     currency,
     payment_type,
@@ -45,9 +44,9 @@ INSERT INTO payment_links (
     qr_code_url,
     metadata
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
 )
-RETURNING id, workspace_id, slug, status, product_id, price_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, slug, status, product_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at
 `
 
 type CreatePaymentLinkParams struct {
@@ -55,7 +54,6 @@ type CreatePaymentLinkParams struct {
 	Slug            string             `json:"slug"`
 	Status          string             `json:"status"`
 	ProductID       pgtype.UUID        `json:"product_id"`
-	PriceID         pgtype.UUID        `json:"price_id"`
 	AmountInCents   pgtype.Int8        `json:"amount_in_cents"`
 	Currency        pgtype.Text        `json:"currency"`
 	PaymentType     pgtype.Text        `json:"payment_type"`
@@ -75,7 +73,6 @@ func (q *Queries) CreatePaymentLink(ctx context.Context, arg CreatePaymentLinkPa
 		arg.Slug,
 		arg.Status,
 		arg.ProductID,
-		arg.PriceID,
 		arg.AmountInCents,
 		arg.Currency,
 		arg.PaymentType,
@@ -95,7 +92,6 @@ func (q *Queries) CreatePaymentLink(ctx context.Context, arg CreatePaymentLinkPa
 		&i.Slug,
 		&i.Status,
 		&i.ProductID,
-		&i.PriceID,
 		&i.AmountInCents,
 		&i.Currency,
 		&i.PaymentType,
@@ -121,7 +117,7 @@ SET
     status = 'inactive',
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, slug, status, product_id, price_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, slug, status, product_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at
 `
 
 type DeactivatePaymentLinkParams struct {
@@ -138,7 +134,6 @@ func (q *Queries) DeactivatePaymentLink(ctx context.Context, arg DeactivatePayme
 		&i.Slug,
 		&i.Status,
 		&i.ProductID,
-		&i.PriceID,
 		&i.AmountInCents,
 		&i.Currency,
 		&i.PaymentType,
@@ -164,7 +159,7 @@ SET
     deleted_at = CURRENT_TIMESTAMP,
     status = 'inactive'
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, slug, status, product_id, price_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, slug, status, product_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at
 `
 
 type DeletePaymentLinkParams struct {
@@ -181,7 +176,6 @@ func (q *Queries) DeletePaymentLink(ctx context.Context, arg DeletePaymentLinkPa
 		&i.Slug,
 		&i.Status,
 		&i.ProductID,
-		&i.PriceID,
 		&i.AmountInCents,
 		&i.Currency,
 		&i.PaymentType,
@@ -218,7 +212,7 @@ func (q *Queries) ExpirePaymentLinks(ctx context.Context) error {
 }
 
 const getActivePaymentLinkBySlug = `-- name: GetActivePaymentLinkBySlug :one
-SELECT id, workspace_id, slug, status, product_id, price_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at FROM payment_links
+SELECT id, workspace_id, slug, status, product_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at FROM payment_links
 WHERE slug = $1 
     AND status = 'active'
     AND deleted_at IS NULL
@@ -235,7 +229,6 @@ func (q *Queries) GetActivePaymentLinkBySlug(ctx context.Context, slug string) (
 		&i.Slug,
 		&i.Status,
 		&i.ProductID,
-		&i.PriceID,
 		&i.AmountInCents,
 		&i.Currency,
 		&i.PaymentType,
@@ -256,7 +249,7 @@ func (q *Queries) GetActivePaymentLinkBySlug(ctx context.Context, slug string) (
 }
 
 const getPaymentLink = `-- name: GetPaymentLink :one
-SELECT id, workspace_id, slug, status, product_id, price_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at FROM payment_links
+SELECT id, workspace_id, slug, status, product_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at FROM payment_links
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 `
 
@@ -274,7 +267,6 @@ func (q *Queries) GetPaymentLink(ctx context.Context, arg GetPaymentLinkParams) 
 		&i.Slug,
 		&i.Status,
 		&i.ProductID,
-		&i.PriceID,
 		&i.AmountInCents,
 		&i.Currency,
 		&i.PaymentType,
@@ -295,7 +287,7 @@ func (q *Queries) GetPaymentLink(ctx context.Context, arg GetPaymentLinkParams) 
 }
 
 const getPaymentLinkBySlug = `-- name: GetPaymentLinkBySlug :one
-SELECT id, workspace_id, slug, status, product_id, price_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at FROM payment_links
+SELECT id, workspace_id, slug, status, product_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at FROM payment_links
 WHERE slug = $1 AND deleted_at IS NULL
 `
 
@@ -308,7 +300,6 @@ func (q *Queries) GetPaymentLinkBySlug(ctx context.Context, slug string) (Paymen
 		&i.Slug,
 		&i.Status,
 		&i.ProductID,
-		&i.PriceID,
 		&i.AmountInCents,
 		&i.Currency,
 		&i.PaymentType,
@@ -361,7 +352,7 @@ func (q *Queries) GetPaymentLinkStats(ctx context.Context, workspaceID uuid.UUID
 }
 
 const getPaymentLinksByProduct = `-- name: GetPaymentLinksByProduct :many
-SELECT id, workspace_id, slug, status, product_id, price_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at FROM payment_links
+SELECT id, workspace_id, slug, status, product_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at FROM payment_links
 WHERE workspace_id = $1 
     AND product_id = $2
     AND deleted_at IS NULL
@@ -388,7 +379,6 @@ func (q *Queries) GetPaymentLinksByProduct(ctx context.Context, arg GetPaymentLi
 			&i.Slug,
 			&i.Status,
 			&i.ProductID,
-			&i.PriceID,
 			&i.AmountInCents,
 			&i.Currency,
 			&i.PaymentType,
@@ -416,7 +406,7 @@ func (q *Queries) GetPaymentLinksByProduct(ctx context.Context, arg GetPaymentLi
 }
 
 const getPaymentLinksByWorkspace = `-- name: GetPaymentLinksByWorkspace :many
-SELECT id, workspace_id, slug, status, product_id, price_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at FROM payment_links
+SELECT id, workspace_id, slug, status, product_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at FROM payment_links
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -443,7 +433,6 @@ func (q *Queries) GetPaymentLinksByWorkspace(ctx context.Context, arg GetPayment
 			&i.Slug,
 			&i.Status,
 			&i.ProductID,
-			&i.PriceID,
 			&i.AmountInCents,
 			&i.Currency,
 			&i.PaymentType,
@@ -472,12 +461,11 @@ func (q *Queries) GetPaymentLinksByWorkspace(ctx context.Context, arg GetPayment
 
 const getTopPaymentLinks = `-- name: GetTopPaymentLinks :many
 SELECT 
-    pl.id, pl.workspace_id, pl.slug, pl.status, pl.product_id, pl.price_id, pl.amount_in_cents, pl.currency, pl.payment_type, pl.collect_email, pl.collect_shipping, pl.collect_name, pl.expires_at, pl.max_uses, pl.used_count, pl.redirect_url, pl.qr_code_url, pl.metadata, pl.created_at, pl.updated_at, pl.deleted_at,
+    pl.id, pl.workspace_id, pl.slug, pl.status, pl.product_id, pl.amount_in_cents, pl.currency, pl.payment_type, pl.collect_email, pl.collect_shipping, pl.collect_name, pl.expires_at, pl.max_uses, pl.used_count, pl.redirect_url, pl.qr_code_url, pl.metadata, pl.created_at, pl.updated_at, pl.deleted_at,
     p.name as product_name,
-    pr.unit_amount_in_pennies as price_amount
+    p.unit_amount_in_pennies as price_amount
 FROM payment_links pl
 LEFT JOIN products p ON pl.product_id = p.id
-LEFT JOIN prices pr ON pl.price_id = pr.id
 WHERE pl.workspace_id = $1 
     AND pl.deleted_at IS NULL
 ORDER BY pl.used_count DESC
@@ -495,7 +483,6 @@ type GetTopPaymentLinksRow struct {
 	Slug            string             `json:"slug"`
 	Status          string             `json:"status"`
 	ProductID       pgtype.UUID        `json:"product_id"`
-	PriceID         pgtype.UUID        `json:"price_id"`
 	AmountInCents   pgtype.Int8        `json:"amount_in_cents"`
 	Currency        pgtype.Text        `json:"currency"`
 	PaymentType     pgtype.Text        `json:"payment_type"`
@@ -530,7 +517,6 @@ func (q *Queries) GetTopPaymentLinks(ctx context.Context, arg GetTopPaymentLinks
 			&i.Slug,
 			&i.Status,
 			&i.ProductID,
-			&i.PriceID,
 			&i.AmountInCents,
 			&i.Currency,
 			&i.PaymentType,
@@ -569,7 +555,7 @@ SET
     END,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2
-RETURNING id, workspace_id, slug, status, product_id, price_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, slug, status, product_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at
 `
 
 type IncrementPaymentLinkUsageParams struct {
@@ -586,7 +572,6 @@ func (q *Queries) IncrementPaymentLinkUsage(ctx context.Context, arg IncrementPa
 		&i.Slug,
 		&i.Status,
 		&i.ProductID,
-		&i.PriceID,
 		&i.AmountInCents,
 		&i.Currency,
 		&i.PaymentType,
@@ -616,7 +601,7 @@ SET
     metadata = COALESCE($7, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, slug, status, product_id, price_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, slug, status, product_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdatePaymentLinkParams struct {
@@ -646,7 +631,6 @@ func (q *Queries) UpdatePaymentLink(ctx context.Context, arg UpdatePaymentLinkPa
 		&i.Slug,
 		&i.Status,
 		&i.ProductID,
-		&i.PriceID,
 		&i.AmountInCents,
 		&i.Currency,
 		&i.PaymentType,
@@ -672,7 +656,7 @@ SET
     qr_code_url = $3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, slug, status, product_id, price_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, slug, status, product_id, amount_in_cents, currency, payment_type, collect_email, collect_shipping, collect_name, expires_at, max_uses, used_count, redirect_url, qr_code_url, metadata, created_at, updated_at, deleted_at
 `
 
 type UpdatePaymentLinkQRCodeParams struct {
@@ -690,7 +674,6 @@ func (q *Queries) UpdatePaymentLinkQRCode(ctx context.Context, arg UpdatePayment
 		&i.Slug,
 		&i.Status,
 		&i.ProductID,
-		&i.PriceID,
 		&i.AmountInCents,
 		&i.Currency,
 		&i.PaymentType,

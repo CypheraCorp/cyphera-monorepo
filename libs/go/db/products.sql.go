@@ -18,7 +18,7 @@ SET
     active = true,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) ActivateProduct(ctx context.Context, id uuid.UUID) (Product, error) {
@@ -34,6 +34,15 @@ func (q *Queries) ActivateProduct(ctx context.Context, id uuid.UUID) (Product, e
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
+		&i.ProductType,
+		&i.ProductGroup,
+		&i.PriceType,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.PriceNickname,
+		&i.PriceExternalID,
 		&i.Metadata,
 		&i.PaymentSyncStatus,
 		&i.PaymentSyncedAt,
@@ -67,28 +76,46 @@ INSERT INTO products (
     image_url,
     url,
     active,
+    product_type,
+    product_group,
+    price_type,
+    currency,
+    unit_amount_in_pennies,
+    interval_type,
+    term_length,
+    price_nickname,
+    price_external_id,
     metadata,
     payment_sync_status,
     payment_provider
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8,
-    COALESCE($9, 'pending'),
-    $10
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+    COALESCE($18, 'pending'),
+    $19
 )
-RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type CreateProductParams struct {
-	WorkspaceID     uuid.UUID   `json:"workspace_id"`
-	WalletID        uuid.UUID   `json:"wallet_id"`
-	Name            string      `json:"name"`
-	Description     pgtype.Text `json:"description"`
-	ImageUrl        pgtype.Text `json:"image_url"`
-	Url             pgtype.Text `json:"url"`
-	Active          bool        `json:"active"`
-	Metadata        []byte      `json:"metadata"`
-	Column9         interface{} `json:"column_9"`
-	PaymentProvider pgtype.Text `json:"payment_provider"`
+	WorkspaceID         uuid.UUID        `json:"workspace_id"`
+	WalletID            uuid.UUID        `json:"wallet_id"`
+	Name                string           `json:"name"`
+	Description         pgtype.Text      `json:"description"`
+	ImageUrl            pgtype.Text      `json:"image_url"`
+	Url                 pgtype.Text      `json:"url"`
+	Active              bool             `json:"active"`
+	ProductType         pgtype.Text      `json:"product_type"`
+	ProductGroup        pgtype.Text      `json:"product_group"`
+	PriceType           PriceType        `json:"price_type"`
+	Currency            string           `json:"currency"`
+	UnitAmountInPennies int32            `json:"unit_amount_in_pennies"`
+	IntervalType        NullIntervalType `json:"interval_type"`
+	TermLength          pgtype.Int4      `json:"term_length"`
+	PriceNickname       pgtype.Text      `json:"price_nickname"`
+	PriceExternalID     pgtype.Text      `json:"price_external_id"`
+	Metadata            []byte           `json:"metadata"`
+	Column18            interface{}      `json:"column_18"`
+	PaymentProvider     pgtype.Text      `json:"payment_provider"`
 }
 
 func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error) {
@@ -100,8 +127,17 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 		arg.ImageUrl,
 		arg.Url,
 		arg.Active,
+		arg.ProductType,
+		arg.ProductGroup,
+		arg.PriceType,
+		arg.Currency,
+		arg.UnitAmountInPennies,
+		arg.IntervalType,
+		arg.TermLength,
+		arg.PriceNickname,
+		arg.PriceExternalID,
 		arg.Metadata,
-		arg.Column9,
+		arg.Column18,
 		arg.PaymentProvider,
 	)
 	var i Product
@@ -115,6 +151,15 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
+		&i.ProductType,
+		&i.ProductGroup,
+		&i.PriceType,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.PriceNickname,
+		&i.PriceExternalID,
 		&i.Metadata,
 		&i.PaymentSyncStatus,
 		&i.PaymentSyncedAt,
@@ -137,31 +182,49 @@ INSERT INTO products (
     image_url,
     url,
     active,
+    product_type,
+    product_group,
+    price_type,
+    currency,
+    unit_amount_in_pennies,
+    interval_type,
+    term_length,
+    price_nickname,
+    price_external_id,
     metadata,
     payment_sync_status,
     payment_synced_at,
     payment_sync_version,
     payment_provider
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
 )
-RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type CreateProductWithSyncParams struct {
-	WorkspaceID        uuid.UUID          `json:"workspace_id"`
-	WalletID           uuid.UUID          `json:"wallet_id"`
-	ExternalID         pgtype.Text        `json:"external_id"`
-	Name               string             `json:"name"`
-	Description        pgtype.Text        `json:"description"`
-	ImageUrl           pgtype.Text        `json:"image_url"`
-	Url                pgtype.Text        `json:"url"`
-	Active             bool               `json:"active"`
-	Metadata           []byte             `json:"metadata"`
-	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
-	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
-	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`
-	PaymentProvider    pgtype.Text        `json:"payment_provider"`
+	WorkspaceID         uuid.UUID          `json:"workspace_id"`
+	WalletID            uuid.UUID          `json:"wallet_id"`
+	ExternalID          pgtype.Text        `json:"external_id"`
+	Name                string             `json:"name"`
+	Description         pgtype.Text        `json:"description"`
+	ImageUrl            pgtype.Text        `json:"image_url"`
+	Url                 pgtype.Text        `json:"url"`
+	Active              bool               `json:"active"`
+	ProductType         pgtype.Text        `json:"product_type"`
+	ProductGroup        pgtype.Text        `json:"product_group"`
+	PriceType           PriceType          `json:"price_type"`
+	Currency            string             `json:"currency"`
+	UnitAmountInPennies int32              `json:"unit_amount_in_pennies"`
+	IntervalType        NullIntervalType   `json:"interval_type"`
+	TermLength          pgtype.Int4        `json:"term_length"`
+	PriceNickname       pgtype.Text        `json:"price_nickname"`
+	PriceExternalID     pgtype.Text        `json:"price_external_id"`
+	Metadata            []byte             `json:"metadata"`
+	PaymentSyncStatus   pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt     pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion  pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider     pgtype.Text        `json:"payment_provider"`
 }
 
 func (q *Queries) CreateProductWithSync(ctx context.Context, arg CreateProductWithSyncParams) (Product, error) {
@@ -174,6 +237,15 @@ func (q *Queries) CreateProductWithSync(ctx context.Context, arg CreateProductWi
 		arg.ImageUrl,
 		arg.Url,
 		arg.Active,
+		arg.ProductType,
+		arg.ProductGroup,
+		arg.PriceType,
+		arg.Currency,
+		arg.UnitAmountInPennies,
+		arg.IntervalType,
+		arg.TermLength,
+		arg.PriceNickname,
+		arg.PriceExternalID,
 		arg.Metadata,
 		arg.PaymentSyncStatus,
 		arg.PaymentSyncedAt,
@@ -191,6 +263,15 @@ func (q *Queries) CreateProductWithSync(ctx context.Context, arg CreateProductWi
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
+		&i.ProductType,
+		&i.ProductGroup,
+		&i.PriceType,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.PriceNickname,
+		&i.PriceExternalID,
 		&i.Metadata,
 		&i.PaymentSyncStatus,
 		&i.PaymentSyncedAt,
@@ -209,7 +290,7 @@ SET
     active = false,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) DeactivateProduct(ctx context.Context, id uuid.UUID) (Product, error) {
@@ -225,6 +306,15 @@ func (q *Queries) DeactivateProduct(ctx context.Context, id uuid.UUID) (Product,
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
+		&i.ProductType,
+		&i.ProductGroup,
+		&i.PriceType,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.PriceNickname,
+		&i.PriceExternalID,
 		&i.Metadata,
 		&i.PaymentSyncStatus,
 		&i.PaymentSyncedAt,
@@ -254,7 +344,7 @@ func (q *Queries) DeleteProduct(ctx context.Context, arg DeleteProductParams) er
 }
 
 const getActiveProductsByWalletID = `-- name: GetActiveProductsByWalletID :many
-SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
 WHERE wallet_id = $1 AND deleted_at IS NULL
 `
 
@@ -277,6 +367,127 @@ func (q *Queries) GetActiveProductsByWalletID(ctx context.Context, walletID uuid
 			&i.ImageUrl,
 			&i.Url,
 			&i.Active,
+			&i.ProductType,
+			&i.ProductGroup,
+			&i.PriceType,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceNickname,
+			&i.PriceExternalID,
+			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAddonProducts = `-- name: GetAddonProducts :many
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
+WHERE workspace_id = $1 
+  AND product_type = 'addon'
+  AND active = true
+  AND deleted_at IS NULL
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetAddonProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error) {
+	rows, err := q.db.Query(ctx, getAddonProducts, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Product{}
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.WalletID,
+			&i.ExternalID,
+			&i.Name,
+			&i.Description,
+			&i.ImageUrl,
+			&i.Url,
+			&i.Active,
+			&i.ProductType,
+			&i.ProductGroup,
+			&i.PriceType,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceNickname,
+			&i.PriceExternalID,
+			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getBaseProducts = `-- name: GetBaseProducts :many
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
+WHERE workspace_id = $1 
+  AND product_type = 'base'
+  AND active = true
+  AND deleted_at IS NULL
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetBaseProducts(ctx context.Context, workspaceID uuid.UUID) ([]Product, error) {
+	rows, err := q.db.Query(ctx, getBaseProducts, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Product{}
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.WalletID,
+			&i.ExternalID,
+			&i.Name,
+			&i.Description,
+			&i.ImageUrl,
+			&i.Url,
+			&i.Active,
+			&i.ProductType,
+			&i.ProductGroup,
+			&i.PriceType,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceNickname,
+			&i.PriceExternalID,
 			&i.Metadata,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
@@ -297,7 +508,7 @@ func (q *Queries) GetActiveProductsByWalletID(ctx context.Context, walletID uuid
 }
 
 const getProduct = `-- name: GetProduct :one
-SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -319,6 +530,15 @@ func (q *Queries) GetProduct(ctx context.Context, arg GetProductParams) (Product
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
+		&i.ProductType,
+		&i.ProductGroup,
+		&i.PriceType,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.PriceNickname,
+		&i.PriceExternalID,
 		&i.Metadata,
 		&i.PaymentSyncStatus,
 		&i.PaymentSyncedAt,
@@ -332,7 +552,7 @@ func (q *Queries) GetProduct(ctx context.Context, arg GetProductParams) (Product
 }
 
 const getProductByExternalID = `-- name: GetProductByExternalID :one
-SELECT p.id, p.workspace_id, p.wallet_id, p.external_id, p.name, p.description, p.image_url, p.url, p.active, p.metadata, p.payment_sync_status, p.payment_synced_at, p.payment_sync_version, p.payment_provider, p.created_at, p.updated_at, p.deleted_at FROM products p
+SELECT p.id, p.workspace_id, p.wallet_id, p.external_id, p.name, p.description, p.image_url, p.url, p.active, p.product_type, p.product_group, p.price_type, p.currency, p.unit_amount_in_pennies, p.interval_type, p.term_length, p.price_nickname, p.price_external_id, p.metadata, p.payment_sync_status, p.payment_synced_at, p.payment_sync_version, p.payment_provider, p.created_at, p.updated_at, p.deleted_at FROM products p
 WHERE p.workspace_id = $1 
   AND p.external_id = $2
   AND p.payment_provider = $3
@@ -358,6 +578,15 @@ func (q *Queries) GetProductByExternalID(ctx context.Context, arg GetProductByEx
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
+		&i.ProductType,
+		&i.ProductGroup,
+		&i.PriceType,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.PriceNickname,
+		&i.PriceExternalID,
 		&i.Metadata,
 		&i.PaymentSyncStatus,
 		&i.PaymentSyncedAt,
@@ -371,7 +600,7 @@ func (q *Queries) GetProductByExternalID(ctx context.Context, arg GetProductByEx
 }
 
 const getProductWithoutWorkspaceId = `-- name: GetProductWithoutWorkspaceId :one
-SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
 WHERE id = $1 AND deleted_at IS NULL LIMIT 1
 `
 
@@ -388,6 +617,15 @@ func (q *Queries) GetProductWithoutWorkspaceId(ctx context.Context, id uuid.UUID
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
+		&i.ProductType,
+		&i.ProductGroup,
+		&i.PriceType,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.PriceNickname,
+		&i.PriceExternalID,
 		&i.Metadata,
 		&i.PaymentSyncStatus,
 		&i.PaymentSyncedAt,
@@ -400,9 +638,129 @@ func (q *Queries) GetProductWithoutWorkspaceId(ctx context.Context, id uuid.UUID
 	return i, err
 }
 
+const getProductsByGroup = `-- name: GetProductsByGroup :many
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
+WHERE workspace_id = $1 
+  AND product_group = $2
+  AND deleted_at IS NULL
+ORDER BY created_at DESC
+`
+
+type GetProductsByGroupParams struct {
+	WorkspaceID  uuid.UUID   `json:"workspace_id"`
+	ProductGroup pgtype.Text `json:"product_group"`
+}
+
+func (q *Queries) GetProductsByGroup(ctx context.Context, arg GetProductsByGroupParams) ([]Product, error) {
+	rows, err := q.db.Query(ctx, getProductsByGroup, arg.WorkspaceID, arg.ProductGroup)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Product{}
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.WalletID,
+			&i.ExternalID,
+			&i.Name,
+			&i.Description,
+			&i.ImageUrl,
+			&i.Url,
+			&i.Active,
+			&i.ProductType,
+			&i.ProductGroup,
+			&i.PriceType,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceNickname,
+			&i.PriceExternalID,
+			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductsByType = `-- name: GetProductsByType :many
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
+WHERE workspace_id = $1 
+  AND product_type = $2
+  AND deleted_at IS NULL
+ORDER BY created_at DESC
+`
+
+type GetProductsByTypeParams struct {
+	WorkspaceID uuid.UUID   `json:"workspace_id"`
+	ProductType pgtype.Text `json:"product_type"`
+}
+
+func (q *Queries) GetProductsByType(ctx context.Context, arg GetProductsByTypeParams) ([]Product, error) {
+	rows, err := q.db.Query(ctx, getProductsByType, arg.WorkspaceID, arg.ProductType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Product{}
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.WalletID,
+			&i.ExternalID,
+			&i.Name,
+			&i.Description,
+			&i.ImageUrl,
+			&i.Url,
+			&i.Active,
+			&i.ProductType,
+			&i.ProductGroup,
+			&i.PriceType,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceNickname,
+			&i.PriceExternalID,
+			&i.Metadata,
+			&i.PaymentSyncStatus,
+			&i.PaymentSyncedAt,
+			&i.PaymentSyncVersion,
+			&i.PaymentProvider,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getProductsNeedingSync = `-- name: GetProductsNeedingSync :many
 
-SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products 
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products 
 WHERE workspace_id = $1 AND payment_sync_status = 'pending' AND deleted_at IS NULL
 ORDER BY created_at ASC
 `
@@ -427,6 +785,15 @@ func (q *Queries) GetProductsNeedingSync(ctx context.Context, workspaceID uuid.U
 			&i.ImageUrl,
 			&i.Url,
 			&i.Active,
+			&i.ProductType,
+			&i.ProductGroup,
+			&i.PriceType,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceNickname,
+			&i.PriceExternalID,
 			&i.Metadata,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
@@ -447,7 +814,7 @@ func (q *Queries) GetProductsNeedingSync(ctx context.Context, workspaceID uuid.U
 }
 
 const getProductsSyncedByProvider = `-- name: GetProductsSyncedByProvider :many
-SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products 
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products 
 WHERE workspace_id = $1 AND payment_provider = $2 AND payment_sync_status != 'pending' AND deleted_at IS NULL
 ORDER BY payment_synced_at DESC
 `
@@ -476,6 +843,15 @@ func (q *Queries) GetProductsSyncedByProvider(ctx context.Context, arg GetProduc
 			&i.ImageUrl,
 			&i.Url,
 			&i.Active,
+			&i.ProductType,
+			&i.ProductGroup,
+			&i.PriceType,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceNickname,
+			&i.PriceExternalID,
 			&i.Metadata,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
@@ -496,7 +872,7 @@ func (q *Queries) GetProductsSyncedByProvider(ctx context.Context, arg GetProduc
 }
 
 const getProductsWithSyncConflicts = `-- name: GetProductsWithSyncConflicts :many
-SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products 
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products 
 WHERE workspace_id = $1 AND payment_sync_status = 'conflict' AND deleted_at IS NULL
 ORDER BY payment_synced_at DESC
 `
@@ -520,6 +896,15 @@ func (q *Queries) GetProductsWithSyncConflicts(ctx context.Context, workspaceID 
 			&i.ImageUrl,
 			&i.Url,
 			&i.Active,
+			&i.ProductType,
+			&i.ProductGroup,
+			&i.PriceType,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceNickname,
+			&i.PriceExternalID,
 			&i.Metadata,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
@@ -540,7 +925,7 @@ func (q *Queries) GetProductsWithSyncConflicts(ctx context.Context, workspaceID 
 }
 
 const listActiveProducts = `-- name: ListActiveProducts :many
-SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
 WHERE workspace_id = $1 AND active = true AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -564,6 +949,15 @@ func (q *Queries) ListActiveProducts(ctx context.Context, workspaceID uuid.UUID)
 			&i.ImageUrl,
 			&i.Url,
 			&i.Active,
+			&i.ProductType,
+			&i.ProductGroup,
+			&i.PriceType,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceNickname,
+			&i.PriceExternalID,
 			&i.Metadata,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
@@ -584,7 +978,7 @@ func (q *Queries) ListActiveProducts(ctx context.Context, workspaceID uuid.UUID)
 }
 
 const listProducts = `-- name: ListProducts :many
-SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
@@ -608,6 +1002,15 @@ func (q *Queries) ListProducts(ctx context.Context, workspaceID uuid.UUID) ([]Pr
 			&i.ImageUrl,
 			&i.Url,
 			&i.Active,
+			&i.ProductType,
+			&i.ProductGroup,
+			&i.PriceType,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceNickname,
+			&i.PriceExternalID,
 			&i.Metadata,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
@@ -628,7 +1031,7 @@ func (q *Queries) ListProducts(ctx context.Context, workspaceID uuid.UUID) ([]Pr
 }
 
 const listProductsWithPagination = `-- name: ListProductsWithPagination :many
-SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
+SELECT id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at FROM products
 WHERE workspace_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -659,6 +1062,15 @@ func (q *Queries) ListProductsWithPagination(ctx context.Context, arg ListProduc
 			&i.ImageUrl,
 			&i.Url,
 			&i.Active,
+			&i.ProductType,
+			&i.ProductGroup,
+			&i.PriceType,
+			&i.Currency,
+			&i.UnitAmountInPennies,
+			&i.IntervalType,
+			&i.TermLength,
+			&i.PriceNickname,
+			&i.PriceExternalID,
 			&i.Metadata,
 			&i.PaymentSyncStatus,
 			&i.PaymentSyncedAt,
@@ -687,22 +1099,40 @@ SET
     image_url = COALESCE($6, image_url),
     url = COALESCE($7, url),
     active = COALESCE($8, active),
-    metadata = COALESCE($9, metadata),
+    product_type = COALESCE($9, product_type),
+    product_group = COALESCE($10, product_group),
+    price_type = COALESCE($11, price_type),
+    currency = COALESCE($12, currency),
+    unit_amount_in_pennies = COALESCE($13, unit_amount_in_pennies),
+    interval_type = COALESCE($14, interval_type),
+    term_length = COALESCE($15, term_length),
+    price_nickname = COALESCE($16, price_nickname),
+    price_external_id = COALESCE($17, price_external_id),
+    metadata = COALESCE($18, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type UpdateProductParams struct {
-	ID          uuid.UUID   `json:"id"`
-	WorkspaceID uuid.UUID   `json:"workspace_id"`
-	Name        string      `json:"name"`
-	WalletID    uuid.UUID   `json:"wallet_id"`
-	Description pgtype.Text `json:"description"`
-	ImageUrl    pgtype.Text `json:"image_url"`
-	Url         pgtype.Text `json:"url"`
-	Active      bool        `json:"active"`
-	Metadata    []byte      `json:"metadata"`
+	ID                  uuid.UUID        `json:"id"`
+	WorkspaceID         uuid.UUID        `json:"workspace_id"`
+	Name                string           `json:"name"`
+	WalletID            uuid.UUID        `json:"wallet_id"`
+	Description         pgtype.Text      `json:"description"`
+	ImageUrl            pgtype.Text      `json:"image_url"`
+	Url                 pgtype.Text      `json:"url"`
+	Active              bool             `json:"active"`
+	ProductType         pgtype.Text      `json:"product_type"`
+	ProductGroup        pgtype.Text      `json:"product_group"`
+	PriceType           PriceType        `json:"price_type"`
+	Currency            string           `json:"currency"`
+	UnitAmountInPennies int32            `json:"unit_amount_in_pennies"`
+	IntervalType        NullIntervalType `json:"interval_type"`
+	TermLength          pgtype.Int4      `json:"term_length"`
+	PriceNickname       pgtype.Text      `json:"price_nickname"`
+	PriceExternalID     pgtype.Text      `json:"price_external_id"`
+	Metadata            []byte           `json:"metadata"`
 }
 
 func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error) {
@@ -715,6 +1145,15 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 		arg.ImageUrl,
 		arg.Url,
 		arg.Active,
+		arg.ProductType,
+		arg.ProductGroup,
+		arg.PriceType,
+		arg.Currency,
+		arg.UnitAmountInPennies,
+		arg.IntervalType,
+		arg.TermLength,
+		arg.PriceNickname,
+		arg.PriceExternalID,
 		arg.Metadata,
 	)
 	var i Product
@@ -728,6 +1167,15 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
+		&i.ProductType,
+		&i.ProductGroup,
+		&i.PriceType,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.PriceNickname,
+		&i.PriceExternalID,
 		&i.Metadata,
 		&i.PaymentSyncStatus,
 		&i.PaymentSyncedAt,
@@ -748,7 +1196,7 @@ SET payment_sync_status = $3,
     payment_provider = COALESCE($4, payment_provider),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type UpdateProductPaymentSyncStatusParams struct {
@@ -776,6 +1224,15 @@ func (q *Queries) UpdateProductPaymentSyncStatus(ctx context.Context, arg Update
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
+		&i.ProductType,
+		&i.ProductGroup,
+		&i.PriceType,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.PriceNickname,
+		&i.PriceExternalID,
 		&i.Metadata,
 		&i.PaymentSyncStatus,
 		&i.PaymentSyncedAt,
@@ -797,30 +1254,48 @@ SET
     image_url = COALESCE($6, image_url),
     url = COALESCE($7, url),
     active = COALESCE($8, active),
-    metadata = COALESCE($9, metadata),
-    payment_sync_status = COALESCE($10, payment_sync_status),
-    payment_synced_at = COALESCE($11, payment_synced_at),
-    payment_sync_version = COALESCE($12, payment_sync_version),
-    payment_provider = COALESCE($13, payment_provider),
+    product_type = COALESCE($9, product_type),
+    product_group = COALESCE($10, product_group),
+    price_type = COALESCE($11, price_type),
+    currency = COALESCE($12, currency),
+    unit_amount_in_pennies = COALESCE($13, unit_amount_in_pennies),
+    interval_type = COALESCE($14, interval_type),
+    term_length = COALESCE($15, term_length),
+    price_nickname = COALESCE($16, price_nickname),
+    price_external_id = COALESCE($17, price_external_id),
+    metadata = COALESCE($18, metadata),
+    payment_sync_status = COALESCE($19, payment_sync_status),
+    payment_synced_at = COALESCE($20, payment_synced_at),
+    payment_sync_version = COALESCE($21, payment_sync_version),
+    payment_provider = COALESCE($22, payment_provider),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
-RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
+RETURNING id, workspace_id, wallet_id, external_id, name, description, image_url, url, active, product_type, product_group, price_type, currency, unit_amount_in_pennies, interval_type, term_length, price_nickname, price_external_id, metadata, payment_sync_status, payment_synced_at, payment_sync_version, payment_provider, created_at, updated_at, deleted_at
 `
 
 type UpdateProductWithSyncParams struct {
-	ID                 uuid.UUID          `json:"id"`
-	WorkspaceID        uuid.UUID          `json:"workspace_id"`
-	Name               string             `json:"name"`
-	WalletID           uuid.UUID          `json:"wallet_id"`
-	Description        pgtype.Text        `json:"description"`
-	ImageUrl           pgtype.Text        `json:"image_url"`
-	Url                pgtype.Text        `json:"url"`
-	Active             bool               `json:"active"`
-	Metadata           []byte             `json:"metadata"`
-	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
-	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
-	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`
-	PaymentProvider    pgtype.Text        `json:"payment_provider"`
+	ID                  uuid.UUID          `json:"id"`
+	WorkspaceID         uuid.UUID          `json:"workspace_id"`
+	Name                string             `json:"name"`
+	WalletID            uuid.UUID          `json:"wallet_id"`
+	Description         pgtype.Text        `json:"description"`
+	ImageUrl            pgtype.Text        `json:"image_url"`
+	Url                 pgtype.Text        `json:"url"`
+	Active              bool               `json:"active"`
+	ProductType         pgtype.Text        `json:"product_type"`
+	ProductGroup        pgtype.Text        `json:"product_group"`
+	PriceType           PriceType          `json:"price_type"`
+	Currency            string             `json:"currency"`
+	UnitAmountInPennies int32              `json:"unit_amount_in_pennies"`
+	IntervalType        NullIntervalType   `json:"interval_type"`
+	TermLength          pgtype.Int4        `json:"term_length"`
+	PriceNickname       pgtype.Text        `json:"price_nickname"`
+	PriceExternalID     pgtype.Text        `json:"price_external_id"`
+	Metadata            []byte             `json:"metadata"`
+	PaymentSyncStatus   pgtype.Text        `json:"payment_sync_status"`
+	PaymentSyncedAt     pgtype.Timestamptz `json:"payment_synced_at"`
+	PaymentSyncVersion  pgtype.Int4        `json:"payment_sync_version"`
+	PaymentProvider     pgtype.Text        `json:"payment_provider"`
 }
 
 func (q *Queries) UpdateProductWithSync(ctx context.Context, arg UpdateProductWithSyncParams) (Product, error) {
@@ -833,6 +1308,15 @@ func (q *Queries) UpdateProductWithSync(ctx context.Context, arg UpdateProductWi
 		arg.ImageUrl,
 		arg.Url,
 		arg.Active,
+		arg.ProductType,
+		arg.ProductGroup,
+		arg.PriceType,
+		arg.Currency,
+		arg.UnitAmountInPennies,
+		arg.IntervalType,
+		arg.TermLength,
+		arg.PriceNickname,
+		arg.PriceExternalID,
 		arg.Metadata,
 		arg.PaymentSyncStatus,
 		arg.PaymentSyncedAt,
@@ -850,6 +1334,15 @@ func (q *Queries) UpdateProductWithSync(ctx context.Context, arg UpdateProductWi
 		&i.ImageUrl,
 		&i.Url,
 		&i.Active,
+		&i.ProductType,
+		&i.ProductGroup,
+		&i.PriceType,
+		&i.Currency,
+		&i.UnitAmountInPennies,
+		&i.IntervalType,
+		&i.TermLength,
+		&i.PriceNickname,
+		&i.PriceExternalID,
 		&i.Metadata,
 		&i.PaymentSyncStatus,
 		&i.PaymentSyncedAt,

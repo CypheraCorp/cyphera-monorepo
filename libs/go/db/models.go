@@ -245,7 +245,7 @@ type PriceType string
 
 const (
 	PriceTypeRecurring PriceType = "recurring"
-	PriceTypeOneOff    PriceType = "one_off"
+	PriceTypeOneTime   PriceType = "one_time"
 )
 
 func (e *PriceType) Scan(src interface{}) error {
@@ -283,24 +283,76 @@ func (ns NullPriceType) Value() (driver.Value, error) {
 	return string(ns.PriceType), nil
 }
 
+type SubscriptionChangeType string
+
+const (
+	SubscriptionChangeTypeUpgrade     SubscriptionChangeType = "upgrade"
+	SubscriptionChangeTypeDowngrade   SubscriptionChangeType = "downgrade"
+	SubscriptionChangeTypeCancel      SubscriptionChangeType = "cancel"
+	SubscriptionChangeTypePause       SubscriptionChangeType = "pause"
+	SubscriptionChangeTypeResume      SubscriptionChangeType = "resume"
+	SubscriptionChangeTypeModifyItems SubscriptionChangeType = "modify_items"
+	SubscriptionChangeTypeReactivate  SubscriptionChangeType = "reactivate"
+)
+
+func (e *SubscriptionChangeType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SubscriptionChangeType(s)
+	case string:
+		*e = SubscriptionChangeType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SubscriptionChangeType: %T", src)
+	}
+	return nil
+}
+
+type NullSubscriptionChangeType struct {
+	SubscriptionChangeType SubscriptionChangeType `json:"subscription_change_type"`
+	Valid                  bool                   `json:"valid"` // Valid is true if SubscriptionChangeType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSubscriptionChangeType) Scan(value interface{}) error {
+	if value == nil {
+		ns.SubscriptionChangeType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SubscriptionChangeType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSubscriptionChangeType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SubscriptionChangeType), nil
+}
+
 type SubscriptionEventType string
 
 const (
-	SubscriptionEventTypeCreated                 SubscriptionEventType = "created"
-	SubscriptionEventTypeRedeemed                SubscriptionEventType = "redeemed"
-	SubscriptionEventTypeRenewed                 SubscriptionEventType = "renewed"
-	SubscriptionEventTypeCanceled                SubscriptionEventType = "canceled"
-	SubscriptionEventTypeExpired                 SubscriptionEventType = "expired"
-	SubscriptionEventTypeCompleted               SubscriptionEventType = "completed"
-	SubscriptionEventTypeFailed                  SubscriptionEventType = "failed"
-	SubscriptionEventTypeFailedValidation        SubscriptionEventType = "failed_validation"
-	SubscriptionEventTypeFailedCustomerCreation  SubscriptionEventType = "failed_customer_creation"
-	SubscriptionEventTypeFailedWalletCreation    SubscriptionEventType = "failed_wallet_creation"
-	SubscriptionEventTypeFailedDelegationStorage SubscriptionEventType = "failed_delegation_storage"
-	SubscriptionEventTypeFailedSubscriptionDb    SubscriptionEventType = "failed_subscription_db"
-	SubscriptionEventTypeFailedRedemption        SubscriptionEventType = "failed_redemption"
-	SubscriptionEventTypeFailedTransaction       SubscriptionEventType = "failed_transaction"
-	SubscriptionEventTypeFailedDuplicate         SubscriptionEventType = "failed_duplicate"
+	SubscriptionEventTypeCreate                SubscriptionEventType = "create"
+	SubscriptionEventTypeRedeem                SubscriptionEventType = "redeem"
+	SubscriptionEventTypeRenew                 SubscriptionEventType = "renew"
+	SubscriptionEventTypeCancel                SubscriptionEventType = "cancel"
+	SubscriptionEventTypeExpire                SubscriptionEventType = "expire"
+	SubscriptionEventTypeUpgrade               SubscriptionEventType = "upgrade"
+	SubscriptionEventTypeDowngrade             SubscriptionEventType = "downgrade"
+	SubscriptionEventTypePause                 SubscriptionEventType = "pause"
+	SubscriptionEventTypeResume                SubscriptionEventType = "resume"
+	SubscriptionEventTypeReactivate            SubscriptionEventType = "reactivate"
+	SubscriptionEventTypeComplete              SubscriptionEventType = "complete"
+	SubscriptionEventTypeFail                  SubscriptionEventType = "fail"
+	SubscriptionEventTypeFailValidation        SubscriptionEventType = "fail_validation"
+	SubscriptionEventTypeFailCustomerCreation  SubscriptionEventType = "fail_customer_creation"
+	SubscriptionEventTypeFailWalletCreation    SubscriptionEventType = "fail_wallet_creation"
+	SubscriptionEventTypeFailDelegationStorage SubscriptionEventType = "fail_delegation_storage"
+	SubscriptionEventTypeFailSubscriptionDb    SubscriptionEventType = "fail_subscription_db"
+	SubscriptionEventTypeFailRedemption        SubscriptionEventType = "fail_redemption"
+	SubscriptionEventTypeFailTransaction       SubscriptionEventType = "fail_transaction"
+	SubscriptionEventTypeFailDuplicate         SubscriptionEventType = "fail_duplicate"
 )
 
 func (e *SubscriptionEventType) Scan(src interface{}) error {
@@ -348,6 +400,7 @@ const (
 	SubscriptionStatusSuspended SubscriptionStatus = "suspended"
 	SubscriptionStatusFailed    SubscriptionStatus = "failed"
 	SubscriptionStatusCompleted SubscriptionStatus = "completed"
+	SubscriptionStatusTrial     SubscriptionStatus = "trial"
 )
 
 func (e *SubscriptionStatus) Scan(src interface{}) error {
@@ -572,6 +625,7 @@ type CircleWallet struct {
 
 type Customer struct {
 	ID                 uuid.UUID          `json:"id"`
+	NumID              int64              `json:"num_id"`
 	Web3authID         pgtype.Text        `json:"web3auth_id"`
 	ExternalID         pgtype.Text        `json:"external_id"`
 	Email              pgtype.Text        `json:"email"`
@@ -899,6 +953,24 @@ type Invoice struct {
 	CustomerTaxID          pgtype.Text        `json:"customer_tax_id"`
 	CustomerJurisdictionID pgtype.UUID        `json:"customer_jurisdiction_id"`
 	ReverseChargeApplies   pgtype.Bool        `json:"reverse_charge_applies"`
+	ReminderSentAt         pgtype.Timestamptz `json:"reminder_sent_at"`
+	ReminderCount          pgtype.Int4        `json:"reminder_count"`
+	Notes                  pgtype.Text        `json:"notes"`
+	Terms                  pgtype.Text        `json:"terms"`
+	Footer                 pgtype.Text        `json:"footer"`
+}
+
+type InvoiceActivity struct {
+	ID           uuid.UUID          `json:"id"`
+	InvoiceID    uuid.UUID          `json:"invoice_id"`
+	WorkspaceID  uuid.UUID          `json:"workspace_id"`
+	ActivityType string             `json:"activity_type"`
+	FromStatus   pgtype.Text        `json:"from_status"`
+	ToStatus     pgtype.Text        `json:"to_status"`
+	PerformedBy  pgtype.UUID        `json:"performed_by"`
+	Description  pgtype.Text        `json:"description"`
+	Metadata     []byte             `json:"metadata"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 type InvoiceLineItem struct {
@@ -911,7 +983,6 @@ type InvoiceLineItem struct {
 	FiatCurrency      string             `json:"fiat_currency"`
 	SubscriptionID    pgtype.UUID        `json:"subscription_id"`
 	ProductID         pgtype.UUID        `json:"product_id"`
-	PriceID           pgtype.UUID        `json:"price_id"`
 	NetworkID         pgtype.UUID        `json:"network_id"`
 	TokenID           pgtype.UUID        `json:"token_id"`
 	CryptoAmount      pgtype.Numeric     `json:"crypto_amount"`
@@ -1000,7 +1071,6 @@ type PaymentLink struct {
 	Slug            string             `json:"slug"`
 	Status          string             `json:"status"`
 	ProductID       pgtype.UUID        `json:"product_id"`
-	PriceID         pgtype.UUID        `json:"price_id"`
 	AmountInCents   pgtype.Int8        `json:"amount_in_cents"`
 	Currency        pgtype.Text        `json:"currency"`
 	PaymentType     pgtype.Text        `json:"payment_type"`
@@ -1054,17 +1124,25 @@ type PaymentSyncSession struct {
 	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
 }
 
-type Price struct {
+type Product struct {
 	ID                  uuid.UUID          `json:"id"`
-	ProductID           uuid.UUID          `json:"product_id"`
+	WorkspaceID         uuid.UUID          `json:"workspace_id"`
+	WalletID            uuid.UUID          `json:"wallet_id"`
 	ExternalID          pgtype.Text        `json:"external_id"`
+	Name                string             `json:"name"`
+	Description         pgtype.Text        `json:"description"`
+	ImageUrl            pgtype.Text        `json:"image_url"`
+	Url                 pgtype.Text        `json:"url"`
 	Active              bool               `json:"active"`
-	Type                PriceType          `json:"type"`
-	Nickname            pgtype.Text        `json:"nickname"`
+	ProductType         pgtype.Text        `json:"product_type"`
+	ProductGroup        pgtype.Text        `json:"product_group"`
+	PriceType           PriceType          `json:"price_type"`
 	Currency            string             `json:"currency"`
 	UnitAmountInPennies int32              `json:"unit_amount_in_pennies"`
-	IntervalType        IntervalType       `json:"interval_type"`
-	TermLength          int32              `json:"term_length"`
+	IntervalType        NullIntervalType   `json:"interval_type"`
+	TermLength          pgtype.Int4        `json:"term_length"`
+	PriceNickname       pgtype.Text        `json:"price_nickname"`
+	PriceExternalID     pgtype.Text        `json:"price_external_id"`
 	Metadata            []byte             `json:"metadata"`
 	PaymentSyncStatus   pgtype.Text        `json:"payment_sync_status"`
 	PaymentSyncedAt     pgtype.Timestamptz `json:"payment_synced_at"`
@@ -1075,24 +1153,17 @@ type Price struct {
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 }
 
-type Product struct {
-	ID                 uuid.UUID          `json:"id"`
-	WorkspaceID        uuid.UUID          `json:"workspace_id"`
-	WalletID           uuid.UUID          `json:"wallet_id"`
-	ExternalID         pgtype.Text        `json:"external_id"`
-	Name               string             `json:"name"`
-	Description        pgtype.Text        `json:"description"`
-	ImageUrl           pgtype.Text        `json:"image_url"`
-	Url                pgtype.Text        `json:"url"`
-	Active             bool               `json:"active"`
-	Metadata           []byte             `json:"metadata"`
-	PaymentSyncStatus  pgtype.Text        `json:"payment_sync_status"`
-	PaymentSyncedAt    pgtype.Timestamptz `json:"payment_synced_at"`
-	PaymentSyncVersion pgtype.Int4        `json:"payment_sync_version"`
-	PaymentProvider    pgtype.Text        `json:"payment_provider"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+type ProductAddonRelationship struct {
+	ID             uuid.UUID          `json:"id"`
+	BaseProductID  uuid.UUID          `json:"base_product_id"`
+	AddonProductID uuid.UUID          `json:"addon_product_id"`
+	IsRequired     pgtype.Bool        `json:"is_required"`
+	MaxQuantity    pgtype.Int4        `json:"max_quantity"`
+	MinQuantity    pgtype.Int4        `json:"min_quantity"`
+	DisplayOrder   pgtype.Int4        `json:"display_order"`
+	Metadata       []byte             `json:"metadata"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type ProductsToken struct {
@@ -1108,10 +1179,10 @@ type ProductsToken struct {
 
 type Subscription struct {
 	ID                 uuid.UUID          `json:"id"`
+	NumID              int64              `json:"num_id"`
 	CustomerID         uuid.UUID          `json:"customer_id"`
 	ProductID          uuid.UUID          `json:"product_id"`
 	WorkspaceID        uuid.UUID          `json:"workspace_id"`
-	PriceID            uuid.UUID          `json:"price_id"`
 	ProductTokenID     uuid.UUID          `json:"product_token_id"`
 	ExternalID         pgtype.Text        `json:"external_id"`
 	TokenAmount        int32              `json:"token_amount"`
@@ -1131,6 +1202,7 @@ type Subscription struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	Currency           pgtype.Text        `json:"currency"`
 	CancelAt           pgtype.Timestamptz `json:"cancel_at"`
 	CancelledAt        pgtype.Timestamptz `json:"cancelled_at"`
 	CancellationReason pgtype.Text        `json:"cancellation_reason"`
@@ -1153,6 +1225,23 @@ type SubscriptionEvent struct {
 	UpdatedAt       pgtype.Timestamptz    `json:"updated_at"`
 }
 
+type SubscriptionLineItem struct {
+	ID                   uuid.UUID          `json:"id"`
+	SubscriptionID       uuid.UUID          `json:"subscription_id"`
+	ProductID            uuid.UUID          `json:"product_id"`
+	LineItemType         string             `json:"line_item_type"`
+	Quantity             int32              `json:"quantity"`
+	UnitAmountInPennies  int32              `json:"unit_amount_in_pennies"`
+	Currency             string             `json:"currency"`
+	PriceType            PriceType          `json:"price_type"`
+	IntervalType         NullIntervalType   `json:"interval_type"`
+	TotalAmountInPennies int32              `json:"total_amount_in_pennies"`
+	IsActive             pgtype.Bool        `json:"is_active"`
+	Metadata             []byte             `json:"metadata"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
 type SubscriptionProration struct {
 	ID                  uuid.UUID          `json:"id"`
 	SubscriptionID      uuid.UUID          `json:"subscription_id"`
@@ -1172,22 +1261,22 @@ type SubscriptionProration struct {
 }
 
 type SubscriptionScheduleChange struct {
-	ID                   uuid.UUID          `json:"id"`
-	SubscriptionID       uuid.UUID          `json:"subscription_id"`
-	ChangeType           string             `json:"change_type"`
-	ScheduledFor         pgtype.Timestamptz `json:"scheduled_for"`
-	FromLineItems        []byte             `json:"from_line_items"`
-	ToLineItems          []byte             `json:"to_line_items"`
-	ProrationAmountCents pgtype.Int8        `json:"proration_amount_cents"`
-	ProrationCalculation []byte             `json:"proration_calculation"`
-	Status               string             `json:"status"`
-	ProcessedAt          pgtype.Timestamptz `json:"processed_at"`
-	ErrorMessage         pgtype.Text        `json:"error_message"`
-	Reason               pgtype.Text        `json:"reason"`
-	InitiatedBy          pgtype.Text        `json:"initiated_by"`
-	Metadata             []byte             `json:"metadata"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	ID                   uuid.UUID              `json:"id"`
+	SubscriptionID       uuid.UUID              `json:"subscription_id"`
+	ChangeType           SubscriptionChangeType `json:"change_type"`
+	ScheduledFor         pgtype.Timestamptz     `json:"scheduled_for"`
+	FromLineItems        []byte                 `json:"from_line_items"`
+	ToLineItems          []byte                 `json:"to_line_items"`
+	ProrationAmountCents pgtype.Int8            `json:"proration_amount_cents"`
+	ProrationCalculation []byte                 `json:"proration_calculation"`
+	Status               string                 `json:"status"`
+	ProcessedAt          pgtype.Timestamptz     `json:"processed_at"`
+	ErrorMessage         pgtype.Text            `json:"error_message"`
+	Reason               pgtype.Text            `json:"reason"`
+	InitiatedBy          pgtype.Text            `json:"initiated_by"`
+	Metadata             []byte                 `json:"metadata"`
+	CreatedAt            pgtype.Timestamptz     `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz     `json:"updated_at"`
 }
 
 type SubscriptionStateHistory struct {

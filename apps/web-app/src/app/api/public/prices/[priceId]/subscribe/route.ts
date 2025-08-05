@@ -10,7 +10,7 @@ interface RouteParams {
 
 /**
  * POST /api/public/prices/:priceId/subscribe
- * Public Cyphera API endpoint to handle price subscriptions.
+ * Public Cyphera API endpoint to handle product subscriptions.
  * Uses the API Key for authentication.
  * Note: Public endpoints don't need CSRF protection
  */
@@ -19,8 +19,8 @@ export async function POST(
   { params }: RouteParams
 ) {
   try {
-    // Get the priceId from params
-    const { priceId } = await params;
+    // Get the productId from params (route uses priceId for URL structure)
+    const { priceId: productId } = await params;
     
     // Validate request body
     const { data: body, error: validationError } = await validateBody(request, subscribeRequestSchema);
@@ -28,19 +28,19 @@ export async function POST(
     
     // Log the incoming request for debugging
     logger.info('Subscribe endpoint called', {
-      priceId,
+      productId,
       body: JSON.stringify(body, null, 2),
       headers: Object.fromEntries(request.headers.entries())
     });
     
-    if (!priceId) {
-      return NextResponse.json({ error: 'Price ID is required' }, { status: 400 });
+    if (!productId) {
+      return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
     }
 
-    // Merge price_id from params into body
+    // Merge product_id from params into body
     const requestData = {
       ...body!,
-      price_id: priceId
+      product_id: productId
     };
 
     // Custom serializer for BigInt in delegation
@@ -58,7 +58,7 @@ export async function POST(
     
     // Call the service method (which uses public headers internally)
     const subscriptionResult = await subscribeAPI.submitSubscription(
-      requestData.price_id,
+      requestData.product_id,
       requestData.product_token_id,
       requestData.token_amount,
       processedDelegation,

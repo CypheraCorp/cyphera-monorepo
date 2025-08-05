@@ -24,8 +24,8 @@ function MerchantAuthWrapper({ children }: { children: ReactNode }) {
         return { title: 'Customers', subtitle: 'Manage your customer base and relationships' };
       case '/merchants/wallets':
         return { title: 'Wallets', subtitle: 'Manage your crypto wallets and transactions' };
-      case '/merchants/transactions':
-        return { title: 'Transactions', subtitle: 'View and manage payment transactions' };
+      case '/merchants/payments':
+        return { title: 'Payments', subtitle: 'View and manage payment transactions' };
       case '/merchants/subscriptions':
         return { title: 'Subscriptions', subtitle: 'Monitor and manage active subscriptions' };
       case '/merchants/settings':

@@ -70,6 +70,7 @@ export interface CustomerSignInResponse {
   data: {
     customer: {
       id: string;
+      num_id: number;
       object: 'customer';
       external_id?: string;
       email: string;
@@ -111,6 +112,7 @@ export interface UpdateCustomerRequest {
  */
 export interface CustomerResponse {
   id: string;
+  num_id: number;
   object: string;
   workspace_id: string;
   external_id?: string;
@@ -128,6 +130,7 @@ export interface CustomerResponse {
   tax_exempt: boolean;
   tax_ids?: Record<string, unknown>;
   livemode: boolean;
+  total_revenue?: number; // Total revenue in cents from completed payments
   created_at: number;
   updated_at: number;
   workspace_name?: string;

@@ -51,11 +51,11 @@ func NewPaymentService(queries db.Querier, cmcAPIKey string) *PaymentService {
 func (s *PaymentService) CreatePaymentFromSubscriptionEvent(ctx context.Context, params params.CreatePaymentFromSubscriptionEventParams) (*db.Payment, error) {
 	event := params.SubscriptionEvent
 	subscription := params.Subscription
-	price := params.Price
+	product := params.Product
 	customer := params.Customer
 
 	// Validate that this is a redeemed event
-	if event.EventType != db.SubscriptionEventTypeRedeemed {
+	if event.EventType != db.SubscriptionEventTypeRedeem {
 		return nil, fmt.Errorf("can only create payments for redeemed subscription events")
 	}
 
@@ -78,10 +78,19 @@ func (s *PaymentService) CreatePaymentFromSubscriptionEvent(ctx context.Context,
 		SubscriptionEvent:  pgtype.UUID{Bytes: event.ID, Valid: true},
 		CustomerID:         customer.ID,
 		AmountInCents:      int64(event.AmountInCents),
-		Currency:           string(price.Currency),
+		Currency:           string(product.Currency),
 		Status:             "completed", // Subscription events are already completed
 		PaymentMethod:      "crypto",
 		ProductAmountCents: int64(event.AmountInCents),
+		InvoiceID:          pgtype.UUID{Valid: false}, // Default to no invoice
+	}
+	
+	// Link to invoice if provided
+	if params.InvoiceID != nil {
+		paymentParams.InvoiceID = pgtype.UUID{
+			Bytes: *params.InvoiceID,
+			Valid: true,
+		}
 	}
 
 	// Add blockchain data if available

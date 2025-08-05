@@ -99,3 +99,10 @@ LIMIT 1;
 SELECT * FROM networks
 WHERE active = true AND deleted_at IS NULL
 ORDER BY name;
+
+-- name: ListActiveCircleNetworks :many
+SELECT * FROM networks
+WHERE active = true 
+  AND circle_network_type IS NOT NULL
+  AND deleted_at IS NULL
+ORDER BY name;

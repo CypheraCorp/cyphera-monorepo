@@ -227,7 +227,7 @@ export default function ProductsPage() {
                         <div className="col-span-2">
                           <div className="space-y-1">
                             <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                              {formatProductType(product.prices?.[0]?.type || '')}
+                              {formatProductType(product.price_type || '')}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {formatProductInterval(product)}
@@ -238,14 +238,14 @@ export default function ProductsPage() {
                         {/* Price */}
                         <div className="col-span-1">
                           <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                            {product.prices?.[0]?.currency === 'EUR' ? (
+                            {product.currency === 'EUR' ? (
                               <>
-                                {((product.prices?.[0]?.unit_amount_in_pennies ?? 0) / 100).toFixed(
+                                {((product.unit_amount_in_pennies ?? 0) / 100).toFixed(
                                   2
                                 )}
                                 {
                                   CURRENCY_SYMBOLS[
-                                    product.prices?.[0]?.currency as keyof typeof CURRENCY_SYMBOLS
+                                    product.currency as keyof typeof CURRENCY_SYMBOLS
                                   ]
                                 }
                               </>
@@ -253,10 +253,10 @@ export default function ProductsPage() {
                               <>
                                 {
                                   CURRENCY_SYMBOLS[
-                                    product.prices?.[0]?.currency as keyof typeof CURRENCY_SYMBOLS
+                                    product.currency as keyof typeof CURRENCY_SYMBOLS
                                   ]
                                 }
-                                {((product.prices?.[0]?.unit_amount_in_pennies ?? 0) / 100).toFixed(
+                                {((product.unit_amount_in_pennies ?? 0) / 100).toFixed(
                                   2
                                 )}
                               </>
@@ -313,7 +313,7 @@ export default function ProductsPage() {
                             {product.active && (
                               <div className="flex items-center gap-1">
                                 <a
-                                  href={`/public/prices/${product.prices?.[0]?.id}`}
+                                  href={`/pay/${product.id}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 text-xs font-medium"
@@ -325,7 +325,7 @@ export default function ProductsPage() {
                                   size="sm"
                                   className="h-5 w-5 p-0"
                                   onClick={() => {
-                                    const link = `${window.location.origin}/public/prices/${product.prices?.[0]?.id}`;
+                                    const link = `${window.location.origin}/pay/${product.id}`;
                                     navigator.clipboard.writeText(link);
                                   }}
                                 >

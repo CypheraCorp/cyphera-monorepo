@@ -176,6 +176,12 @@ func (p *ScheduledChangesProcessor) ProcessChanges() {
 			zap.Error(err))
 	}
 
+	// Process overdue invoices
+	if err := p.processOverdueInvoices(ctx); err != nil {
+		p.logger.Error("Failed to process overdue invoices",
+			zap.Error(err))
+	}
+
 	duration := time.Since(startTime)
 	p.logger.Info("Completed scheduled changes processing run",
 		zap.Duration("duration", duration))
@@ -573,4 +579,83 @@ func (p *ScheduledChangesProcessor) sendDunningCancellationEmail(ctx context.Con
 	}
 
 	return p.emailService.SendTransactionalEmail(ctx, emailParams)
+}
+
+// processOverdueInvoices handles invoices that are past due
+func (p *ScheduledChangesProcessor) processOverdueInvoices(ctx context.Context) error {
+	// Get overdue invoices
+	overdueInvoices, err := p.db.GetOverdueInvoices(ctx, db.GetOverdueInvoicesParams{
+		WorkspaceID: uuid.UUID{}, // Process for all workspaces
+		Limit:       100,
+		Offset:      0,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get overdue invoices: %w", err)
+	}
+
+	p.logger.Info("Processing overdue invoices",
+		zap.Int("count", len(overdueInvoices)))
+
+	for _, invoice := range overdueInvoices {
+		// Check if the invoice has an associated subscription
+		if !invoice.SubscriptionID.Valid {
+			continue // Skip non-subscription invoices
+		}
+
+		// Check if subscription has an active dunning campaign
+		_, err = p.db.GetActiveDunningCampaignForSubscription(ctx, invoice.SubscriptionID)
+		if err == nil {
+			// Already has active dunning campaign, skip
+			continue
+		}
+		// If error is not "no rows found", log it
+		if err.Error() != "no rows in result set" {
+			p.logger.Error("Failed to check dunning campaign for subscription",
+				zap.String("subscription_id", uuid.UUID(invoice.SubscriptionID.Bytes).String()),
+				zap.Error(err))
+			continue
+		}
+
+		// Get subscription details
+		subscription, err := p.db.GetSubscription(ctx, invoice.SubscriptionID.Bytes)
+		if err != nil {
+			p.logger.Error("Failed to get subscription for overdue invoice",
+				zap.String("invoice_id", invoice.ID.String()),
+				zap.Error(err))
+			continue
+		}
+
+		// Only process if subscription is still active or overdue
+		if subscription.Status != db.SubscriptionStatusActive && 
+		   subscription.Status != db.SubscriptionStatusOverdue {
+			continue
+		}
+
+		// Update invoice status to past_due if not already
+		if invoice.Status != "past_due" {
+			_, err = p.db.UpdateInvoiceStatus(ctx, db.UpdateInvoiceStatusParams{
+				ID:          invoice.ID,
+				WorkspaceID: invoice.WorkspaceID,
+				Status:      "past_due",
+			})
+			if err != nil {
+				p.logger.Error("Failed to update invoice status to past_due",
+					zap.String("invoice_id", invoice.ID.String()),
+					zap.Error(err))
+			} else {
+				p.logger.Info("Updated invoice status to past_due",
+					zap.String("invoice_id", invoice.ID.String()),
+					zap.String("invoice_number", invoice.InvoiceNumber.String))
+			}
+		}
+
+		// Log for monitoring
+		p.logger.Info("Found overdue invoice without dunning campaign",
+			zap.String("invoice_id", invoice.ID.String()),
+			zap.String("subscription_id", uuid.UUID(invoice.SubscriptionID.Bytes).String()),
+			zap.Time("due_date", invoice.DueDate.Time),
+			zap.Int32("amount_due", invoice.AmountDue))
+	}
+
+	return nil
 }

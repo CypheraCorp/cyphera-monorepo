@@ -17,7 +17,7 @@ help:
 	@echo "  make test-format         - Check code formatting"
 	@echo ""
 	@echo "🔧 DEVELOPMENT COMMANDS:"
-	@echo "  make gen                 - Generate SQLC database code"
+	@echo "  make gen                 - Generate SQLC database code and mocks"
 	@echo "  make generate-mocks      - Generate mocks for all interfaces"
 	@echo "  make proto-gen           - Generate all protobuf code"
 	@echo "  make swagger-gen         - Generate Swagger/OpenAPI docs"
@@ -94,11 +94,19 @@ db-console:
 	@echo "🗄️  Opening database console..."
 	@psql "$(DATABASE_URL)"
 
-# Generate SQLC code
+# Generate SQLC code and mocks
 gen:
 	@echo "🔧 Generating SQLC code..."
 	@cd libs/go/db && sqlc generate
 	@echo "✅ SQLC code generated"
+	@echo "🔧 Generating mocks..."
+	@echo "  → Generating mock for db.Querier..."
+	@mockgen -source=libs/go/db/querier.go -destination=libs/go/mocks/mock_querier.go -package=mocks
+	@echo "  → Generating mocks for service interfaces..."
+	@mockgen -source=libs/go/interfaces/services.go -destination=libs/go/mocks/mock_services.go -package=mocks
+	@echo "  → Generating mocks for client interfaces..."
+	@mockgen -source=libs/go/interfaces/clients.go -destination=libs/go/mocks/mock_clients.go -package=mocks
+	@echo "✅ Mock generation complete"
 
 # ==============================================================================
 # Mock Generation
@@ -189,11 +197,6 @@ sam-build-processor:
 	@echo "🔨 Building subscription processor for SAM..."
 	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
 		$(GO) build -o ./apps/subscription-processor/bootstrap ./apps/subscription-processor/cmd/main.go
-
-sam-build-dunning:
-	@echo "🔨 Building dunning processor for SAM..."
-	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-		$(GO) build -o ./apps/dunning-processor/bin/bootstrap ./apps/dunning-processor/cmd/main.go
 
 # Individual Lambda function build targets for GitHub Actions
 build-WebhookReceiverFunction:

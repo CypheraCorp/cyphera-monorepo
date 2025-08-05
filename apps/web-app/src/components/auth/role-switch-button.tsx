@@ -77,7 +77,8 @@ export function RoleSwitchButton({
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
         className={cn(
-          'flex items-center justify-start gap-2 group/sidebar py-2 px-3 rounded-md cursor-pointer transition-colors',
+          'flex items-center group/sidebar py-2 px-3 rounded-md cursor-pointer transition-colors',
+          open ? 'justify-start gap-2' : 'justify-center',
           'hover:bg-neutral-100 dark:hover:bg-neutral-800',
           'text-neutral-700 dark:text-neutral-200 hover:text-neutral-900 dark:hover:text-neutral-100',
           isSwitching && 'opacity-50 cursor-not-allowed',

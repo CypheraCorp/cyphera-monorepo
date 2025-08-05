@@ -42,7 +42,7 @@ export const updateProductTokenRequestSchema = z.object({
 /**
  * Price type enum
  */
-export const priceTypeSchema = z.enum(['one_off', 'recurring']);
+export const priceTypeSchema = z.enum(['one_time', 'recurring']);
 
 /**
  * Interval type enum
@@ -75,6 +75,7 @@ export const createPriceSchema = z.object({
 
 /**
  * Schema for creating a product
+ * Updated to support embedded pricing (prices table merged into products)
  */
 export const createProductSchema = z.object({
   name: z.string()
@@ -88,9 +89,28 @@ export const createProductSchema = z.object({
   url: z.string().url('Invalid URL').optional().or(z.literal('')),
   active: z.boolean(),
   metadata: z.record(z.unknown()).nullable().optional(),
-  prices: z.array(createPriceSchema)
-    .min(1, 'At least one price is required'),
+  // Embedded price fields (required)
+  price_type: priceTypeSchema,
+  currency: z.string().length(3, 'Currency must be 3 characters (e.g., USD)'),
+  unit_amount_in_pennies: z.number().int().positive('Amount must be positive'),
+  interval_type: intervalTypeSchema.optional(),
+  term_length: z.number().int().positive().optional(),
+  price_nickname: z.string().optional(),
+  price_external_id: z.string().optional(),
+  payment_provider: z.string().optional(),
+  // Product categorization
+  product_type: z.string().optional(),
+  product_group: z.string().optional(),
   product_tokens: z.array(createProductTokenWithoutIdSchema).optional(),
+}).refine((data) => {
+  // If price_type is recurring, interval_type is required
+  if (data.price_type === 'recurring') {
+    return data.interval_type !== undefined;
+  }
+  return true;
+}, {
+  message: 'Interval type is required for recurring prices',
+  path: ['interval_type'],
 });
 
 /**
@@ -120,10 +140,10 @@ export const productIdParamSchema = z.object({
 });
 
 /**
- * Schema for price ID parameter
+ * Schema for product ID parameter in routes that use priceId in the URL
  */
 export const priceIdParamSchema = z.object({
-  priceId: z.string().uuid('Invalid price ID format'),
+  priceId: z.string().uuid('Invalid product ID format'), // Validates product IDs
 });
 
 // Type exports

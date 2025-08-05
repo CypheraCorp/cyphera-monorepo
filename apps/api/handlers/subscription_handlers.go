@@ -2,6 +2,7 @@ package handlers
 
 import (
 	// "context" // Commented out: unused after commenting out logAndValidateEventCreation
+	"encoding/json"
 	"errors"
 	// "fmt" // Commented out: unused after commenting out logAndValidateEventCreation
 	"net/http"
@@ -25,7 +26,6 @@ import (
 
 // Use types from the centralized packages
 type (
-	PriceResponse   = responses.PriceResponse
 	ProductResponse = responses.ProductResponse
 )
 
@@ -87,7 +87,7 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 		return
 	}
 
-	subscription, err := h.common.db.GetSubscriptionWithWorkspace(c.Request.Context(), db.GetSubscriptionWithWorkspaceParams{
+	subscriptionDetails, err := h.common.db.GetSubscriptionWithDetails(c.Request.Context(), db.GetSubscriptionWithDetailsParams{
 		ID:          parsedUUID,
 		WorkspaceID: parsedWorkspaceID,
 	})
@@ -100,7 +100,153 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, subscription)
+	// Convert to response format with nested objects
+	response := responses.SubscriptionResponse{
+		ID:                    subscriptionDetails.ID,
+		NumID:                 subscriptionDetails.NumID,
+		WorkspaceID:           subscriptionDetails.WorkspaceID,
+		CustomerID:            subscriptionDetails.CustomerID,
+		Status:                string(subscriptionDetails.Status),
+		TotalRedemptions:      subscriptionDetails.TotalRedemptions,
+		TotalAmountInCents:    subscriptionDetails.TotalAmountInCents,
+		TokenAmount:           subscriptionDetails.TokenAmount,
+		DelegationID:          subscriptionDetails.DelegationID,
+		CreatedAt:             subscriptionDetails.CreatedAt.Time,
+		UpdatedAt:             subscriptionDetails.UpdatedAt.Time,
+		ProductID:             subscriptionDetails.ProductID,
+		ProductTokenID:        subscriptionDetails.ProductTokenID,
+	}
+	
+	// Handle pgtype conversions
+	if subscriptionDetails.CurrentPeriodStart.Valid {
+		response.CurrentPeriodStart = subscriptionDetails.CurrentPeriodStart.Time
+	}
+	if subscriptionDetails.CurrentPeriodEnd.Valid {
+		response.CurrentPeriodEnd = subscriptionDetails.CurrentPeriodEnd.Time
+	}
+	if subscriptionDetails.NextRedemptionDate.Valid {
+		response.NextRedemptionDate = &subscriptionDetails.NextRedemptionDate.Time
+	}
+	if subscriptionDetails.CustomerWalletID.Valid {
+		customerWalletUUID, _ := uuid.FromBytes(subscriptionDetails.CustomerWalletID.Bytes[:])
+		response.CustomerWalletID = &customerWalletUUID
+	}
+	if subscriptionDetails.ExternalID.Valid {
+		response.ExternalID = subscriptionDetails.ExternalID.String
+	}
+	if subscriptionDetails.PaymentSyncStatus.Valid {
+		response.PaymentSyncStatus = subscriptionDetails.PaymentSyncStatus.String
+	}
+	if subscriptionDetails.PaymentSyncedAt.Valid {
+		response.PaymentSyncedAt = &subscriptionDetails.PaymentSyncedAt.Time
+	}
+	if subscriptionDetails.PaymentSyncVersion.Valid {
+		response.PaymentSyncVersion = subscriptionDetails.PaymentSyncVersion.Int32
+	}
+	if subscriptionDetails.PaymentProvider.Valid {
+		response.PaymentProvider = subscriptionDetails.PaymentProvider.String
+	}
+	if subscriptionDetails.Metadata != nil {
+		// Convert json.RawMessage to map[string]interface{}
+		var metadata map[string]interface{}
+		if err := json.Unmarshal(subscriptionDetails.Metadata, &metadata); err == nil {
+			response.Metadata = metadata
+		}
+	}
+	if subscriptionDetails.TrialStart.Valid {
+		response.TrialStart = &subscriptionDetails.TrialStart.Time
+	}
+	if subscriptionDetails.TrialEnd.Valid {
+		response.TrialEnd = &subscriptionDetails.TrialEnd.Time
+	}
+	if subscriptionDetails.CancelledAt.Valid {
+		response.CanceledAt = &subscriptionDetails.CancelledAt.Time
+	}
+	if subscriptionDetails.CancelAt.Valid {
+		response.CancelAt = &subscriptionDetails.CancelAt.Time
+	}
+	if subscriptionDetails.CancellationReason.Valid {
+		response.CancellationReason = subscriptionDetails.CancellationReason.String
+	}
+	if subscriptionDetails.PausedAt.Valid {
+		response.PausedAt = &subscriptionDetails.PausedAt.Time
+	}
+	if subscriptionDetails.PauseEndsAt.Valid {
+		response.PauseEndsAt = &subscriptionDetails.PauseEndsAt.Time
+	}
+
+	// Add customer data if available
+	if subscriptionDetails.CustomerName.Valid {
+		response.CustomerName = subscriptionDetails.CustomerName.String
+	}
+	if subscriptionDetails.CustomerEmail.Valid {
+		response.CustomerEmail = subscriptionDetails.CustomerEmail.String
+	}
+	
+	// Add customer object - CustomerID is always valid since it's a required field
+	customer := responses.SubscriptionCustomerResponse{
+		ID:        subscriptionDetails.CustomerID,
+		NumID:     subscriptionDetails.CustomerNumID,
+	}
+	if subscriptionDetails.CustomerCreatedAt.Valid {
+		customer.CreatedAt = subscriptionDetails.CustomerCreatedAt.Time
+	}
+	if subscriptionDetails.CustomerUpdatedAt.Valid {
+		customer.UpdatedAt = subscriptionDetails.CustomerUpdatedAt.Time
+	}
+	if subscriptionDetails.CustomerName.Valid {
+		customer.Name = subscriptionDetails.CustomerName.String
+	}
+	if subscriptionDetails.CustomerEmail.Valid {
+		customer.Email = subscriptionDetails.CustomerEmail.String
+	}
+	if subscriptionDetails.CustomerPhone.Valid {
+		customer.Phone = subscriptionDetails.CustomerPhone.String
+	}
+	if subscriptionDetails.CustomerDescription.Valid {
+		customer.Description = subscriptionDetails.CustomerDescription.String
+	}
+	if subscriptionDetails.CustomerFinishedOnboarding.Valid {
+		customer.FinishedOnboarding = subscriptionDetails.CustomerFinishedOnboarding.Bool
+	}
+	if subscriptionDetails.CustomerMetadata != nil {
+		// Convert json.RawMessage to map[string]interface{}
+		var metadata map[string]interface{}
+		if err := json.Unmarshal(subscriptionDetails.CustomerMetadata, &metadata); err == nil {
+			customer.Metadata = metadata
+		}
+	}
+	response.Customer = &customer
+
+	// Add product data
+	product := responses.ProductResponse{
+		ID:                  subscriptionDetails.ProductID.String(),
+		Name:                subscriptionDetails.ProductName,
+		PriceType:           string(subscriptionDetails.PriceType),
+		Currency:            subscriptionDetails.PriceCurrency,
+		UnitAmountInPennies: int64(subscriptionDetails.PriceUnitAmountInPennies),
+	}
+	if subscriptionDetails.PriceIntervalType.Valid {
+		intervalType := string(subscriptionDetails.PriceIntervalType.IntervalType)
+		product.IntervalType = intervalType
+	}
+	if subscriptionDetails.PriceTermLength.Valid {
+		product.TermLength = subscriptionDetails.PriceTermLength.Int32
+	}
+	response.Product = &product
+
+	// Add product token data
+	productToken := responses.ProductTokenResponse{
+		ID:            subscriptionDetails.ProductTokenID.String(),
+		ProductID:     subscriptionDetails.ProductID.String(),
+		TokenSymbol:   subscriptionDetails.TokenSymbol,
+		NetworkName:   subscriptionDetails.NetworkName,
+		ChainID:       int32(subscriptionDetails.ChainID),
+		TokenDecimals: subscriptionDetails.TokenDecimals,
+	}
+	response.ProductToken = &productToken
+
+	c.JSON(http.StatusOK, response)
 }
 
 // ListSubscriptions godoc
@@ -523,32 +669,11 @@ func CalculatePeriodEnd(start time.Time, intervalType string, termLength int32) 
 
 // toSubscriptionResponse converts a db.ListSubscriptionDetailsWithPaginationRow to a SubscriptionResponse.
 func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationRow) (responses.SubscriptionResponse, error) {
-	// Helper to convert pgtype.Text to string for enums
-	helperPgEnumTextToString := func(pgText pgtype.Text) string {
-		if pgText.Valid {
-			return pgText.String
-		}
-		return ""
-	}
-
-	// Prepare PriceResponse.CreatedAt and PriceResponse.UpdatedAt (assuming they are int64 in PriceResponse)
-	var priceCreatedAtUnix int64
-	if subDetails.PriceCreatedAt.Valid {
-		priceCreatedAtUnix = subDetails.PriceCreatedAt.Time.Unix()
-	}
-	var priceUpdatedAtUnix int64
-	if subDetails.PriceUpdatedAt.Valid {
-		priceUpdatedAtUnix = subDetails.PriceUpdatedAt.Time.Unix()
-	}
-
-	// Prepare nullable fields for PriceResponse
-	var intervalTypeStr string
-	if subDetails.PriceIntervalType != "" {
-		intervalTypeStr = string(subDetails.PriceIntervalType)
-	}
+	// Variables removed since pricing is now embedded in product
 
 	resp := responses.SubscriptionResponse{
 		ID:                 subDetails.SubscriptionID,
+		NumID:              subDetails.SubscriptionNumID, // Add NumID field
 		WorkspaceID:        subDetails.ProductWorkspaceID,
 		Status:             string(subDetails.SubscriptionStatus),
 		CurrentPeriodStart: subDetails.SubscriptionCurrentPeriodStart.Time,
@@ -559,30 +684,20 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 		TokenAmount:        subDetails.SubscriptionTokenAmount,
 		CustomerName:       subDetails.CustomerName.String,
 		CustomerEmail:      subDetails.CustomerEmail.String,
-		Price: PriceResponse{
-			ID:                  subDetails.PriceID.String(),
-			Object:              "price", // Typically static for PriceResponse
-			ProductID:           subDetails.PriceProductID.String(),
-			Active:              subDetails.PriceActive,
-			Type:                string(subDetails.PriceType),
-			Nickname:            helperPgEnumTextToString(subDetails.PriceNickname),
-			Currency:            string(subDetails.PriceCurrency),
-			UnitAmountInPennies: int64(subDetails.PriceUnitAmountInPennies), // Convert int32 to int64
-			IntervalType:        intervalTypeStr,
-			TermLength:          subDetails.PriceTermLength,
-			Metadata:            subDetails.PriceMetadata, // Expecting json.RawMessage
-			CreatedAt:           priceCreatedAtUnix,
-			UpdatedAt:           priceUpdatedAtUnix,
+		Product: &ProductResponse{
+			ID:                  subDetails.ProductID.String(),
+			Name:                subDetails.ProductName,
+			Description:         subDetails.ProductDescription.String,
+			ImageURL:            subDetails.ProductImageUrl.String,
+			Active:              subDetails.ProductActive,
+			PriceType:           string(subDetails.PriceType),
+			Currency:            subDetails.PriceCurrency,
+			UnitAmountInPennies: int64(subDetails.PriceUnitAmountInPennies),
+			IntervalType:        string(subDetails.PriceIntervalType.IntervalType),
+			TermLength:          subDetails.PriceTermLength.Int32,
+			Metadata:            subDetails.ProductMetadata, // Expecting json.RawMessage
 		},
-		Product: ProductResponse{
-			ID:          subDetails.ProductID.String(),
-			Name:        subDetails.ProductName,
-			Description: subDetails.ProductDescription.String,
-			ImageURL:    subDetails.ProductImageUrl.String,
-			Active:      subDetails.ProductActive,
-			Metadata:    subDetails.ProductMetadata, // Expecting json.RawMessage
-		},
-		ProductToken: responses.ProductTokenResponse{
+		ProductToken: &responses.ProductTokenResponse{
 			ID:          subDetails.ProductTokenID.String(),
 			TokenID:     subDetails.ProductTokenTokenID.String(),
 			TokenSymbol: subDetails.TokenSymbol,
@@ -598,6 +713,7 @@ func toSubscriptionResponse(subDetails db.ListSubscriptionDetailsWithPaginationR
 func toSubscriptionResponseFromDBSubscription(sub db.Subscription) (responses.SubscriptionResponse, error) {
 	resp := responses.SubscriptionResponse{
 		ID:          sub.ID,
+		NumID:       sub.NumID, // Add NumID field
 		CustomerID:  sub.CustomerID,
 		WorkspaceID: sub.WorkspaceID,
 		Status:      string(sub.Status),

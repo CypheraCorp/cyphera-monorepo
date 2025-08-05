@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	dsClient "github.com/cyphera/cyphera-api/libs/go/client/delegation_server"
 	"github.com/cyphera/cyphera-api/libs/go/db"
 	"github.com/cyphera/cyphera-api/libs/go/helpers"
+	"github.com/cyphera/cyphera-api/libs/go/interfaces"
 	"github.com/cyphera/cyphera-api/libs/go/logger"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/params"
 	"github.com/cyphera/cyphera-api/libs/go/types/api/requests"
@@ -28,17 +30,19 @@ type SubscriptionService struct {
 	delegationClient     *dsClient.DelegationClient
 	paymentService       *PaymentService
 	customerService      *CustomerService
+	invoiceService       interfaces.InvoiceService
 	logger               *zap.Logger
 	lastRedemptionTxHash string // Stores the transaction hash from the last successful redemption
 }
 
 // NewSubscriptionService creates a new subscription service
-func NewSubscriptionService(queries db.Querier, delegationClient *dsClient.DelegationClient, paymentService *PaymentService, customerService *CustomerService) *SubscriptionService {
+func NewSubscriptionService(queries db.Querier, delegationClient *dsClient.DelegationClient, paymentService *PaymentService, customerService *CustomerService, invoiceService interfaces.InvoiceService) *SubscriptionService {
 	return &SubscriptionService{
 		queries:          queries,
 		delegationClient: delegationClient,
 		paymentService:   paymentService,
 		customerService:  customerService,
+		invoiceService:   invoiceService,
 		logger:           logger.Log,
 	}
 }
@@ -50,6 +54,7 @@ func (s *SubscriptionService) WithTransaction(tx pgx.Tx) *SubscriptionService {
 		delegationClient: s.delegationClient,
 		paymentService:   s.paymentService,
 		customerService:  s.customerService,
+		invoiceService:   s.invoiceService,
 		logger:           s.logger,
 	}
 }
@@ -66,8 +71,7 @@ func (e *SubscriptionExistsError) Error() string {
 // ProcessSubscriptionParams represents parameters for processing a subscription
 type ProcessSubscriptionParams struct {
 	Subscription         db.Subscription
-	Price                db.Price
-	Product              db.Product
+	Product              db.Product // Product now contains pricing info
 	Customer             db.Customer
 	MerchantWallet       db.Wallet
 	CustomerWallet       db.Wallet
@@ -371,13 +375,12 @@ func (s *SubscriptionService) CreateSubscription(ctx context.Context, tx pgx.Tx,
 		return nil, fmt.Errorf("failed to check existing subscriptions: %w", err)
 	}
 
-	// Check for existing active subscription for the same price
+	// Check for existing active subscription for the same product
 	for i, existingSub := range existingSubscriptions {
-		if existingSub.Status == db.SubscriptionStatusActive {
-			// Note: We can't check PriceID directly on the subscription model, would need to join with price table
-			// For now, just check if any active subscription exists for this product
-			s.logger.Warn("Active subscription already exists",
-				zap.String("subscription_id", existingSub.ID.String()))
+		if existingSub.Status == db.SubscriptionStatusActive && existingSub.ProductID == params.ProductID {
+			s.logger.Warn("Active subscription already exists for this product",
+				zap.String("subscription_id", existingSub.ID.String()),
+				zap.String("product_id", params.ProductID.String()))
 			return nil, &SubscriptionExistsError{Subscription: &existingSubscriptions[i]}
 		}
 	}
@@ -387,7 +390,6 @@ func (s *SubscriptionService) CreateSubscription(ctx context.Context, tx pgx.Tx,
 		WorkspaceID:        params.WorkspaceID,
 		CustomerID:         params.Customer.ID,
 		ProductID:          params.ProductID,
-		PriceID:            params.Price.ID,
 		ProductTokenID:     params.ProductTokenID,
 		TokenAmount:        int32(params.TokenAmount),
 		DelegationID:       params.DelegationData.ID,
@@ -399,12 +401,20 @@ func (s *SubscriptionService) CreateSubscription(ctx context.Context, tx pgx.Tx,
 		TotalRedemptions:   0,
 		TotalAmountInCents: 0,
 		Metadata: func() []byte {
+			// Get the product for metadata
+			product := params.Product
+
 			metadata := map[string]interface{}{
-				"price_id":               params.Price.ID.String(),
-				"token_amount":           params.TokenAmount,
-				"term_length":            params.Price.TermLength,
-				"interval_type":          params.Price.IntervalType,
-				"unit_amount_in_pennies": params.Price.UnitAmountInPennies,
+				"product_id":   product.ID.String(),
+				"token_amount": params.TokenAmount,
+				"term_length":  product.TermLength.Int32,
+				"interval_type": func() string {
+					if product.IntervalType.Valid {
+						return string(product.IntervalType.IntervalType)
+					}
+					return ""
+				}(),
+				"unit_amount_in_pennies": product.UnitAmountInPennies,
 				"wallet_address":         params.CustomerWallet.WalletAddress,
 				"delegation_id":          params.DelegationData.ID.String(),
 			}
@@ -415,6 +425,7 @@ func (s *SubscriptionService) CreateSubscription(ctx context.Context, tx pgx.Tx,
 			}
 			return metadataBytes
 		}(),
+		PaymentProvider: pgtype.Text{String: "", Valid: false},
 	})
 	if err != nil {
 		s.logger.Error("Failed to create subscription", zap.Error(err))
@@ -423,6 +434,95 @@ func (s *SubscriptionService) CreateSubscription(ctx context.Context, tx pgx.Tx,
 
 	s.logger.Info("Subscription created successfully",
 		zap.String("subscription_id", subscription.ID.String()))
+
+	// Create subscription line items
+	// First, create the base product line item
+	baseProduct := params.Product
+
+	// Create base product line item
+	s.logger.Info("Creating base product line item",
+		zap.String("subscription_id", subscription.ID.String()),
+		zap.String("product_id", baseProduct.ID.String()),
+		zap.Int32("unit_amount", baseProduct.UnitAmountInPennies))
+		
+	lineItem, err := qtx.CreateSubscriptionLineItem(ctx, db.CreateSubscriptionLineItemParams{
+		SubscriptionID:       subscription.ID,
+		ProductID:            baseProduct.ID,
+		LineItemType:         "base",
+		Quantity:             1,
+		UnitAmountInPennies:  baseProduct.UnitAmountInPennies,
+		Currency:             baseProduct.Currency,
+		PriceType:            baseProduct.PriceType,
+		IntervalType:         baseProduct.IntervalType,
+		TotalAmountInPennies: baseProduct.UnitAmountInPennies,
+		IsActive:             pgtype.Bool{Bool: true, Valid: true},
+		Metadata:             []byte("{}"),
+	})
+	if err != nil {
+		s.logger.Error("Failed to create base product line item", 
+			zap.Error(err),
+			zap.String("subscription_id", subscription.ID.String()),
+			zap.String("product_id", baseProduct.ID.String()))
+		return nil, fmt.Errorf("failed to create base product line item: %w", err)
+	}
+	
+	s.logger.Info("Successfully created base product line item",
+		zap.String("line_item_id", lineItem.ID.String()),
+		zap.String("subscription_id", subscription.ID.String()))
+
+	// Create addon line items if provided
+	if params.Addons != nil && len(params.Addons) > 0 {
+		for _, addon := range params.Addons {
+			// Get addon product details
+			addonProduct, err := qtx.GetProductWithoutWorkspaceId(ctx, addon.ProductID)
+			if err != nil {
+				s.logger.Error("Failed to get addon product",
+					zap.String("addon_product_id", addon.ProductID.String()),
+					zap.Error(err))
+				return nil, fmt.Errorf("failed to get addon product: %w", err)
+			}
+
+			// Validate addon is actually an addon type
+			if !addonProduct.ProductType.Valid || addonProduct.ProductType.String != "addon" {
+				return nil, fmt.Errorf("product %s is not an addon type", addon.ProductID.String())
+			}
+
+			// Create addon line item
+			totalAmount := addonProduct.UnitAmountInPennies * addon.Quantity
+			_, err = qtx.CreateSubscriptionLineItem(ctx, db.CreateSubscriptionLineItemParams{
+				SubscriptionID:       subscription.ID,
+				ProductID:            addon.ProductID,
+				LineItemType:         "addon",
+				Quantity:             addon.Quantity,
+				UnitAmountInPennies:  addonProduct.UnitAmountInPennies,
+				Currency:             addonProduct.Currency,
+				PriceType:            addonProduct.PriceType,
+				IntervalType:         addonProduct.IntervalType,
+				TotalAmountInPennies: totalAmount,
+				IsActive:             pgtype.Bool{Bool: true, Valid: true},
+				Metadata:             []byte("{}"),
+			})
+			if err != nil {
+				s.logger.Error("Failed to create addon line item",
+					zap.String("addon_product_id", addon.ProductID.String()),
+					zap.Error(err))
+				return nil, fmt.Errorf("failed to create addon line item: %w", err)
+			}
+		}
+	}
+
+	// Update subscription total amount based on line items
+	totalRow, err := qtx.CalculateSubscriptionTotal(ctx, subscription.ID)
+	if err != nil {
+		s.logger.Error("Failed to calculate subscription total", zap.Error(err))
+		// Don't fail the whole operation, just log the error
+	} else {
+		// Update the subscription's total amount
+		// The query returns BIGINT which is int64 in Go
+		if totalAmount, ok := totalRow.(int64); ok {
+			subscription.TotalAmountInCents = int32(totalAmount)
+		}
+	}
 
 	return &subscription, nil
 }
@@ -491,15 +591,15 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 	eventMetadata := map[string]interface{}{
 		"product_id":        redemptionParams.Product.ID.String(),
 		"product_name":      redemptionParams.Product.Name,
-		"price_id":          redemptionParams.Price.ID.String(),
-		"price_type":        redemptionParams.Price.Type,
+		"product_id_old":    redemptionParams.Product.ID.String(),
+		"price_type":        string(redemptionParams.Product.PriceType),
 		"product_token_id":  redemptionParams.ProductToken.ID.String(),
 		"token_symbol":      redemptionParams.ProductToken.TokenSymbol,
 		"network_name":      redemptionParams.ProductToken.NetworkName,
 		"wallet_address":    redemptionParams.CustomerWallet.WalletAddress,
 		"customer_id":       redemptionParams.Customer.ID.String(),
 		"redemption_time":   time.Now().Unix(),
-		"subscription_type": string(redemptionParams.Price.Type),
+		"subscription_type": string(redemptionParams.Product.PriceType),
 		"tx_hash":           txHash,
 	}
 
@@ -511,10 +611,10 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 
 	subscriptionEvent, eventErr := qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
 		SubscriptionID:  redemptionParams.Subscription.ID,
-		EventType:       db.SubscriptionEventTypeRedeemed,
+		EventType:       db.SubscriptionEventTypeRedeem,
 		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		TransactionHash: pgtype.Text{String: txHash, Valid: true},
-		AmountInCents:   int32(redemptionParams.Price.UnitAmountInPennies),
+		AmountInCents:   redemptionParams.Product.UnitAmountInPennies,
 		Metadata:        metadataBytes,
 	})
 	if eventErr != nil {
@@ -543,7 +643,7 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 		_, paymentErr := paymentServiceTx.CreatePaymentFromSubscriptionEvent(ctx, params.CreatePaymentFromSubscriptionEventParams{
 			SubscriptionEvent: &subscriptionEvent,
 			Subscription:      &redemptionParams.Subscription,
-			Price:             &redemptionParams.Price,
+			Product:           &redemptionParams.Product,
 			Customer:          &redemptionParams.Customer,
 			TransactionHash:   txHash,
 			NetworkID:         redemptionParams.Network.ID,
@@ -560,13 +660,56 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 			s.logger.Info("Payment record created successfully for subscription redemption",
 				zap.String("subscription_id", redemptionParams.Subscription.ID.String()),
 				zap.String("transaction_hash", txHash))
+
+			// Create invoice for the initial subscription payment
+			if s.invoiceService != nil {
+				s.logger.Info("Creating invoice for initial subscription payment",
+					zap.String("subscription_id", redemptionParams.Subscription.ID.String()),
+					zap.String("customer_id", redemptionParams.Customer.ID.String()))
+
+				// Skip invoice generation during transaction - line items not yet committed
+				// TODO: Create invoice after transaction commits
+				invoice, invoiceErr := (*responses.InvoiceResponse)(nil), error(nil)
+				invoiceErr = fmt.Errorf("invoice creation skipped during transaction")
+
+				if invoiceErr != nil {
+					s.logger.Info("Skipping invoice creation during initial redemption",
+						zap.String("reason", "transaction not yet committed"),
+						zap.String("subscription_id", redemptionParams.Subscription.ID.String()))
+				} else {
+					s.logger.Info("Invoice created successfully for subscription",
+						zap.String("subscription_id", redemptionParams.Subscription.ID.String()),
+						zap.String("invoice_id", invoice.ID.String()),
+						zap.String("invoice_status", invoice.Status))
+
+					// Mark the invoice as paid since payment was already processed
+					if invoice.Status == "open" {
+						_, markPaidErr := s.invoiceService.MarkInvoicePaid(ctx,
+							redemptionParams.Product.WorkspaceID,
+							invoice.ID)
+
+						if markPaidErr != nil {
+							s.logger.Error("Failed to mark invoice as paid",
+								zap.Error(markPaidErr),
+								zap.String("invoice_id", invoice.ID.String()))
+						} else {
+							s.logger.Info("Invoice marked as paid",
+								zap.String("invoice_id", invoice.ID.String()))
+						}
+					}
+				}
+			}
 		}
 	}
 
 	// Calculate next redemption date
 	var nextRedemptionDate pgtype.Timestamptz
-	if redemptionParams.Price.Type == db.PriceTypeRecurring {
-		nextDate := helpers.CalculateNextRedemption(string(redemptionParams.Price.IntervalType), time.Now())
+	if redemptionParams.Product.PriceType == db.PriceTypeRecurring {
+		intervalType := ""
+		if redemptionParams.Product.IntervalType.Valid {
+			intervalType = string(redemptionParams.Product.IntervalType.IntervalType)
+		}
+		nextDate := helpers.CalculateNextRedemption(intervalType, time.Now())
 		nextRedemptionDate = pgtype.Timestamptz{
 			Time:  nextDate,
 			Valid: true,
@@ -580,7 +723,7 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 	// Update subscription with redemption details
 	updatedSubscription, err := qtx.IncrementSubscriptionRedemption(ctx, db.IncrementSubscriptionRedemptionParams{
 		ID:                 redemptionParams.Subscription.ID,
-		TotalAmountInCents: int32(redemptionParams.Price.UnitAmountInPennies),
+		TotalAmountInCents: redemptionParams.Product.UnitAmountInPennies,
 		NextRedemptionDate: nextRedemptionDate,
 	})
 	if err != nil {
@@ -601,71 +744,215 @@ func (s *SubscriptionService) ProcessInitialRedemption(ctx context.Context, tx p
 	s.logger.Info("Initial redemption successful",
 		zap.String("subscription_id", redemptionParams.Subscription.ID.String()),
 		zap.String("transaction_hash", txHash),
-		zap.Int32("amount_in_cents", int32(redemptionParams.Price.UnitAmountInPennies)))
+		zap.Int32("amount_in_cents", int32(redemptionParams.Product.UnitAmountInPennies)))
 
 	return &updatedSubscription, nil
 }
 
-// CreateSubscriptionWithDelegation creates a subscription with delegation in a transaction
+// CreateSubscriptionWithDelegation creates a subscription with delegation after successful blockchain transaction
 func (s *SubscriptionService) CreateSubscriptionWithDelegation(ctx context.Context, tx pgx.Tx, createParams params.CreateSubscriptionWithDelegationParams) (*params.SubscriptionCreationResult, error) {
 	s.logger.Info("Creating subscription with delegation",
 		zap.String("product_id", createParams.Product.ID.String()),
 		zap.String("subscriber_address", createParams.SubscriberAddress))
 
-	var result params.SubscriptionCreationResult
+	// STEP 1: Validate and prepare (no DB writes yet)
+	normalizedAddress := helpers.NormalizeWalletAddress(createParams.SubscriberAddress, helpers.DetermineNetworkType(createParams.ProductToken.NetworkType))
 
-	// Process customer and wallet
+	// Prepare delegation data for redemption
+	caveatsJSON, err := json.Marshal(createParams.DelegationData.Caveats)
+	if err != nil {
+		s.logger.Error("Failed to marshal caveats", zap.Error(err))
+		return nil, fmt.Errorf("failed to marshal caveats: %w", err)
+	}
+
+	delegationDataForRedemption := dsClient.DelegationData{
+		Delegate:  createParams.DelegationData.Delegate,
+		Delegator: createParams.DelegationData.Delegator,
+		Authority: createParams.DelegationData.Authority,
+		Caveats:   caveatsJSON,
+		Salt:      createParams.DelegationData.Salt,
+		Signature: createParams.DelegationData.Signature,
+	}
+
+	delegationBytes, err := json.Marshal(delegationDataForRedemption)
+	if err != nil {
+		s.logger.Error("Failed to marshal delegation data", zap.Error(err))
+		return nil, fmt.Errorf("failed to marshal delegation data: %w", err)
+	}
+
+	// Create execution object for redemption
+	executionObject := dsClient.ExecutionObject{
+		MerchantAddress:      createParams.MerchantWallet.WalletAddress,
+		TokenContractAddress: createParams.Token.ContractAddress,
+		TokenAmount:          createParams.TokenAmount,
+		TokenDecimals:        createParams.Token.Decimals,
+		ChainID:              uint32(createParams.Network.ChainID),
+		NetworkName:          createParams.Network.Name,
+	}
+
+	// STEP 2: Execute blockchain transaction FIRST (before any DB writes)
+	if s.delegationClient == nil {
+		return nil, fmt.Errorf("delegation client is not configured")
+	}
+
+	txHash, err := s.delegationClient.RedeemDelegation(ctx, delegationBytes, executionObject)
+	if err != nil {
+		s.logger.Error("Delegation redemption failed",
+			zap.Error(err),
+			zap.String("product_id", createParams.Product.ID.String()),
+			zap.String("subscriber_address", normalizedAddress))
+
+		// Log failed attempt - transaction failed
+		s.logFailedSubscriptionAttempt(ctx, nil, createParams, normalizedAddress, err, "")
+
+		return nil, fmt.Errorf("delegation redemption failed: %w", err)
+	}
+
+	// STEP 3: Transaction succeeded - now create DB records
+	s.logger.Info("Blockchain transaction successful, creating database records",
+		zap.String("transaction_hash", txHash))
+
+	// From this point on, if anything fails, we need to log it with the transaction hash
+	// because the payment has already been made
+
+	result, err := s.CreateSubscriptionAfterPayment(ctx, tx, params.CreateSubscriptionAfterPaymentParams{
+		CreateParams:      createParams,
+		TransactionHash:   txHash,
+		NormalizedAddress: normalizedAddress,
+	})
+	if err != nil {
+		// Transaction succeeded but DB operations failed - log with detailed context
+		s.logFailedSubscriptionAttempt(ctx, nil, createParams, normalizedAddress, err, txHash)
+		return nil, fmt.Errorf("failed to create subscription records after successful payment: %w", err)
+	}
+
+	return result, nil
+}
+
+// CreateSubscriptionAfterPayment creates all database records after successful blockchain payment
+func (s *SubscriptionService) CreateSubscriptionAfterPayment(ctx context.Context, tx pgx.Tx, afterPaymentParams params.CreateSubscriptionAfterPaymentParams) (*params.SubscriptionCreationResult, error) {
+	createParams := afterPaymentParams.CreateParams
+	txHash := afterPaymentParams.TransactionHash
+	normalizedAddress := afterPaymentParams.NormalizedAddress
+
+	var result params.SubscriptionCreationResult
+	var createdEntities = make(map[string]string) // Track what we successfully create
+
+	// Helper function to track progress
+	trackProgress := func(entityType string, entityID uuid.UUID) {
+		createdEntities[entityType] = entityID.String()
+	}
+
+	// STEP 1: Process customer and wallet
 	customer, customerWallet, err := s.customerService.ProcessCustomerAndWallet(ctx, tx, params.ProcessCustomerWalletParams{
-		WalletAddress: createParams.SubscriberAddress,
+		WalletAddress: normalizedAddress,
 		WorkspaceID:   createParams.Product.WorkspaceID,
 		ProductID:     createParams.Product.ID,
 		NetworkType:   string(createParams.Network.NetworkType),
 	})
 	if err != nil {
-		s.logger.Error("Failed to process customer and wallet", zap.Error(err))
-		return nil, fmt.Errorf("failed to process customer and wallet: %w", err)
+		s.logger.Error("Failed to process customer and wallet after payment",
+			zap.Error(err),
+			zap.String("transaction_hash", txHash))
+		// Return detailed error with transaction hash
+		return nil, fmt.Errorf("failed to process customer and wallet (tx: %s): %w", txHash, err)
 	}
 
 	result.Customer = customer
 	result.CustomerWallet = customerWallet
+	trackProgress("customer", customer.ID)
+	trackProgress("customer_wallet", customerWallet.ID)
 
-	// Store delegation data
+	// STEP 2: Store delegation data
 	delegationData, err := s.StoreDelegationData(ctx, tx, createParams.DelegationData)
 	if err != nil {
-		s.logger.Error("Failed to store delegation data", zap.Error(err))
-		return nil, fmt.Errorf("failed to store delegation data: %w", err)
+		s.logger.Error("Failed to store delegation data after payment",
+			zap.Error(err),
+			zap.String("transaction_hash", txHash),
+			zap.Any("created_entities", createdEntities))
+		return nil, fmt.Errorf("failed to store delegation data (tx: %s, created: %v): %w",
+			txHash, createdEntities, err)
 	}
+	trackProgress("delegation_data", delegationData.ID)
 
-	// Calculate subscription periods
-	periodStart, periodEnd, nextRedemption := helpers.CalculateSubscriptionPeriods(createParams.Price)
+	// STEP 3: Calculate subscription periods
+	periodStart, periodEnd, nextRedemption := helpers.CalculateSubscriptionPeriods(createParams.Product)
 
-	// Create subscription
+	// STEP 4: Create subscription
 	subscription, err := s.CreateSubscription(ctx, tx, params.CreateSubscriptionParams{
 		Customer:       *customer,
 		CustomerWallet: *customerWallet,
 		WorkspaceID:    createParams.Product.WorkspaceID,
 		ProductID:      createParams.Product.ID,
 		ProductTokenID: createParams.ProductTokenID,
-		Price:          createParams.Price,
+		Product:        createParams.Product,
 		TokenAmount:    createParams.TokenAmount,
 		DelegationData: *delegationData,
 		PeriodStart:    periodStart,
 		PeriodEnd:      periodEnd,
 		NextRedemption: nextRedemption,
+		Addons:         createParams.Addons, // Pass addons to create line items
 	})
 	if err != nil {
-		s.logger.Error("Failed to create subscription", zap.Error(err))
-		return nil, fmt.Errorf("failed to create subscription: %w", err)
+		s.logger.Error("Failed to create subscription after payment",
+			zap.Error(err),
+			zap.String("transaction_hash", txHash),
+			zap.Any("created_entities", createdEntities))
+		return nil, fmt.Errorf("failed to create subscription (tx: %s, created: %v): %w",
+			txHash, createdEntities, err)
+	}
+	result.Subscription = subscription
+	trackProgress("subscription", subscription.ID)
+
+	// STEP 5: Create subscription event (type: created)
+	qtx := db.New(tx)
+	createdEventMetadata := map[string]interface{}{
+		"product_id":        createParams.Product.ID.String(),
+		"product_name":      createParams.Product.Name,
+		"customer_id":       customer.ID.String(),
+		"wallet_address":    customerWallet.WalletAddress,
+		"subscription_type": string(createParams.Product.PriceType),
+		"initial_tx_hash":   txHash,
 	}
 
-	result.Subscription = subscription
+	createdEventMetadataBytes, err := json.Marshal(createdEventMetadata)
+	if err != nil {
+		s.logger.Error("Failed to marshal created event metadata", zap.Error(err))
+		createdEventMetadataBytes = []byte("{}")
+	}
 
-	// Create subscription event
+	createdEvent, err := qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+		SubscriptionID:  subscription.ID,
+		EventType:       db.SubscriptionEventTypeCreate,
+		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		TransactionHash: pgtype.Text{Valid: false}, // No transaction for created event
+		AmountInCents:   0, // No amount for created event
+		Metadata:        createdEventMetadataBytes,
+	})
+	if err != nil {
+		s.logger.Error("Failed to create subscription created event",
+			zap.Error(err),
+			zap.String("subscription_id", subscription.ID.String()),
+			zap.Any("created_entities", createdEntities))
+		return nil, fmt.Errorf("failed to create subscription created event (tx: %s, created: %v): %w",
+			txHash, createdEntities, err)
+	}
+	trackProgress("subscription_created_event", createdEvent.ID)
+
+	// STEP 6: Create subscription event (type: redeemed)
 	eventMetadata := map[string]interface{}{
-		"product_name":   createParams.Product.Name,
-		"price_type":     createParams.Price.Type,
-		"wallet_address": customerWallet.WalletAddress,
-		"network_type":   createParams.Network.Type,
+		"product_id":        createParams.Product.ID.String(),
+		"product_name":      createParams.Product.Name,
+		"product_id_old":    createParams.Product.ID.String(),
+		"price_type":        string(createParams.Product.PriceType),
+		"product_token_id":  createParams.ProductToken.ID.String(),
+		"token_symbol":      createParams.ProductToken.TokenSymbol,
+		"network_name":      createParams.ProductToken.NetworkName,
+		"wallet_address":    customerWallet.WalletAddress,
+		"customer_id":       customer.ID.String(),
+		"redemption_time":   time.Now().Unix(),
+		"subscription_type": string(createParams.Product.PriceType),
+		"tx_hash":           txHash,
 	}
 
 	eventMetadataBytes, err := json.Marshal(eventMetadata)
@@ -674,73 +961,485 @@ func (s *SubscriptionService) CreateSubscriptionWithDelegation(ctx context.Conte
 		eventMetadataBytes = []byte("{}")
 	}
 
-	qtx := db.New(tx)
-	_, err = qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
-		SubscriptionID: subscription.ID,
-		EventType:      db.SubscriptionEventTypeCreated,
-		OccurredAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		AmountInCents:  createParams.Price.UnitAmountInPennies,
-		Metadata:       eventMetadataBytes,
+	subscriptionEvent, err := qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
+		SubscriptionID:  subscription.ID,
+		EventType:       db.SubscriptionEventTypeRedeem,
+		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		TransactionHash: pgtype.Text{String: txHash, Valid: true},
+		AmountInCents:   createParams.Product.UnitAmountInPennies,
+		Metadata:        eventMetadataBytes,
 	})
 	if err != nil {
-		s.logger.Error("Failed to create subscription event", zap.Error(err))
-		return nil, fmt.Errorf("failed to create subscription event: %w", err)
+		s.logger.Error("Failed to create subscription event after payment",
+			zap.Error(err),
+			zap.String("transaction_hash", txHash),
+			zap.Any("created_entities", createdEntities))
+		return nil, fmt.Errorf("failed to create subscription event (tx: %s, created: %v): %w",
+			txHash, createdEntities, err)
+	}
+	trackProgress("subscription_event", subscriptionEvent.ID)
+
+	// STEP 6: Create payment record
+	paymentServiceTx := &PaymentService{
+		queries:               qtx,
+		logger:                s.logger,
+		gasFeeService:         nil, // Not needed for basic payment creation
+		taxService:            nil, // Not needed for basic payment creation
+		discountService:       nil, // Not needed for basic payment creation
+		exchangeRateService:   nil, // Not needed for basic payment creation
+		gasSponsorshipService: nil, // Not needed for basic payment creation
 	}
 
-	// NOTE: Transaction should be committed by the caller before performing initial redemption
-	// The initial redemption needs to happen after the transaction commits
-
-	// Set a flag to indicate initial redemption should be performed after commit
-	updatedSubscription, err := s.ProcessInitialRedemption(ctx, tx, params.InitialRedemptionParams{
-		Customer:       *customer,
-		CustomerWallet: *customerWallet,
-		Subscription:   *subscription,
-		Product:        createParams.Product,
-		Price:          createParams.Price,
-		ProductToken:   createParams.ProductToken,
-		DelegationData: createParams.DelegationData,
-		MerchantWallet: createParams.MerchantWallet,
-		Token:          createParams.Token,
-		Network:        createParams.Network,
-		TokenAmount:    createParams.TokenAmount,
+	payment, err := paymentServiceTx.CreatePaymentFromSubscriptionEvent(ctx, params.CreatePaymentFromSubscriptionEventParams{
+		SubscriptionEvent: &subscriptionEvent,
+		Subscription:      subscription,
+		Product:           &createParams.Product,
+		Customer:          customer,
+		TransactionHash:   txHash,
+		NetworkID:         createParams.Network.ID,
+		TokenID:           createParams.Token.ID,
+		CryptoAmount:      fmt.Sprintf("%.*f", int(createParams.Token.Decimals), float64(createParams.TokenAmount)/math.Pow(10, float64(createParams.Token.Decimals))),
 	})
 	if err != nil {
-		s.logger.Error("Initial redemption failed",
+		s.logger.Error("Failed to create payment record after blockchain transaction",
+			zap.Error(err),
+			zap.String("transaction_hash", txHash),
+			zap.Any("created_entities", createdEntities))
+		return nil, fmt.Errorf("failed to create payment record (tx: %s, created: %v): %w",
+			txHash, createdEntities, err)
+	}
+	trackProgress("payment", payment.ID)
+
+	// STEP 7: Create invoice
+	// For now, skip invoice creation within the transaction since the invoice service
+	// doesn't support transactions. The invoice will be created separately.
+	// This prevents the "no active line items" error that occurs when the invoice service
+	// queries for line items before the transaction is committed.
+	s.logger.Info("Skipping invoice creation within transaction - will be created separately",
+		zap.String("subscription_id", subscription.ID.String()),
+		zap.String("payment_id", payment.ID.String()))
+
+	// STEP 10: Update subscription redemption tracking
+	// Calculate next redemption date
+	var nextRedemptionDate pgtype.Timestamptz
+	if createParams.Product.PriceType == db.PriceTypeRecurring {
+		intervalType := ""
+		if createParams.Product.IntervalType.Valid {
+			intervalType = string(createParams.Product.IntervalType.IntervalType)
+		}
+		nextDate := helpers.CalculateNextRedemption(intervalType, time.Now())
+		nextRedemptionDate = pgtype.Timestamptz{
+			Time:  nextDate,
+			Valid: true,
+		}
+	} else {
+		nextRedemptionDate = pgtype.Timestamptz{
+			Valid: false,
+		}
+	}
+
+	// Update subscription with redemption details
+	updatedSubscription, err := qtx.IncrementSubscriptionRedemption(ctx, db.IncrementSubscriptionRedemptionParams{
+		ID:                 subscription.ID,
+		TotalAmountInCents: createParams.Product.UnitAmountInPennies,
+		NextRedemptionDate: nextRedemptionDate,
+	})
+	if err != nil {
+		s.logger.Error("Failed to update subscription redemption details",
 			zap.Error(err),
 			zap.String("subscription_id", subscription.ID.String()))
-
-		// Update subscription status to failed
-		qtx := db.New(tx)
-		_, updateErr := qtx.UpdateSubscriptionStatus(ctx, db.UpdateSubscriptionStatusParams{
-			ID:     subscription.ID,
-			Status: db.SubscriptionStatusFailed,
-		})
-		if updateErr != nil {
-			s.logger.Error("Failed to update subscription status after redemption failure",
-				zap.Error(updateErr),
-				zap.String("subscription_id", subscription.ID.String()))
-		}
-
-		// Soft delete the subscription
-		deleteErr := qtx.DeleteSubscription(ctx, subscription.ID)
-		if deleteErr != nil {
-			s.logger.Error("Failed to soft-delete subscription after redemption failure",
-				zap.Error(deleteErr),
-				zap.String("subscription_id", subscription.ID.String()))
-		}
-
-		return nil, fmt.Errorf("initial redemption failed: %w", err)
+		// Don't fail the whole operation
+		updatedSubscription = *subscription
 	}
 
-	result.Subscription = updatedSubscription
-	result.TransactionHash = s.lastRedemptionTxHash
+	// Update wallet usage time
+	_, walletErr := qtx.UpdateCustomerWalletUsageTime(ctx, customerWallet.ID)
+	if walletErr != nil {
+		s.logger.Warn("Failed to update wallet last used timestamp",
+			zap.Error(walletErr),
+			zap.String("wallet_id", customerWallet.ID.String()))
+	}
+
+	result.Subscription = &updatedSubscription
+	result.TransactionHash = txHash
 	result.InitialRedemption = true
 
-	s.logger.Info("Subscription created successfully with initial redemption",
+	s.logger.Info("Successfully created all subscription records after payment",
 		zap.String("subscription_id", subscription.ID.String()),
-		zap.String("transaction_hash", result.TransactionHash))
+		zap.String("transaction_hash", txHash),
+		zap.Any("created_entities", createdEntities))
 
 	return &result, nil
+}
+
+// CreateInvoiceForSubscriptionPayment creates an invoice after subscription payment transaction is committed
+func (s *SubscriptionService) CreateInvoiceForSubscriptionPayment(ctx context.Context, subscriptionID, paymentID uuid.UUID, periodStart, periodEnd time.Time, transactionHash string) error {
+	if s.invoiceService == nil {
+		s.logger.Warn("Invoice service not configured, skipping invoice creation")
+		return nil
+	}
+
+	s.logger.Info("Creating or updating invoice for subscription payment",
+		zap.String("subscription_id", subscriptionID.String()),
+		zap.String("payment_id", paymentID.String()),
+		zap.String("transaction_hash", transactionHash))
+
+	// Get subscription details
+	subscription, err := s.queries.GetSubscription(ctx, subscriptionID)
+	if err != nil {
+		s.logger.Error("Failed to get subscription",
+			zap.Error(err),
+			zap.String("subscription_id", subscriptionID.String()))
+		return fmt.Errorf("failed to get subscription: %w", err)
+	}
+
+	// First, check if an invoice already exists for this period
+	invoices, err := s.queries.ListInvoicesBySubscription(ctx, db.ListInvoicesBySubscriptionParams{
+		WorkspaceID:    subscription.WorkspaceID,
+		SubscriptionID: pgtype.UUID{Bytes: subscriptionID, Valid: true},
+		Limit:          10,
+		Offset:         0,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list invoices for subscription: %w", err)
+	}
+
+	// Find the earliest open invoice for this subscription
+	// Since invoices are ordered by created_date DESC, we need to find the last open invoice in the list
+	var existingInvoice *db.Invoice
+	for i := range invoices {
+		// Look for any open invoice, not period-specific
+		if invoices[i].Status == "open" {
+			// Keep updating to get the oldest open invoice (last in the DESC ordered list)
+			existingInvoice = &invoices[i]
+			s.logger.Info("Found open invoice",
+				zap.String("invoice_id", invoices[i].ID.String()),
+				zap.String("invoice_number", invoices[i].InvoiceNumber.String),
+				zap.String("status", invoices[i].Status),
+				zap.Time("created_date", invoices[i].CreatedDate.Time))
+		}
+	}
+	
+	if existingInvoice != nil {
+		s.logger.Info("Selected earliest open invoice to mark as paid",
+			zap.String("invoice_id", existingInvoice.ID.String()),
+			zap.String("invoice_number", existingInvoice.InvoiceNumber.String),
+			zap.Time("created_date", existingInvoice.CreatedDate.Time))
+	}
+
+	var invoice *responses.InvoiceResponse
+	
+	// Get subscription details for payment metadata
+	subscriptionDetails, err := s.queries.GetSubscriptionForInvoicing(ctx, subscriptionID)
+	var hasSubscriptionDetails bool
+	if err != nil {
+		s.logger.Error("Failed to get subscription details for invoice metadata",
+			zap.Error(err),
+			zap.String("subscription_id", subscriptionID.String()))
+		hasSubscriptionDetails = false
+	} else {
+		hasSubscriptionDetails = true
+	}
+
+	if existingInvoice != nil {
+		// Update existing invoice
+		s.logger.Info("Found existing invoice for period, marking as paid",
+			zap.String("invoice_id", existingInvoice.ID.String()),
+			zap.String("subscription_id", subscriptionID.String()))
+
+		// Create payment metadata
+		paymentMetadata := map[string]interface{}{
+			"transaction_hash": transactionHash,
+			"payment_id": paymentID.String(),
+		}
+		
+		if hasSubscriptionDetails {
+			paymentMetadata["payer_wallet"] = subscriptionDetails.CustomerWalletAddress.String
+			paymentMetadata["receiver_wallet"] = subscriptionDetails.MerchantWalletAddress.String
+		}
+		
+		metadataJSON, err := json.Marshal(paymentMetadata)
+		if err != nil {
+			s.logger.Error("Failed to marshal payment metadata",
+				zap.Error(err),
+				zap.String("invoice_id", existingInvoice.ID.String()))
+		} else {
+			// Update invoice metadata with payment details
+			_, err = s.queries.UpdateInvoiceMetadata(ctx, db.UpdateInvoiceMetadataParams{
+				ID:       existingInvoice.ID,
+				Metadata: metadataJSON,
+			})
+			if err != nil {
+				s.logger.Error("Failed to update invoice metadata",
+					zap.Error(err),
+					zap.String("invoice_id", existingInvoice.ID.String()))
+			}
+		}
+
+		// Mark invoice as paid
+		_, err = s.invoiceService.MarkInvoicePaid(ctx, subscription.WorkspaceID, existingInvoice.ID)
+		if err != nil {
+			s.logger.Error("Failed to mark invoice as paid",
+				zap.Error(err),
+				zap.String("invoice_id", existingInvoice.ID.String()))
+			return fmt.Errorf("failed to mark invoice as paid: %w", err)
+		}
+
+		// Update payment with invoice_id
+		_, err = s.queries.UpdatePaymentInvoiceID(ctx, db.UpdatePaymentInvoiceIDParams{
+			ID:        paymentID,
+			InvoiceID: pgtype.UUID{Bytes: existingInvoice.ID, Valid: true},
+		})
+		if err != nil {
+			s.logger.Error("Failed to link payment to invoice",
+				zap.Error(err),
+				zap.String("payment_id", paymentID.String()),
+				zap.String("invoice_id", existingInvoice.ID.String()))
+		}
+
+		s.logger.Info("Successfully updated existing invoice and linked payment",
+			zap.String("payment_id", paymentID.String()),
+			zap.String("invoice_id", existingInvoice.ID.String()))
+
+		return nil
+	}
+
+	// No existing invoice, create a new one
+	s.logger.Info("No existing invoice found for period, creating new invoice",
+		zap.String("subscription_id", subscriptionID.String()),
+		zap.Time("period_start", periodStart),
+		zap.Time("period_end", periodEnd))
+
+	// Create payment metadata
+	paymentMetadata := map[string]interface{}{
+		"transaction_hash": transactionHash,
+		"payment_id": paymentID.String(),
+	}
+	
+	if hasSubscriptionDetails {
+		paymentMetadata["payer_wallet"] = subscriptionDetails.CustomerWalletAddress.String
+		paymentMetadata["receiver_wallet"] = subscriptionDetails.MerchantWalletAddress.String
+	}
+
+	// Create invoice with metadata
+	invoice, err = s.invoiceService.GenerateInvoiceFromSubscriptionWithMetadata(ctx,
+		subscriptionID,
+		periodStart,
+		periodEnd,
+		false, // Not draft, this is a paid invoice
+		paymentMetadata)
+
+	if err != nil {
+		s.logger.Error("Failed to create invoice after payment",
+			zap.Error(err),
+			zap.String("subscription_id", subscriptionID.String()),
+			zap.String("payment_id", paymentID.String()))
+		return fmt.Errorf("failed to create invoice: %w", err)
+	}
+
+	s.logger.Info("Successfully created invoice",
+		zap.String("invoice_id", invoice.ID.String()),
+		zap.String("subscription_id", subscriptionID.String()))
+
+	// Mark invoice as paid
+	_, err = s.invoiceService.MarkInvoicePaid(ctx,
+		subscription.WorkspaceID,
+		invoice.ID)
+
+	if err != nil {
+		s.logger.Error("Failed to mark invoice as paid",
+			zap.Error(err),
+			zap.String("invoice_id", invoice.ID.String()))
+		return fmt.Errorf("failed to mark invoice as paid: %w", err)
+	}
+
+	// Update payment with invoice_id
+	_, err = s.queries.UpdatePaymentInvoiceID(ctx, db.UpdatePaymentInvoiceIDParams{
+		ID:        paymentID,
+		InvoiceID: pgtype.UUID{Bytes: invoice.ID, Valid: true},
+	})
+	if err != nil {
+		s.logger.Error("Failed to link payment to invoice",
+			zap.Error(err),
+			zap.String("payment_id", paymentID.String()),
+			zap.String("invoice_id", invoice.ID.String()))
+		return fmt.Errorf("failed to link payment to invoice: %w", err)
+	}
+
+	s.logger.Info("Successfully linked payment to invoice",
+		zap.String("payment_id", paymentID.String()),
+		zap.String("invoice_id", invoice.ID.String()))
+
+	return nil
+}
+
+// MarkSubscriptionInvoiceAsPaid marks the invoice for a subscription period as paid
+func (s *SubscriptionService) MarkSubscriptionInvoiceAsPaid(ctx context.Context, workspaceID, subscriptionID, paymentID uuid.UUID, periodStart, periodEnd time.Time) error {
+	if s.invoiceService == nil {
+		s.logger.Warn("Invoice service not configured, skipping invoice status update")
+		return nil
+	}
+
+	// Find the invoice for this subscription period
+	invoices, err := s.queries.ListInvoicesBySubscription(ctx, db.ListInvoicesBySubscriptionParams{
+		WorkspaceID:    workspaceID,
+		SubscriptionID: pgtype.UUID{Bytes: subscriptionID, Valid: true},
+		Limit:          10,
+		Offset:         0,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list invoices for subscription: %w", err)
+	}
+
+	// Find the invoice that matches this period
+	var invoiceToMark *db.Invoice
+	for _, inv := range invoices {
+		// Check if this invoice has line items for the matching period
+		lineItems, err := s.queries.GetInvoiceLineItems(ctx, inv.ID)
+		if err != nil {
+			s.logger.Warn("Failed to get line items for invoice",
+				zap.String("invoice_id", inv.ID.String()),
+				zap.Error(err))
+			continue
+		}
+
+		// Check if any line item matches the period
+		for _, item := range lineItems {
+			if item.PeriodStart.Valid && item.PeriodEnd.Valid &&
+				item.PeriodStart.Time.Equal(periodStart) &&
+				item.PeriodEnd.Time.Equal(periodEnd) {
+				invoiceToMark = &inv
+				break
+			}
+		}
+		if invoiceToMark != nil {
+			break
+		}
+	}
+
+	if invoiceToMark == nil {
+		s.logger.Warn("No invoice found for subscription period",
+			zap.String("subscription_id", subscriptionID.String()),
+			zap.Time("period_start", periodStart),
+			zap.Time("period_end", periodEnd))
+		return nil
+	}
+
+	// Mark the invoice as paid
+	_, err = s.invoiceService.MarkInvoicePaid(ctx, workspaceID, invoiceToMark.ID)
+	if err != nil {
+		return fmt.Errorf("failed to mark invoice as paid: %w", err)
+	}
+
+	// Update payment with invoice_id
+	_, err = s.queries.UpdatePaymentInvoiceID(ctx, db.UpdatePaymentInvoiceIDParams{
+		ID:        paymentID,
+		InvoiceID: pgtype.UUID{Bytes: invoiceToMark.ID, Valid: true},
+	})
+	if err != nil {
+		s.logger.Error("Failed to link payment to invoice",
+			zap.Error(err),
+			zap.String("payment_id", paymentID.String()),
+			zap.String("invoice_id", invoiceToMark.ID.String()))
+	}
+
+	s.logger.Info("Successfully marked invoice as paid",
+		zap.String("invoice_id", invoiceToMark.ID.String()),
+		zap.String("subscription_id", subscriptionID.String()),
+		zap.String("payment_id", paymentID.String()))
+
+	return nil
+}
+
+// GenerateNextPeriodInvoice generates an open invoice for the next subscription period
+func (s *SubscriptionService) GenerateNextPeriodInvoice(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time) (*responses.InvoiceResponse, error) {
+	if s.invoiceService == nil {
+		return nil, fmt.Errorf("invoice service not configured")
+	}
+
+	// Generate invoice for next period (will be open status)
+	invoice, err := s.invoiceService.GenerateInvoiceFromSubscription(ctx, subscriptionID, periodStart, periodEnd, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate next period invoice: %w", err)
+	}
+
+	return invoice, nil
+}
+
+// logFailedSubscriptionAttempt logs a failed subscription attempt with appropriate context
+func (s *SubscriptionService) logFailedSubscriptionAttempt(
+	ctx context.Context,
+	customerID *uuid.UUID,
+	createParams params.CreateSubscriptionWithDelegationParams,
+	walletAddress string,
+	err error,
+	transactionHash string,
+) {
+	s.logger.Error("Failed subscription attempt",
+		zap.Any("customer_id", customerID),
+		zap.String("workspace_id", createParams.Product.WorkspaceID.String()),
+		zap.String("product_id", createParams.Product.ID.String()),
+		zap.String("product_token_id", createParams.ProductToken.ID.String()),
+		zap.String("wallet_address", walletAddress),
+		zap.String("delegation_signature", createParams.DelegationData.Signature),
+		zap.String("transaction_hash", transactionHash),
+		zap.Error(err))
+
+	errorType := helpers.DetermineErrorType(err)
+	var customerIDPgType pgtype.UUID
+	if customerID != nil {
+		customerIDPgType = pgtype.UUID{Bytes: *customerID, Valid: true}
+	} else {
+		customerIDPgType = pgtype.UUID{Valid: false}
+	}
+
+	customerWalletIDPgType := pgtype.UUID{Valid: false}
+	var delegationSignaturePgType pgtype.Text
+	if createParams.DelegationData.Signature != "" {
+		delegationSignaturePgType = pgtype.Text{String: createParams.DelegationData.Signature, Valid: true}
+	} else {
+		delegationSignaturePgType = pgtype.Text{Valid: false}
+	}
+
+	// Build detailed metadata about the failure
+	metadata := map[string]interface{}{
+		"product_id":      createParams.Product.ID.String(),
+		"token_amount":    createParams.TokenAmount,
+		"network_name":    createParams.Network.Name,
+		"merchant_wallet": createParams.MerchantWallet.WalletAddress,
+	}
+
+	// If transaction hash exists, this was a partial success
+	if transactionHash != "" {
+		metadata["transaction_hash"] = transactionHash
+		metadata["transaction_status"] = "success"
+		metadata["failure_type"] = "post_transaction_db_failure"
+
+		// Try to extract what was created from the error message
+		if strings.Contains(err.Error(), "created:") {
+			// The error message contains created entities info
+			metadata["partial_success"] = true
+		}
+	}
+
+	metadataBytes, _ := json.Marshal(metadata)
+
+	_, dbErr := s.queries.CreateFailedSubscriptionAttempt(ctx, db.CreateFailedSubscriptionAttemptParams{
+		CustomerID:          customerIDPgType,
+		ProductID:           createParams.Product.ID,
+		ProductTokenID:      createParams.ProductToken.ID,
+		CustomerWalletID:    customerWalletIDPgType,
+		WalletAddress:       walletAddress,
+		ErrorType:           errorType,
+		ErrorMessage:        err.Error(),
+		ErrorDetails:        metadataBytes,
+		DelegationSignature: delegationSignaturePgType,
+		Metadata:            []byte("{}"),
+	})
+
+	if dbErr != nil {
+		s.logger.Error("Failed to create failed subscription attempt record", zap.Error(dbErr))
+	}
 }
 
 // ProcessDueSubscriptions finds and processes all subscriptions that are due for redemption
@@ -826,10 +1525,8 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 		return fmt.Errorf("failed to get product: %w", err)
 	}
 
-	price, err := qtx.GetPrice(ctx, subscription.PriceID)
-	if err != nil {
-		return fmt.Errorf("failed to get price: %w", err)
-	}
+	// Price is now embedded in product - no need to fetch separately
+	price := product // Use product as price for code that expects price variable
 
 	customer, err := qtx.GetCustomer(ctx, subscription.CustomerID)
 	if err != nil {
@@ -914,6 +1611,48 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 				zap.Error(updateErr),
 				zap.String("subscription_id", subscription.ID.String()))
 		}
+		
+		// Check if there's an open invoice for this period and keep it open
+		if s.invoiceService != nil {
+			periodStart := currentSub.CurrentPeriodStart.Time
+			periodEnd := currentSub.CurrentPeriodEnd.Time
+			
+			// Find any existing invoice for this period
+			invoices, listErr := s.queries.ListInvoicesBySubscription(ctx, db.ListInvoicesBySubscriptionParams{
+				WorkspaceID:    currentSub.WorkspaceID,
+				SubscriptionID: pgtype.UUID{Bytes: subscription.ID, Valid: true},
+				Limit:          5,
+				Offset:         0,
+			})
+			if listErr == nil {
+				for _, inv := range invoices {
+					// Check if this invoice is for the current period
+					lineItems, itemErr := s.queries.GetInvoiceLineItems(ctx, inv.ID)
+					if itemErr == nil {
+						for _, item := range lineItems {
+							if item.PeriodStart.Valid && item.PeriodEnd.Valid &&
+								item.PeriodStart.Time.Equal(periodStart) &&
+								item.PeriodEnd.Time.Equal(periodEnd) {
+								// Found the invoice for this period
+								if inv.Status == "draft" {
+									// Update to open status since payment was attempted
+									_, _ = s.queries.UpdateInvoiceStatus(ctx, db.UpdateInvoiceStatusParams{
+										ID:          inv.ID,
+										WorkspaceID: currentSub.WorkspaceID,
+										Status:      "open",
+									})
+									s.logger.Info("Updated invoice status to open after failed payment",
+										zap.String("invoice_id", inv.ID.String()),
+										zap.String("subscription_id", subscription.ID.String()))
+								}
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+		
 		return fmt.Errorf("redemption failed: %w", err)
 	}
 
@@ -921,15 +1660,15 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 
 	// Update subscription with proper term length validation
 	var nextRedemptionDate pgtype.Timestamptz
-	if price.Type == db.PriceTypeRecurring {
+	if price.PriceType == db.PriceTypeRecurring {
 		// CRITICAL BUG FIX: Check if subscription has reached its term limit
 		// currentSub.TotalRedemptions will be incremented by IncrementSubscriptionRedemption below
 		// so we check if the NEXT redemption would exceed the limit
-		if currentSub.TotalRedemptions+1 >= price.TermLength {
+		if currentSub.TotalRedemptions+1 >= price.TermLength.Int32 {
 			s.logger.Info("Subscription reached maximum periods, marking as completed",
 				zap.String("subscription_id", subscription.ID.String()),
 				zap.Int32("current_redemptions", currentSub.TotalRedemptions),
-				zap.Int32("max_periods", price.TermLength))
+				zap.Int32("max_periods", price.TermLength.Int32))
 
 			// Mark as completed - reached maximum periods
 			_, err = qtx.UpdateSubscriptionStatus(ctx, db.UpdateSubscriptionStatusParams{
@@ -946,7 +1685,11 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 			nextRedemptionDate = pgtype.Timestamptz{Valid: false}
 		} else {
 			// Continue with next redemption - subscription still has periods remaining
-			nextDate := helpers.CalculateNextRedemption(string(price.IntervalType), time.Now())
+			intervalType := ""
+			if price.IntervalType.Valid {
+				intervalType = string(price.IntervalType.IntervalType)
+			}
+			nextDate := helpers.CalculateNextRedemption(intervalType, time.Now())
 			nextRedemptionDate = pgtype.Timestamptz{
 				Time:  nextDate,
 				Valid: true,
@@ -955,8 +1698,31 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 			s.logger.Info("Subscription continuing to next period",
 				zap.String("subscription_id", subscription.ID.String()),
 				zap.Int32("current_redemptions", currentSub.TotalRedemptions),
-				zap.Int32("max_periods", price.TermLength),
+				zap.Int32("max_periods", price.TermLength.Int32),
 				zap.Time("next_redemption", nextDate))
+			
+			// Generate invoice for next period
+			if s.invoiceService != nil {
+				nextPeriodStart := currentSub.CurrentPeriodEnd.Time
+				nextPeriodEnd := nextDate
+				
+				// Create a draft invoice for the next period
+				nextInvoice, err := s.invoiceService.GenerateInvoiceFromSubscription(ctx, subscription.ID, nextPeriodStart, nextPeriodEnd, false)
+				if err != nil {
+					s.logger.Error("Failed to generate invoice for next period",
+						zap.Error(err),
+						zap.String("subscription_id", subscription.ID.String()),
+						zap.Time("next_period_start", nextPeriodStart),
+						zap.Time("next_period_end", nextPeriodEnd))
+				} else {
+					s.logger.Info("Generated invoice for next subscription period",
+						zap.String("subscription_id", subscription.ID.String()),
+						zap.String("invoice_id", nextInvoice.ID.String()),
+						zap.String("invoice_number", nextInvoice.InvoiceNumber),
+						zap.Time("period_start", nextPeriodStart),
+						zap.Time("period_end", nextPeriodEnd))
+				}
+			}
 		}
 	} else {
 		// One-time price, mark as completed
@@ -976,7 +1742,7 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 
 	_, err = qtx.IncrementSubscriptionRedemption(ctx, db.IncrementSubscriptionRedemptionParams{
 		ID:                 subscription.ID,
-		TotalAmountInCents: int32(price.UnitAmountInPennies),
+		TotalAmountInCents: price.UnitAmountInPennies,
 		NextRedemptionDate: nextRedemptionDate,
 	})
 	if err != nil {
@@ -987,15 +1753,15 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 	eventMetadata := map[string]interface{}{
 		"product_id":        product.ID.String(),
 		"product_name":      product.Name,
-		"price_id":          price.ID.String(),
-		"price_type":        price.Type,
+		"product_id_old":    product.ID.String(),
+		"price_type":        string(product.PriceType),
 		"product_token_id":  productToken.ID.String(),
 		"token_symbol":      productToken.TokenSymbol,
 		"network_name":      productToken.NetworkName,
 		"wallet_address":    customerWallet.WalletAddress,
 		"customer_id":       customer.ID.String(),
 		"redemption_time":   time.Now().Unix(),
-		"subscription_type": string(price.Type),
+		"subscription_type": string(product.PriceType),
 		"tx_hash":           txHash,
 	}
 
@@ -1008,10 +1774,10 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 	// Actually create the subscription event in the database
 	subEvent, err = qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
 		SubscriptionID:  subscription.ID,
-		EventType:       db.SubscriptionEventTypeRedeemed,
+		EventType:       db.SubscriptionEventTypeRedeem,
 		OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		TransactionHash: pgtype.Text{String: txHash, Valid: true},
-		AmountInCents:   int32(price.UnitAmountInPennies),
+		AmountInCents:   product.UnitAmountInPennies,
 		Metadata:        metadataBytes,
 	})
 	if err != nil {
@@ -1021,11 +1787,10 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 		return fmt.Errorf("failed to create subscription event: %w", err)
 	}
 
-	_, err = s.paymentService.CreatePaymentFromSubscriptionEvent(ctx, params.CreatePaymentFromSubscriptionEventParams{
+	payment, err := s.paymentService.CreatePaymentFromSubscriptionEvent(ctx, params.CreatePaymentFromSubscriptionEventParams{
 		SubscriptionEvent: &subEvent,
 		Subscription:      &currentSub,
 		Product:           &product,
-		Price:             &price,
 		Customer:          &customer,
 		TransactionHash:   txHash,
 		NetworkID:         productToken.NetworkID,
@@ -1039,6 +1804,21 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 		s.logger.Error("Failed to create payment record",
 			zap.Error(err),
 			zap.String("subscription_id", subscription.ID.String()))
+	} else {
+		// Generate invoice for this payment period
+		periodStart := currentSub.CurrentPeriodStart.Time
+		periodEnd := currentSub.CurrentPeriodEnd.Time
+		
+		// Create invoice and mark it as paid since payment was successful
+		if s.invoiceService != nil {
+			err = s.CreateInvoiceForSubscriptionPayment(ctx, subscription.ID, payment.ID, periodStart, periodEnd, txHash)
+			if err != nil {
+				s.logger.Error("Failed to create invoice for subscription payment",
+					zap.Error(err),
+					zap.String("subscription_id", subscription.ID.String()),
+					zap.String("payment_id", payment.ID.String()))
+			}
+		}
 	}
 
 	// Check if subscription was completed and create completion event
@@ -1050,16 +1830,16 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 	} else if updatedSub.Status == db.SubscriptionStatusCompleted {
 		// Create completion event after redemption and payment
 		completionReason := "term_limit_reached"
-		if price.Type == db.PriceTypeOneOff {
+		if price.PriceType == db.PriceTypeOneTime {
 			completionReason = "one_time_purchase"
 		}
 
 		completionMetadata := map[string]interface{}{
 			"product_id":        product.ID.String(),
 			"product_name":      product.Name,
-			"price_id":          price.ID.String(),
+			"product_id_old":    price.ID.String(),
 			"total_redemptions": updatedSub.TotalRedemptions,
-			"max_periods":       price.TermLength,
+			"max_periods":       price.TermLength.Int32,
 			"completion_reason": completionReason,
 			"final_tx_hash":     txHash,
 		}
@@ -1072,7 +1852,7 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 
 		_, err = qtx.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
 			SubscriptionID:  subscription.ID,
-			EventType:       db.SubscriptionEventTypeCompleted,
+			EventType:       db.SubscriptionEventTypeComplete,
 			OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
 			TransactionHash: pgtype.Text{String: txHash, Valid: true},
 			AmountInCents:   0, // No additional amount for completion event
@@ -1096,23 +1876,14 @@ func (s *SubscriptionService) processSingleSubscription(ctx context.Context, qtx
 	return nil
 }
 
-// SubscribeToProductByPriceID handles the complete workflow for subscribing to a product by price ID
+// SubscribeToProductByPriceID handles the complete workflow for subscribing to a product
+// Deprecated: The name is kept for backward compatibility but it now uses product ID directly
 func (s *SubscriptionService) SubscribeToProductByPriceID(ctx context.Context, subscribeParams params.SubscribeToProductByPriceIDParams) (*responses.SubscribeToProductByPriceIDResult, error) {
-	// Get price and validate it's active
-	price, err := s.queries.GetPrice(ctx, subscribeParams.PriceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get price: %w", err)
-	}
-
-	if !price.Active {
-		return &responses.SubscribeToProductByPriceIDResult{
-			Success:      false,
-			ErrorMessage: "Cannot subscribe to inactive price",
-		}, nil
-	}
+	// Since prices are now embedded in products, ProductID is what was formerly PriceID
+	productID := subscribeParams.ProductID
 
 	// Get product and validate it's active
-	product, err := s.queries.GetProductWithoutWorkspaceId(ctx, price.ProductID)
+	product, err := s.queries.GetProductWithoutWorkspaceId(ctx, productID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get product: %w", err)
 	}
@@ -1120,7 +1891,7 @@ func (s *SubscriptionService) SubscribeToProductByPriceID(ctx context.Context, s
 	if !product.Active {
 		return &responses.SubscribeToProductByPriceIDResult{
 			Success:      false,
-			ErrorMessage: "Cannot subscribe to a price of an inactive product",
+			ErrorMessage: "Cannot subscribe to inactive product",
 		}, nil
 	}
 
@@ -1195,44 +1966,20 @@ func (s *SubscriptionService) SubscribeToProductByPriceID(ctx context.Context, s
 		Signature: subscribeParams.DelegationData.Signature,
 	}
 
-	// Since this method is called with a transaction-aware service (via WithTransaction),
-	// we can directly use the service's existing methods that work with transactions
-
-	// Process customer and wallet first
-	customer, customerWallet, err := s.customerService.ProcessCustomerAndWallet(ctx, nil, params.ProcessCustomerWalletParams{
-		WalletAddress: normalizedAddress,
-		WorkspaceID:   product.WorkspaceID,
-		ProductID:     product.ID,
-		NetworkType:   string(network.NetworkType),
+	// Use the new flow - execute blockchain transaction first, then create DB records
+	result, err := s.CreateSubscriptionWithDelegation(ctx, nil, params.CreateSubscriptionWithDelegationParams{
+		Product:           product,
+		ProductToken:      productToken,
+		MerchantWallet:    merchantWallet,
+		Token:             token,
+		Network:           network,
+		DelegationData:    delegationParams,
+		SubscriberAddress: normalizedAddress,
+		ProductTokenID:    parsedProductTokenID,
+		TokenAmount:       tokenAmount,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to process customer and wallet: %w", err)
-	}
-
-	// Store delegation data (this needs a transaction but service should handle it)
-	delegationData, err := s.StoreDelegationData(ctx, nil, delegationParams)
-	if err != nil {
-		return nil, fmt.Errorf("failed to store delegation data: %w", err)
-	}
-
-	// Calculate subscription periods
-	periodStart, periodEnd, nextRedemption := helpers.CalculateSubscriptionPeriods(price)
-
-	// Create subscription using the service method
-	subscription, err := s.CreateSubscription(ctx, nil, params.CreateSubscriptionParams{
-		Customer:       *customer,
-		CustomerWallet: *customerWallet,
-		WorkspaceID:    product.WorkspaceID,
-		ProductID:      product.ID,
-		ProductTokenID: parsedProductTokenID,
-		Price:          price,
-		TokenAmount:    tokenAmount,
-		DelegationData: *delegationData,
-		PeriodStart:    periodStart,
-		PeriodEnd:      periodEnd,
-		NextRedemption: nextRedemption,
-	})
-	if err != nil {
+		// Check for specific error types
 		var subExistsErr *SubscriptionExistsError
 		if errors.As(err, &subExistsErr) {
 			return &responses.SubscribeToProductByPriceIDResult{
@@ -1240,92 +1987,32 @@ func (s *SubscriptionService) SubscribeToProductByPriceID(ctx context.Context, s
 				ErrorMessage: "Subscription already exists for this customer and product",
 			}, nil
 		}
-		return nil, fmt.Errorf("failed to create subscription: %w", err)
-	}
 
-	// Create subscription creation event
-	eventMetadata, err := json.Marshal(map[string]interface{}{
-		"product_name":   product.Name,
-		"price_type":     price.Type,
-		"wallet_address": customerWallet.WalletAddress,
-		"network_type":   customerWallet.NetworkType,
-	})
-	if err != nil {
-		s.logger.Error("Failed to marshal event metadata", zap.Error(err))
-		eventMetadata = []byte("{}")
-	}
-
-	_, err = s.queries.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
-		SubscriptionID: subscription.ID,
-		EventType:      db.SubscriptionEventTypeCreated,
-		OccurredAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		AmountInCents:  price.UnitAmountInPennies,
-		Metadata:       eventMetadata,
-	})
-	if err != nil {
-		s.logger.Error("Failed to create subscription event", zap.Error(err))
-		// Don't fail the whole operation for event creation failure
-	}
-
-	// Perform initial redemption
-	updatedSubscription, err := s.ProcessInitialRedemption(ctx, nil, params.InitialRedemptionParams{
-		Subscription:   *subscription,
-		Customer:       *customer,
-		CustomerWallet: *customerWallet,
-		Product:        product,
-		Price:          price,
-		ProductToken:   productToken,
-		DelegationData: delegationParams,
-		MerchantWallet: merchantWallet,
-		Token:          token,
-		Network:        network,
-		TokenAmount:    tokenAmount,
-	})
-	if err != nil {
-		// Update subscription status to failed and soft delete
-		_, updateErr := s.queries.UpdateSubscriptionStatus(ctx, db.UpdateSubscriptionStatusParams{
-			ID:     subscription.ID,
-			Status: db.SubscriptionStatusFailed,
-		})
-		if updateErr != nil {
-			s.logger.Error("Failed to update subscription status after redemption failure",
-				zap.Error(updateErr),
-				zap.String("subscription_id", subscription.ID.String()))
+		// For delegation failures, return user-friendly message
+		if strings.Contains(err.Error(), "delegation redemption failed") {
+			return &responses.SubscribeToProductByPriceIDResult{
+				Success:      false,
+				ErrorMessage: "Payment transaction failed",
+			}, nil
 		}
 
-		deleteErr := s.queries.DeleteSubscription(ctx, subscription.ID)
-		if deleteErr != nil {
-			s.logger.Error("Failed to soft-delete subscription after redemption failure",
-				zap.Error(deleteErr),
-				zap.String("subscription_id", subscription.ID.String()))
+		// For DB failures after successful payment
+		if strings.Contains(err.Error(), "failed to create subscription records after successful payment") {
+			return &responses.SubscribeToProductByPriceIDResult{
+				Success:      false,
+				ErrorMessage: "Payment successful but subscription creation failed - please contact support",
+			}, nil
 		}
 
-		// Create failed redemption event
-		errorMsg := fmt.Sprintf("Initial redemption failed: %v", err)
-		_, eventErr := s.queries.CreateSubscriptionEvent(ctx, db.CreateSubscriptionEventParams{
-			SubscriptionID:  subscription.ID,
-			EventType:       db.SubscriptionEventTypeFailedRedemption,
-			TransactionHash: pgtype.Text{String: "", Valid: false},
-			AmountInCents:   price.UnitAmountInPennies,
-			ErrorMessage:    pgtype.Text{String: errorMsg, Valid: true},
-			OccurredAt:      pgtype.Timestamptz{Time: time.Now(), Valid: true},
-			Metadata:        json.RawMessage(`{}`),
-		})
-
-		if eventErr != nil {
-			s.logger.Error("Failed to create subscription event after redemption failure",
-				zap.Error(eventErr),
-				zap.String("subscription_id", subscription.ID.String()))
-		}
-
+		// Generic error
 		return &responses.SubscribeToProductByPriceIDResult{
 			Success:      false,
-			ErrorMessage: "Initial redemption failed, subscription marked as failed and soft-deleted",
+			ErrorMessage: fmt.Sprintf("Failed to create subscription: %v", err),
 		}, nil
 	}
 
 	return &responses.SubscribeToProductByPriceIDResult{
-		Subscription: updatedSubscription,
+		Subscription: result.Subscription,
 		Success:      true,
 	}, nil
 }

@@ -50,6 +50,8 @@ type SubscriptionService interface {
 	ProcessInitialRedemption(ctx context.Context, tx pgx.Tx, params params.InitialRedemptionParams) (*db.Subscription, error)
 	ProcessDueSubscriptions(ctx context.Context) (*responses.ProcessDueSubscriptionsResult, error)
 	CreateSubscription(ctx context.Context, tx pgx.Tx, params params.CreateSubscriptionParams) (*db.Subscription, error)
+	CreateInvoiceForSubscriptionPayment(ctx context.Context, subscriptionID, paymentID uuid.UUID, periodStart, periodEnd time.Time, transactionHash string) error
+	GenerateNextPeriodInvoice(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time) (*responses.InvoiceResponse, error)
 }
 
 // InvoiceService handles invoice operations
@@ -57,6 +59,16 @@ type InvoiceService interface {
 	CreateInvoice(ctx context.Context, params params.InvoiceCreateParams) (*responses.InvoiceResponse, error)
 	GetInvoiceWithDetails(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*responses.InvoiceResponse, error)
 	FinalizeInvoice(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error)
+	VoidInvoice(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error)
+	MarkInvoicePaid(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error)
+	MarkInvoiceUncollectible(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*db.Invoice, error)
+	DuplicateInvoice(ctx context.Context, workspaceID, invoiceID uuid.UUID) (*responses.InvoiceResponse, error)
+	GetInvoiceActivity(ctx context.Context, workspaceID, invoiceID uuid.UUID, limit, offset int32) ([]db.InvoiceActivity, error)
+	GenerateInvoiceFromSubscription(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool) (*responses.InvoiceResponse, error)
+	GenerateInvoiceFromSubscriptionWithNotes(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool, notes string) (*responses.InvoiceResponse, error)
+	GenerateInvoiceFromSubscriptionWithMetadata(ctx context.Context, subscriptionID uuid.UUID, periodStart, periodEnd time.Time, isDraft bool, metadata map[string]interface{}) (*responses.InvoiceResponse, error)
+	BulkGenerateInvoices(ctx context.Context, workspaceID uuid.UUID, endDate time.Time, maxInvoices int32) (*responses.BulkInvoiceGenerationResult, error)
+	GetInvoiceStats(ctx context.Context, workspaceID uuid.UUID, startDate, endDate time.Time) (*responses.InvoiceStatsResponse, error)
 }
 
 // DunningService handles dunning campaigns
@@ -156,6 +168,7 @@ type SubscriptionManagementService interface {
 	PreviewChange(ctx context.Context, subscriptionID uuid.UUID, changeType string, lineItems []requests.LineItemUpdate) (*business.ChangePreview, error)
 	GetSubscriptionHistory(ctx context.Context, subscriptionID uuid.UUID, limit int32) ([]db.SubscriptionStateHistory, error)
 	ProcessScheduledChanges(ctx context.Context) error
+	ChangePrice(ctx context.Context, subscriptionID uuid.UUID, newPriceCents int64) error
 }
 
 // CustomerService handles customer operations
@@ -193,17 +206,18 @@ type WorkspaceService interface {
 
 // ProductService handles product operations
 type ProductService interface {
-	CreateProduct(ctx context.Context, params params.CreateProductParams) (*db.Product, []db.Price, error)
-	GetProduct(ctx context.Context, params params.GetProductParams) (*db.Product, []db.Price, error)
+	CreateProduct(ctx context.Context, params params.CreateProductParams) (*db.Product, error)
+	GetProduct(ctx context.Context, params params.GetProductParams) (*db.Product, error)
 	ListProducts(ctx context.Context, params params.ListProductsParams) (*responses.ListProductsResult, error)
 	UpdateProduct(ctx context.Context, params params.UpdateProductParams) (*db.Product, error)
 	DeleteProduct(ctx context.Context, productID uuid.UUID, workspaceID uuid.UUID) error
 	GetPublicProductByPriceID(ctx context.Context, priceID uuid.UUID) (*responses.PublicProductResponse, error)
+	GetPublicProductByID(ctx context.Context, productID uuid.UUID) (*responses.PublicProductResponse, error)
 
 	// Subscription validation methods
 	ValidateSubscriptionRequest(ctx context.Context, params params.ValidateSubscriptionParams) error
 	ValidateProductForSubscription(ctx context.Context, productID uuid.UUID) (*db.Product, error)
-	ValidatePriceForSubscription(ctx context.Context, priceID uuid.UUID) (*db.Price, *db.Product, error)
+	ValidatePriceForSubscription(ctx context.Context, priceID uuid.UUID) (*db.Product, *db.Product, error) // Deprecated: Returns product twice for backward compatibility
 	GetProductTokenWithValidation(ctx context.Context, productTokenID uuid.UUID, productID uuid.UUID) (*db.GetProductTokenRow, error)
 }
 
