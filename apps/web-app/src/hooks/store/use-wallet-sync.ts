@@ -67,9 +67,9 @@ export function useSmartAccount() {
 
     const hasSignMessage = typeof walletClient.signMessage === 'function';
     const hasSignTypedData = typeof walletClient.signTypedData === 'function';
-    const isCompatible = hasSignMessage && hasSignTypedData && isMetaMask;
+    const isCompatible = hasSignMessage && hasSignTypedData && !!isMetaMask;
 
-    setWalletCompatibility(isCompatible, isMetaMask);
+    setWalletCompatibility(isCompatible, !!isMetaMask);
 
     if (!isMetaMask) {
       toast({

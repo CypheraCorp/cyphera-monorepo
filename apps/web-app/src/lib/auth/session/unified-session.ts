@@ -1,6 +1,27 @@
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
-import { logger } from '@/lib/core/logger/logger-utils';
+
+// Use edge-compatible logger for Edge Runtime compatibility
+let logger: any;
+
+// Dynamically import the appropriate logger based on runtime context
+try {
+  // Try to import regular logger first (for server-side usage)
+  logger = require('@/lib/core/logger/logger-utils').logger;
+} catch {
+  // Fallback to edge logger for middleware/edge runtime
+  try {
+    logger = require('@/lib/core/logger/edge-logger').logger;
+  } catch {
+    // Final fallback to console if both fail
+    logger = {
+      info: console.log,
+      warn: console.warn,
+      error: console.error,
+      debug: console.log,
+    };
+  }
+}
 
 // Session Types
 export type UserType = 'merchant' | 'customer';

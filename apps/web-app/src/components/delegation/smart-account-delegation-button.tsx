@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { type Address, formatUnits } from 'viem';
+import { formatUnits } from 'viem';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { useEnvConfig } from '@/components/env/client';
@@ -32,25 +32,6 @@ import type {
   DelegationResult 
 } from './types';
 
-// Client-only icon component to prevent hydration mismatches
-interface ClientOnlyIconProps {
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  className?: string;
-  [key: string]: unknown;
-}
-
-function ClientOnlyIcon({ icon: Icon, className, ...props }: ClientOnlyIconProps) {
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  if (!isMounted) {
-    return <span className={className || ''} />;
-  }
-
-  return <Icon className={className} {...(props as React.SVGProps<SVGSVGElement>)} />;
-}
 
 interface SmartAccountDelegationButtonProps extends SubscriptionParams {
   /** Smart account provider to use */

@@ -49,7 +49,7 @@ export function ConnectWalletButton() {
       typeof window.ethereum !== 'undefined' &&
       window.ethereum.isMetaMask;
 
-    setIsMetaMaskInstalled(checkMetaMask);
+    setIsMetaMaskInstalled(!!checkMetaMask);
 
     // Check if parent has inline-block class (navbar)
     if (typeof document !== 'undefined') {
@@ -108,7 +108,7 @@ export function ConnectWalletButton() {
         try {
           // This is a quick way to check if there's a pending request
           // It will fail with code -32002 if there's already a pending request
-          await window.ethereum.request({ method: 'eth_accounts' });
+          await (window.ethereum as any).request({ method: 'eth_accounts' });
         } catch (error: unknown) {
           const ethError = error as { code?: number };
           if (ethError.code === -32002) {

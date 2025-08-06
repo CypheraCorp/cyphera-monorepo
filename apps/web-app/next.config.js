@@ -80,6 +80,9 @@ const nextConfig = {
       'viem',
     ],
   },
+  
+  // Transpile problematic packages
+  transpilePackages: ['@metamask/delegation-toolkit'],
 
   // Add headers to fix Web3Auth popup issues and improve caching
   async headers() {
@@ -133,6 +136,11 @@ const nextConfig = {
     // Exclude web3auth-examples directory from module resolution
     config.externals = config.externals || [];
     config.externals.push(/^web3auth-examples/);
+    
+    // Add MetaMask delegation toolkit to externals for server-side
+    if (isServer) {
+      config.externals.push('@metamask/delegation-toolkit');
+    }
 
     // Optimize module resolution
     config.resolve.modules = ['node_modules'];
@@ -141,6 +149,14 @@ const nextConfig = {
     config.module.rules.push({
       test: /\.m?js$/,
       type: 'javascript/auto',
+      resolve: {
+        fullySpecified: false,
+      },
+    });
+
+    // Handle MetaMask Delegation Toolkit specifically
+    config.module.rules.push({
+      test: /node_modules\/@metamask\/delegation-toolkit/,
       resolve: {
         fullySpecified: false,
       },
@@ -187,7 +203,7 @@ const nextConfig = {
             },
             // Blockchain packages
             blockchain: {
-              test: /[\\/]node_modules[\\/](wagmi|viem|permissionless)[\\/]/,
+              test: /[\\/]node_modules[\\/](wagmi|viem|permissionless|@metamask[\\/]delegation-toolkit)[\\/]/,
               name: 'blockchain',
               chunks: 'all',
               priority: 25,

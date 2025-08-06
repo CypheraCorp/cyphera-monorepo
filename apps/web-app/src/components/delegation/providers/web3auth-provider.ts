@@ -5,9 +5,7 @@ import { ensureCorrectNetwork } from '@/lib/web3/utils/delegation';
 import type { Web3Provider } from '@/lib/web3/utils/delegation';
 import type { MetaMaskSmartAccount } from '@metamask/delegation-toolkit';
 import type { SmartAccountProvider } from '../types';
-import { createDelegation, type Delegation } from '@metamask/delegation-toolkit';
-import { type Hex } from 'viem';
-import { logger } from '@/lib/core/logger/logger-utils';
+
 
 
 /**
