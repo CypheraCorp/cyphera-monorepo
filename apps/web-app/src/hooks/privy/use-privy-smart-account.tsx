@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { usePrivy, useWallets, useSignTypedData } from '@privy-io/react-auth';
 import { createPublicClient, createWalletClient, custom, http } from 'viem';
-import { baseSepolia } from 'viem/chains';
+import { baseSepolia, sepolia } from 'viem/chains';
 import type { Address } from 'viem';
 import { createPimlicoClient } from 'permissionless/clients/pimlico';
 import { createBundlerClient, createPaymasterClient } from 'viem/account-abstraction';
@@ -17,6 +17,8 @@ interface PrivySmartAccountInterface {
   eoa: any | undefined;
   /** Bundler client for sending user operations */
   bundlerClient: any | null;
+  /** Pimlico client for gas price operations */
+  pimlicoClient: any | null;
   /** Smart account instance for delegation signing */
   smartAccount: any | null;
   /** Smart account address */
@@ -31,6 +33,8 @@ interface PrivySmartAccountInterface {
   deploySmartAccount: () => Promise<void>;
   /** Switch to a different network */
   switchNetwork: (chainId: number) => Promise<void>;
+  /** Current chain ID */
+  currentChainId: number;
   /** Get display name for the provider */
   getDisplayName: () => string;
   /** Get button text */
@@ -44,6 +48,7 @@ interface PrivySmartAccountInterface {
 const PrivySmartAccountContext = React.createContext<PrivySmartAccountInterface>({
   eoa: undefined,
   bundlerClient: null,
+  pimlicoClient: null,
   smartAccount: null,
   smartAccountAddress: undefined,
   smartAccountReady: false,
@@ -51,6 +56,7 @@ const PrivySmartAccountContext = React.createContext<PrivySmartAccountInterface>
   checkDeploymentStatus: async () => false,
   deploySmartAccount: async () => {},
   switchNetwork: async () => {},
+  currentChainId: 84532,
   getDisplayName: () => 'Privy',
   getButtonText: () => 'Subscribe with Privy',
   isButtonDisabled: () => true,
@@ -258,14 +264,27 @@ export const PrivySmartAccountProvider = ({
     }
 
     try {
+      logger.log(`🔄 Switching network from ${currentChainId} to ${chainId}...`);
+      
+      // Switch the Privy wallet to the new network
       await embeddedWallet.switchChain(chainId);
       setCurrentChainId(chainId);
-      logger.log(`✅ Switched to chain ${chainId}`);
+      
+      // Reset smart account state to trigger recreation on new network
+      logger.log('🔄 Resetting smart account state for new network...');
+      setSmartAccount(null);
+      setBundlerClient(null);
+      setPimlicoClient(null);
+      setSmartAccountAddress(undefined);
+      setSmartAccountReady(false);
+      setIsDeployed(null);
+      
+      logger.log(`✅ Network switched to chain ${chainId}, smart account will be recreated`);
     } catch (error) {
       logger.error('❌ Failed to switch network:', error);
       throw error;
     }
-  }, [embeddedWallet]);
+  }, [embeddedWallet, currentChainId]);
 
   // Provider interface methods
   const getDisplayName = useCallback(() => 'Privy', []);
@@ -329,7 +348,7 @@ export const PrivySmartAccountProvider = ({
         
         let networkConfig = await getNetworkConfig(targetChainId);
         
-        // Fallback to hardcoded Base Sepolia config if dynamic fetch fails
+        // Fallback to hardcoded configurations if dynamic fetch fails
         if (!networkConfig && targetChainId === baseSepolia.id) {
           logger.log('⚠️ Using fallback Base Sepolia configuration');
           const infuraApiKey = process.env.NEXT_PUBLIC_INFURA_API_KEY;
@@ -343,6 +362,25 @@ export const PrivySmartAccountProvider = ({
             isCircleSupported: true,
             tokens: [{
               address: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' as Address,
+              symbol: 'USDC',
+              name: 'USD Coin',
+              decimals: 6,
+              isGasToken: false,
+            }],
+          };
+        } else if (!networkConfig && targetChainId === sepolia.id) {
+          logger.log('⚠️ Using fallback Ethereum Sepolia configuration');
+          const infuraApiKey = process.env.NEXT_PUBLIC_INFURA_API_KEY;
+          networkConfig = {
+            chain: sepolia,
+            rpcUrl: infuraApiKey 
+              ? `https://sepolia.infura.io/v3/${infuraApiKey}`
+              : 'https://rpc.sepolia.org',
+            circleNetworkType: 'ETH-SEPOLIA',
+            isPimlicoSupported: true,
+            isCircleSupported: true,
+            tokens: [{
+              address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' as Address,
               symbol: 'USDC',
               name: 'USD Coin',
               decimals: 6,
@@ -585,6 +623,7 @@ export const PrivySmartAccountProvider = ({
         authenticated,
         hasEmbeddedWallet: !!embeddedWallet,
         embeddedWalletAddress: embeddedWallet?.address,
+        currentChainId,
       });
       createSmartWallet(embeddedWallet);
     } else {
@@ -592,6 +631,7 @@ export const PrivySmartAccountProvider = ({
         ready,
         authenticated,
         hasEmbeddedWallet: !!embeddedWallet,
+        currentChainId,
       });
       // Reset state when not authenticated
       setEoa(undefined);
@@ -602,7 +642,7 @@ export const PrivySmartAccountProvider = ({
       setSmartAccountReady(false);
       setIsDeployed(null);
     }
-  }, [ready, authenticated, embeddedWallet, signMessage, signTypedData]);
+  }, [ready, authenticated, embeddedWallet, currentChainId, signMessage, signTypedData]);
 
   // Auto-check deployment status
   useEffect(() => {
@@ -616,6 +656,7 @@ export const PrivySmartAccountProvider = ({
       value={{
         eoa,
         bundlerClient,
+        pimlicoClient,
         smartAccount,
         smartAccountAddress,
         smartAccountReady,
@@ -623,6 +664,7 @@ export const PrivySmartAccountProvider = ({
         checkDeploymentStatus,
         deploySmartAccount,
         switchNetwork,
+        currentChainId,
         getDisplayName,
         getButtonText,
         isButtonDisabled,

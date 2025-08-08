@@ -5,7 +5,7 @@ import { PrivyProvider as BasePrivyProvider } from '@privy-io/react-auth';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { getAllNetworkConfigs } from '@/lib/web3/dynamic-networks';
 import { logger } from '@/lib/core/logger/logger-utils';
-import { baseSepolia, base, polygon, arbitrum, optimism } from 'viem/chains';
+import { baseSepolia, base, polygon, arbitrum, optimism, sepolia } from 'viem/chains';
 import type { Chain } from 'viem/chains';
 
 // Create a TanStack Query client
@@ -29,10 +29,11 @@ const chainIdToViemChain: Record<number, Chain> = {
   137: polygon,
   42161: arbitrum,
   10: optimism,
+  11155111: sepolia, // Ethereum Sepolia
 };
 
 export function PrivyProvider({ children }: PrivyProviderProps) {
-  const [supportedChains, setSupportedChains] = useState<Chain[]>([baseSepolia]);
+  const [supportedChains, setSupportedChains] = useState<Chain[]>([baseSepolia, sepolia]);
   const [defaultChain, setDefaultChain] = useState<Chain>(baseSepolia);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -54,12 +55,24 @@ export function PrivyProvider({ children }: PrivyProviderProps) {
           chains.push(viemChain);
         }
 
-        if (chains.length > 0 && firstChain) {
-          setSupportedChains(chains);
-          setDefaultChain(firstChain);
+        // Always ensure essential chains are included (Base Sepolia and Ethereum Sepolia)
+        const essentialChains = [baseSepolia, sepolia];
+        const finalChains = [...essentialChains];
+        
+        // Add any additional chains from dynamic config that aren't already included
+        for (const chain of chains) {
+          if (!finalChains.some(c => c.id === chain.id)) {
+            finalChains.push(chain);
+          }
+        }
+
+        if (finalChains.length > 0) {
+          setSupportedChains(finalChains);
+          setDefaultChain(firstChain || baseSepolia);
           logger.log('✅ Privy network configuration loaded:', {
-            supportedChains: chains.map(c => ({ id: c.id, name: c.name })),
-            defaultChain: firstChain.name,
+            supportedChains: finalChains.map(c => ({ id: c.id, name: c.name })),
+            defaultChain: (firstChain || baseSepolia).name,
+            essentialChainsIncluded: essentialChains.map(c => ({ id: c.id, name: c.name })),
           });
         }
       } catch (err) {
@@ -93,7 +106,7 @@ export function PrivyProvider({ children }: PrivyProviderProps) {
           appearance: {
             theme: 'light' as const,  // Use 'light' or 'dark' instead of 'auto'
             accentColor: '#4F46E5',
-            logo: '/logos/privy-logo.png',
+            // logo: '/logos/privy-logo.png', // Remove logo to fix 404 error
           },
           
           // Login methods - prioritize embedded wallet creation

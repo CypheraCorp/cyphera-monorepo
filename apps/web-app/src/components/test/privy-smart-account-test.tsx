@@ -3,8 +3,21 @@
 import React, { useState } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import { usePrivySmartAccount } from '@/hooks/privy/use-privy-smart-account';
+import { NetworkSwitcher } from '@/components/wallet/network-switcher';
+import { WalletDashboard } from '@/components/wallet/wallet-dashboard';
 import { logger } from '@/lib/core/logger/logger-utils';
-import { formatEther, parseEther } from 'viem';
+
+// Helper function to get explorer URL based on chain ID
+const getExplorerUrl = (chainId: number, txHash: string): string => {
+  switch (chainId) {
+    case 84532: // Base Sepolia
+      return `https://sepolia.basescan.org/tx/${txHash}`;
+    case 11155111: // Ethereum Sepolia
+      return `https://sepolia.etherscan.io/tx/${txHash}`;
+    default:
+      return `https://etherscan.io/tx/${txHash}`; // Fallback to mainnet
+  }
+};
 
 export const PrivySmartAccountTest: React.FC = () => {
   const { authenticated } = usePrivy();
@@ -14,14 +27,18 @@ export const PrivySmartAccountTest: React.FC = () => {
     smartAccountReady,
     isDeployed,
     bundlerClient,
+    pimlicoClient,
     deploySmartAccount,
     checkDeploymentStatus,
+    switchNetwork,
+    currentChainId,
   } = usePrivySmartAccount();
 
   const [isDeploying, setIsDeploying] = useState(false);
   const [isSendingTx, setIsSendingTx] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isNetworkSwitching, setIsNetworkSwitching] = useState(false);
 
   const handleDeploy = async () => {
     setIsDeploying(true);
@@ -49,8 +66,8 @@ export const PrivySmartAccountTest: React.FC = () => {
   };
 
   const handleSendTestTransaction = async () => {
-    if (!bundlerClient || !smartAccount) {
-      setError('Smart account not ready');
+    if (!bundlerClient || !smartAccount || !pimlicoClient) {
+      setError('Smart account or clients not ready');
       return;
     }
 
@@ -61,7 +78,21 @@ export const PrivySmartAccountTest: React.FC = () => {
     try {
       logger.log('📤 Sending test transaction...');
       
-      // Send a minimal self-transfer to test the smart account
+      // Fetch gas prices using the same pattern as deployment
+      logger.log('⛽ Fetching gas prices from Pimlico...');
+      const gasInfo = await pimlicoClient.getUserOperationGasPrice();
+      
+      // Ensure gas prices are BigInt for consistency with Viem
+      const gasPrices = {
+        maxFeePerGas: BigInt(gasInfo.fast.maxFeePerGas),
+        maxPriorityFeePerGas: BigInt(gasInfo.fast.maxPriorityFeePerGas),
+      };
+      
+      logger.log(`📊 Using gas prices: maxFeePerGas: ${gasPrices.maxFeePerGas.toString()} wei, maxPriorityFeePerGas: ${gasPrices.maxPriorityFeePerGas.toString()} wei`);
+      logger.log('💰 Using integrated paymaster for gas-free transaction');
+      logger.log('📊 Sending UserOperation...');
+      
+      // Send a minimal self-transfer to test the smart account with gas prices (same as deployment)
       const userOpHash = await bundlerClient.sendUserOperation({
         account: smartAccount,
         calls: [{
@@ -69,15 +100,23 @@ export const PrivySmartAccountTest: React.FC = () => {
           value: BigInt(0),
           data: '0x' as `0x${string}`,
         }],
+        // Include gas prices like the deployment does
+        maxFeePerGas: gasPrices.maxFeePerGas,
+        maxPriorityFeePerGas: gasPrices.maxPriorityFeePerGas,
       });
 
-      logger.log('⏳ UserOperation sent:', userOpHash);
+      logger.log('📊 UserOperation sent:', userOpHash);
+      logger.log('📊 Waiting for UserOperation confirmation...');
       
       // Wait for receipt
       const receipt = await bundlerClient.waitForUserOperationReceipt({
         hash: userOpHash,
         timeout: 60000,
       });
+
+      if (!receipt.success) {
+        throw new Error('UserOperation did not succeed');
+      }
 
       const hash = receipt.receipt.transactionHash;
       setTxHash(hash);
@@ -90,6 +129,25 @@ export const PrivySmartAccountTest: React.FC = () => {
     }
   };
 
+  const handleNetworkSwitch = async (chainId: number) => {
+    if (isNetworkSwitching) return;
+
+    try {
+      setIsNetworkSwitching(true);
+      setError(null);
+      logger.log('🔄 Switching network to chain ID:', chainId);
+      
+      await switchNetwork(chainId);
+      
+      logger.log('✅ Network switched successfully to chain ID:', chainId);
+    } catch (error: any) {
+      logger.error('❌ Network switch failed:', error);
+      setError(`Failed to switch network: ${error.message}`);
+    } finally {
+      setIsNetworkSwitching(false);
+    }
+  };
+
   if (!authenticated) {
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -99,13 +157,36 @@ export const PrivySmartAccountTest: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold mb-4">Smart Account Testing</h2>
+    <div className="space-y-8">
+      {/* Wallet Dashboard */}
+      <WalletDashboard />
+      
+      {/* Technical Testing Panel */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-2xl font-bold mb-4">Technical Testing & Debugging</h2>
+        
+        {/* Network Switcher */}
+        <div className="mb-6">
+          <h3 className="font-semibold mb-3">Network Selection:</h3>
+          <NetworkSwitcher
+            currentChainId={currentChainId}
+            onNetworkSwitch={handleNetworkSwitch}
+            isNetworkSwitching={isNetworkSwitching}
+            className="max-w-md"
+          />
+        </div>
       
       {/* Status Section */}
       <div className="mb-6 p-4 bg-gray-50 rounded-lg">
         <h3 className="font-semibold mb-3">Smart Account Status:</h3>
         <div className="space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="font-medium">Current Network:</span>
+            <span className="px-2 py-1 rounded bg-blue-100 text-blue-800 text-xs font-mono">
+              {currentChainId === 84532 ? 'Base Sepolia' : currentChainId === 11155111 ? 'Ethereum Sepolia' : `Chain ${currentChainId}`}
+            </span>
+          </div>
+          
           <div className="flex items-center justify-between">
             <span className="font-medium">Ready:</span>
             <span className={`px-2 py-1 rounded ${smartAccountReady ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
@@ -117,6 +198,13 @@ export const PrivySmartAccountTest: React.FC = () => {
             <span className="font-medium">Bundler Client:</span>
             <span className={`px-2 py-1 rounded ${bundlerClient ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
               {bundlerClient ? 'Connected' : 'Not Connected'}
+            </span>
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <span className="font-medium">Pimlico Client:</span>
+            <span className={`px-2 py-1 rounded ${pimlicoClient ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+              {pimlicoClient ? 'Connected' : 'Not Connected'}
             </span>
           </div>
           
@@ -157,7 +245,7 @@ export const PrivySmartAccountTest: React.FC = () => {
             Transaction successful!
             <br />
             <a 
-              href={`https://sepolia.basescan.org/tx/${txHash}`}
+              href={getExplorerUrl(currentChainId, txHash)}
               target="_blank"
               rel="noopener noreferrer"
               className="underline hover:text-green-900"
@@ -194,7 +282,7 @@ export const PrivySmartAccountTest: React.FC = () => {
         {isDeployed && (
           <button
             onClick={handleSendTestTransaction}
-            disabled={isSendingTx || !bundlerClient}
+            disabled={isSendingTx || !bundlerClient || !pimlicoClient}
             className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSendingTx ? 'Sending Transaction...' : 'Send Test Transaction'}
@@ -223,11 +311,13 @@ export const PrivySmartAccountTest: React.FC = () => {
             smartAccountAddress,
             isDeployed,
             hasBundlerClient: !!bundlerClient,
+            hasPimlicoClient: !!pimlicoClient,
             hasSmartAccount: !!smartAccount,
             smartAccountType: smartAccount ? smartAccount.constructor.name : null,
           }, null, 2)}
         </pre>
       </div>
+    </div>
     </div>
   );
 };
